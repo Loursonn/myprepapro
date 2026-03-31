@@ -1,0 +1,209 @@
+import { createContext, useContext, useEffect, useState } from "react";
+import { User } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+
+export interface Profile {
+  id: string;
+  role: "coach" | "athlete" | "coach_athlete";
+  full_name: string;
+  coach_id: string | null;
+  coach_code: string | null;
+}
+
+interface AuthContextType {
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+  athletes: Profile[];
+  activeAthleteId: string | null;
+  setActiveAthleteId: (id: string | null) => void;
+  login: (email: string, password: string) => Promise<void>;
+  registerCoach: (email: string, password: string, fullName: string, isCoachAthlete?: boolean) => Promise<void>;
+  registerAthlete: (email: string, password: string, fullName: string, token: string) => Promise<void>;
+  registerAthleteWithCode: (email: string, password: string, fullName: string, coachCode: string) => Promise<void>;
+  linkToCoach: (coachCode: string) => Promise<void>;
+  logout: () => Promise<void>;
+  createInviteLink: () => Promise<string>;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+function generateCoachCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [athletes, setAthletes] = useState<Profile[]>([]);
+  const [activeAthleteId, setActiveAthleteId] = useState<string | null>(null);
+
+  async function fetchProfile(userId: string) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+    let p = data as Profile | null;
+    // Auto-generate coach_code for existing coaches who don't have one
+    if (p && (p.role === "coach" || p.role === "coach_athlete") && !p.coach_code) {
+      let code = generateCoachCode();
+      await supabase.from("profiles").update({ coach_code: code }).eq("id", userId);
+      p = { ...p, coach_code: code };
+    }
+    setProfile(p);
+    if (p && (p.role === "coach" || p.role === "coach_athlete")) {
+      await fetchAthletes(userId);
+    }
+  }
+
+  async function fetchAthletes(coachId: string) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("coach_id", coachId)
+      .order("full_name");
+    setAthletes((data as Profile[]) || []);
+  }
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) fetchProfile(session.user.id).finally(() => setLoading(false));
+      else setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) fetchProfile(session.user.id);
+      else { setProfile(null); setAthletes([]); setActiveAthleteId(null); }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function login(email: string, password: string) {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+  }
+
+  async function registerCoach(email: string, password: string, fullName: string, isCoachAthlete = false) {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Erreur lors de la création du compte");
+
+    let code = generateCoachCode();
+    // Ensure uniqueness (retry on collision)
+    let attempts = 0;
+    while (attempts < 5) {
+      const { data: existing } = await supabase.from("profiles").select("id").eq("coach_code", code).maybeSingle();
+      if (!existing) break;
+      code = generateCoachCode();
+      attempts++;
+    }
+
+    const { error: profileError } = await supabase.from("profiles").insert({
+      id: data.user.id,
+      role: isCoachAthlete ? "coach_athlete" : "coach",
+      full_name: fullName,
+      coach_code: code,
+    });
+    if (profileError) throw new Error(profileError.message);
+  }
+
+  async function registerAthlete(email: string, password: string, fullName: string, token: string) {
+    const { data: invite, error: inviteError } = await supabase
+      .from("invitations")
+      .select("*")
+      .eq("token", token)
+      .is("used_at", null)
+      .single();
+
+    if (inviteError || !invite) throw new Error("Lien d'invitation invalide ou déjà utilisé");
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Erreur lors de la création du compte");
+
+    const { error: profileError } = await supabase.from("profiles").insert({
+      id: data.user.id,
+      role: "athlete",
+      full_name: fullName,
+      coach_id: invite.coach_id,
+    });
+    if (profileError) throw new Error(profileError.message);
+
+    await supabase.from("invitations").update({ used_at: new Date().toISOString() }).eq("token", token);
+  }
+
+  async function registerAthleteWithCode(email: string, password: string, fullName: string, coachCode: string) {
+    const { data: coach } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("coach_code", coachCode.toUpperCase().trim())
+      .maybeSingle();
+
+    if (!coach) throw new Error("Code coach invalide — vérifie auprès de ton coach");
+
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error("Erreur lors de la création du compte");
+
+    const { error: profileError } = await supabase.from("profiles").insert({
+      id: data.user.id,
+      role: "athlete",
+      full_name: fullName,
+      coach_id: coach.id,
+    });
+    if (profileError) throw new Error(profileError.message);
+  }
+
+  async function linkToCoach(coachCode: string) {
+    if (!user) throw new Error("Non connecté");
+    const { data: coach } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("coach_code", coachCode.toUpperCase().trim())
+      .maybeSingle();
+    if (!coach) throw new Error("Code coach invalide");
+    const { error } = await supabase.from("profiles").update({ coach_id: coach.id }).eq("id", user.id);
+    if (error) throw new Error("Erreur lors de l'assignation");
+    await fetchProfile(user.id);
+  }
+
+  async function logout() {
+    setAthletes([]);
+    setActiveAthleteId(null);
+    await supabase.auth.signOut();
+  }
+
+  async function createInviteLink(): Promise<string> {
+    if (!user) throw new Error("Non connecté");
+    const { data, error } = await supabase
+      .from("invitations")
+      .insert({ coach_id: user.id })
+      .select("token")
+      .single();
+    if (error) throw new Error(error.message);
+    return `${window.location.origin}/invite/${data.token}`;
+  }
+
+  return (
+    <AuthContext.Provider value={{
+      user, profile, loading,
+      athletes, activeAthleteId, setActiveAthleteId,
+      login, registerCoach, registerAthlete, registerAthleteWithCode,
+      linkToCoach, logout, createInviteLink,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth doit être utilisé dans AuthProvider");
+  return ctx;
+}
