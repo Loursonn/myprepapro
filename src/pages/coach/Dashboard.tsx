@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, Profile } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import WeightliftingTracker from "@/components/WeightliftingTracker.jsx";
+import AthleteProfileForm from "@/components/coach/AthleteProfileForm";
 
 const C = {
   bg: "#08090C", s1: "#111318", s2: "#181B24",
@@ -20,6 +21,7 @@ export default function CoachDashboard() {
   const [copyMsg, setCopyMsg] = useState("");
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [profileAthlete, setProfileAthlete] = useState<Profile | null>(null);
 
   async function handleRemoveAthlete(athleteId: string) {
     if (removing) return;
@@ -126,9 +128,18 @@ export default function CoachDashboard() {
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{a.full_name}</div>
-                        <div style={{ fontSize: 11, color: C.tx3 }}>Athlète</div>
+                        <div style={{ fontSize: 11, color: a.first_name || a.age ? C.g : C.tx3 }}>
+                          {a.first_name || a.age ? `${a.age ? a.age + " ans" : ""}${a.age && a.height_cm ? " · " : ""}${a.height_cm ? a.height_cm + " cm" : ""}` : "Profil incomplet"}
+                        </div>
                       </div>
                       <div style={{ fontSize: 18, color: C.tx3 }}>›</div>
+                    </button>
+                    <button
+                      onClick={() => setProfileAthlete(a)}
+                      title="Éditer le profil"
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.coach + "40", background: C.coachS, color: C.coach, fontSize: 14, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      ✎
                     </button>
                     <button onClick={() => setConfirmRemove(a.id)} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.r + "40", background: C.r + "12", color: C.r, fontSize: 16, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
                   </div>
@@ -151,6 +162,14 @@ export default function CoachDashboard() {
               </button>
             )}
           </div>
+
+          {/* Modal profil athlète */}
+          {profileAthlete && (
+            <AthleteProfileForm
+              athlete={profileAthlete}
+              onClose={() => setProfileAthlete(null)}
+            />
+          )}
 
           {/* Lien invitation */}
           <button onClick={handleCopyLink}
@@ -197,6 +216,15 @@ export default function CoachDashboard() {
           </div>
         </div>
 
+        {!isOwnAthleteView && selectedAthlete && (
+          <button
+            onClick={() => setProfileAthlete(selectedAthlete)}
+            title="Profil de l'athlète"
+            style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid " + C.coach + "40", background: C.coachS, color: C.coach, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Profil
+          </button>
+        )}
         {athletes.length > 0 && (
           <button onClick={() => setShowPanel(!showPanel)}
             style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s1, color: C.tx2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
@@ -240,6 +268,14 @@ export default function CoachDashboard() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Modal profil athlète (vue tracker) */}
+      {profileAthlete && (
+        <AthleteProfileForm
+          athlete={profileAthlete}
+          onClose={() => setProfileAthlete(null)}
+        />
       )}
 
       {/* Main tracker — key= athleteId forces remount on switch */}

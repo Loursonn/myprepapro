@@ -8,6 +8,14 @@ export interface Profile {
   full_name: string;
   coach_id: string | null;
   coach_code: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  age: number | null;
+  height_cm: number | null;
+  gender: "male" | "female" | null;
+  weight_kg: number | null;
+  body_fat_pct: number | null;
+  base_metabolism: number | null;
 }
 
 interface AuthContextType {
@@ -24,6 +32,16 @@ interface AuthContextType {
   linkToCoach: (coachCode: string) => Promise<void>;
   logout: () => Promise<void>;
   createInviteLink: () => Promise<string>;
+  updateAthleteProfile: (athleteId: string, fields: {
+    first_name: string;
+    last_name: string;
+    age: number | null;
+    height_cm: number | null;
+    gender: "male" | "female" | null;
+    weight_kg: number | null;
+    body_fat_pct: number | null;
+    base_metabolism: number | null;
+  }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -179,6 +197,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  async function updateAthleteProfile(athleteId: string, fields: {
+    first_name: string;
+    last_name: string;
+    age: number | null;
+    height_cm: number | null;
+    gender: "male" | "female" | null;
+    weight_kg: number | null;
+    body_fat_pct: number | null;
+    base_metabolism: number | null;
+  }) {
+    const full_name = [fields.first_name, fields.last_name].filter(Boolean).join(" ").trim();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ ...fields, ...(full_name ? { full_name } : {}) })
+      .eq("id", athleteId);
+    if (error) throw new Error(error.message);
+    // Refresh data
+    if (user) {
+      const isOwnProfile = athleteId === user.id;
+      if (isOwnProfile) await fetchProfile(user.id);
+      else if (profile?.role === "coach" || profile?.role === "coach_athlete") await fetchAthletes(user.id);
+    }
+  }
+
   async function createInviteLink(): Promise<string> {
     if (!user) throw new Error("Non connecté");
     const { data, error } = await supabase
@@ -195,7 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user, profile, loading,
       athletes, activeAthleteId, setActiveAthleteId,
       login, registerCoach, registerAthlete, registerAthleteWithCode,
-      linkToCoach, logout, createInviteLink,
+      linkToCoach, logout, createInviteLink, updateAthleteProfile,
     }}>
       {children}
     </AuthContext.Provider>

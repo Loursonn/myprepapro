@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import WeightliftingTracker from "@/components/WeightliftingTracker.jsx";
+import ProfileView from "@/components/athlete/ProfileView";
 
 const C = {
   bg: "#08090C", s1: "#111318", s2: "#181B24",
@@ -15,6 +16,7 @@ export default function AthleteDashboard() {
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   if (!user) return null;
 
@@ -71,7 +73,17 @@ export default function AthleteDashboard() {
             <div style={{ fontSize: 10, color: C.tx3 }}>{profile?.coach_id ? "Athlète suivi" : "Athlète"}</div>
           </div>
         </div>
+        <button
+          onClick={() => setShowProfile(true)}
+          style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid " + C.acS, background: C.acS, color: C.ac, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+        >
+          Mon profil
+        </button>
       </div>
+
+      {showProfile && profile && (
+        <ProfileView profile={profile} onClose={() => setShowProfile(false)} />
+      )}
 
       <WeightliftingTracker
         athleteId={user.id}
