@@ -239,6 +239,16 @@ VITE_SUPABASE_ANON_KEY=   # Clé publique Supabase
 - `supabase/migrations/` — historique des migrations BDD
 - `src/integrations/supabase/types.ts` — types auto-générés Supabase
 
+## Documentation (dossier docs/)
+
+Lire ces fichiers avant toute intervention sur le projet :
+
+- `docs/ONBOARDING.md` — setup local, workflow Git, premiers pas
+- `docs/ARCHITECTURE.md` — stack, structure du code, système de données
+- `docs/FEATURES.md` — fonctionnalités (ce qui est fait / prévu / abandonné)
+- `docs/DATABASE.md` — schéma BDD actuel et cible
+- `docs/DECISIONS.md` — journal des décisions techniques importantes
+
 ---
 
 ## Priorités immédiates
