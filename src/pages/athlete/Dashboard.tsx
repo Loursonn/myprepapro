@@ -34,6 +34,10 @@ export default function AthleteDashboard() {
     }
   }
 
+  const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || profile?.full_name || "";
+  const initials = fullName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?";
+  const hasProfile = !!(profile?.first_name || profile?.age || profile?.height_cm);
+
   return (
     <div>
       {/* Bandeau "pas de coach" */}
@@ -56,29 +60,50 @@ export default function AthleteDashboard() {
               {loading ? "..." : "Rejoindre"}
             </button>
           </div>
-          {msg && (
-            <div style={{ fontSize: 12, marginTop: 6, color: msg === "Coach rejoint !" ? C.g : C.r }}>{msg}</div>
-          )}
+          {msg && <div style={{ fontSize: 12, marginTop: 6, color: msg === "Coach rejoint !" ? C.g : C.r }}>{msg}</div>}
         </div>
       )}
 
-      {/* Bandeau compte connecté */}
-      <div style={{ background: C.s1, borderBottom: "1px solid " + C.brd, padding: "6px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 22, height: 22, borderRadius: "50%", background: C.acS, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.ac }}>
-            {profile?.full_name?.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx }}>{profile?.full_name}</div>
-            <div style={{ fontSize: 10, color: C.tx3 }}>{profile?.coach_id ? "Athlète suivi" : "Athlète"}</div>
-          </div>
+      {/* Header profil */}
+      <div
+        onClick={() => setShowProfile(true)}
+        style={{ background: C.s1, borderBottom: "1px solid " + C.brd, padding: "16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+      >
+        {/* Avatar */}
+        <div style={{ width: 52, height: 52, borderRadius: "50%", background: C.acS, border: "2px solid " + C.ac + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: C.ac, flexShrink: 0 }}>
+          {initials}
         </div>
-        <button
-          onClick={() => setShowProfile(true)}
-          style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid " + C.acS, background: C.acS, color: C.ac, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-        >
-          Mon profil
-        </button>
+
+        {/* Infos */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.tx, marginBottom: 4 }}>{fullName}</div>
+          {hasProfile ? (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {profile?.age && (
+                <span style={{ fontSize: 12, color: C.tx3 }}>
+                  <span style={{ color: C.tx2, fontWeight: 600 }}>{profile.age}</span> ans
+                </span>
+              )}
+              {profile?.age && profile?.height_cm && <span style={{ fontSize: 12, color: C.brdL }}>·</span>}
+              {profile?.height_cm && (
+                <span style={{ fontSize: 12, color: C.tx3 }}>
+                  <span style={{ color: C.tx2, fontWeight: 600 }}>{profile.height_cm}</span> cm
+                </span>
+              )}
+              {profile?.height_cm && profile?.base_metabolism && <span style={{ fontSize: 12, color: C.brdL }}>·</span>}
+              {profile?.base_metabolism && (
+                <span style={{ fontSize: 12, color: C.tx3 }}>
+                  MB <span style={{ color: C.ac, fontWeight: 600 }}>{profile.base_metabolism.toLocaleString("fr-FR")}</span> kcal
+                </span>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: C.tx3 }}>Profil non renseigné</div>
+          )}
+        </div>
+
+        {/* Flèche */}
+        <div style={{ fontSize: 18, color: C.tx3, flexShrink: 0 }}>›</div>
       </div>
 
       {showProfile && profile && (
