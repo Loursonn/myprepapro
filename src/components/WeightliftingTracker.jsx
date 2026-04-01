@@ -438,10 +438,37 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   const STYLES=["Mixte force/volume","Push/Pull/Legs","Full body","Upper/Lower","Specialisation"];
   const[aiTab,setAiTab]=useState("import");
   const[importText,setImportText]=useState("");
-  const[importImage,setImportImage]=useState(null);
-  const[importImagePreview,setImportImagePreview]=useState(null);
+  const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview}]
   const fileRef=useRef(null);
-  const handleImageUpload=(e)=>{const f=e.target.files?.[0];if(!f)return;const previewUrl=URL.createObjectURL(f);setImportImagePreview(previewUrl);const img=new Image();img.onload=()=>{const maxW=1400;const scale=Math.min(1,maxW/img.width);const canvas=document.createElement("canvas");canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];setImportImage(b64);};img.src=previewUrl;};
+  const handleFilesUpload=(e)=>{
+    const files=Array.from(e.target.files||[]);
+    if(!files.length)return;
+    files.forEach(file=>{
+      if(file.type.startsWith("image/")){
+        const url=URL.createObjectURL(file);
+        const img=new Image();
+        img.onload=()=>{
+          const maxW=1400;const scale=Math.min(1,maxW/img.width);
+          const canvas=document.createElement("canvas");
+          canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
+          const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:"image/jpeg",data:b64,preview:url}]);
+        };
+        img.src=url;
+      }else{
+        // PDF et autres formats — envoi direct en base64
+        const reader=new FileReader();
+        reader.onload=ev=>{
+          const b64=ev.target.result.split(",")[1];
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:file.type||"application/pdf",data:b64,preview:null}]);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+    e.target.value="";// reset pour permettre re-sélection
+  };
+  const removeImportFile=(idx)=>setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
   const AI_URL=`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-program`;
 
   const DETAIL_FIELDS=[
@@ -488,10 +515,12 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
   };
 
   const importProgram=async()=>{
-    if(!importText.trim()&&!importImage){setError("Colle un texte ou ajoute une photo de ton programme.");return;}
+    if(!importText.trim()&&!importFiles.length){setError("Colle un texte ou ajoute au moins un fichier.");return;}
     setLoading(true);setError(null);
     try{
-      const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify({mode:"import",prompt:importText||"Programme dans l'image ci-jointe",imageBase64:importImage||undefined,sessions:SESSIONS})});
+      const payload={mode:"import",prompt:importText||(importFiles.length?"Programme dans les fichiers ci-joints":""),sessions:SESSIONS};
+      if(importFiles.length)payload.filesData=importFiles.map(f=>({mimeType:f.mimeType,data:f.data}));
+      const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
       setPreview(data);setStep(1);
@@ -526,12 +555,25 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
             <textarea value={importText} onChange={e=>setImportText(e.target.value)} placeholder={"Ex:\nBench Volume:\n- Dev. couche 4x10 @80kg RIR 2.5\n- Dev. incline halt. 3x12 @28kg\n\nSquat Volume:\n- Back squat 4x10 @100kg\n..."} rows={8} style={{...sL,resize:"vertical",lineHeight:1.6}}/>
           </div>
           <div style={{marginBottom:14}}>
-            <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:7}}>Ou ajoute une photo</div>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImageUpload} style={{display:"none"}}/>
-            <button onClick={()=>fileRef.current?.click()} style={{width:"100%",padding:"14px 0",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:importImage?C.gS:C.coachS,color:importImage?C.g:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              {importImage?"Photo ajoutee - Changer":"Photo / Choisir image"}
+            <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:7}}>Fichiers (images, PDF…)</div>
+            <input ref={fileRef} type="file" accept="image/*,.pdf,.png,.jpg,.jpeg,.webp" multiple onChange={handleFilesUpload} style={{display:"none"}}/>
+            <button onClick={()=>fileRef.current?.click()} style={{width:"100%",padding:"14px 0",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:importFiles.length?C.gS:C.coachS,color:importFiles.length?C.g:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+              {importFiles.length?`${importFiles.length} fichier${importFiles.length>1?"s":" "} selectionne${importFiles.length>1?"s":""} — Ajouter d'autres`:"+ Ajouter fichiers (JPG, PNG, PDF…)"}
             </button>
-            {importImagePreview&&<img src={importImagePreview} alt="Preview" style={{width:"100%",borderRadius:10,marginTop:8,maxHeight:200,objectFit:"contain",background:C.s2}}/>}
+            {importFiles.length>0&&(<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6}}>
+              {importFiles.map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.s2,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.brdL}}>
+                  {f.preview
+                    ?<img src={f.preview} alt={f.name} style={{width:36,height:36,borderRadius:6,objectFit:"cover",background:C.s1,flexShrink:0}}/>
+                    :<div style={{width:36,height:36,borderRadius:6,background:C.rS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📄</div>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase"}}>{f.mimeType.split("/")[1]}</div>
+                  </div>
+                  <button onClick={()=>removeImportFile(i)} style={{background:"none",border:"none",color:C.tx3,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0,fontFamily:"inherit"}}>×</button>
+                </div>
+              ))}
+            </div>)}
           </div>
           {error&&<div style={{padding:"10px 14px",borderRadius:8,background:C.rS,border:"1px solid "+C.r+"40",color:C.r,fontSize:11,marginBottom:12}}>{error}</div>}
           <button onClick={importProgram} disabled={loading} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:loading?"#333":C.coach,color:loading?C.tx3:"#fff",fontSize:14,fontWeight:700,cursor:loading?"default":"pointer",fontFamily:"inherit"}}>

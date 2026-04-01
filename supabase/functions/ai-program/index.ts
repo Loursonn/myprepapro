@@ -13,7 +13,7 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
     const body = await req.json();
-    const { mode, prompt, imageBase64, sessions, currentProgram, conversationHistory, message } = body;
+    const { mode, prompt, imageBase64, filesData, sessions, currentProgram, conversationHistory, message } = body;
 
     const sessionsList = sessions && Array.isArray(sessions) && sessions.length > 0
       ? sessions
@@ -64,13 +64,13 @@ Retourne UNIQUEMENT les sessions modifiees dans {"sessions":{...},"rationale":".
     // Build Gemini request parts
     const parts: any[] = [{ text: systemPrompt + "\n\n" + userPrompt }];
 
-    if (imageBase64) {
-      parts.push({
-        inline_data: {
-          mime_type: "image/jpeg",
-          data: imageBase64,
-        },
-      });
+    // Support multi-file (new format) or legacy single image
+    if (filesData && Array.isArray(filesData) && filesData.length > 0) {
+      for (const f of filesData) {
+        parts.push({ inline_data: { mime_type: f.mimeType, data: f.data } });
+      }
+    } else if (imageBase64) {
+      parts.push({ inline_data: { mime_type: "image/jpeg", data: imageBase64 } });
     }
 
     // Helper: call Gemini and parse JSON, returns parsed object or throws
