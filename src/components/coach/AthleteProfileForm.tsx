@@ -25,9 +25,10 @@ function calcKatchMcArdle(weight: number, bodyFat: number): number {
 interface Props {
   athlete: Profile;
   onClose: () => void;
+  inline?: boolean;
 }
 
-export default function AthleteProfileForm({ athlete, onClose }: Props) {
+export default function AthleteProfileForm({ athlete, onClose, inline = false }: Props) {
   const { updateAthleteProfile } = useAuth();
 
   const [firstName, setFirstName] = useState(athlete.first_name ?? "");
@@ -100,15 +101,8 @@ export default function AthleteProfileForm({ athlete, onClose }: Props) {
     borderBottom: "1px solid " + C.brd,
   };
 
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
-      onClick={onClose}
-    >
-      <div
-        style={{ width: "100%", maxWidth: 480, background: C.s1, borderRadius: "16px 16px 0 0", padding: "20px 20px 32px", maxHeight: "92vh", overflowY: "auto" }}
-        onClick={e => e.stopPropagation()}
-      >
+  const formContent = (
+    <div style={{ padding: inline ? "16px" : "20px 20px 32px" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div>
@@ -275,6 +269,27 @@ export default function AthleteProfileForm({ athlete, onClose }: Props) {
             {saving ? "Enregistrement..." : "Enregistrer"}
           </button>
         </div>
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.coach + "50" }}>
+        {formContent}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ width: "100%", maxWidth: 480, background: C.s1, borderRadius: "16px 16px 0 0", maxHeight: "92vh", overflowY: "auto" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {formContent}
       </div>
     </div>
   );
