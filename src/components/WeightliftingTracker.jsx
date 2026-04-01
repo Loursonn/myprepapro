@@ -500,28 +500,18 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
     setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
   };
   const sendConvMessage=async()=>{
-    const msg=convInput.trim();if(!msg||convLoading)return;
+    const msg=convInput.trim();if(!msg||convLoading||!preview)return;
     setConvInput("");
-    const newMsgs=[...convMsgs,{role:"user",content:msg}];
-    setConvMsgs(newMsgs);
+    setConvMsgs(prev=>[...prev,{role:"user",content:msg}]);
     setConvLoading(true);setConvError(null);
     setTimeout(()=>convEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
     try{
-      let payload;
-      if(!convProgram){
-        // Premier message → génération initiale
-        payload={mode:"generate",prompt:msg,sessions:SESSIONS};
-      }else{
-        // Messages suivants → édition du programme en cours
-        const history=convMsgs.map(m=>({role:m.role==="user"?"user":"assistant",content:m.content}));
-        payload={mode:"chat_edit",message:msg,currentProgram:convProgram.sessions,conversationHistory:history,sessions:SESSIONS};
-      }
+      const history=convMsgs.map(m=>({role:m.role==="user"?"user":"assistant",content:m.content}));
+      const payload={mode:"chat_edit",message:msg,currentProgram:preview.sessions,conversationHistory:history,sessions:SESSIONS};
       const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
-      // Merger avec le programme existant si chat_edit
-      const merged=convProgram?{sessions:{...convProgram.sessions,...data.sessions},rationale:data.rationale}:data;
-      setConvProgram(merged);
+      setPreview(prev=>({sessions:{...prev.sessions,...data.sessions},rationale:data.rationale}));
       setConvMsgs(prev=>[...prev,{role:"ai",content:data.rationale||"Programme mis à jour."}]);
     }catch(e){setConvError(e.message);}
     setConvLoading(false);
@@ -599,7 +589,7 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
       {step===0&&(<div style={{padding:"0 0 40px"}}>
         {/* Sub-tabs */}
         <div style={{display:"flex",borderBottom:"1px solid "+C.brd,marginBottom:16}}>
-          {[{k:"import",l:"Import"},{k:"conv",l:"Chat IA"},{k:"form",l:"Parametres"},{k:"details",l:"Profil"}].map(t=>(
+          {[{k:"import",l:"Import"},{k:"form",l:"Parametres"},{k:"details",l:"Profil"}].map(t=>(
             <button key={t.k} onClick={()=>setAiTab(t.k)} style={{flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(aiTab===t.k?C.coach:"transparent"),background:"transparent",color:aiTab===t.k?C.coach:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"}}>{t.l}</button>
           ))}
         </div>
@@ -637,41 +627,6 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
           <button onClick={importProgram} disabled={loading} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:loading?"#333":C.coach,color:loading?C.tx3:"#fff",fontSize:14,fontWeight:700,cursor:loading?"default":"pointer",fontFamily:"inherit"}}>
             {loading?"Analyse en cours...":"Importer le programme"}
           </button>
-        </div>)}
-
-        {aiTab==="conv"&&(<div style={{padding:"0 16px",display:"flex",flexDirection:"column",height:"calc(100vh - 200px)"}}>
-          <div style={{padding:"10px 14px",borderRadius:10,background:C.coachS,border:"1px solid "+C.coach+"40",marginBottom:12,fontSize:11,color:C.coach,lineHeight:1.6}}>
-            Decris le programme que tu veux. L IA genere, tu ajustes, elle corrige. Quand c est bon → Appliquer.
-          </div>
-          {/* Messages */}
-          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,marginBottom:12,paddingRight:4}}>
-            {convMsgs.length===0&&(<div style={{textAlign:"center",padding:"30px 0",color:C.tx3,fontSize:12}}>
-              Ex: "PPL 6 semaines, niveau intermediaire, epaule fragile gauche"
-            </div>)}
-            {convMsgs.map((m,i)=>(
-              <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-                <div style={{maxWidth:"85%",padding:"9px 13px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?C.coach:C.s2,color:m.role==="user"?"#fff":C.tx,fontSize:12,lineHeight:1.5}}>
-                  {m.content}
-                </div>
-              </div>
-            ))}
-            {convLoading&&(<div style={{display:"flex",justifyContent:"flex-start"}}>
-              <div style={{padding:"9px 13px",borderRadius:"12px 12px 12px 4px",background:C.s2,color:C.tx3,fontSize:12}}>...</div>
-            </div>)}
-            {convError&&(<div style={{padding:"8px 12px",borderRadius:8,background:C.rS,color:C.r,fontSize:11}}>{convError}</div>)}
-            <div ref={convEndRef}/>
-          </div>
-          {/* Aperçu programme si généré */}
-          {convProgram&&(<div style={{background:C.s1,borderRadius:10,padding:"10px 12px",border:"1px solid "+C.g+"40",marginBottom:10,maxHeight:160,overflowY:"auto"}}>
-            <div style={{fontSize:10,fontWeight:700,color:C.g,marginBottom:6}}>Programme actuel</div>
-            {Object.entries(convProgram.sessions||{}).map(([sid,exList])=>{const s=SESSIONS.find(x=>x.id===sid);if(!s||!exList?.length)return null;return(<div key={sid} style={{fontSize:10,color:C.tx2,marginBottom:3}}><span style={{color:C.tx,fontWeight:600}}>{s.name}</span> — {exList.map(e=>e.name).join(", ")}</div>);})}
-          </div>)}
-          {/* Input */}
-          <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-            <textarea value={convInput} onChange={e=>setConvInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendConvMessage();}}} placeholder={convProgram?"Ajuste le programme...":"Decris ce que tu veux..."} rows={2} style={{flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",lineHeight:1.5}}/>
-            <button onClick={sendConvMessage} disabled={convLoading||!convInput.trim()} style={{padding:"9px 14px",borderRadius:10,border:"none",background:convInput.trim()?C.coach:"#333",color:convInput.trim()?"#fff":C.tx3,fontSize:13,fontWeight:700,cursor:convInput.trim()?"pointer":"default",fontFamily:"inherit",flexShrink:0,alignSelf:"flex-end"}}>↑</button>
-          </div>
-          {convProgram&&(<button onClick={()=>onGenerate(convProgram.sessions)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:10}}>Appliquer ce programme</button>)}
         </div>)}
 
         {aiTab==="form"&&(<div style={{padding:"0 16px"}}>
@@ -716,17 +671,39 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
       </div>)}
 
       {step===1&&preview&&(<div style={{padding:"16px"}}>
-        <div style={{padding:"12px 14px",borderRadius:10,background:C.gS,border:"1px solid "+C.g+"40",marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.g,marginBottom:4}}>Programme genere avec succes</div>
-          <div style={{fontSize:11,color:C.tx2,lineHeight:1.6}}>{preview.rationale}</div>
+        {/* Résumé IA */}
+        <div style={{padding:"10px 14px",borderRadius:10,background:C.gS,border:"1px solid "+C.g+"40",marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.g,marginBottom:2}}>Programme généré</div>
+          <div style={{fontSize:11,color:C.tx2,lineHeight:1.5}}>{preview.rationale}</div>
         </div>
-        <div style={{marginBottom:16}}>
-          {Object.entries(preview.sessions||{}).map(([sid,exList])=>{const s=SESSIONS.find(x=>x.id===sid);if(!s||!exList?.length)return null;return(<div key={sid} style={{background:C.s1,borderRadius:10,padding:"10px 14px",marginBottom:8,border:"1px solid "+C.brd}}><div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:6}}>{s.name} <span style={{fontSize:10,color:C.tx3}}>({exList.length} exos)</span></div>{exList.map((ex,i)=>{const wks=Object.keys(ex.weeks||{});return(<div key={i} style={{fontSize:11,color:C.tx2,padding:"3px 0",borderTop:i>0?"1px solid "+C.brd:""}}><span style={{color:getMC(ex.target||"Pecs"),fontWeight:600}}>{ex.name}</span> <span style={{color:C.tx3}}>- {ex.bloc} - S{wks[0]} a S{wks[wks.length-1]}</span></div>);})}</div>);})}</div>
+        {/* Liste exercices */}
+        <div style={{marginBottom:12}}>
+          {Object.entries(preview.sessions||{}).map(([sid,exList])=>{const s=SESSIONS.find(x=>x.id===sid);if(!s||!exList?.length)return null;return(<div key={sid} style={{background:C.s1,borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1px solid "+C.brd}}><div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:5}}>{s.name} <span style={{fontSize:10,color:C.tx3}}>({exList.length} exos)</span></div>{exList.map((ex,i)=>{const wks=Object.keys(ex.weeks||{});return(<div key={i} style={{fontSize:11,color:C.tx2,padding:"3px 0",borderTop:i>0?"1px solid "+C.brd:""}}><span style={{color:getMC(ex.target||"Pecs"),fontWeight:600}}>{ex.name}</span><span style={{color:C.tx3}}> - {ex.bloc} - S{wks[0]}→S{wks[wks.length-1]}</span></div>);})}</div>);})}
+        </div>
+        {/* Chat IA pour affiner */}
+        <div style={{borderTop:"1px solid "+C.brd,paddingTop:12,marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Affiner avec l'IA</div>
+          {convMsgs.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10,maxHeight:200,overflowY:"auto"}}>
+            {convMsgs.map((m,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+                <div style={{maxWidth:"85%",padding:"8px 12px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?C.coach:C.s2,color:m.role==="user"?"#fff":C.tx,fontSize:11,lineHeight:1.5}}>{m.content}</div>
+              </div>
+            ))}
+            {convLoading&&<div style={{display:"flex"}}><div style={{padding:"8px 12px",borderRadius:"12px 12px 12px 4px",background:C.s2,color:C.tx3,fontSize:11}}>...</div></div>}
+            {convError&&<div style={{fontSize:11,color:C.r,padding:"6px 10px",borderRadius:7,background:C.rS}}>{convError}</div>}
+            <div ref={convEndRef}/>
+          </div>)}
+          <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+            <textarea value={convInput} onChange={e=>setConvInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendConvMessage();}}} placeholder='Ex: "plus de volume triceps, remplace le hack squat..."' rows={2} style={{flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",lineHeight:1.5}}/>
+            <button onClick={sendConvMessage} disabled={convLoading||!convInput.trim()} style={{padding:"9px 14px",borderRadius:10,border:"none",background:convInput.trim()&&!convLoading?C.coach:"#333",color:convInput.trim()&&!convLoading?"#fff":C.tx3,fontSize:14,fontWeight:700,cursor:convInput.trim()&&!convLoading?"pointer":"default",fontFamily:"inherit",flexShrink:0,alignSelf:"flex-end"}}>↑</button>
+          </div>
+        </div>
+        {/* Actions */}
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setStep(0)} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Regenerer</button>
-          <button onClick={()=>onGenerate(preview.sessions)} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer ce programme</button>
+          <button onClick={()=>{setStep(0);setConvMsgs([]);setConvError(null);}} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Régénérer</button>
+          <button onClick={()=>onGenerate(preview.sessions)} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
         </div>
-        <div style={{fontSize:10,color:C.tx3,textAlign:"center",marginTop:8}}>Tu pourras modifier chaque exercice dans l editeur</div>
+        <div style={{fontSize:10,color:C.tx3,textAlign:"center",marginTop:8}}>Tu pourras modifier chaque exercice dans l'éditeur</div>
       </div>)}
     </div>
   </div>);
