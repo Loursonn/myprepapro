@@ -13,7 +13,7 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
     const body = await req.json();
-    const { mode, prompt, imageBase64, sessions, currentProgram, conversationHistory, message } = body;
+    const { mode, prompt, imageBase64, filesData, sessions, currentProgram, conversationHistory, message } = body;
 
     const sessionsList = sessions && Array.isArray(sessions) && sessions.length > 0
       ? sessions
@@ -58,20 +58,41 @@ ${historyText ? `HISTORIQUE:\n${historyText}\n\n` : ""}DEMANDE: ${message}
 
 Retourne UNIQUEMENT les sessions modifiees dans {"sessions":{...},"rationale":"..."}. N'inclus PAS les sessions non modifiees — elles seront conservees automatiquement cote client. Exemple: si seule la session "s1" change, retourne {"sessions":{"s1":[...]},"rationale":"..."}.`;
     } else {
-      userPrompt = `A partir du contenu suivant, cree un programme de musculation complet en repartissant les exercices dans les sessions disponibles: ${sessDesc}. Repartis intelligemment les exercices selon leur type et les noms des sessions.\n\nCONTENU A IMPORTER:\n${prompt || "Programme dans l'image ci-jointe"}`;
+      const fileCount = (filesData?.length || 0) + (imageBase64 ? 1 : 0);
+      const fileNames = filesData?.map((f: any, i: number) => `fichier ${i + 1}: "${f.name || "sans nom"}"`).join(", ") || "";
+
+      let fileContext = "";
+      if (fileCount > 1) {
+        fileContext = `\nATTENTION: ${fileCount} fichiers sont joints (${fileNames}). OBLIGATION: lire et extraire les exercices de CHAQUE fichier. Chaque fichier peut representer une seance differente ou une partie du programme. Combine TOUT le contenu pour creer un programme complet.`;
+      } else if (fileCount === 1) {
+        fileContext = `\n1 fichier joint. Extraire tous les exercices du fichier.`;
+      }
+
+      const hasText = (prompt || "").trim().length > 0 && prompt !== "Programme dans les fichiers ci-joints";
+      userPrompt = `A partir du contenu suivant, cree un programme de musculation complet en repartissant les exercices dans les sessions disponibles: ${sessDesc}. Repartis intelligemment les exercices selon leur type et les noms des sessions.${fileContext}
+
+CONTENU A IMPORTER:
+${hasText ? prompt : fileCount > 1 ? "Programme reparti sur les fichiers joints (voir ci-dessous)" : "Programme dans le fichier joint (voir ci-dessous)"}`;
     }
 
-    // Build Gemini request parts
+    // Build Gemini request parts — text first, then files
     const parts: any[] = [{ text: systemPrompt + "\n\n" + userPrompt }];
 
-    if (imageBase64) {
-      parts.push({
-        inline_data: {
-          mime_type: "image/jpeg",
-          data: imageBase64,
-        },
-      });
+    // Support multi-file (new format) or legacy single image
+    if (filesData && Array.isArray(filesData) && filesData.length > 0) {
+      for (let i = 0; i < filesData.length; i++) {
+        const f = filesData[i];
+        // Insert a label before each file so Gemini knows which file it's reading
+        if (filesData.length > 1) {
+          parts.push({ text: `[Fichier ${i + 1}/${filesData.length}: ${f.name || "sans nom"}]` });
+        }
+        parts.push({ inline_data: { mime_type: f.mimeType, data: f.data } });
+      }
+    } else if (imageBase64) {
+      parts.push({ inline_data: { mime_type: "image/jpeg", data: imageBase64 } });
     }
+
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
     // Helper: call Gemini and parse JSON, returns parsed object or throws
     const callGemini = async (temperature: number, modelId = "gemini-2.5-flash") => {
@@ -91,14 +112,18 @@ Retourne UNIQUEMENT les sessions modifiees dans {"sessions":{...},"rationale":".
         const t = await response.text();
         console.error("Gemini error:", response.status, t);
         if (response.status === 429) throw new Error("__429__");
-        throw new Error("Erreur Gemini: " + response.status);
+        let detail = "";
+        try { detail = JSON.parse(t)?.error?.message?.slice(0, 150) || t.slice(0, 150); } catch { detail = t.slice(0, 150); }
+        throw new Error("Gemini " + response.status + ": " + detail);
       }
 
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       if (!text) {
         const reason = data.candidates?.[0]?.finishReason || "unknown";
-        throw new Error("Reponse vide de Gemini (finishReason: " + reason + ")");
+        const safetyRatings = JSON.stringify(data.candidates?.[0]?.safetyRatings || []);
+        console.error("Gemini empty response, finishReason:", reason, "safety:", safetyRatings);
+        throw new Error("Reponse vide (" + reason + ")");
       }
 
       let clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
@@ -121,28 +146,51 @@ Retourne UNIQUEMENT les sessions modifiees dans {"sessions":{...},"rationale":".
     // chat_edit uses faster model; generate/import use quality model
     const primaryModel = mode === "chat_edit" ? "gemini-2.0-flash" : "gemini-2.5-flash";
 
-    // Attempt 1, retry once on any error (except 429)
+    // Attempt 1
     let parsed: any;
+    let attempt1Error = "";
     try {
       parsed = await callGemini(0.3, primaryModel);
     } catch (e: any) {
       if (e.message === "__429__") {
-        return new Response(JSON.stringify({ error: "Trop de requetes, reessaie dans quelques secondes." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      console.warn("Tentative 1 echouee (" + e.message?.slice(0, 80) + "), retry...");
-      try {
-        parsed = await callGemini(0.1, primaryModel);
-      } catch (e2: any) {
-        if (e2.message === "__429__") {
-          return new Response(JSON.stringify({ error: "Trop de requetes, reessaie dans quelques secondes." }), {
-            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+        // Rate limited: wait 22s and retry automatically
+        console.warn("Rate limited (429), waiting 22s before retry...");
+        await sleep(22000);
+        try {
+          parsed = await callGemini(0.3, primaryModel);
+        } catch (e2: any) {
+          if (e2.message === "__429__") {
+            return new Response(JSON.stringify({ error: "Trop de requetes. Attends 30 secondes et reessaie." }), {
+              status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          attempt1Error = e2.message || "unknown";
         }
-        return new Response(JSON.stringify({ error: "Generation echouee apres 2 tentatives. Reessaie." }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      } else {
+        attempt1Error = e.message || "unknown";
+      }
+
+      if (!parsed && attempt1Error) {
+        console.warn("Tentative 1 echouee (" + attempt1Error.slice(0, 120) + "), retry temp 0.1...");
+        try {
+          parsed = await callGemini(0.1, primaryModel);
+        } catch (e3: any) {
+          if (e3.message === "__429__") {
+            await sleep(22000);
+            try {
+              parsed = await callGemini(0.1, primaryModel);
+            } catch {
+              return new Response(JSON.stringify({ error: "Trop de requetes. Attends 30 secondes et reessaie." }), {
+                status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+          } else {
+            const detail = attempt1Error.startsWith("__json_invalid__") ? "Reponse JSON invalide" : attempt1Error.slice(0, 120);
+            return new Response(JSON.stringify({ error: "Generation echouee: " + detail }), {
+              status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
       }
     }
 

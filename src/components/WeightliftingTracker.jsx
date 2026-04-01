@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, ReferenceLine } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import * as XLSX from "xlsx";
+import { PDFDocument } from "pdf-lib";
 
 const C={bg:"#08090C",s1:"#111318",s2:"#181B24",brd:"rgba(255,255,255,0.04)",brdL:"rgba(255,255,255,0.08)",tx:"#F2F2F4",tx2:"#9194A0",tx3:"#555866",ac:"#7B6FFF",acS:"rgba(123,111,255,0.12)",g:"#22C993",gS:"rgba(34,201,147,0.1)",o:"#F5A623",oS:"rgba(245,166,35,0.1)",r:"#EF4B4B",rS:"rgba(239,75,75,0.1)",b:"#3B8DF0",bS:"rgba(59,141,240,0.1)",coach:"#D4538E",coachS:"rgba(212,83,142,0.12)"};
 const BT={PERF:{c:"#EF4B4B",l:"Mvt principal"},ESTH:{c:"#7B6FFF",l:"Hypertrophie"},BESOIN:{c:"#F5A623",l:"Besoin indiv."},ASSOC:{c:"#22C993",l:"Muscles assoc."},CORE:{c:"#9194A0",l:"Core"}};
@@ -438,10 +440,92 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   const STYLES=["Mixte force/volume","Push/Pull/Legs","Full body","Upper/Lower","Specialisation"];
   const[aiTab,setAiTab]=useState("import");
   const[importText,setImportText]=useState("");
-  const[importImage,setImportImage]=useState(null);
-  const[importImagePreview,setImportImagePreview]=useState(null);
+  const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview}]
   const fileRef=useRef(null);
-  const handleImageUpload=(e)=>{const f=e.target.files?.[0];if(!f)return;const previewUrl=URL.createObjectURL(f);setImportImagePreview(previewUrl);const img=new Image();img.onload=()=>{const maxW=1400;const scale=Math.min(1,maxW/img.width);const canvas=document.createElement("canvas");canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];setImportImage(b64);};img.src=previewUrl;};
+  // Chat IA conversationnel
+  const[convMsgs,setConvMsgs]=useState([]);// [{role:"user"|"ai", content:string}]
+  const[convInput,setConvInput]=useState("");
+  const[convProgram,setConvProgram]=useState(null);// dernier programme généré
+  const[convLoading,setConvLoading]=useState(false);
+  const[convError,setConvError]=useState(null);
+  const[convCooldown,setConvCooldown]=useState(0);// secondes restantes avant prochain envoi
+  const convEndRef=useRef(null);
+  useEffect(()=>{
+    if(convCooldown<=0)return;
+    const t=setTimeout(()=>setConvCooldown(c=>Math.max(0,c-1)),1000);
+    return()=>clearTimeout(t);
+  },[convCooldown]);
+  const handleFilesUpload=(e)=>{
+    const files=Array.from(e.target.files||[]);
+    if(!files.length)return;
+    files.forEach(file=>{
+      const ext=file.name.split(".").pop().toLowerCase();
+      const isExcel=["xlsx","xls","csv","ods"].includes(ext);
+      if(isExcel){
+        // Excel/CSV → convertir en texte via SheetJS puis envoyer comme texte
+        const reader=new FileReader();
+        reader.onload=ev=>{
+          try{
+            const wb=XLSX.read(ev.target.result,{type:"array"});
+            const lines=[];
+            wb.SheetNames.forEach(name=>{
+              const ws=wb.Sheets[name];
+              const txt=XLSX.utils.sheet_to_csv(ws,{blankrows:false});
+              if(txt.trim())lines.push(`=== Feuille: ${name} ===\n${txt}`);
+            });
+            const text=lines.join("\n\n");
+            setImportText(prev=>(prev?prev+"\n\n":"")+`[Fichier Excel: ${file.name}]\n${text}`);
+            setImportFiles(prev=>[...prev,{name:file.name,mimeType:"text/plain",data:null,preview:null,isExcel:true}]);
+          }catch(err){console.error("Erreur lecture Excel",err);}
+        };
+        reader.readAsArrayBuffer(file);
+      }else if(file.type.startsWith("image/")){
+        const url=URL.createObjectURL(file);
+        const img=new Image();
+        img.onload=()=>{
+          const maxW=1400;const scale=Math.min(1,maxW/img.width);
+          const canvas=document.createElement("canvas");
+          canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
+          const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);
+          const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:"image/jpeg",data:b64,preview:url}]);
+        };
+        img.src=url;
+      }else{
+        // PDF et autres formats — envoi direct en base64
+        const reader=new FileReader();
+        reader.onload=ev=>{
+          const b64=ev.target.result.split(",")[1];
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:file.type||"application/pdf",data:b64,preview:null}]);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+    e.target.value="";
+  };
+  const removeImportFile=(idx)=>{
+    setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
+  };
+  const sendConvMessage=async()=>{
+    const msg=convInput.trim();if(!msg||convLoading||convCooldown>0||!preview)return;
+    setConvInput("");
+    setConvMsgs(prev=>[...prev,{role:"user",content:msg}]);
+    setConvLoading(true);setConvError(null);
+    setTimeout(()=>convEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
+    try{
+      const history=convMsgs.map(m=>({role:m.role==="user"?"user":"assistant",content:m.content}));
+      const payload={mode:"chat_edit",message:msg,currentProgram:preview.sessions,conversationHistory:history,sessions:SESSIONS};
+      const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
+      const data=await resp.json();
+      if(resp.status===429){setConvCooldown(30);throw new Error(data.error||"Trop de requetes");}
+      if(!resp.ok)throw new Error(data.error||"Erreur serveur");
+      setPreview(prev=>({sessions:{...prev.sessions,...data.sessions},rationale:data.rationale}));
+      setConvMsgs(prev=>[...prev,{role:"ai",content:data.rationale||"Programme mis à jour."}]);
+      setConvCooldown(8);// cooldown entre chaque message
+    }catch(e){setConvError(e.message);}
+    setConvLoading(false);
+    setTimeout(()=>convEndRef.current?.scrollIntoView({behavior:"smooth"}),100);
+  };
   const AI_URL=`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-program`;
 
   const DETAIL_FIELDS=[
@@ -487,11 +571,70 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
     setLoading(false);
   };
 
+  const stitchImages=async(images)=>{
+    // Charge toutes les images et les empile verticalement sur un seul canvas
+    const imgs=await Promise.all(images.map(f=>new Promise((res,rej)=>{
+      const img=new Image();
+      img.onload=()=>res(img);
+      img.onerror=rej;
+      img.src="data:"+f.mimeType+";base64,"+f.data;
+    })));
+    const maxW=Math.min(1400,Math.max(...imgs.map(i=>i.width)));
+    const totalH=imgs.reduce((s,i)=>s+Math.round(i.height*(maxW/i.width)),0);
+    const canvas=document.createElement("canvas");
+    canvas.width=maxW;canvas.height=Math.min(totalH,8000);
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#ffffff";ctx.fillRect(0,0,canvas.width,canvas.height);
+    let y=0;
+    for(const img of imgs){
+      const scale=maxW/img.width;
+      const h=Math.round(img.height*scale);
+      if(y+h>canvas.height)break;
+      ctx.drawImage(img,0,y,maxW,h);
+      y+=h;
+    }
+    const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];
+    return{name:"fusion_images.jpg",mimeType:"image/jpeg",data:b64,preview:null};
+  };
+
+  const mergePDFs=async(pdfs)=>{
+    const merged=await PDFDocument.create();
+    for(const f of pdfs){
+      const bytes=Uint8Array.from(atob(f.data),c=>c.charCodeAt(0));
+      const doc=await PDFDocument.load(bytes);
+      const pages=await merged.copyPages(doc,doc.getPageIndices());
+      pages.forEach(p=>merged.addPage(p));
+    }
+    const bytes=await merged.save();
+    const b64=btoa(String.fromCharCode(...bytes));
+    return{name:"fusion.pdf",mimeType:"application/pdf",data:b64,preview:null};
+  };
+
+  const mergeFilesForImport=async(files)=>{
+    const images=files.filter(f=>f.mimeType.startsWith("image/"));
+    const pdfs=files.filter(f=>f.mimeType==="application/pdf");
+    const others=files.filter(f=>!f.mimeType.startsWith("image/")&&f.mimeType!=="application/pdf");
+    const result=[];
+    if(images.length===1)result.push(images[0]);
+    else if(images.length>1)result.push(await stitchImages(images));
+    if(pdfs.length===1)result.push(pdfs[0]);
+    else if(pdfs.length>1)result.push(await mergePDFs(pdfs));
+    result.push(...others);
+    return result;
+  };
+
   const importProgram=async()=>{
-    if(!importText.trim()&&!importImage){setError("Colle un texte ou ajoute une photo de ton programme.");return;}
+    if(!importText.trim()&&!importFiles.length){setError("Colle un texte ou ajoute au moins un fichier.");return;}
     setLoading(true);setError(null);
     try{
-      const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify({mode:"import",prompt:importText||"Programme dans l'image ci-jointe",imageBase64:importImage||undefined,sessions:SESSIONS})});
+      const payload={mode:"import",prompt:importText||(importFiles.length?"Programme dans les fichiers ci-joints":""),sessions:SESSIONS};
+      // Exclure les fichiers Excel (data=null), fusionner images + PDFs en 1 seul fichier chacun
+      const binaryFiles=importFiles.filter(f=>f.data!==null);
+      if(binaryFiles.length){
+        const merged=await mergeFilesForImport(binaryFiles);
+        payload.filesData=merged.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name}));
+      }
+      const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
       setPreview(data);setStep(1);
@@ -512,7 +655,7 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
       {step===0&&(<div style={{padding:"0 0 40px"}}>
         {/* Sub-tabs */}
         <div style={{display:"flex",borderBottom:"1px solid "+C.brd,marginBottom:16}}>
-          {[{k:"import",l:"Import rapide"},{k:"form",l:"Parametres"},{k:"details",l:"Profil detaille"}].map(t=>(
+          {[{k:"import",l:"Import"},{k:"form",l:"Parametres"},{k:"details",l:"Profil"}].map(t=>(
             <button key={t.k} onClick={()=>setAiTab(t.k)} style={{flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(aiTab===t.k?C.coach:"transparent"),background:"transparent",color:aiTab===t.k?C.coach:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"}}>{t.l}</button>
           ))}
         </div>
@@ -526,12 +669,25 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
             <textarea value={importText} onChange={e=>setImportText(e.target.value)} placeholder={"Ex:\nBench Volume:\n- Dev. couche 4x10 @80kg RIR 2.5\n- Dev. incline halt. 3x12 @28kg\n\nSquat Volume:\n- Back squat 4x10 @100kg\n..."} rows={8} style={{...sL,resize:"vertical",lineHeight:1.6}}/>
           </div>
           <div style={{marginBottom:14}}>
-            <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:7}}>Ou ajoute une photo</div>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImageUpload} style={{display:"none"}}/>
-            <button onClick={()=>fileRef.current?.click()} style={{width:"100%",padding:"14px 0",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:importImage?C.gS:C.coachS,color:importImage?C.g:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              {importImage?"Photo ajoutee - Changer":"Photo / Choisir image"}
+            <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:7}}>Fichiers (images, PDF…)</div>
+            <input ref={fileRef} type="file" accept="image/*,.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.ods" multiple onChange={handleFilesUpload} style={{display:"none"}}/>
+            <button onClick={()=>fileRef.current?.click()} style={{width:"100%",padding:"14px 0",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:importFiles.length?C.gS:C.coachS,color:importFiles.length?C.g:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+              {importFiles.length?`${importFiles.length} fichier${importFiles.length>1?"s":" "} selectionne${importFiles.length>1?"s":""} — Ajouter d'autres`:"+ Ajouter fichiers (JPG, PNG, PDF…)"}
             </button>
-            {importImagePreview&&<img src={importImagePreview} alt="Preview" style={{width:"100%",borderRadius:10,marginTop:8,maxHeight:200,objectFit:"contain",background:C.s2}}/>}
+            {importFiles.length>0&&(<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6}}>
+              {importFiles.map((f,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.s2,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.brdL}}>
+                  {f.preview
+                    ?<img src={f.preview} alt={f.name} style={{width:36,height:36,borderRadius:6,objectFit:"cover",background:C.s1,flexShrink:0}}/>
+                    :<div style={{width:36,height:36,borderRadius:6,background:C.rS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📄</div>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase"}}>{f.mimeType.split("/")[1]}</div>
+                  </div>
+                  <button onClick={()=>removeImportFile(i)} style={{background:"none",border:"none",color:C.tx3,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0,fontFamily:"inherit"}}>×</button>
+                </div>
+              ))}
+            </div>)}
           </div>
           {error&&<div style={{padding:"10px 14px",borderRadius:8,background:C.rS,border:"1px solid "+C.r+"40",color:C.r,fontSize:11,marginBottom:12}}>{error}</div>}
           <button onClick={importProgram} disabled={loading} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:loading?"#333":C.coach,color:loading?C.tx3:"#fff",fontSize:14,fontWeight:700,cursor:loading?"default":"pointer",fontFamily:"inherit"}}>
@@ -581,17 +737,39 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
       </div>)}
 
       {step===1&&preview&&(<div style={{padding:"16px"}}>
-        <div style={{padding:"12px 14px",borderRadius:10,background:C.gS,border:"1px solid "+C.g+"40",marginBottom:16}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.g,marginBottom:4}}>Programme genere avec succes</div>
-          <div style={{fontSize:11,color:C.tx2,lineHeight:1.6}}>{preview.rationale}</div>
+        {/* Résumé IA */}
+        <div style={{padding:"10px 14px",borderRadius:10,background:C.gS,border:"1px solid "+C.g+"40",marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.g,marginBottom:2}}>Programme généré</div>
+          <div style={{fontSize:11,color:C.tx2,lineHeight:1.5}}>{preview.rationale}</div>
         </div>
-        <div style={{marginBottom:16}}>
-          {Object.entries(preview.sessions||{}).map(([sid,exList])=>{const s=SESSIONS.find(x=>x.id===sid);if(!s||!exList?.length)return null;return(<div key={sid} style={{background:C.s1,borderRadius:10,padding:"10px 14px",marginBottom:8,border:"1px solid "+C.brd}}><div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:6}}>{s.name} <span style={{fontSize:10,color:C.tx3}}>({exList.length} exos)</span></div>{exList.map((ex,i)=>{const wks=Object.keys(ex.weeks||{});return(<div key={i} style={{fontSize:11,color:C.tx2,padding:"3px 0",borderTop:i>0?"1px solid "+C.brd:""}}><span style={{color:getMC(ex.target||"Pecs"),fontWeight:600}}>{ex.name}</span> <span style={{color:C.tx3}}>- {ex.bloc} - S{wks[0]} a S{wks[wks.length-1]}</span></div>);})}</div>);})}</div>
+        {/* Liste exercices */}
+        <div style={{marginBottom:12}}>
+          {Object.entries(preview.sessions||{}).map(([sid,exList])=>{const s=SESSIONS.find(x=>x.id===sid);if(!s||!exList?.length)return null;return(<div key={sid} style={{background:C.s1,borderRadius:10,padding:"10px 14px",marginBottom:6,border:"1px solid "+C.brd}}><div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:5}}>{s.name} <span style={{fontSize:10,color:C.tx3}}>({exList.length} exos)</span></div>{exList.map((ex,i)=>{const wks=Object.keys(ex.weeks||{});return(<div key={i} style={{fontSize:11,color:C.tx2,padding:"3px 0",borderTop:i>0?"1px solid "+C.brd:""}}><span style={{color:getMC(ex.target||"Pecs"),fontWeight:600}}>{ex.name}</span><span style={{color:C.tx3}}> - {ex.bloc} - S{wks[0]}→S{wks[wks.length-1]}</span></div>);})}</div>);})}
+        </div>
+        {/* Chat IA pour affiner */}
+        <div style={{borderTop:"1px solid "+C.brd,paddingTop:12,marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Affiner avec l'IA</div>
+          {convMsgs.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10,maxHeight:200,overflowY:"auto"}}>
+            {convMsgs.map((m,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+                <div style={{maxWidth:"85%",padding:"8px 12px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?C.coach:C.s2,color:m.role==="user"?"#fff":C.tx,fontSize:11,lineHeight:1.5}}>{m.content}</div>
+              </div>
+            ))}
+            {convLoading&&<div style={{display:"flex"}}><div style={{padding:"8px 12px",borderRadius:"12px 12px 12px 4px",background:C.s2,color:C.tx3,fontSize:11}}>...</div></div>}
+            {convError&&<div style={{fontSize:11,color:C.r,padding:"6px 10px",borderRadius:7,background:C.rS}}>{convError}</div>}
+            <div ref={convEndRef}/>
+          </div>)}
+          <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+            <textarea value={convInput} onChange={e=>setConvInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendConvMessage();}}} placeholder='Ex: "plus de volume triceps, remplace le hack squat..."' rows={2} disabled={convLoading||convCooldown>0} style={{flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid "+(convCooldown>0?C.o+"60":C.brdL),background:C.s2,color:convCooldown>0?C.tx3:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",lineHeight:1.5}}/>
+            <button onClick={sendConvMessage} disabled={convLoading||convCooldown>0||!convInput.trim()} style={{padding:"9px 14px",borderRadius:10,border:"none",background:convInput.trim()&&!convLoading&&!convCooldown?C.coach:convCooldown>0?C.o+"30":"#333",color:convInput.trim()&&!convLoading&&!convCooldown?"#fff":convCooldown>0?C.o:C.tx3,fontSize:convCooldown>0?11:14,fontWeight:700,cursor:convInput.trim()&&!convLoading&&!convCooldown?"pointer":"default",fontFamily:"inherit",flexShrink:0,alignSelf:"flex-end",minWidth:40}}>{convLoading?"...":convCooldown>0?convCooldown+"s":"↑"}</button>
+          </div>
+        </div>
+        {/* Actions */}
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>setStep(0)} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Regenerer</button>
-          <button onClick={()=>onGenerate(preview.sessions)} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer ce programme</button>
+          <button onClick={()=>{setStep(0);setConvMsgs([]);setConvError(null);}} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Régénérer</button>
+          <button onClick={()=>onGenerate(preview.sessions)} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
         </div>
-        <div style={{fontSize:10,color:C.tx3,textAlign:"center",marginTop:8}}>Tu pourras modifier chaque exercice dans l editeur</div>
+        <div style={{fontSize:10,color:C.tx3,textAlign:"center",marginTop:8}}>Tu pourras modifier chaque exercice dans l'éditeur</div>
       </div>)}
     </div>
   </div>);
