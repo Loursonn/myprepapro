@@ -400,7 +400,7 @@ function MuscleSelector({value,onChange,multi}){
   const isOn=id=>multi?vals.includes(id):value===id;
   const toggle=id=>{if(multi){onChange(vals.includes(id)?vals.filter(v=>v!==id):[...vals,id]);}else{onChange(id);}};
   const[expanded,setExpanded]=useState({});const tog=id=>setExpanded(p=>({...p,[id]:!p[id]}));
-  return(<div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MTREE.map(g=>{const isGroup=g.s.length>0,isActive=isOn(g.id),hasSub=isGroup&&g.s.some(s=>isOn(s.id));const c=getMC(g.id);return(<div key={g.id}><button onClick={()=>{if(isGroup){tog(g.id);if(!expanded[g.id])toggle(g.id);}else toggle(g.id);}} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid "+((isActive||hasSub)?c:C.brdL),background:(isActive||hasSub)?c+"20":"transparent",color:(isActive||hasSub)?c:C.tx3,fontSize:11,fontWeight:(isActive||hasSub)?700:400,cursor:"pointer",fontFamily:"inherit",marginBottom:(isGroup&&expanded[g.id])?0:4}}>{mL(g.id)}{isGroup?" v":""}</button>{isGroup&&expanded[g.id]&&(<div style={{display:"flex",flexWrap:"wrap",gap:3,padding:"4px 0 4px 8px",borderLeft:"2px solid "+c+"40",marginLeft:4,marginBottom:4}}>{g.s.map(s=>(<button key={s.id} onClick={()=>toggle(s.id)} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+(isOn(s.id)?c:C.brdL),background:isOn(s.id)?c+"20":"transparent",color:isOn(s.id)?c:C.tx3,fontSize:10,fontWeight:isOn(s.id)?700:400,cursor:"pointer",fontFamily:"inherit"}}>{mL(s.id)}</button>))}</div>)}</div>);})}</div>);
+  return(<div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MTREE.map(g=>{const isGroup=g.s.length>0,isActive=isOn(g.id),hasSub=isGroup&&g.s.some(s=>isOn(s.id));const c=getMC(g.id);return(<div key={g.id} style={{marginBottom:(isGroup&&expanded[g.id])?0:4}}><div style={{display:"flex",gap:2,alignItems:"center"}}><button onClick={()=>toggle(g.id)} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid "+((isActive||hasSub)?c:C.brdL),background:(isActive||hasSub)?c+"20":"transparent",color:(isActive||hasSub)?c:C.tx3,fontSize:11,fontWeight:(isActive||hasSub)?700:400,cursor:"pointer",fontFamily:"inherit"}}>{mL(g.id)}</button>{isGroup&&<button onClick={()=>tog(g.id)} style={{padding:"3px 6px",borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:9,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}>{expanded[g.id]?"▲":"▼"}</button>}</div>{isGroup&&expanded[g.id]&&(<div style={{display:"flex",flexWrap:"wrap",gap:3,padding:"4px 0 4px 8px",borderLeft:"2px solid "+c+"40",marginLeft:4,marginBottom:4}}>{g.s.map(s=>(<button key={s.id} onClick={()=>toggle(s.id)} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+(isOn(s.id)?c:C.brdL),background:isOn(s.id)?c+"20":"transparent",color:isOn(s.id)?c:C.tx3,fontSize:10,fontWeight:isOn(s.id)?700:400,cursor:"pointer",fontFamily:"inherit"}}>{mL(s.id)}</button>))}</div>)}</div>);})}</div>);
 }
 
 function MethodParamsForm({method,params,onChange,exosInSession,currentExId}){
@@ -600,7 +600,7 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
 function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,currentWeek=1}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;const progPct=blockConfig?.progressionPct||2.5;const deloadPct=blockConfig?.deloadPct||40;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
-  const[sess,setSess]=useState(0);const[week,setWeek]=useState(1);const[openEx,setOpenEx]=useState(null);
+  const[sess,setSess]=useState(0);const[week,setWeek]=useState(1);const[openEx,setOpenEx]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
   const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#7B6FFF",e:"NEW"});
   const dropRef=useRef(null);
   const[showAI,setShowAI]=useState(false);
@@ -640,7 +640,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     const newExos={};
     Object.keys(exos).forEach(sessId=>{
       newExos[sessId]=(exos[sessId]||[]).map(ex=>{
-        const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");if(eType!=="muscu")return ex;
+        const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");if(eType!=="muscu"&&eType!=="halterophilie")return ex;
         const w1=ex.weeks?.[1]||{};
         const tier=getExTier(ex.name,ex);
         const tc=tierCfg[tier]||tierCfg[3];
@@ -709,7 +709,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     const suffix=raw!==norm?raw.replace(norm,"").replace(/^\s*\(?/,"").replace(/\)?\s*$/,"").trim():"";
     const id="custom_"+sid+"_"+Date.now();
     const coachNote=suffix||"";
-    const isMuscu=newEx.exType==="muscu";
+    const isMuscu=newEx.exType==="muscu"||newEx.exType==="halterophilie";
     setExos(prev=>({...prev,[sid]:[...(prev[sid]||[]),{id,name:norm||raw,bloc:newEx.bloc,target:newEx.target,exType:newEx.exType||"muscu",isFlexibility:!isMuscu,tier:isMuscu?(newEx.tier||3):undefined,weeks:{1:{coachNote:coachNote||undefined}}}]}));
     setNewEx({name:"",bloc:sessBlocs[0]?.id||null,target:"Pecs",exType:"muscu",tier:3});setExSearch("");setAddForm(false);
   };
@@ -860,14 +860,23 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
       ← Annuler la suppression ({undoStack.length})
     </button>)}
 
+    {exList.length>3&&<div style={{marginBottom:10}}>
+      <input value={exosSearch} onChange={e=>setExosSearch(e.target.value)} placeholder="Rechercher dans la séance..." style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit",boxSizing:"border-box",marginBottom:6,outline:"none"}}/>
+      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+        {[{k:"",l:"Tous"},{k:"muscu",l:"Muscu"},{k:"halterophilie",l:"Halté."},{k:"plio",l:"Plio"},{k:"mobilite",l:"Mob."}].map(({k,l})=>{const on=exosTypeFilter===k;const tc={muscu:C.tx2,halterophilie:"#8b5cf6",plio:C.o,mobilite:C.b,"":C.tx3}[k];return(<button key={k} onClick={()=>setExosTypeFilter(k)} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(on?(k?tc:C.coach):C.brdL),background:on?(k?tc+"20":C.coachS):"transparent",color:on?(k?tc:C.coach):C.tx3,fontSize:11,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>);})}
+        {(exosSearch||exosTypeFilter)&&<button onClick={()=>{setExosSearch("");setExosTypeFilter("");}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
+      </div>
+    </div>}
     {(()=>{
       // Group exercises by bloc preserving display order
       const groups=[];const seenBloc=new Set();
-      exList.forEach(ex=>{
+      const filteredExList=exList.filter(ex=>{const nameMatch=!exosSearch||ex.name.toLowerCase().includes(exosSearch.toLowerCase());const et=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const typeMatch=!exosTypeFilter||et===exosTypeFilter;return nameMatch&&typeMatch;});
+      filteredExList.forEach(ex=>{
         const key=ex.bloc||"__no_bloc__";
         if(!seenBloc.has(key)){seenBloc.add(key);groups.push({blocId:ex.bloc,exs:[]});}
         groups.find(g=>g.blocId===ex.bloc).exs.push(ex);
       });
+      if(filteredExList.length===0&&exList.length>0)return[<div key="empty" style={{textAlign:"center",padding:"20px 0",color:C.tx3,fontSize:12}}>Aucun exercice ne correspond</div>];
       return groups.map(({blocId,exs:groupExs})=>{
         const bloc=getBlocById(blocId);const blocC=bloc?.color||C.tx3;
         return(<div key={blocId||"__no_bloc__"} style={{marginBottom:14,borderRadius:14,border:"1px solid "+blocC+(bloc?"40":"20"),background:blocC+(bloc?"0D":"00"),overflow:"hidden"}}>
@@ -880,7 +889,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           {/* Exercises */}
           <div style={{padding:bloc?"6px 8px":"0"}}>
           {groupExs.map(ex=>{
-            const exIdx=exList.indexOf(ex);const wd=ex.weeks[week]||{};const isOpen=openEx===ex.id;const sk=ex.id+"_"+week;const aNote=athleteNotes[sk]||"";const curM=allMethods[wd.method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu";const exTier=getExTier(ex.name,ex);const exTc=tierCfg[exTier]||tierCfg[3];const typeLabels={muscu:"Muscu",plio:"Plio",mobilite:"Mobilité"};const typeColors={muscu:C.tx3,plio:C.o,mobilite:C.b};
+            const exIdx=exList.indexOf(ex);const wd=ex.weeks[week]||{};const isOpen=openEx===ex.id;const sk=ex.id+"_"+week;const aNote=athleteNotes[sk]||"";const curM=allMethods[wd.method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";const exTier=getExTier(ex.name,ex);const exTc=tierCfg[exTier]||tierCfg[3];const typeLabels={muscu:"Muscu",plio:"Plio",mobilite:"Mobilité",halterophilie:"Halté."};const typeColors={muscu:C.tx3,plio:C.o,mobilite:C.b,halterophilie:"#8b5cf6"};
             return(<div key={ex.id} draggable={true} onDragStart={e=>{setDragId(ex.id);e.dataTransfer.effectAllowed="move";}} onDragOver={e=>{e.preventDefault();setDragOverId(ex.id);}} onDrop={e=>{e.preventDefault();if(dragId&&dragId!==ex.id)reorderExercise(dragId,ex.id);setDragId(null);setDragOverId(null);}} onDragEnd={()=>{setDragId(null);setDragOverId(null);}} style={{background:C.s1,borderRadius:10,marginBottom:4,border:"1px solid "+(dragOverId===ex.id?C.ac:C.brd),overflow:"hidden",opacity:dragId===ex.id?0.45:1,transition:"opacity 0.15s,border-color 0.15s"}}>
               <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"11px 13px",cursor:"pointer",gap:10}}>
                 <div style={{color:C.tx3+"60",fontSize:13,cursor:"grab",userSelect:"none",flexShrink:0}} onMouseDown={e=>e.stopPropagation()}>⠿</div>
@@ -888,9 +897,9 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:13,fontWeight:600}}>{ex.name}</span>
-                    {isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:typeColors[eType]+"20",color:typeColors[eType],fontWeight:600}}>{typeLabels[eType]}</span>}
+                    {eType!=="muscu"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:typeColors[eType]+"20",color:typeColors[eType],fontWeight:600}}>{typeLabels[eType]}</span>}
                   </div>
-                  {!isFlex&&wd.kg?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.kg}kg - {wd.sets}x{wd.repsRange||"?"} - <span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>{curM?" - "+curM.e+" "+curM.label:""}</div>
+                  {!isFlex&&(wd.pdc||wd.kg)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.pdc?"PDC":wd.kg+"kg"} - {wd.sets}x{wd.repsRange||"?"} - <span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>{curM?" - "+curM.e+" "+curM.label:""}</div>
                   :isFlex&&wd.sets?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>
                   :<div style={{fontSize:11,color:C.tx3,marginTop:2}}>Aucune prescription</div>}
                 </div>
@@ -902,7 +911,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                   <span style={{fontSize:12,color:C.tx3}}>{isOpen?"^":"v"}</span>
                 </div>
               </div>
-              {isOpen&&(<div style={{padding:"0 13px 16px",borderTop:"1px solid "+C.brd}}>
+              {isOpen&&(<div onMouseDown={e=>e.stopPropagation()} style={{padding:"0 13px 16px",borderTop:"1px solid "+C.brd}}>
                 {aNote&&<div style={{margin:"12px 0",padding:"10px 12px",borderRadius:8,background:C.b+"12",border:"1px solid "+C.b+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.b,textTransform:"uppercase",marginBottom:4}}>Retour S{week}</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic"}}>"{aNote}"</div></div>}
                 <div style={{paddingTop:12,marginBottom:12,padding:"10px 12px",borderRadius:8,background:C.s2,border:"1px solid "+C.brdL}}>
                   <div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Parametres exercice</div>
@@ -915,11 +924,11 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                       </select>
                     </div>
                     <div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:4}}>Type</div>
-                      <div style={{display:"flex",gap:3}}>{[{k:"muscu",l:"Muscu",c:C.tx3},{k:"plio",l:"Plio",c:C.o},{k:"mobilite",l:"Mob.",c:C.b}].map(({k,l,c})=>{const on=eType===k;return(<button key={k} onClick={()=>updExField(ex.id,"exType",k)} style={{flex:1,padding:"5px 2px",borderRadius:6,border:"1px solid "+(on?c:C.brdL),background:on?c+"20":"transparent",color:on?c:C.tx3,fontSize:10,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>);})}</div>
+                      <div style={{display:"flex",gap:3}}>{[{k:"muscu",l:"Muscu",c:C.tx3},{k:"halterophilie",l:"Halté.",c:"#8b5cf6"},{k:"plio",l:"Plio",c:C.o},{k:"mobilite",l:"Mob.",c:C.b}].map(({k,l,c})=>{const on=eType===k;return(<button key={k} onClick={()=>updExField(ex.id,"exType",k)} style={{flex:1,padding:"5px 2px",borderRadius:6,border:"1px solid "+(on?c:C.brdL),background:on?c+"20":"transparent",color:on?c:C.tx3,fontSize:10,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>);})}</div>
                     </div>
                   </div>
                 </div>
-                {!isFlex?(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>{[{f:"kg",l:"Charge (kg)"},{f:"sets",l:"Series"}].map(({f,l})=><div key={f}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>{l}</div><input type="number" value={wd[f]??""} placeholder="--" onChange={e=>updField(ex.id,f,e.target.value)} style={fS}/></div>)}</div>
+                {!isFlex?(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>Charge<button onClick={()=>updField(ex.id,"pdc",!wd.pdc)} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(wd.pdc?C.ac:C.brdL),background:wd.pdc?C.acS:"transparent",color:wd.pdc?C.ac:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>PDC</button></div>{wd.pdc?<div style={{...fS,display:"flex",alignItems:"center",justifyContent:"center",background:C.acS,border:"1px solid "+C.ac,color:C.ac,fontWeight:700}}>PDC</div>:<input type="number" value={wd.kg??""} placeholder="--" onChange={e=>updField(ex.id,"kg",e.target.value)} style={fS}/>}</div><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div><input type="number" value={wd.sets??""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/></div></div>
                 ):(<div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div><input type="number" value={wd.sets||""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/></div>)}
                 <div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5}}>Repetitions / Duree</div><input type="text" value={wd.repsRange||""} placeholder={isFlex?"30s ou 10":"10 ou 8-12"} onChange={e=>updField(ex.id,"repsRange",e.target.value)} style={{...fS,textAlign:"left",paddingLeft:10}}/></div>
                 <div style={{display:"grid",gridTemplateColumns:isFlex?"1fr":"1fr 1fr",gap:8,marginBottom:14}}>
@@ -936,7 +945,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                   {wd.method&&<MethodParamsForm method={wd.method} params={wd.methodParams} onChange={p=>updMP(ex.id,p)} exosInSession={exList} currentExId={ex.id}/>}
                   {newMForm&&(<div style={{marginTop:8,padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+C.brdL}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}><input value={newM.label} onChange={e=>setNewM(p=>({...p,label:e.target.value}))} placeholder="Nom" style={{padding:"6px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit"}}/><input value={newM.e} onChange={e=>setNewM(p=>({...p,e:e.target.value}))} placeholder="Code" style={{padding:"6px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit"}}/></div><button onClick={addCM} style={{padding:"6px 14px",borderRadius:7,border:"none",background:C.coachS,color:C.coach,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Ajouter</button></div>)}
                 </div>)}
-                <div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Consigne technique</div><textarea value={wd.coachNote||""} onChange={e=>updField(ex.id,"coachNote",e.target.value)} placeholder="Ex: garder les omoplates retractees..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.coach+"40",background:C.coachS+"50",color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/></div>
+                <div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Consigne technique</div><textarea value={wd.coachNote||""} onChange={e=>updField(ex.id,"coachNote",e.target.value)} placeholder="Ex: garder les omoplates retractees..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.coach+"60",background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/></div>
                 {!isFlex&&wd.kg&&wd.repsRange&&<div style={{marginTop:10,padding:"8px 12px",borderRadius:8,background:C.s2,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:10,color:C.tx3}}>1RM estime</span><span style={{fontSize:14,fontWeight:700,color:C.coach}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</span></div>}
               </div>)}
             </div>);
@@ -993,13 +1002,13 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           </div>
           <div style={{marginBottom:10}}>
             <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5}}>Type d'exercice</div>
-            <div style={{display:"flex",gap:4}}>{[{k:"muscu",l:"Musculation",c:C.tx2},{k:"plio",l:"Pliométrie",c:C.o},{k:"mobilite",l:"Mobilité",c:C.b}].map(({k,l,c})=>{const on=(newEx.exType||"muscu")===k;return(<button key={k} onClick={()=>setNewEx(p=>({...p,exType:k}))} style={{flex:1,padding:"7px 4px",borderRadius:7,border:"1px solid "+(on?c:C.brdL),background:on?c+"20":"transparent",color:on?c:C.tx3,fontSize:10,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>);})}</div>
+            <div style={{display:"flex",gap:4}}>{[{k:"muscu",l:"Musculation",c:C.tx2},{k:"halterophilie",l:"Haltérophilie",c:"#8b5cf6"},{k:"plio",l:"Pliométrie",c:C.o},{k:"mobilite",l:"Mobilité",c:C.b}].map(({k,l,c})=>{const on=(newEx.exType||"muscu")===k;return(<button key={k} onClick={()=>setNewEx(p=>({...p,exType:k}))} style={{flex:1,padding:"7px 4px",borderRadius:7,border:"1px solid "+(on?c:C.brdL),background:on?c+"20":"transparent",color:on?c:C.tx3,fontSize:10,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>);})}</div>
           </div>
-          {(newEx.exType||"muscu")==="muscu"&&<div style={{marginBottom:10}}>
+          {["muscu","halterophilie"].includes(newEx.exType||"muscu")&&<div style={{marginBottom:10}}>
             <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5}}>Categorie surcharge</div>
             <div style={{display:"flex",gap:4}}>{[1,2,3].map(t=>{const tc=tierCfg[t];return(<button key={t} onClick={()=>setNewEx(p=>({...p,tier:t}))} style={{flex:1,padding:"6px 4px",borderRadius:7,border:"1px solid "+((newEx.tier||3)===t?tc.c:C.brdL),background:(newEx.tier||3)===t?tc.c+"20":"transparent",color:(newEx.tier||3)===t?tc.c:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{tc.label}</button>);})}</div>
           </div>}
-          <div style={{display:"grid",gridTemplateColumns:(newEx.exType||"muscu")!=="muscu"?"1fr":"1fr 1fr",gap:8,marginBottom:12}}>
+          <div style={{display:"grid",gridTemplateColumns:!["muscu","halterophilie"].includes(newEx.exType||"muscu")?"1fr":"1fr 1fr",gap:8,marginBottom:12}}>
             <div>
               <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5}}>Bloc</div>
               <select value={newEx.bloc||""} onChange={e=>setNewEx(p=>({...p,bloc:e.target.value||null}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+(sessBlocs.find(b=>b.id===newEx.bloc)?.color||C.brdL),background:C.s2,color:sessBlocs.find(b=>b.id===newEx.bloc)?.color||C.tx,fontSize:12,fontFamily:"inherit"}}>
@@ -1007,7 +1016,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 {sessBlocs.map(b=><option key={b.id} value={b.id}>{b.label}</option>)}
               </select>
             </div>
-            {(newEx.exType||"muscu")==="muscu"&&<div>
+            {["muscu","halterophilie"].includes(newEx.exType||"muscu")&&<div>
               <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5}}>Muscle cible</div>
               <select value={newEx.target} onChange={e=>setNewEx(p=>({...p,target:e.target.value}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit"}}>
                 {ALL_MIDS.filter(m=>!MTREE.find(g=>g.id===m&&g.s.length>0)).map(m=><option key={m} value={m}>{mL(m)}</option>)}
@@ -1039,7 +1048,7 @@ function CoachExoParams({exMeta,setExMeta,exos,setExos,blockConfig}){
   const usageCount=(name)=>{const norm=normalizeExName(name).toLowerCase();return Object.values(exos||{}).flat().filter(e=>normalizeExName(e.name).toLowerCase()===norm).length;};
   const filt=allU.filter(e=>e.name.toLowerCase().includes(search.toLowerCase()));
   const upd=(name,f,v)=>setExMeta(p=>({...p,[name]:{...(p[name]||{}),[f]:v}}));
-  const togSec=(name,m)=>{const pr=normPrimary(exMeta[name]?.primary);if(pr.includes(m))return;const c=exMeta[name]?.secondary||[];upd(name,"secondary",c.includes(m)?c.filter(x=>x!==m):[...c,m]);};
+  const togSec=(name,m,curMeta)=>{const base=curMeta||exMeta[name]||{};const pr=normPrimary(base.primary);if(pr.includes(m))return;const c=base.secondary||[];setExMeta({...exMeta,[name]:{...base,secondary:c.includes(m)?c.filter(x=>x!==m):[...c,m]}});};
   const updTierForEx=(exName,newTier)=>{
     const norm=normalizeExName(exName).toLowerCase();
     const newExos={};Object.keys(exos||{}).forEach(sid=>{newExos[sid]=(exos[sid]||[]).map(e=>normalizeExName(e.name).toLowerCase()===norm?{...e,tier:newTier}:e);});
@@ -1048,7 +1057,7 @@ function CoachExoParams({exMeta,setExMeta,exos,setExos,blockConfig}){
   };
   const updExTypeForEx=(exName,newType)=>{
     const norm=normalizeExName(exName).toLowerCase();
-    const newExos={};Object.keys(exos||{}).forEach(sid=>{newExos[sid]=(exos[sid]||[]).map(e=>normalizeExName(e.name).toLowerCase()===norm?{...e,exType:newType,isFlexibility:newType!=="muscu"}:e);});
+    const newExos={};Object.keys(exos||{}).forEach(sid=>{newExos[sid]=(exos[sid]||[]).map(e=>normalizeExName(e.name).toLowerCase()===norm?{...e,exType:newType,isFlexibility:newType!=="muscu"&&newType!=="halterophilie"}:e);});
     setExos(newExos);
     setExMeta({...exMeta,[exName]:{...(exMeta[exName]||{}),exType:newType}});
   };
@@ -1089,7 +1098,7 @@ function CoachExoParams({exMeta,setExMeta,exos,setExos,blockConfig}){
       <MuscleSelector value={newTarget} onChange={v=>{const arr=normPrimary(v);if(arr.length<=4)setNewTarget(arr);}} multi/>
       <button onClick={addExo} disabled={!newName.trim()} style={{width:"100%",padding:"8px",borderRadius:8,border:"none",background:C.g,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",opacity:newName.trim()?1:0.4}}>Ajouter</button>
     </div>)}
-    {filt.map(ex=>{const bt=BT[ex.bloc]||{c:C.tx3,l:"?"};const isOpen=open===(ex.id||ex.name);const meta=exMeta[ex.name]||{primary:ex.target,secondary:[]};const primaries=normPrimary(meta.primary);const pc=primaries.length>0?getMC(primaries[0]):getMC(ex.target);const curTier=getExTierFromExos(ex.name);const curTc=tierCfg[curTier]||tierCfg[3];const usage=usageCount(ex.name);const isEditing=editName===ex.name;const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isMuscu=eType==="muscu";
+    {filt.map(ex=>{const bt=BT[ex.bloc]||{c:C.tx3,l:"?"};const isOpen=open===(ex.id||ex.name);const meta=exMeta[ex.name]||{primary:ex.target,secondary:[]};const primaries=normPrimary(meta.primary);const pc=primaries.length>0?getMC(primaries[0]):getMC(ex.target);const curTier=getExTierFromExos(ex.name);const curTc=tierCfg[curTier]||tierCfg[3];const usage=usageCount(ex.name);const isEditing=editName===ex.name;const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isMuscu=eType==="muscu"||eType==="halterophilie";
       return(<div key={ex.id||ex.name} style={{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(confirmDel===ex.name?C.r+"60":C.brd),overflow:"hidden"}}>
         <div onClick={()=>{if(!isEditing&&confirmDel!==ex.name)setOpen(isOpen?null:(ex.id||ex.name));}} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
           <div style={{width:3,height:28,borderRadius:2,background:bt.c,flexShrink:0}}/>
@@ -1115,14 +1124,14 @@ function CoachExoParams({exMeta,setExMeta,exos,setExos,blockConfig}){
           </div>
           <div style={{marginBottom:12}}>
             <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:6}}>Type d'exercice</div>
-            <div style={{display:"flex",gap:4}}>{[{v:"muscu",l:"Muscu"},{v:"plio",l:"Plio"},{v:"mobilite",l:"Mobilité"}].map(({v,l})=>(<button key={v} onClick={()=>updExTypeForEx(ex.name,v)} style={{flex:1,padding:"6px 4px",borderRadius:7,border:"1px solid "+(eType===v?C.ac:C.brdL),background:eType===v?C.acS:"transparent",color:eType===v?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>))}</div>
+            <div style={{display:"flex",gap:4}}>{[{v:"muscu",l:"Muscu"},{v:"halterophilie",l:"Halté."},{v:"plio",l:"Plio"},{v:"mobilite",l:"Mobilité"}].map(({v,l})=>(<button key={v} onClick={()=>updExTypeForEx(ex.name,v)} style={{flex:1,padding:"6px 4px",borderRadius:7,border:"1px solid "+(eType===v?C.ac:C.brdL),background:eType===v?C.acS:"transparent",color:eType===v?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>))}</div>
           </div>
           {isMuscu&&(<div style={{marginBottom:12}}>
             <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:6}}>Categorie surcharge</div>
             <div style={{display:"flex",gap:4}}>{[1,2,3].map(t=>{const tc=tierCfg[t];return(<button key={t} onClick={()=>updTierForEx(ex.name,t)} style={{flex:1,padding:"6px 4px",borderRadius:7,border:"1px solid "+(curTier===t?tc.c:C.brdL),background:curTier===t?tc.c+"20":"transparent",color:curTier===t?tc.c:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{tc.label}</button>);})}</div>
             <div style={{fontSize:9,color:C.tx3,marginTop:4}}>{curTc.mode==="rir"?"+"+( curTc.kgStep??2.5)+"kg/sem · RIR "+curTc.rirStart+"→"+curTc.rirEnd:curTc.mode==="reps"?"Reps "+curTc.repsStart+"→"+curTc.repsEnd+" puis +"+( curTc.kgStep??2.5)+"kg":"Reps "+curTc.repsStart+"→"+curTc.repsEnd+" échec puis +"+( curTc.kgStep??1.25)+"kg"}</div>
           </div>)}
-          {isMuscu&&<><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:8}}>Muscles principaux <span style={{fontWeight:400,textTransform:"none"}}>(max 4)</span></div><MuscleSelector value={primaries} onChange={v=>{const arr=normPrimary(v);if(arr.length<=4){upd(ex.name,"primary",arr);const sec=(meta.secondary||[]).filter(m=>!arr.includes(m));upd(ex.name,"secondary",sec);}}} multi/><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",margin:"12px 0 8px"}}>Muscles secondaires <span style={{fontWeight:400,textTransform:"none"}}>(comptent 50% du volume)</span></div><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{ALL_MIDS.filter(m=>!primaries.includes(m)&&!MTREE.find(g=>g.id===m&&g.s.length>0)).map(m=>{const on=(meta.secondary||[]).includes(m);const mc=getMC(m);return(<button key={m} onClick={()=>togSec(ex.name,m)} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(on?mc:C.brdL),background:on?mc+"15":"transparent",color:on?mc:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{on?"✓ ":""}{mL(m)}</button>);})}</div></>}</div></div>)}
+          {isMuscu&&<><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:8}}>Muscles principaux <span style={{fontWeight:400,textTransform:"none"}}>(max 4)</span></div><MuscleSelector value={primaries} onChange={v=>{const arr=normPrimary(v);if(arr.length<=4){const sec=(meta.secondary||[]).filter(m=>!arr.includes(m));setExMeta(p=>({...p,[ex.name]:{...(p[ex.name]||{}),primary:arr,secondary:sec}}));}}} multi/><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",margin:"12px 0 8px"}}>Muscles secondaires <span style={{fontWeight:400,textTransform:"none"}}>(comptent 50% du volume)</span></div><MuscleSelector value={meta.secondary||[]} onChange={v=>{const arr=normPrimary(v).filter(m=>!primaries.includes(m));setExMeta({...exMeta,[ex.name]:{...meta,secondary:arr}});}} multi/></>}</div></div>)}
       </div>);
     })}
     <div style={{fontSize:10,color:C.tx3,textAlign:"center",padding:"12px 0"}}>{filt.length} exercice{filt.length>1?"s":""} dans la base</div>
@@ -1517,11 +1526,11 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const[step,setStep]=useState(initialSess?1:0);const[wk,setWk]=useState(currentWeek);
   const[selectedSess,setSelectedSess]=useState(initialSess||null);const[openEx,setOpenEx]=useState(null);
-  useEffect(()=>{if(step===0)setWk(currentWeek);},[currentWeek]);
+  useEffect(()=>{if(step===0)setWk(currentWeek);},[currentWeek,step]);
   const sid=selectedSess?.id||null;const exercises=sid?exos[sid]||[]:[];
   const sessIsDone=(completedSessions[wk]||[]).includes(sid);
   const allSetsDone=useMemo(()=>{if(!sid||!exercises.length)return false;return exercises.every(ex=>{const s=sets[ex.id+"_"+wk];return s?.length>0&&s.every(x=>x.done);});},[exercises,sets,wk,sid]);
-  useEffect(()=>{if(allSetsDone&&sid&&step===1&&!sessIsDone)completeSession(sid,wk);},[allSetsDone]);
+  useEffect(()=>{if(allSetsDone&&sid&&step===1&&!sessIsDone)completeSession(sid,wk);},[allSetsDone,sid,wk,step,sessIsDone]);
   const exosMap=useMemo(()=>exercises.reduce((a,e)=>({...a,[e.id]:e.name}),{}),[exercises]);
 
   const crumb=(<div style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px 0",fontSize:11,color:C.tx3,flexWrap:"wrap"}}>
@@ -1563,16 +1572,16 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
     {wk===dw&&<div style={{padding:"8px 14px",borderRadius:8,background:C.bS,border:"1px solid "+C.b+"40",marginBottom:10,fontSize:11,color:C.b,fontWeight:600}}>Semaine deload</div>}
     <div style={{display:"flex",gap:3,marginBottom:14,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWk(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===wk?"2px solid "+C.ac:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===wk?C.acS:(w===dw?C.bS:"transparent"),color:w===wk?C.ac:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>
     <div style={{marginBottom:14,background:C.s1,borderRadius:12,padding:"10px 12px",border:"1px solid "+C.brd}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Timer repos</div><RestTimer timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onSetDur={onTimerSetDur} onStart={onTimerStart} onStop={onTimerStop}/></div>
-    {exercises.map(ex=>{const wd=ex.weeks[wk];const showH=ex.bloc!==lb;lb=ex.bloc;const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;const rows=sets[sk]||[];const done=rows.filter(r=>r.done).length;const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];const isFlex=ex.isFlexibility;
+    {exercises.map(ex=>{const wd=ex.weeks[wk];const showH=ex.bloc!==lb;lb=ex.bloc;const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;const rows=sets[sk]||[];const done=rows.filter(r=>r.done).length;const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
       return(<div key={ex.id}>
         {showH&&<div style={{display:"flex",alignItems:"center",gap:8,margin:"14px 0 8px",padding:"7px 12px",borderRadius:8,background:bt.c+"18",border:"1px solid "+bt.c+"35"}}><div style={{width:4,height:16,borderRadius:2,background:bt.c,flexShrink:0}}/><span style={{fontSize:10,fontWeight:700,color:bt.c,textTransform:"uppercase",letterSpacing:"0.8px"}}>{bt.l}</span></div>}
         <div style={{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}>
           <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
             <div style={{width:3,height:32,borderRadius:2,background:allDone?C.g:bt.c,flexShrink:0}}/>
-            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.kg}kg - {wd.sets}x{wd.repsRange||"?"}{wd.tempo?" - "+wd.tempo:""} - <span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span></div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
+            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {wd.sets}x{wd.repsRange||"?"}{wd.tempo?" - "+wd.tempo:""} - <span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span></div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>{rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}<span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span></div>
           </div>
-          {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}><div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div><div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+          {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
         </div>
       </div>);
     })}
@@ -1582,11 +1591,125 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   return null;
 }
 
+function MuscleVolumeCard({exos,exMeta,sets,sessions,weeksArr,tw}){
+  const wks=weeksArr||Array.from({length:tw||6},(_,i)=>i+1);
+  const[wk,setWk]=useState(wks[0]);
+  const[showSubs,setShowSubs]=useState(false);
+  const[panel,setPanel]=useState(null);
+  const muscleData=useMemo(()=>{
+    const m={};
+    Object.entries(exos).forEach(([sid,exList])=>{
+      const sess=sessions.find(s=>s.id===sid);
+      (exList||[]).filter(ex=>{const et=ex.exType||(ex.isFlexibility?"mobilite":"muscu");return (et==="muscu"||et==="halterophilie")&&ex.weeks?.[wk]?.sets;}).forEach(ex=>{
+        const meta=exMeta[ex.name]||exMeta[normalizeExName(ex.name)]||{};
+        const prim=normPrimary(meta.primary||ex.target);
+        const sec=meta.secondary||[];
+        const pl=ex.weeks[wk]?.sets||0;
+        const done=(sets[ex.id+"_"+wk]||[]).filter(r=>r.done).length;
+        const add=(mid,factor)=>{
+          if(!m[mid])m[mid]={pl:0,done:0,exs:[]};
+          m[mid].pl+=pl*factor;m[mid].done+=done*factor;
+          if(!m[mid].exs.find(e=>e.name===ex.name&&e.sid===sid))m[mid].exs.push({name:ex.name,sid,sessName:sess?.name||sess?.short||"",pl,done,factor,reps:ex.weeks[wk]?.repsRange,kg:ex.weeks[wk]?.kg});
+        };
+        prim.forEach(mid=>add(mid,1));sec.forEach(mid=>add(mid,0.5));
+      });
+    });
+    Object.values(m).forEach(v=>{v.pl=Math.round(v.pl);v.done=Math.round(v.done);});
+    return m;
+  },[exos,exMeta,sets,sessions,wk]);
+  const dispData=useMemo(()=>{
+    if(showSubs)return muscleData;
+    const agg={};
+    Object.entries(muscleData).forEach(([mid,data])=>{
+      const par=MTREE.find(g=>g.id===mid)||MTREE.find(g=>g.s?.some(s=>s.id===mid));
+      const pid=par?.id||mid;
+      if(!agg[pid])agg[pid]={pl:0,done:0,exs:[]};
+      agg[pid].pl+=data.pl;agg[pid].done+=data.done;
+      data.exs.forEach(e=>{if(!agg[pid].exs.find(x=>x.name===e.name&&x.sid===e.sid))agg[pid].exs.push(e);});
+    });
+    return agg;
+  },[muscleData,showSubs]);
+  const sorted=Object.entries(dispData).sort((a,b)=>b[1].pl-a[1].pl);
+  const maxP=Math.max(...sorted.map(([,d])=>d.pl),1);
+  const panelD=panel?dispData[panel]:null;
+  const bNav={padding:"5px 10px",borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:13,cursor:"pointer",fontFamily:"inherit"};
+  if(!sorted.length)return(<div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Séries par muscle</div><div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"14px 0"}}>Aucun exercice configuré pour S{wk}</div></div>);
+  return(<>
+    {panel&&<div onClick={()=>setPanel(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:199}}/>}
+    {panel&&panelD&&(<div style={{position:"fixed",top:0,right:0,bottom:0,width:340,background:C.bg,zIndex:200,borderLeft:"1px solid "+C.brdL,display:"flex",flexDirection:"column",overflowY:"auto",boxShadow:"-8px 0 32px rgba(0,0,0,0.4)"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.brd,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:C.bg,zIndex:1}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:800,color:getMC(panel)}}>{mL(panel)}</div>
+          <div style={{fontSize:11,color:C.tx3,marginTop:2}}>S{wk} — <span style={{color:panelD.done>=panelD.pl&&panelD.pl>0?C.g:C.tx2,fontWeight:600}}>{panelD.done} réalisées</span> / {panelD.pl} prévues</div>
+        </div>
+        <button onClick={()=>setPanel(null)} style={{background:"none",border:"none",color:C.tx3,fontSize:22,cursor:"pointer",fontFamily:"inherit",lineHeight:1,padding:"4px 8px"}}>×</button>
+      </div>
+      <div style={{padding:"14px 16px",flex:1}}>
+        <div style={{height:5,background:C.s2,borderRadius:3,overflow:"hidden",marginBottom:16}}>
+          <div style={{height:"100%",width:panelD.pl>0?Math.min(panelD.done/panelD.pl*100,100)+"%":"0%",background:panelD.done>=panelD.pl&&panelD.pl>0?C.g:getMC(panel),borderRadius:3,transition:"width 0.4s"}}/>
+        </div>
+        {panelD.exs.length===0&&<div style={{color:C.tx3,fontSize:11,textAlign:"center",padding:"20px 0"}}>Aucun exercice</div>}
+        {panelD.exs.map((ex,i)=>{
+          const mc=getMC(panel);const donePct=ex.pl>0?Math.min(ex.done/ex.pl*100,100):0;
+          return(<div key={i} style={{marginBottom:12,padding:"12px 14px",borderRadius:12,background:C.s1,border:"1px solid "+(ex.factor<1?C.brdL:mc+"40")}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.tx,marginBottom:2}}>{ex.name}</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontSize:10,color:C.tx3,background:C.s2,padding:"2px 7px",borderRadius:5}}>{ex.sessName}</span>
+                  {ex.factor<1&&<span style={{fontSize:9,color:C.tx3,fontStyle:"italic",padding:"2px 7px",borderRadius:5,background:C.s2}}>secondaire ×0.5</span>}
+                </div>
+              </div>
+              <div style={{textAlign:"right",marginLeft:8}}>
+                <div style={{fontSize:16,fontWeight:800,color:donePct>=100?C.g:mc}}>{ex.done}<span style={{fontSize:10,color:C.tx3,fontWeight:400}}>/{ex.pl}</span></div>
+                <div style={{fontSize:9,color:C.tx3}}>séries</div>
+              </div>
+            </div>
+            {(ex.kg>0||ex.reps)&&<div style={{fontSize:10,color:C.tx3,marginBottom:6}}>{ex.kg>0?ex.kg+"kg":""}{ex.kg>0&&ex.reps?" × ":""}{ex.reps||""}</div>}
+            <div style={{height:4,background:C.s2,borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:"100%",width:donePct+"%",background:donePct>=100?C.g:mc,borderRadius:2,transition:"width 0.4s"}}/>
+            </div>
+          </div>);
+        })}
+      </div>
+    </div>)}
+    <div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Séries par muscle</div>
+        <button onClick={()=>setShowSubs(!showSubs)} style={{padding:"3px 10px",borderRadius:6,border:"1px solid "+(showSubs?C.ac:C.brdL),background:showSubs?C.acS:"transparent",color:showSubs?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Sous-groupes</button>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <button onClick={()=>setWk(w=>wks[Math.max(0,wks.indexOf(w)-1)])} disabled={wk===wks[0]} style={{...bNav,opacity:wk===wks[0]?0.3:1}}>←</button>
+        <div style={{display:"flex",gap:4,flex:1,justifyContent:"center",flexWrap:"wrap"}}>
+          {wks.map(w=><button key={w} onClick={()=>setWk(w)} style={{padding:"4px 10px",borderRadius:7,border:"none",background:wk===w?C.ac:C.s2,color:wk===w?"#fff":C.tx3,fontSize:10,fontWeight:wk===w?700:400,cursor:"pointer",fontFamily:"inherit"}}> S{w}</button>)}
+        </div>
+        <button onClick={()=>setWk(w=>wks[Math.min(wks.length-1,wks.indexOf(w)+1)])} disabled={wk===wks[wks.length-1]} style={{...bNav,opacity:wk===wks[wks.length-1]?0.3:1}}>→</button>
+      </div>
+      <div style={{display:"flex",gap:12,marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:2,background:C.ac+"35"}}/><span style={{fontSize:9,color:C.tx3}}>Prévu</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:2,background:C.g}}/><span style={{fontSize:9,color:C.tx3}}>Réalisé</span></div>
+        <div style={{fontSize:9,color:C.tx3,marginLeft:"auto"}}>Cliquer pour détail →</div>
+      </div>
+      {sorted.map(([mid,data])=>{
+        const c=getMC(mid);const sel=panel===mid;
+        const planPct=data.pl/maxP*100;const realPct=data.pl>0?Math.min(data.done/data.pl*100,100)*planPct/100:0;
+        return(<div key={mid} onClick={()=>setPanel(sel?null:mid)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,cursor:"pointer",borderRadius:8,padding:"5px 6px",background:sel?C.s2:"transparent",border:"1px solid "+(sel?c+"40":"transparent"),transition:"all 0.15s"}}>
+          <span style={{fontSize:10,color:sel?c:C.tx2,width:76,flexShrink:0,textAlign:"right",fontWeight:sel?700:400}}>{mL(mid)}</span>
+          <div style={{flex:1,height:16,background:C.s2,borderRadius:4,overflow:"hidden",position:"relative"}}>
+            <div style={{position:"absolute",inset:0,width:planPct+"%",background:c+"25",borderRadius:4}}/>
+            <div style={{position:"absolute",inset:0,width:realPct+"%",background:c,borderRadius:4,transition:"width 0.4s"}}/>
+          </div>
+          <span style={{fontSize:10,fontWeight:700,color:data.done>0?c:C.tx3,width:46,textAlign:"right",fontFamily:"monospace"}}>{data.done}/{data.pl}s</span>
+        </div>);
+      })}
+    </div>
+  </>);
+}
 function WeeklyVolumeCard({exos,sets,sessions,weeksArr,tw,C}){
   const[sel,setSel]=useState(null);
   const wks=weeksArr||Array.from({length:tw||6},(_,i)=>i+1);
   const data=wks.map(wk=>{
-    const planned=Object.values(exos).flat().filter(ex=>(ex.exType||"muscu")==="muscu").reduce((s,ex)=>s+(ex.weeks[wk]?.sets||0),0);
+    const planned=Object.values(exos).flat().filter(ex=>(["muscu","halterophilie"].includes(ex.exType||"muscu"))).reduce((s,ex)=>s+(ex.weeks[wk]?.sets||0),0);
     const done=Object.entries(sets).filter(([k])=>k.endsWith("_"+wk)).reduce((s,[,rows])=>s+rows.filter(r=>r.done).length,0);
     return{wk,planned,done};
   });
@@ -1624,8 +1747,8 @@ function WeeklyVolumeCard({exos,sets,sessions,weeksArr,tw,C}){
             {prev&&<div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:d.planned-prev.planned>0?C.g:d.planned-prev.planned<0?C.r:C.tx3}}>{d.planned-prev.planned>0?"+":""}{d.planned-prev.planned}</div><div style={{fontSize:8,color:C.tx3}}>vs S{sel-1}</div></div>}
           </div>
         </div>
-        {sessions.filter(s=>(exos[s.id]||[]).some(ex=>(ex.exType||"muscu")==="muscu"&&ex.weeks[sel]?.sets)).map(s=>{
-          const sp=(exos[s.id]||[]).filter(ex=>(ex.exType||"muscu")==="muscu").reduce((sum,ex)=>sum+(ex.weeks[sel]?.sets||0),0);
+        {sessions.filter(s=>(exos[s.id]||[]).some(ex=>(["muscu","halterophilie"].includes(ex.exType||"muscu"))&&ex.weeks[sel]?.sets)).map(s=>{
+          const sp=(exos[s.id]||[]).filter(ex=>(["muscu","halterophilie"].includes(ex.exType||"muscu"))).reduce((sum,ex)=>sum+(ex.weeks[sel]?.sets||0),0);
           if(!sp)return null;
           return(<div key={s.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
             <div style={{fontSize:10,color:C.tx2,width:80,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name||s.short}</div>
@@ -1812,7 +1935,7 @@ function ExerciseCreateModal({coachId,onSave,onClose}){
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
             <div><label style={lS}>Difficulté</label><select value={form.difficulty} onChange={e=>upd('difficulty',e.target.value)} style={fS}>{['Débutant','Intermédiaire','Avancé'].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
-            <div><label style={lS}>Type</label><select value={form.ex_type} onChange={e=>upd('ex_type',e.target.value)} style={fS}><option value="muscu">Musculation</option><option value="plio">Pliométrique</option><option value="mobilite">Mobilité</option></select></div>
+            <div><label style={lS}>Type</label><select value={form.ex_type} onChange={e=>upd('ex_type',e.target.value)} style={fS}><option value="muscu">Musculation</option><option value="plio">Pliométrique</option><option value="halterophilie">Haltérophilie</option><option value="mobilite">Mobilité</option></select></div>
           </div>
           <div style={{display:'flex',gap:16}}>
             <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',fontSize:12,color:C.tx2}}><input type="checkbox" checked={form.is_compound} onChange={e=>upd('is_compound',e.target.checked)} style={{accentColor:C.ac}}/>Polyarticulaire</label>
@@ -1941,7 +2064,7 @@ function ExerciseBank({coachId,onAddToExos}){
       <button onClick={()=>setShowMusclePanel(v=>!v)} style={{flexShrink:0,padding:'5px 10px',borderRadius:8,border:'1px solid '+(fMuscles.length>0?C.ac:C.brdL),background:fMuscles.length>0?C.acS:C.s1,color:fMuscles.length>0?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:5}}>
         Muscles{fMuscles.length>0&&<span style={{background:C.ac,color:'#fff',borderRadius:10,padding:'1px 6px',fontSize:10,fontWeight:700}}>{fMuscles.length}</span>}
       </button>
-      {[{l:'Équip.',v:fEquip,s:setFEquip,o:EQUIPS},{l:'Niveau',v:fDiff,s:setFDiff,o:['Débutant','Intermédiaire','Avancé']},{l:'Type',v:fType,s:setFType,o:['muscu','plio','mobilite']}].map(({l,v,s,o})=>(
+      {[{l:'Équip.',v:fEquip,s:setFEquip,o:EQUIPS},{l:'Niveau',v:fDiff,s:setFDiff,o:['Débutant','Intermédiaire','Avancé']},{l:'Type',v:fType,s:setFType,o:['muscu','halterophilie','plio','mobilite']}].map(({l,v,s,o})=>(
         <select key={l} value={v} onChange={e=>{s(e.target.value);setPage(0);}} style={{flexShrink:0,padding:'5px 8px',borderRadius:8,border:'1px solid '+(v?C.ac:C.brdL),background:v?C.acS:C.s1,color:v?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',outline:'none'}}>
           <option value=''>{l}</option>{o.map(x=><option key={x} value={x}>{x}</option>)}
         </select>
@@ -2021,7 +2144,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
   const[blockConfig,setBlockConfigState]=useState(DEF_BLOCK_CONFIG);
   const[loaded,setLoaded]=useState(false);const[saveStatus,setSaveStatus]=useState(null);
   const[weekJustCompleted,setWeekJustCompleted]=useState(null);const[showBilan,setShowBilan]=useState(false);
-  const[showWellness,setShowWellness]=useState(false);const[milestoneNotif,setMilestoneNotif]=useState(null);
+  const[showWellness,setShowWellness]=useState(false);const[milestoneNotif,setMilestoneNotif]=useState(null);const[autoProgNotif,setAutoProgNotif]=useState(null);
   const[blockHistory,setBlockHistoryState]=useState([]);
   const[weekSchedule,setWeekScheduleState]=useState({});
   const[showNewBlock,setShowNewBlock]=useState(false);const[showBlockHistory,setShowBlockHistory]=useState(false);
@@ -2032,7 +2155,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
   const[timerActive,setTimerActive]=useState(false);const[timerFinished,setTimerFinished]=useState(false);
   const timerRef=useRef(null);
   const playDing=()=>{try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const mk=(freq,t0,dur,vol=0.4)=>{const o=ctx.createOscillator();const g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=freq;o.type="sine";g.gain.setValueAtTime(vol,t0);g.gain.exponentialRampToValueAtTime(0.001,t0+dur);o.start(t0);o.stop(t0+dur);};mk(880,ctx.currentTime,1.2);mk(1108,ctx.currentTime+0.25,1.0,0.3);mk(1318,ctx.currentTime+0.5,0.9,0.2);}catch(e){}};
-  useEffect(()=>{if(timerActive&&timerLeft>0){timerRef.current=setInterval(()=>setTimerLeft(l=>l-1),1000);return()=>clearInterval(timerRef.current);}if(timerActive&&timerLeft<=0){setTimerActive(false);setTimerFinished(true);playDing();}},[timerActive,timerLeft]);
+  useEffect(()=>{if(!timerActive||timerLeft<=0)return;const tid=setInterval(()=>setTimerLeft(l=>l-1),1000);timerRef.current=tid;return()=>clearInterval(tid);},[timerActive]);
+  useEffect(()=>{if(timerActive&&timerLeft<=0){setTimerActive(false);setTimerFinished(true);playDing();}},[timerActive,timerLeft]);
   const timerSetDur=d=>{setTimerDur(d);setTimerLeft(d);setTimerActive(false);setTimerFinished(false);};
   const timerStart=()=>{setTimerLeft(timerDur);setTimerActive(true);setTimerFinished(false);};
   const timerStop=()=>{clearInterval(timerRef.current);setTimerActive(false);setTimerFinished(false);setTimerLeft(timerDur);};
@@ -2124,7 +2248,76 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
   const activeInjuries=injuries.filter(i=>i.status!=="Guerie");
 
   const switchMode=m=>{setMode(m);if(m==="coach")setCoachTab("prog");else setTab("dash");};
-  const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);if(newW.length>=goals.sessionsPerWeek){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
+  const autoProgressOnComplete=(sessId,completedWeek,currentExos)=>{
+    const sessExos=(currentExos||exos)[sessId]||[];
+    if(!sessExos.length)return;
+    const tierCfgL=blockConfig?.tierConfig||DEF_TIER_CONFIG;
+    const dwL=blockConfig?.deloadWeek||tw;
+    const futureWeeks=weeksArr.filter(w=>w>completedWeek);
+    const futureTrainWeeks=futureWeeks.filter(w=>w!==dwL);
+    if(!futureWeeks.length)return;
+    let changed=false;
+    const newSessExos=sessExos.map(ex=>{
+      const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");
+      if(eType!=="muscu"&&eType!=="halterophilie")return ex;
+      const doneRows=(sets[ex.id+"_"+completedWeek]||[]).filter(r=>r.done);
+      if(!doneRows.length)return ex;
+      const tier=getExTier(ex.name,ex);
+      const tc=tierCfgL[tier]||tierCfgL[3];
+      const plannedWd=ex.weeks[completedWeek]||{};
+      // Compute effective performance from done rows
+      const mainRows=doneRows.filter(r=>!r.type||r.type==="set");
+      const refRows=mainRows.length?mainRows:doneRows;
+      const kgVals=refRows.map(r=>r.kg||0).filter(v=>v>0);
+      const baseKg=kgVals.length?kgVals[Math.floor(kgVals.length/2)]:(plannedWd.pdc?0:(plannedWd.kg||0));
+      const basePdc=!!(plannedWd.pdc&&!baseKg);
+      const repsVals=mainRows.filter(r=>r.reps>0).map(r=>r.reps);
+      const baseReps=repsVals.length?Math.round(repsVals.reduce((a,b)=>a+b,0)/repsVals.length):(parseReps(plannedWd.repsRange)||10);
+      const rirVals=mainRows.map(r=>r.rir).filter(v=>v!==null&&v!==undefined&&!isNaN(v));
+      const baseRir=rirVals.length?Math.round(rirVals.reduce((a,b)=>a+b,0)/rirVals.length*2)/2:(plannedWd.rir??tc.rirStart??2);
+      const baseSets=mainRows.length||plannedWd.sets||3;
+      const newWeeks={...ex.weeks};
+      futureWeeks.forEach(w=>{
+        if((completedSessions[w]||[]).includes(sessId))return;// skip already-done weeks
+        const existingWd=newWeeks[w]||{};
+        const preserve={coachNote:existingWd.coachNote,tempo:existingWd.tempo,method:existingWd.method,methodParams:existingWd.methodParams};
+        const kgBase=basePdc?undefined:baseKg;
+        if(w===dwL){
+          const dlPct=tc.deloadPct||40;
+          newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:Math.round(kgBase*(1-dlPct/100)/2.5)*2.5}:{})),sets:Math.max(2,Math.round(baseSets*0.6)),rir:(tc.rirStart||2)+2,repsRange:String(baseReps)};
+        }else{
+          const wIdx=futureTrainWeeks.indexOf(w);// 0-based among future training weeks
+          const total=futureTrainWeeks.length;
+          const kgStep=tc.kgStep??2.5;
+          if(tc.mode==="rir"){
+            const rirDrop=baseRir>=(tc.rirEnd??0)?Math.max(0,baseRir-(tc.rirEnd??0))/Math.max(1,total):0;
+            const newRir=Math.max(tc.rirEnd??0,Math.round((baseRir-rirDrop*(wIdx+1))*2)/2);
+            newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:roundHalf(kgBase+kgStep*(wIdx+1))}:{})),sets:baseSets,repsRange:String(baseReps),rir:newRir};
+          }else if(tc.mode==="reps"){
+            const repTarget=tc.repsEnd||12;
+            const repGap=Math.max(0,repTarget-baseReps);
+            const repStep=total?Math.ceil(repGap/total):0;
+            const newReps=Math.min(repTarget,baseReps+repStep*(wIdx+1));
+            const rirDrop=(baseRir-(tc.rirEnd||1))/Math.max(1,total);
+            const newRir=Math.max(tc.rirEnd||1,Math.round((baseRir-rirDrop*(wIdx+1))*2)/2);
+            const cycleLen=repGap+1||1;const cycleNum=Math.floor((wIdx+1)/cycleLen);
+            newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:roundHalf(kgBase+kgStep*cycleNum)}:{})),sets:baseSets,repsRange:String(newReps),rir:newRir};
+          }else{
+            newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:roundHalf(kgBase+kgStep*(wIdx+1))}:{})),sets:baseSets,repsRange:String(baseReps),rir:tc.rir??0};
+          }
+        }
+        changed=true;
+      });
+      return{...ex,weeks:newWeeks};
+    });
+    if(changed){
+      const newExos={...(currentExos||exos),[sessId]:newSessExos};
+      setExos(newExos);
+      setAutoProgNotif(`Progression S${completedWeek+1}→S${tw} mise à jour`);
+      setTimeout(()=>setAutoProgNotif(null),3500);
+    }
+  };
+  const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);autoProgressOnComplete(sessId,week);if(newW.length>=goals.sessionsPerWeek){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
   const uncompleteSession=(sessId,week)=>setCompletedSessions({...completedSessions,[week]:(completedSessions[week]||[]).filter(s=>s!==sessId)});
   const[bankAddEx,setBankAddEx]=useState(null);const[bankAddMsg,setBankAddMsg]=useState('');
   const handleBankAdd=ex=>{
@@ -2144,6 +2337,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
 
     {showWellness&&(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd}}><div style={{fontSize:14,fontWeight:700}}>Wellness du jour</div><button onClick={()=>setShowWellness(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:20,cursor:"pointer",fontFamily:"inherit"}}>x</button></div><WellnessFlow existing={wellness} onSave={saveWellness} sleepTarget={goals.sleepTarget} onAddInjury={addInjury}/></div>)}
     {milestoneNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:250,background:C.s1,border:"1px solid "+C.g+"50",borderRadius:14,padding:"12px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><div><div style={{fontSize:13,fontWeight:700,color:C.g}}>Nouveau palier valide !</div><div style={{fontSize:11,color:C.tx2}}>Poids mis a jour : {milestoneNotif} kg</div></div></div>)}
+    {autoProgNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:251,background:C.s1,border:"1px solid "+C.coach+"50",borderRadius:14,padding:"10px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><span style={{fontSize:18}}>↗</span><div><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Surcharge progressive mise à jour</div><div style={{fontSize:11,color:C.tx2}}>{autoProgNotif}</div></div></div>)}
     {weekJustCompleted&&(<div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.9)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}><div style={{fontSize:26,fontWeight:800,color:C.g}}>Semaine {weekJustCompleted} validee !</div><div style={{fontSize:14,color:C.tx2}}>{weekJustCompleted<tw?"En route pour S"+(weekJustCompleted+1):"Bloc termine !"}</div><div style={{display:"flex",gap:6,marginTop:8}}>{[...Array(tw)].map((_,i)=><div key={i} style={{width:10,height:10,borderRadius:"50%",background:i<weekJustCompleted?C.g:C.s2}}/>)}</div></div>)}
     {showBilan&&(<div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}><div style={{padding:"40px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:20}}><div style={{fontSize:28,fontWeight:800,textAlign:"center"}}>Bloc termine !</div><div style={{fontSize:14,color:C.tx2}}>{totalDone} seances realisees</div><div style={{display:"flex",gap:12,width:"100%"}}>{getBig3(exos).map(({name,label,c})=>{const pr=prs[name];return(<div key={label} style={{flex:1,background:C.s1,borderRadius:14,padding:"14px 10px",textAlign:"center",border:"1px solid "+c+"30"}}><div style={{fontSize:11,color:C.tx3,marginBottom:4}}>{label}</div><div style={{fontSize:22,fontWeight:800,color:c}}>{pr?.est||"--"}</div><div style={{fontSize:9,color:C.tx3}}>kg est.</div></div>);})}</div><div style={{width:"100%",background:C.s1,borderRadius:14,padding:16,border:"1px solid "+C.brd}}><CombinedStatsChart data={combinedData}/></div><button onClick={()=>{setShowBilan(false);setShowNewBlock(true);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.coach,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button><button onClick={()=>setShowBilan(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Fermer</button></div></div>)}
     {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0}/>}
@@ -2204,7 +2398,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
         </div>
 
         {/* Séries par muscle */}
-        {(()=>{const ms=getMuscSets(exos,exMeta);const sorted=Object.entries(ms).sort((a,b)=>b[1]-a[1]);const max=sorted[0]?.[1]||1;if(!sorted.length)return null;return(<div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Séries par muscle / semaine</div>{sorted.map(([mid,v])=>{const c=getMC(mid);return(<div key={mid} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}><span style={{fontSize:10,color:C.tx2,width:76,flexShrink:0,textAlign:"right"}}>{mL(mid)}</span><div style={{flex:1,height:14,background:C.s2,borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:(v/max*100)+"%",background:c,borderRadius:4,transition:"width 0.6s"}}/></div><span style={{fontSize:11,fontWeight:700,color:c,width:28,fontFamily:"monospace"}}>{v}s</span></div>);})}</div>);})()}
+        <MuscleVolumeCard exos={exos} exMeta={exMeta} sets={sets} sessions={sessions} weeksArr={weeksArr} tw={tw}/>
 
         {/* Blessures */}
         {injuries.length>0?(<div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.r+"30"}}>
