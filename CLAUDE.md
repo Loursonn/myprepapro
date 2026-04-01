@@ -168,6 +168,43 @@ Pecs, Dos-GD, Dos-Trap, Dos-Rhom, Ep-Ant, Ep-Lat, Ep-Post, Quads, Ischios, Fessi
 
 ---
 
+## Workflow Git (multi-contributeurs)
+
+### Branches
+- `main` — production (Vercel déploie automatiquement depuis main)
+- `dev` — branche de développement partagée, base de travail quotidienne
+- `feat/xxx` ou `fix/xxx` — branches individuelles, créées depuis `dev`
+
+### Démarrer une session de travail
+```bash
+git fetch origin
+git checkout dev
+git pull origin dev
+git checkout -b feat/nom-de-la-feature
+```
+
+### Sauvegarder et partager
+```bash
+git add fichier-modifie.tsx
+git commit -m "description courte"
+git push origin feat/nom-de-la-feature
+```
+
+### Fusionner vers dev (Pull Request sur GitHub)
+1. Ouvrir une PR : `feat/xxx` → `dev`
+2. Faire reviewer par l'autre
+3. Merger
+
+### Mise en production
+Quand `dev` est stable : PR `dev` → `main` → Vercel redéploie automatiquement.
+
+### Règles importantes
+- **Ne jamais pusher directement sur `main`**
+- **Toujours partir de `dev` à jour** avant de créer une branche
+- Un seul contributeur à la fois sur `WeightliftingTracker.jsx` (fichier monolithique 2500+ lignes)
+
+---
+
 ## Commandes essentielles
 
 ```bash
