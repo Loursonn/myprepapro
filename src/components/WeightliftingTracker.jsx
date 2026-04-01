@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, ReferenceLine } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import * as XLSX from "xlsx";
 
 const C={bg:"#08090C",s1:"#111318",s2:"#181B24",brd:"rgba(255,255,255,0.04)",brdL:"rgba(255,255,255,0.08)",tx:"#F2F2F4",tx2:"#9194A0",tx3:"#555866",ac:"#7B6FFF",acS:"rgba(123,111,255,0.12)",g:"#22C993",gS:"rgba(34,201,147,0.1)",o:"#F5A623",oS:"rgba(245,166,35,0.1)",r:"#EF4B4B",rS:"rgba(239,75,75,0.1)",b:"#3B8DF0",bS:"rgba(59,141,240,0.1)",coach:"#D4538E",coachS:"rgba(212,83,142,0.12)"};
 const BT={PERF:{c:"#EF4B4B",l:"Mvt principal"},ESTH:{c:"#7B6FFF",l:"Hypertrophie"},BESOIN:{c:"#F5A623",l:"Besoin indiv."},ASSOC:{c:"#22C993",l:"Muscles assoc."},CORE:{c:"#9194A0",l:"Core"}};
@@ -440,11 +441,38 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   const[importText,setImportText]=useState("");
   const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview}]
   const fileRef=useRef(null);
+  // Chat IA conversationnel
+  const[convMsgs,setConvMsgs]=useState([]);// [{role:"user"|"ai", content:string}]
+  const[convInput,setConvInput]=useState("");
+  const[convProgram,setConvProgram]=useState(null);// dernier programme généré
+  const[convLoading,setConvLoading]=useState(false);
+  const[convError,setConvError]=useState(null);
+  const convEndRef=useRef(null);
   const handleFilesUpload=(e)=>{
     const files=Array.from(e.target.files||[]);
     if(!files.length)return;
     files.forEach(file=>{
-      if(file.type.startsWith("image/")){
+      const ext=file.name.split(".").pop().toLowerCase();
+      const isExcel=["xlsx","xls","csv","ods"].includes(ext);
+      if(isExcel){
+        // Excel/CSV → convertir en texte via SheetJS puis envoyer comme texte
+        const reader=new FileReader();
+        reader.onload=ev=>{
+          try{
+            const wb=XLSX.read(ev.target.result,{type:"array"});
+            const lines=[];
+            wb.SheetNames.forEach(name=>{
+              const ws=wb.Sheets[name];
+              const txt=XLSX.utils.sheet_to_csv(ws,{blankrows:false});
+              if(txt.trim())lines.push(`=== Feuille: ${name} ===\n${txt}`);
+            });
+            const text=lines.join("\n\n");
+            setImportText(prev=>(prev?prev+"\n\n":"")+`[Fichier Excel: ${file.name}]\n${text}`);
+            setImportFiles(prev=>[...prev,{name:file.name,mimeType:"text/plain",data:null,preview:null,isExcel:true}]);
+          }catch(err){console.error("Erreur lecture Excel",err);}
+        };
+        reader.readAsArrayBuffer(file);
+      }else if(file.type.startsWith("image/")){
         const url=URL.createObjectURL(file);
         const img=new Image();
         img.onload=()=>{
@@ -466,9 +494,39 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
         reader.readAsDataURL(file);
       }
     });
-    e.target.value="";// reset pour permettre re-sélection
+    e.target.value="";
   };
-  const removeImportFile=(idx)=>setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
+  const removeImportFile=(idx)=>{
+    setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
+  };
+  const sendConvMessage=async()=>{
+    const msg=convInput.trim();if(!msg||convLoading)return;
+    setConvInput("");
+    const newMsgs=[...convMsgs,{role:"user",content:msg}];
+    setConvMsgs(newMsgs);
+    setConvLoading(true);setConvError(null);
+    setTimeout(()=>convEndRef.current?.scrollIntoView({behavior:"smooth"}),50);
+    try{
+      let payload;
+      if(!convProgram){
+        // Premier message → génération initiale
+        payload={mode:"generate",prompt:msg,sessions:SESSIONS};
+      }else{
+        // Messages suivants → édition du programme en cours
+        const history=convMsgs.map(m=>({role:m.role==="user"?"user":"assistant",content:m.content}));
+        payload={mode:"chat_edit",message:msg,currentProgram:convProgram.sessions,conversationHistory:history,sessions:SESSIONS};
+      }
+      const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
+      const data=await resp.json();
+      if(!resp.ok)throw new Error(data.error||"Erreur serveur");
+      // Merger avec le programme existant si chat_edit
+      const merged=convProgram?{sessions:{...convProgram.sessions,...data.sessions},rationale:data.rationale}:data;
+      setConvProgram(merged);
+      setConvMsgs(prev=>[...prev,{role:"ai",content:data.rationale||"Programme mis à jour."}]);
+    }catch(e){setConvError(e.message);}
+    setConvLoading(false);
+    setTimeout(()=>convEndRef.current?.scrollIntoView({behavior:"smooth"}),100);
+  };
   const AI_URL=`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-program`;
 
   const DETAIL_FIELDS=[
@@ -541,7 +599,7 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
       {step===0&&(<div style={{padding:"0 0 40px"}}>
         {/* Sub-tabs */}
         <div style={{display:"flex",borderBottom:"1px solid "+C.brd,marginBottom:16}}>
-          {[{k:"import",l:"Import rapide"},{k:"form",l:"Parametres"},{k:"details",l:"Profil detaille"}].map(t=>(
+          {[{k:"import",l:"Import"},{k:"conv",l:"Chat IA"},{k:"form",l:"Parametres"},{k:"details",l:"Profil"}].map(t=>(
             <button key={t.k} onClick={()=>setAiTab(t.k)} style={{flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(aiTab===t.k?C.coach:"transparent"),background:"transparent",color:aiTab===t.k?C.coach:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"}}>{t.l}</button>
           ))}
         </div>
@@ -556,7 +614,7 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
           </div>
           <div style={{marginBottom:14}}>
             <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:7}}>Fichiers (images, PDF…)</div>
-            <input ref={fileRef} type="file" accept="image/*,.pdf,.png,.jpg,.jpeg,.webp" multiple onChange={handleFilesUpload} style={{display:"none"}}/>
+            <input ref={fileRef} type="file" accept="image/*,.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.ods" multiple onChange={handleFilesUpload} style={{display:"none"}}/>
             <button onClick={()=>fileRef.current?.click()} style={{width:"100%",padding:"14px 0",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:importFiles.length?C.gS:C.coachS,color:importFiles.length?C.g:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
               {importFiles.length?`${importFiles.length} fichier${importFiles.length>1?"s":" "} selectionne${importFiles.length>1?"s":""} — Ajouter d'autres`:"+ Ajouter fichiers (JPG, PNG, PDF…)"}
             </button>
@@ -579,6 +637,41 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
           <button onClick={importProgram} disabled={loading} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:loading?"#333":C.coach,color:loading?C.tx3:"#fff",fontSize:14,fontWeight:700,cursor:loading?"default":"pointer",fontFamily:"inherit"}}>
             {loading?"Analyse en cours...":"Importer le programme"}
           </button>
+        </div>)}
+
+        {aiTab==="conv"&&(<div style={{padding:"0 16px",display:"flex",flexDirection:"column",height:"calc(100vh - 200px)"}}>
+          <div style={{padding:"10px 14px",borderRadius:10,background:C.coachS,border:"1px solid "+C.coach+"40",marginBottom:12,fontSize:11,color:C.coach,lineHeight:1.6}}>
+            Decris le programme que tu veux. L IA genere, tu ajustes, elle corrige. Quand c est bon → Appliquer.
+          </div>
+          {/* Messages */}
+          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,marginBottom:12,paddingRight:4}}>
+            {convMsgs.length===0&&(<div style={{textAlign:"center",padding:"30px 0",color:C.tx3,fontSize:12}}>
+              Ex: "PPL 6 semaines, niveau intermediaire, epaule fragile gauche"
+            </div>)}
+            {convMsgs.map((m,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
+                <div style={{maxWidth:"85%",padding:"9px 13px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?C.coach:C.s2,color:m.role==="user"?"#fff":C.tx,fontSize:12,lineHeight:1.5}}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {convLoading&&(<div style={{display:"flex",justifyContent:"flex-start"}}>
+              <div style={{padding:"9px 13px",borderRadius:"12px 12px 12px 4px",background:C.s2,color:C.tx3,fontSize:12}}>...</div>
+            </div>)}
+            {convError&&(<div style={{padding:"8px 12px",borderRadius:8,background:C.rS,color:C.r,fontSize:11}}>{convError}</div>)}
+            <div ref={convEndRef}/>
+          </div>
+          {/* Aperçu programme si généré */}
+          {convProgram&&(<div style={{background:C.s1,borderRadius:10,padding:"10px 12px",border:"1px solid "+C.g+"40",marginBottom:10,maxHeight:160,overflowY:"auto"}}>
+            <div style={{fontSize:10,fontWeight:700,color:C.g,marginBottom:6}}>Programme actuel</div>
+            {Object.entries(convProgram.sessions||{}).map(([sid,exList])=>{const s=SESSIONS.find(x=>x.id===sid);if(!s||!exList?.length)return null;return(<div key={sid} style={{fontSize:10,color:C.tx2,marginBottom:3}}><span style={{color:C.tx,fontWeight:600}}>{s.name}</span> — {exList.map(e=>e.name).join(", ")}</div>);})}
+          </div>)}
+          {/* Input */}
+          <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+            <textarea value={convInput} onChange={e=>setConvInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendConvMessage();}}} placeholder={convProgram?"Ajuste le programme...":"Decris ce que tu veux..."} rows={2} style={{flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",lineHeight:1.5}}/>
+            <button onClick={sendConvMessage} disabled={convLoading||!convInput.trim()} style={{padding:"9px 14px",borderRadius:10,border:"none",background:convInput.trim()?C.coach:"#333",color:convInput.trim()?"#fff":C.tx3,fontSize:13,fontWeight:700,cursor:convInput.trim()?"pointer":"default",fontFamily:"inherit",flexShrink:0,alignSelf:"flex-end"}}>↑</button>
+          </div>
+          {convProgram&&(<button onClick={()=>onGenerate(convProgram.sessions)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:10}}>Appliquer ce programme</button>)}
         </div>)}
 
         {aiTab==="form"&&(<div style={{padding:"0 16px"}}>
