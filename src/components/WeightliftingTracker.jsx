@@ -567,7 +567,9 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
     setLoading(true);setError(null);
     try{
       const payload={mode:"import",prompt:importText||(importFiles.length?"Programme dans les fichiers ci-joints":""),sessions:SESSIONS};
-      if(importFiles.length)payload.filesData=importFiles.map(f=>({mimeType:f.mimeType,data:f.data}));
+      // Exclure les fichiers Excel (data=null, leur contenu est déjà dans importText)
+      const binaryFiles=importFiles.filter(f=>f.data!==null);
+      if(binaryFiles.length)payload.filesData=binaryFiles.map(f=>({mimeType:f.mimeType,data:f.data}));
       const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
