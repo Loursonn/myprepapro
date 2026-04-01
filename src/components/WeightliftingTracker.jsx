@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, ReferenceLine } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
+import { PDFDocument } from "pdf-lib";
 
 const C={bg:"#08090C",s1:"#111318",s2:"#181B24",brd:"rgba(255,255,255,0.04)",brdL:"rgba(255,255,255,0.08)",tx:"#F2F2F4",tx2:"#9194A0",tx3:"#555866",ac:"#7B6FFF",acS:"rgba(123,111,255,0.12)",g:"#22C993",gS:"rgba(34,201,147,0.1)",o:"#F5A623",oS:"rgba(245,166,35,0.1)",r:"#EF4B4B",rS:"rgba(239,75,75,0.1)",b:"#3B8DF0",bS:"rgba(59,141,240,0.1)",coach:"#D4538E",coachS:"rgba(212,83,142,0.12)"};
 const BT={PERF:{c:"#EF4B4B",l:"Mvt principal"},ESTH:{c:"#7B6FFF",l:"Hypertrophie"},BESOIN:{c:"#F5A623",l:"Besoin indiv."},ASSOC:{c:"#22C993",l:"Muscles assoc."},CORE:{c:"#9194A0",l:"Core"}};
@@ -447,7 +448,13 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   const[convProgram,setConvProgram]=useState(null);// dernier programme généré
   const[convLoading,setConvLoading]=useState(false);
   const[convError,setConvError]=useState(null);
+  const[convCooldown,setConvCooldown]=useState(0);// secondes restantes avant prochain envoi
   const convEndRef=useRef(null);
+  useEffect(()=>{
+    if(convCooldown<=0)return;
+    const t=setTimeout(()=>setConvCooldown(c=>Math.max(0,c-1)),1000);
+    return()=>clearTimeout(t);
+  },[convCooldown]);
   const handleFilesUpload=(e)=>{
     const files=Array.from(e.target.files||[]);
     if(!files.length)return;
@@ -500,7 +507,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
     setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
   };
   const sendConvMessage=async()=>{
-    const msg=convInput.trim();if(!msg||convLoading||!preview)return;
+    const msg=convInput.trim();if(!msg||convLoading||convCooldown>0||!preview)return;
     setConvInput("");
     setConvMsgs(prev=>[...prev,{role:"user",content:msg}]);
     setConvLoading(true);setConvError(null);
@@ -510,9 +517,11 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
       const payload={mode:"chat_edit",message:msg,currentProgram:preview.sessions,conversationHistory:history,sessions:SESSIONS};
       const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
+      if(resp.status===429){setConvCooldown(30);throw new Error(data.error||"Trop de requetes");}
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
       setPreview(prev=>({sessions:{...prev.sessions,...data.sessions},rationale:data.rationale}));
       setConvMsgs(prev=>[...prev,{role:"ai",content:data.rationale||"Programme mis à jour."}]);
+      setConvCooldown(8);// cooldown entre chaque message
     }catch(e){setConvError(e.message);}
     setConvLoading(false);
     setTimeout(()=>convEndRef.current?.scrollIntoView({behavior:"smooth"}),100);
@@ -562,14 +571,69 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
     setLoading(false);
   };
 
+  const stitchImages=async(images)=>{
+    // Charge toutes les images et les empile verticalement sur un seul canvas
+    const imgs=await Promise.all(images.map(f=>new Promise((res,rej)=>{
+      const img=new Image();
+      img.onload=()=>res(img);
+      img.onerror=rej;
+      img.src="data:"+f.mimeType+";base64,"+f.data;
+    })));
+    const maxW=Math.min(1400,Math.max(...imgs.map(i=>i.width)));
+    const totalH=imgs.reduce((s,i)=>s+Math.round(i.height*(maxW/i.width)),0);
+    const canvas=document.createElement("canvas");
+    canvas.width=maxW;canvas.height=Math.min(totalH,8000);
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#ffffff";ctx.fillRect(0,0,canvas.width,canvas.height);
+    let y=0;
+    for(const img of imgs){
+      const scale=maxW/img.width;
+      const h=Math.round(img.height*scale);
+      if(y+h>canvas.height)break;
+      ctx.drawImage(img,0,y,maxW,h);
+      y+=h;
+    }
+    const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];
+    return{name:"fusion_images.jpg",mimeType:"image/jpeg",data:b64,preview:null};
+  };
+
+  const mergePDFs=async(pdfs)=>{
+    const merged=await PDFDocument.create();
+    for(const f of pdfs){
+      const bytes=Uint8Array.from(atob(f.data),c=>c.charCodeAt(0));
+      const doc=await PDFDocument.load(bytes);
+      const pages=await merged.copyPages(doc,doc.getPageIndices());
+      pages.forEach(p=>merged.addPage(p));
+    }
+    const bytes=await merged.save();
+    const b64=btoa(String.fromCharCode(...bytes));
+    return{name:"fusion.pdf",mimeType:"application/pdf",data:b64,preview:null};
+  };
+
+  const mergeFilesForImport=async(files)=>{
+    const images=files.filter(f=>f.mimeType.startsWith("image/"));
+    const pdfs=files.filter(f=>f.mimeType==="application/pdf");
+    const others=files.filter(f=>!f.mimeType.startsWith("image/")&&f.mimeType!=="application/pdf");
+    const result=[];
+    if(images.length===1)result.push(images[0]);
+    else if(images.length>1)result.push(await stitchImages(images));
+    if(pdfs.length===1)result.push(pdfs[0]);
+    else if(pdfs.length>1)result.push(await mergePDFs(pdfs));
+    result.push(...others);
+    return result;
+  };
+
   const importProgram=async()=>{
     if(!importText.trim()&&!importFiles.length){setError("Colle un texte ou ajoute au moins un fichier.");return;}
     setLoading(true);setError(null);
     try{
       const payload={mode:"import",prompt:importText||(importFiles.length?"Programme dans les fichiers ci-joints":""),sessions:SESSIONS};
-      // Exclure les fichiers Excel (data=null, leur contenu est déjà dans importText)
+      // Exclure les fichiers Excel (data=null), fusionner images + PDFs en 1 seul fichier chacun
       const binaryFiles=importFiles.filter(f=>f.data!==null);
-      if(binaryFiles.length)payload.filesData=binaryFiles.map(f=>({mimeType:f.mimeType,data:f.data}));
+      if(binaryFiles.length){
+        const merged=await mergeFilesForImport(binaryFiles);
+        payload.filesData=merged.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name}));
+      }
       const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
@@ -696,8 +760,8 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
             <div ref={convEndRef}/>
           </div>)}
           <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
-            <textarea value={convInput} onChange={e=>setConvInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendConvMessage();}}} placeholder='Ex: "plus de volume triceps, remplace le hack squat..."' rows={2} style={{flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",lineHeight:1.5}}/>
-            <button onClick={sendConvMessage} disabled={convLoading||!convInput.trim()} style={{padding:"9px 14px",borderRadius:10,border:"none",background:convInput.trim()&&!convLoading?C.coach:"#333",color:convInput.trim()&&!convLoading?"#fff":C.tx3,fontSize:14,fontWeight:700,cursor:convInput.trim()&&!convLoading?"pointer":"default",fontFamily:"inherit",flexShrink:0,alignSelf:"flex-end"}}>↑</button>
+            <textarea value={convInput} onChange={e=>setConvInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendConvMessage();}}} placeholder='Ex: "plus de volume triceps, remplace le hack squat..."' rows={2} disabled={convLoading||convCooldown>0} style={{flex:1,padding:"9px 12px",borderRadius:10,border:"1px solid "+(convCooldown>0?C.o+"60":C.brdL),background:C.s2,color:convCooldown>0?C.tx3:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",lineHeight:1.5}}/>
+            <button onClick={sendConvMessage} disabled={convLoading||convCooldown>0||!convInput.trim()} style={{padding:"9px 14px",borderRadius:10,border:"none",background:convInput.trim()&&!convLoading&&!convCooldown?C.coach:convCooldown>0?C.o+"30":"#333",color:convInput.trim()&&!convLoading&&!convCooldown?"#fff":convCooldown>0?C.o:C.tx3,fontSize:convCooldown>0?11:14,fontWeight:700,cursor:convInput.trim()&&!convLoading&&!convCooldown?"pointer":"default",fontFamily:"inherit",flexShrink:0,alignSelf:"flex-end",minWidth:40}}>{convLoading?"...":convCooldown>0?convCooldown+"s":"↑"}</button>
           </div>
         </div>
         {/* Actions */}
