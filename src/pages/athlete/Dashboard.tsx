@@ -86,6 +86,7 @@ export default function AthleteDashboard() {
             defaultMode="athlete"
             canToggleMode={false}
             userName={profile?.full_name}
+            athleteProfile={profile}
           />
         )}
 

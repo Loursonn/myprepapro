@@ -125,7 +125,16 @@ export default function CoachDashboard() {
           defaultMode="coach"
           canToggleMode={true}
           userName={profile?.full_name}
+          athleteProfile={isOwnAthleteView ? profile : selectedAthlete}
+          onEditProfile={!isOwnAthleteView && selectedAthlete ? () => setEditingAthlete(selectedAthlete) : undefined}
         />
+
+        {editingAthlete && (
+          <AthleteProfileForm
+            athlete={editingAthlete}
+            onClose={() => setEditingAthlete(null)}
+          />
+        )}
       </div>
     );
   }

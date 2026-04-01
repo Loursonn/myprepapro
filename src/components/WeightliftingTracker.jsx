@@ -2127,7 +2127,7 @@ function ExerciseBank({coachId,onAddToExos}){
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function App({athleteId,defaultMode,canToggleMode=true,userName}){
+export default function App({athleteId,defaultMode,canToggleMode=true,userName,athleteProfile,onEditProfile}){
   const load=(k,fb)=>sLoad(k,fb,athleteId);
   const save=(k,v)=>sSave(k,v,athleteId);
   const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");
@@ -2327,7 +2327,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
     else setBankAddEx(ex);
   };
   const coachTabs=[{k:"prog",l:"Prog"},{k:"exos",l:"Exos"},{k:"banque",l:"Banque"},{k:"config",l:"Config"},{k:"stats",l:"Stats"},{k:"data",l:"Données"}];
-  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"}];
+  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"},{k:"profil",l:"Profil"}];
   const activeTabs=mode==="coach"?coachTabs:athTabs;const activeTab=mode==="coach"?coachTab:tab;const setActiveTab=mode==="coach"?setCoachTab:setTab;
   const tabS=t=>({flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(activeTab===t?(mode==="coach"?C.coach:C.ac):"transparent"),background:"transparent",color:activeTab===t?(mode==="coach"?C.coach:C.ac):C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"});
 
@@ -2407,7 +2407,50 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
         </div>):(<div style={{background:C.s1,borderRadius:14,padding:"14px",border:"1px solid "+C.g+"30",textAlign:"center"}}><span style={{fontSize:12,color:C.g,fontWeight:600}}>Aucune blessure</span></div>)}
       <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C}/>
       </>)}
-      {coachTab==="data"&&(<DataManager
+      {coachTab==="data"&&(<><div style={{padding:"16px 16px 0"}}>
+        <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Profil athlète</div>
+        <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>Informations personnelles</div>
+        {athleteProfile?(
+          <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden",marginBottom:16}}>
+            <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid "+C.brd}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:C.coach+"25",border:"2px solid "+C.coach+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:C.coach,flexShrink:0}}>
+                {([athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"?").split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{[athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name}</div>
+                <div style={{fontSize:11,color:C.tx3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":"Genre non renseigné"}</div>
+              </div>
+              {onEditProfile&&<button onClick={onEditProfile} style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+C.coach+"50",background:C.coachS,color:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✎ Modifier</button>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:1,background:C.brd}}>
+              {[{l:"Âge",v:athleteProfile.age?athleteProfile.age+" ans":null},{l:"Taille",v:athleteProfile.height_cm?athleteProfile.height_cm+" cm":null},{l:"MB",v:athleteProfile.base_metabolism?athleteProfile.base_metabolism.toLocaleString("fr-FR")+" kcal":null}].map(s=>(
+                <div key={s.l} style={{background:C.s2,padding:"10px 8px",textAlign:"center"}}>
+                  <div style={{fontSize:10,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>{s.l}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div>
+                </div>
+              ))}
+            </div>
+            {athleteProfile.weight_kg||athleteProfile.body_fat_pct?(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:C.brd,borderTop:"1px solid "+C.brd}}>
+                {[{l:"Poids réf.",v:athleteProfile.weight_kg?athleteProfile.weight_kg+" kg":null},{l:"Masse grasse",v:athleteProfile.body_fat_pct?athleteProfile.body_fat_pct+" %":null}].map(s=>(
+                  <div key={s.l} style={{background:C.s2,padding:"10px 8px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>{s.l}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div>
+                  </div>
+                ))}
+              </div>
+            ):null}
+          </div>
+        ):(
+          <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:13,color:C.tx3}}>Profil non renseigné</div>
+            {onEditProfile&&<button onClick={onEditProfile} style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+C.coach+"50",background:C.coachS,color:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✎ Créer le profil</button>}
+          </div>
+        )}
+        <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Gestion des données</div>
+        <div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Supprimer sélectivement des données</div>
+      </div>
+      <DataManager
         exos={exos} setExos={setExos} sets={sets} setSets={setSets} sessions={sessions} setSessions={setSessions}
         completedSessions={completedSessions} setCompletedSessions={setCompletedSessions}
         athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes}
@@ -2418,7 +2461,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
         weightLog={weightLog} setWeightLog={v=>{setWeightLogState(v);save(SKEYS.weightLog,v).catch(()=>{});}}
         injuries={injuries} setInjuries={setInjuries}
         weeksArr={weeksArr}
-      />)}
+      /></>)}
     </div>)}
 
     {mode==="athlete"&&(<>
@@ -2532,6 +2575,52 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName})
           {activeInjuries.map(inj=>{const sc=stC(inj.status);const zn=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non precisee";return(<div key={inj.id} style={{padding:"8px 12px",borderRadius:8,background:C.s2,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:12,fontWeight:600,color:C.tx}}>{zn}</div><div style={{fontSize:10,color:C.tx3}}>Intensite {inj.intensity}/10</div></div><span style={{fontSize:10,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:5,background:sc+"15"}}>{inj.status}</span></div>);})}
         </div>)}
       </div>);})()}
+
+      {tab==="profil"&&(<div style={{padding:"16px 16px 40px"}}>
+        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:20}}>Mon profil</div>
+        {athleteProfile?(()=>{
+          const fullName=[athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"";
+          const initials=fullName.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)||"?";
+          return(<>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24}}>
+              <div style={{width:68,height:68,borderRadius:"50%",background:C.acS,border:"3px solid "+C.ac+"50",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,color:C.ac,marginBottom:10}}>{initials}</div>
+              <div style={{fontSize:18,fontWeight:800,color:C.tx}}>{fullName}</div>
+              <div style={{fontSize:12,color:C.tx3,marginTop:3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":""}</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
+              {[{l:"Âge",v:athleteProfile.age,u:"ans"},{l:"Taille",v:athleteProfile.height_cm,u:"cm"},{l:"Poids réf.",v:athleteProfile.weight_kg,u:"kg"}].map(s=>(
+                <div key={s.l} style={{background:C.s1,borderRadius:12,padding:"14px 10px",border:"1px solid "+C.brd,textAlign:"center"}}>
+                  <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>{s.l}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div>
+                  {s.v&&<div style={{fontSize:11,color:C.tx3,marginTop:2}}>{s.u}</div>}
+                </div>
+              ))}
+            </div>
+            {athleteProfile.base_metabolism&&(<div style={{background:C.s1,borderRadius:14,padding:"16px 18px",border:"1px solid "+C.brd,marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Métabolisme de base</div>
+              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                <div style={{fontSize:30,fontWeight:900,color:C.ac}}>{athleteProfile.base_metabolism.toLocaleString("fr-FR")}</div>
+                <div style={{fontSize:14,color:C.tx3}}>kcal / jour</div>
+              </div>
+            </div>)}
+            <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 16px",borderBottom:"1px solid "+C.brd}}>Informations complètes</div>
+              {[{l:"Prénom",v:athleteProfile.first_name},{l:"Nom",v:athleteProfile.last_name},{l:"Âge",v:athleteProfile.age?athleteProfile.age+" ans":null},{l:"Taille",v:athleteProfile.height_cm?athleteProfile.height_cm+" cm":null},{l:"Genre",v:athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":null},{l:"Poids réf.",v:athleteProfile.weight_kg?athleteProfile.weight_kg+" kg":null},{l:"Masse grasse",v:athleteProfile.body_fat_pct?athleteProfile.body_fat_pct+" %":null},{l:"Métabolisme de base",v:athleteProfile.base_metabolism?athleteProfile.base_metabolism.toLocaleString("fr-FR")+" kcal/j":null}].map((row,i,arr)=>(
+                <div key={row.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:i<arr.length-1?"1px solid "+C.brd:"none"}}>
+                  <div style={{fontSize:13,color:C.tx3}}>{row.l}</div>
+                  <div style={{fontSize:13,fontWeight:600,color:row.v?C.tx:C.tx3}}>{row.v||"—"}</div>
+                </div>
+              ))}
+            </div>
+          </>);
+        })():(
+          <div style={{background:C.s1,borderRadius:14,padding:"32px 20px",border:"1px solid "+C.brd,textAlign:"center"}}>
+            <div style={{fontSize:32,marginBottom:12}}>📋</div>
+            <div style={{fontSize:15,fontWeight:600,color:C.tx,marginBottom:8}}>Profil non renseigné</div>
+            <div style={{fontSize:13,color:C.tx3}}>Ton coach n'a pas encore complété ton profil.</div>
+          </div>
+        )}
+      </div>)}
 
     </>)}
 
