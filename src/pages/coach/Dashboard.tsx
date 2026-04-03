@@ -123,7 +123,7 @@ export default function CoachDashboard() {
           canToggleMode={true}
           userName={profile?.full_name}
           athleteProfile={isOwnAthleteView ? profile : selectedAthlete}
-          onEditProfile={!isOwnAthleteView && selectedAthlete ? () => setEditingAthlete(selectedAthlete) : undefined}
+          onEditProfile={() => setEditingAthlete(isOwnAthleteView ? profile! : selectedAthlete!)}
         />
 
         {editingAthlete && (

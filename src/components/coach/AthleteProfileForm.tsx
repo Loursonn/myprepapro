@@ -29,7 +29,8 @@ interface Props {
 }
 
 export default function AthleteProfileForm({ athlete, onClose, inline = false }: Props) {
-  const { updateAthleteProfile } = useAuth();
+  const { updateAthleteProfile, user } = useAuth();
+  const isOwnProfile = user?.id === athlete.id;
 
   const [firstName, setFirstName] = useState(athlete.first_name ?? "");
   const [lastName, setLastName] = useState(athlete.last_name ?? "");
@@ -106,7 +107,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>Profil de l'athlète</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>{isOwnProfile ? "Mon profil" : "Profil de l'athlète"}</div>
             <div style={{ fontSize: 12, color: C.tx3, marginTop: 2 }}>{athlete.full_name}</div>
           </div>
           <button
