@@ -59,26 +59,34 @@ ${historyText ? `HISTORIQUE:\n${historyText}\n\n` : ""}DEMANDE: ${message}
 Retourne UNIQUEMENT les sessions modifiees dans {"sessions":{...},"rationale":"..."}. N'inclus PAS les sessions non modifiees — elles seront conservees automatiquement cote client. Exemple: si seule la session "s1" change, retourne {"sessions":{"s1":[...]},"rationale":"..."}.`;
     } else {
       const fileCount = (filesData?.length || 0) + (imageBase64 ? 1 : 0);
-      const hasTaggedFiles = filesData?.some((f: any) => f.sessionTag);
+      const hasTaggedFiles = filesData?.some((f: any) => f.sessionTags?.length > 0);
+
+      const getSessionsLabel = (sessionTags: string[]) => {
+        if (!sessionTags?.length) return null;
+        return sessionTags.map((id: string) => {
+          const s = sessionsList.find((x: any) => x.id === id);
+          return s ? `"${s.name}" (${id})` : id;
+        }).join(" + ");
+      };
 
       let fileContext = "";
       if (fileCount > 1) {
         if (hasTaggedFiles) {
           const taggedDesc = filesData?.map((f: any, i: number) => {
-            const sess = sessionsList.find((s: any) => s.id === f.sessionTag);
-            const dest = sess ? `session "${sess.name}" (${f.sessionTag}) UNIQUEMENT` : "contexte general (repartir intelligemment)";
+            const label = getSessionsLabel(f.sessionTags);
+            const dest = label ? `sessions ${label} UNIQUEMENT` : "contexte general (repartir intelligemment)";
             return `  - Fichier ${i + 1}: "${f.name || "sans nom"}" → ${dest}`;
           }).join("\n") || "";
-          fileContext = `\nATTENTION: ${fileCount} fichiers joints avec affectations:\n${taggedDesc}\nREGLE CRITIQUE: pour chaque fichier ayant une session cible, placer SES exercices EXCLUSIVEMENT dans cette session. Pour les fichiers "contexte general", repartir librement.`;
+          fileContext = `\nATTENTION: ${fileCount} fichiers joints avec affectations:\n${taggedDesc}\nREGLE CRITIQUE: pour chaque fichier ayant des sessions cibles, placer SES exercices EXCLUSIVEMENT dans ces sessions (et les y repartir equitablement si plusieurs). Pour les fichiers "contexte general", repartir librement sur toutes les sessions.`;
         } else {
           const fileNames = filesData?.map((f: any, i: number) => `fichier ${i + 1}: "${f.name || "sans nom"}"`).join(", ") || "";
           fileContext = `\nATTENTION: ${fileCount} fichiers sont joints (${fileNames}). OBLIGATION: lire et extraire les exercices de CHAQUE fichier. Chaque fichier peut representer une seance differente ou une partie du programme. Combine TOUT le contenu pour creer un programme complet.`;
         }
       } else if (fileCount === 1) {
         const f = filesData?.[0];
-        if (f?.sessionTag) {
-          const sess = sessionsList.find((s: any) => s.id === f.sessionTag);
-          fileContext = `\n1 fichier joint specifiquement pour la session "${sess?.name || f.sessionTag}". Placer TOUS ses exercices dans cette session uniquement.`;
+        const label = getSessionsLabel(f?.sessionTags);
+        if (label) {
+          fileContext = `\n1 fichier joint affecte aux sessions ${label}. Placer TOUS ses exercices dans ces sessions uniquement, repartis equitablement.`;
         } else {
           fileContext = `\n1 fichier joint. Extraire tous les exercices du fichier.`;
         }
@@ -98,10 +106,10 @@ ${hasText ? prompt : fileCount > 1 ? "Programme reparti sur les fichiers joints 
     if (filesData && Array.isArray(filesData) && filesData.length > 0) {
       for (let i = 0; i < filesData.length; i++) {
         const f = filesData[i];
-        // Label indiquant le fichier et son affectation de séance
-        const sess = sessionsList.find((s: any) => s.id === f.sessionTag);
-        const dest = f.sessionTag
-          ? `→ SESSION "${sess?.name || f.sessionTag}" UNIQUEMENT`
+        // Label indiquant le fichier et ses sessions assignées
+        const tags: string[] = f.sessionTags || [];
+        const dest = tags.length > 0
+          ? `→ SESSIONS ${tags.map((id: string) => { const s = sessionsList.find((x: any) => x.id === id); return s ? `"${s.name}"` : id; }).join(" + ")} UNIQUEMENT`
           : `→ contexte général`;
         parts.push({ text: `[Fichier ${i + 1}/${filesData.length}: ${f.name || "sans nom"} ${dest}]` });
         parts.push({ inline_data: { mime_type: f.mimeType, data: f.data } });
