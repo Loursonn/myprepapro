@@ -179,7 +179,11 @@ ${hasText ? prompt : fileCount > 1 ? "Programme reparti sur les fichiers joints 
     };
 
     // chat_edit uses faster model; generate/import use quality model
-    const primaryModel = mode === "chat_edit" ? "gemini-2.0-flash" : "gemini-2.5-flash";
+    // Import ciblé (targetSessions défini) → 2.0-flash plus rapide, scope limité
+    // Import global ou generate → 2.5-flash pour la qualité
+    const primaryModel = (mode === "chat_edit" || (mode === "import" && targetSessions?.length > 0))
+      ? "gemini-2.0-flash"
+      : "gemini-2.5-flash";
 
     // Attempt 1
     let parsed: any;

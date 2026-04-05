@@ -447,7 +447,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   const[aiTab,setAiTab]=useState("import");
   const[importText,setImportText]=useState("");
   const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview,sessionTags}]
-  const[importTargetSessions,setImportTargetSessions]=useState([]);// sessions ciblées par l'import en cours
+  const importTargetRef=useRef([]);// sessions ciblées — ref pour éviter problèmes d'async state
   const fileRef=useRef(null);
   // Chat IA conversationnel
   const[convMsgs,setConvMsgs]=useState([]);// [{role:"user"|"ai", content:string}]
@@ -648,7 +648,7 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
       const binaryFiles=importFiles.filter(f=>f.data!==null);
       // Collecter les sessions explicitement ciblées (tous fichiers confondus)
       const targetIds=[...new Set(importFiles.flatMap(f=>f.sessionTags||[]))];
-      setImportTargetSessions(targetIds);
+      importTargetRef.current=targetIds;
       if(binaryFiles.length){
         const hasTagged=binaryFiles.some(f=>f.sessionTags?.length>0);
         if(hasTagged){
@@ -813,13 +813,19 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>{setStep(0);setConvMsgs([]);setConvError(null);}} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Régénérer</button>
           <button onClick={()=>{
-            if(importTargetSessions.length>0){
+            const targets=importTargetRef.current;
+            if(targets.length>0){
               // Fusion : garder les séances existantes non ciblées, appliquer l'IA sur les séances ciblées
               const merged={};
               SESSIONS.forEach(s=>{
-                merged[s.id]=importTargetSessions.includes(s.id)
-                  ?(preview.sessions[s.id]||existingExos[s.id]||[])
-                  :(existingExos[s.id]||[]);
+                if(targets.includes(s.id)){
+                  // Séance ciblée : prendre le résultat IA s'il a des exercices, sinon garder l'existant
+                  const aiResult=preview.sessions[s.id];
+                  merged[s.id]=(aiResult&&aiResult.length>0)?aiResult:(existingExos[s.id]||[]);
+                }else{
+                  // Séance non ciblée : toujours garder l'existant
+                  merged[s.id]=existingExos[s.id]||[];
+                }
               });
               onGenerate(merged);
             }else{
