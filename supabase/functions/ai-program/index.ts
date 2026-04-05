@@ -13,17 +13,26 @@ serve(async (req) => {
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured");
 
     const body = await req.json();
-    const { mode, prompt, imageBase64, filesData, sessions, currentProgram, conversationHistory, message } = body;
+    const { mode, prompt, imageBase64, filesData, sessions, targetSessions, currentProgram, conversationHistory, message } = body;
 
     const sessionsList = sessions && Array.isArray(sessions) && sessions.length > 0
       ? sessions
       : [{ id: "s1", name: "Séance 1", short: "S1" }];
 
+    // Si targetSessions est défini, restreindre la génération à ces sessions uniquement
+    const targetList = targetSessions && Array.isArray(targetSessions) && targetSessions.length > 0
+      ? sessionsList.filter((s: any) => targetSessions.includes(s.id))
+      : sessionsList;
+    const generateList = targetList.length > 0 ? targetList : sessionsList;
+
     const sessIds = sessionsList.map((s: any) => s.id).join(", ");
     const sessDesc = sessionsList.map((s: any) => `${s.id} (${s.name})`).join(", ");
-    const sessKeysExample = sessionsList.map((s: any) => `"${s.id}":[...]`).join(",");
+    const genIds = generateList.map((s: any) => s.id).join(", ");
+    const genDesc = generateList.map((s: any) => `${s.id} (${s.name})`).join(", ");
+    const sessKeysExample = generateList.map((s: any) => `"${s.id}":[...]`).join(",");
 
-    const SESSIONS_INFO = `SESSIONS DISPONIBLES: ${sessDesc}
+    const SESSIONS_INFO = `SESSIONS DU PROGRAMME (toutes): ${sessDesc}
+SESSIONS A GENERER (uniquement celles-ci): ${genDesc}
 BLOCS: PERF (mouvement principal), ESTH (hypertrophie esthetique), ASSOC (muscles associes/esthetique associe), BESOIN (besoins individuels/correctifs/mobilite specifique), CORE (gainage/core/poids de corps), MOBIL (mobilite/souplesse generale)
 MUSCLES VALIDES: Pecs, Dos-GD, Dos-Trap, Dos-Rhom, Ep-Ant, Ep-Lat, Ep-Post, Quads, Ischios, Fessiers, Adducteurs, Triceps, Biceps, Core, Mollets
 TYPES D'EXERCICES:
@@ -35,7 +44,7 @@ TYPES D'EXERCICES:
 {"sessions":{${sessKeysExample}},"rationale":"Explication courte"}
 Chaque session contient un array d'exercices au format: {"id":"g_SESSID_NUM","name":"NOM EXERCICE","bloc":"PERF","target":"Pecs","exType":"muscu","weeks":{"1":{"kg":80,"sets":4,"repsRange":"10","rir":2.5}}}
 REGLES:
-- UTILISE UNIQUEMENT ces IDs de sessions: ${sessIds}
+- GENERE UNIQUEMENT les sessions: ${genIds} — ne pas inclure d'autres sessions dans le JSON
 - Reproduis TOUS les exercices de la source sans en omettre, progression logique, RIR 3->1.5, ids uniques g_[sessid]_[num]
 - PERF = 1 seul mouvement poly par session
 - JSON compact, PAS de rationale longue (1 phrase max)

@@ -446,7 +446,8 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   const STYLES=["Mixte force/volume","Push/Pull/Legs","Full body","Upper/Lower","Specialisation"];
   const[aiTab,setAiTab]=useState("import");
   const[importText,setImportText]=useState("");
-  const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview}]
+  const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview,sessionTags}]
+  const[importTargetSessions,setImportTargetSessions]=useState([]);// sessions ciblées par l'import en cours
   const fileRef=useRef(null);
   // Chat IA conversationnel
   const[convMsgs,setConvMsgs]=useState([]);// [{role:"user"|"ai", content:string}]
@@ -645,17 +646,20 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
     try{
       const payload={mode:"import",prompt:importText||(importFiles.length?"Programme dans les fichiers ci-joints":""),sessions:SESSIONS};
       const binaryFiles=importFiles.filter(f=>f.data!==null);
+      // Collecter les sessions explicitement ciblées (tous fichiers confondus)
+      const targetIds=[...new Set(importFiles.flatMap(f=>f.sessionTags||[]))];
+      setImportTargetSessions(targetIds);
       if(binaryFiles.length){
         const hasTagged=binaryFiles.some(f=>f.sessionTags?.length>0);
         if(hasTagged){
-          // Envoi individuel avec sessionTags (tableau) pour respecter l'affectation multi-séances
           payload.filesData=binaryFiles.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name,sessionTags:f.sessionTags||[]}));
         }else{
-          // Comportement historique : fusion images + PDFs pour optimiser
           const merged=await mergeFilesForImport(binaryFiles);
           payload.filesData=merged.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name,sessionTags:[]}));
         }
       }
+      // Restreindre l'IA aux sessions ciblées si précisées
+      if(targetIds.length>0)payload.targetSessions=targetIds;
       const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
@@ -808,7 +812,20 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
         {/* Actions */}
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>{setStep(0);setConvMsgs([]);setConvError(null);}} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Régénérer</button>
-          <button onClick={()=>onGenerate(preview.sessions)} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
+          <button onClick={()=>{
+            if(importTargetSessions.length>0){
+              // Fusion : garder les séances existantes non ciblées, appliquer l'IA sur les séances ciblées
+              const merged={};
+              SESSIONS.forEach(s=>{
+                merged[s.id]=importTargetSessions.includes(s.id)
+                  ?(preview.sessions[s.id]||existingExos[s.id]||[])
+                  :(existingExos[s.id]||[]);
+              });
+              onGenerate(merged);
+            }else{
+              onGenerate(preview.sessions);
+            }
+          }} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
         </div>
         <div style={{fontSize:10,color:C.tx3,textAlign:"center",marginTop:8}}>Tu pourras modifier chaque exercice dans l'éditeur</div>
       </div>)}
