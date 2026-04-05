@@ -481,7 +481,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
             });
             const text=lines.join("\n\n");
             setImportText(prev=>(prev?prev+"\n\n":"")+`[Fichier Excel: ${file.name}]\n${text}`);
-            setImportFiles(prev=>[...prev,{name:file.name,mimeType:"text/plain",data:null,preview:null,isExcel:true}]);
+            setImportFiles(prev=>[...prev,{name:file.name,mimeType:"text/plain",data:null,preview:null,isExcel:true,sessionTag:null}]);
           }catch(err){console.error("Erreur lecture Excel",err);}
         };
         reader.readAsArrayBuffer(file);
@@ -494,7 +494,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
           canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
           const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);
           const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];
-          setImportFiles(prev=>[...prev,{name:file.name,mimeType:"image/jpeg",data:b64,preview:url}]);
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:"image/jpeg",data:b64,preview:url,sessionTag:null}]);
         };
         img.src=url;
       }else{
@@ -502,7 +502,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
         const reader=new FileReader();
         reader.onload=ev=>{
           const b64=ev.target.result.split(",")[1];
-          setImportFiles(prev=>[...prev,{name:file.name,mimeType:file.type||"application/pdf",data:b64,preview:null}]);
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:file.type||"application/pdf",data:b64,preview:null,sessionTag:null}]);
         };
         reader.readAsDataURL(file);
       }
@@ -511,6 +511,9 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   };
   const removeImportFile=(idx)=>{
     setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
+  };
+  const updateFileTag=(idx,tag)=>{
+    setImportFiles(prev=>prev.map((f,i)=>i===idx?{...f,sessionTag:tag||null}:f));
   };
   const sendConvMessage=async()=>{
     const msg=convInput.trim();if(!msg||convLoading||convCooldown>0||!preview)return;
@@ -634,11 +637,17 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
     setLoading(true);setError(null);
     try{
       const payload={mode:"import",prompt:importText||(importFiles.length?"Programme dans les fichiers ci-joints":""),sessions:SESSIONS};
-      // Exclure les fichiers Excel (data=null), fusionner images + PDFs en 1 seul fichier chacun
       const binaryFiles=importFiles.filter(f=>f.data!==null);
       if(binaryFiles.length){
-        const merged=await mergeFilesForImport(binaryFiles);
-        payload.filesData=merged.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name}));
+        const hasTagged=binaryFiles.some(f=>f.sessionTag);
+        if(hasTagged){
+          // Envoi individuel avec sessionTag pour respecter l'affectation par séance
+          payload.filesData=binaryFiles.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name,sessionTag:f.sessionTag||null}));
+        }else{
+          // Comportement historique : fusion images + PDFs pour optimiser
+          const merged=await mergeFilesForImport(binaryFiles);
+          payload.filesData=merged.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name}));
+        }
       }
       const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
@@ -681,18 +690,33 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
               {importFiles.length?`${importFiles.length} fichier${importFiles.length>1?"s":" "} selectionne${importFiles.length>1?"s":""} — Ajouter d'autres`:"+ Ajouter fichiers (JPG, PNG, PDF…)"}
             </button>
             {importFiles.length>0&&(<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6}}>
-              {importFiles.map((f,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.s2,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.brdL}}>
-                  {f.preview
-                    ?<img src={f.preview} alt={f.name} style={{width:36,height:36,borderRadius:6,objectFit:"cover",background:C.s1,flexShrink:0}}/>
-                    :<div style={{width:36,height:36,borderRadius:6,background:C.rS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📄</div>}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:11,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
-                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase"}}>{f.mimeType.split("/")[1]}</div>
+              {importFiles.map((f,i)=>{
+                const taggedSess=SESSIONS.find(s=>s.id===f.sessionTag);
+                return(<div key={i} style={{background:C.s2,borderRadius:8,padding:"8px 10px",border:"1px solid "+(f.sessionTag?C.coach+"50":C.brdL)}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {f.preview
+                      ?<img src={f.preview} alt={f.name} style={{width:36,height:36,borderRadius:6,objectFit:"cover",background:C.s1,flexShrink:0}}/>
+                      :<div style={{width:36,height:36,borderRadius:6,background:f.sessionTag?C.coachS:C.rS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📄</div>}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:11,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                      <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase"}}>{f.mimeType.split("/")[1]}</div>
+                    </div>
+                    <button onClick={()=>removeImportFile(i)} style={{background:"none",border:"none",color:C.tx3,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0,fontFamily:"inherit"}}>×</button>
                   </div>
-                  <button onClick={()=>removeImportFile(i)} style={{background:"none",border:"none",color:C.tx3,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0,fontFamily:"inherit"}}>×</button>
+                  <div style={{marginTop:6,display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.3px",flexShrink:0}}>Séance :</div>
+                    <select value={f.sessionTag||""} onChange={e=>updateFileTag(i,e.target.value)} style={{flex:1,padding:"4px 8px",borderRadius:6,border:"1px solid "+(f.sessionTag?C.coach+"60":C.brdL),background:f.sessionTag?C.coachS:C.s1,color:f.sessionTag?C.coach:C.tx2,fontSize:10,fontWeight:f.sessionTag?700:400,fontFamily:"inherit",cursor:"pointer"}}>
+                      <option value="">Général (tout le programme)</option>
+                      {SESSIONS.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                </div>);
+              })}
+              {importFiles.some(f=>f.sessionTag)&&(
+                <div style={{padding:"7px 10px",borderRadius:7,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:10,color:C.coach,lineHeight:1.5}}>
+                  Les fichiers tagués seront transmis à l'IA séance par séance — elle placera leurs exercices uniquement dans la séance correspondante.
                 </div>
-              ))}
+              )}
             </div>)}
           </div>
           {error&&<div style={{padding:"10px 14px",borderRadius:8,background:C.rS,border:"1px solid "+C.r+"40",color:C.r,fontSize:11,marginBottom:12}}>{error}</div>}
