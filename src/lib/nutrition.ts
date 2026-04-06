@@ -2,9 +2,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type NutritionStrategyType = "maintenance" | "seche" | "prise_de_masse";
 
+export type CalorieMode = "nap" | "active" | "hybrid";
+
 export interface NutritionStrategy {
   strategy: NutritionStrategyType;
-  can_track_calories: boolean;
+  can_track_calories: boolean; // legacy, remplacé par calorie_mode
+  calorie_mode?: CalorieMode | null;
+  nap?: number | null;
   total_calories_coach?: number | null;
   target_weight?: number | null;
   surplus_deficit_min?: number | null;
@@ -12,6 +16,9 @@ export interface NutritionStrategy {
   macros_glucides?: number | null;
   macros_lipides?: number | null;
   macros_proteines?: number | null;
+  macros_glucides_pct?: number | null;
+  macros_lipides_pct?: number | null;
+  macros_proteines_pct?: number | null;
 }
 
 export interface NutritionDailyLog {

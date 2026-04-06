@@ -124,6 +124,7 @@ export default function CoachDashboard() {
           userName={profile?.full_name}
           athleteProfile={isOwnAthleteView ? profile : selectedAthlete}
           onEditProfile={() => setEditingAthlete(isOwnAthleteView ? profile! : selectedAthlete!)}
+          viewOnly={!isOwnAthleteView}
         />
 
         {editingAthlete && (
