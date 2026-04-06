@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  getNutritionStrategy,
   getDailyLog,
   upsertDailyLog,
   NutritionStrategy,
@@ -24,7 +23,6 @@ const STRATEGY_LABELS: Record<string, string> = {
   seche: "Sèche",
   prise_de_masse: "Prise de masse",
 };
-
 const STRATEGY_COLORS: Record<string, string> = {
   maintenance: C.b,
   seche: C.r,
@@ -59,7 +57,6 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
   const upd = (k: keyof NutritionDailyLog, v: number | null) => {
     setLog(prev => {
       const next = { ...prev, [k]: v };
-      // Recalcul automatique des calories depuis les macros
       if (k === "glucides_consumed" || k === "lipides_consumed" || k === "proteines_consumed") {
         const g = k === "glucides_consumed" ? v : (prev.glucides_consumed ?? 0);
         const l = k === "lipides_consumed"  ? v : (prev.lipides_consumed  ?? 0);
@@ -70,13 +67,12 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
     });
   };
 
-  const logAsComplete = log as NutritionDailyLog;
-
   async function handleSave() {
     setSaving(true);
     try {
-      await upsertDailyLog(athleteId, today, logAsComplete);
-      onLogSaved?.(today, logAsComplete);
+      const logToSave = log as NutritionDailyLog;
+      await upsertDailyLog(athleteId, today, logToSave);
+      onLogSaved?.(today, logToSave);
       toast.success("Log enregistré !");
     } catch (e: any) {
       toast.error(e.message || "Erreur lors de l'enregistrement");
@@ -85,41 +81,18 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "9px 12px", borderRadius: 8,
-    border: "1px solid " + C.brdL, background: C.s2, color: C.tx,
-    fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 10, fontWeight: 600, color: C.tx3,
-    textTransform: "uppercase", letterSpacing: "0.5px",
-    display: "block", marginBottom: 5,
-  };
-
-  const sectionTitle: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: C.tx3,
-    textTransform: "uppercase", letterSpacing: "0.5px",
-    marginBottom: 12,
-  };
-
   const card: React.CSSProperties = {
     background: C.s1, borderRadius: 14, padding: "14px 16px",
     border: "1px solid " + C.brd, marginBottom: 12,
   };
 
-  // ── No strategy defined ──────────────────────────────────────────────────────
   if (!nutritionStrategy) {
     return (
       <div style={{ padding: "16px 16px 40px" }}>
-        <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 16 }}>
-          Alimentation
-        </div>
+        <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 16 }}>Alimentation</div>
         <div style={{ ...card, textAlign: "center", padding: "28px 20px" }}>
           <div style={{ fontSize: 24, marginBottom: 12 }}>🥗</div>
-          <div style={{ fontSize: 14, color: C.tx2 }}>
-            Aucune stratégie nutritionnelle n'a encore été définie par ton coach.
-          </div>
+          <div style={{ fontSize: 14, color: C.tx2 }}>Aucune stratégie nutritionnelle n'a encore été définie par ton coach.</div>
         </div>
       </div>
     );
@@ -129,126 +102,100 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
   const stratColor = STRATEGY_COLORS[strat.strategy] || C.ac;
   const stratLabel = STRATEGY_LABELS[strat.strategy] || strat.strategy;
 
-  // Calories dépensées du jour
-  const totalCalDepensees = strat.can_track_calories
+  // Calories cibles du jour selon le mode
+  const mode = strat.calorie_mode ?? (strat.can_track_calories ? "active" : "nap");
+  const hasActiveCal = (log.active_calories ?? 0) > 0;
+  // Si l'athlète n'a rien saisi en calories actives → toujours fallback sur NAP (total_calories_coach)
+  const targetCal = (mode !== "nap" && hasActiveCal)
     ? (bmr || 0) + (log.active_calories || 0)
     : (strat.total_calories_coach || 0);
+  const showActiveCal = mode === "active" || mode === "hybrid";
 
-  // Macros théoriques (coach)
-  const theoreticalKcal =
-    ((strat.macros_glucides || 0) * 4) +
-    ((strat.macros_lipides || 0) * 9) +
-    ((strat.macros_proteines || 0) * 4);
+  // Macros cibles
+  const macroTargets = [
+    { key: "glucides_consumed" as const,  label: "Glucides",  targetG: strat.macros_glucides,  targetPct: strat.macros_glucides_pct,  color: C.b,  factor: 4 },
+    { key: "lipides_consumed"  as const,  label: "Lipides",   targetG: strat.macros_lipides,   targetPct: strat.macros_lipides_pct,   color: C.o,  factor: 9 },
+    { key: "proteines_consumed" as const, label: "Protéines", targetG: strat.macros_proteines, targetPct: strat.macros_proteines_pct, color: C.g,  factor: 4 },
+  ];
 
-  // Feedback
-  const consumed = log.total_calories_consumed || 0;
-  const surplusPct = totalCalDepensees > 0 && consumed > 0
-    ? ((consumed - totalCalDepensees) / totalCalDepensees) * 100
-    : null;
-  const surplusKcal = consumed > 0 && totalCalDepensees > 0
-    ? consumed - totalCalDepensees
-    : null;
+  // Calories consommées (auto depuis macros)
+  const calConsumed = log.total_calories_consumed || 0;
 
-  const inRange = surplusPct !== null &&
-    strat.surplus_deficit_min != null &&
-    strat.surplus_deficit_max != null &&
-    surplusPct >= strat.surplus_deficit_min &&
-    surplusPct <= strat.surplus_deficit_max;
+  // Écart par rapport à la cible
+  const calDiff = calConsumed > 0 && targetCal > 0 ? calConsumed - targetCal : null;
+  const calDiffPct = calDiff !== null && targetCal > 0 ? (calDiff / targetCal) * 100 : null;
+  const inRange = calDiffPct !== null
+    && strat.surplus_deficit_min != null && strat.surplus_deficit_max != null
+    && calDiffPct >= strat.surplus_deficit_min && calDiffPct <= strat.surplus_deficit_max;
 
   return (
     <div style={{ padding: "16px 16px 40px" }}>
-      <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 16 }}>
-        Alimentation
-      </div>
+      <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 16 }}>Alimentation</div>
 
-      {/* ── Bloc 1 — Résumé stratégie ─────────────────────────────────────── */}
+      {/* ── Objectif du jour ── */}
       <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={sectionTitle}>Stratégie coach</div>
-          <span style={{
-            fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6,
-            background: stratColor + "20", border: "1px solid " + stratColor + "40",
-            color: stratColor,
-          }}>
-            {stratLabel}
-          </span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px" }}>Objectif du jour</div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6, background: stratColor + "20", border: "1px solid " + stratColor + "40", color: stratColor }}>{stratLabel}</span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-          {strat.target_weight && (
-            <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
-              <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Poids cible</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: C.ac }}>{strat.target_weight} <span style={{ fontSize: 11, color: C.tx3 }}>kg</span></div>
+        {/* Calories cibles */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: C.s2, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, color: C.tx3, marginBottom: 2 }}>
+              {(mode !== "nap" && hasActiveCal) ? "Dépenses estimées (BMR + activité)" : "Calories cibles (BMR × NAP)"}
             </div>
-          )}
-          <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>
-              {strat.can_track_calories ? "Dépenses estimées" : "Calories fixées"}
+            <div style={{ fontSize: 26, fontWeight: 900, color: C.o, lineHeight: 1 }}>
+              {targetCal > 0 ? targetCal.toLocaleString("fr-FR") : "—"}
+              <span style={{ fontSize: 12, color: C.tx3, fontWeight: 400 }}> kcal</span>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: C.o }}>
-              {totalCalDepensees > 0 ? totalCalDepensees : "—"}
-              <span style={{ fontSize: 11, color: C.tx3 }}> kcal</span>
-            </div>
-            {strat.can_track_calories && bmr && (
-              <div style={{ fontSize: 9, color: C.tx3, marginTop: 2 }}>BMR {bmr} + activité {log.active_calories || 0}</div>
+            {mode !== "nap" && bmr && hasActiveCal && (
+              <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>BMR {bmr} + activité {log.active_calories || 0} kcal</div>
             )}
           </div>
+          {strat.target_weight && (
+            <div style={{ textAlign: "center", paddingLeft: 12, borderLeft: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ fontSize: 10, color: C.tx3, marginBottom: 2 }}>Poids cible</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.ac }}>{strat.target_weight}<span style={{ fontSize: 11, color: C.tx3 }}> kg</span></div>
+            </div>
+          )}
         </div>
 
-        {(strat.macros_glucides || strat.macros_lipides || strat.macros_proteines) && (
-          <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: C.tx3, marginBottom: 8 }}>Macros cibles</div>
-            <div style={{ display: "flex", gap: 12 }}>
-              {[
-                { label: "Glucides", value: strat.macros_glucides, color: C.b },
-                { label: "Lipides", value: strat.macros_lipides, color: C.o },
-                { label: "Protéines", value: strat.macros_proteines, color: C.g },
-              ].map(m => (
-                <div key={m.label} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: m.color }}>{m.value ?? "—"}</div>
-                  <div style={{ fontSize: 9, color: C.tx3 }}>{m.label.slice(0, 4)}. (g)</div>
-                </div>
-              ))}
-              {theoreticalKcal > 0 && (
-                <div style={{ marginLeft: "auto", textAlign: "right" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.tx2 }}>{theoreticalKcal}</div>
-                  <div style={{ fontSize: 9, color: C.tx3 }}>kcal théor.</div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {(strat.surplus_deficit_min != null && strat.surplus_deficit_max != null) && (
-          <div style={{ fontSize: 11, color: C.tx3 }}>
-            Fourchette objectif :&nbsp;
-            <span style={{ color: C.tx, fontWeight: 600 }}>
-              {strat.surplus_deficit_min > 0 ? "+" : ""}{strat.surplus_deficit_min}%
-              &nbsp;à&nbsp;
-              {strat.surplus_deficit_max > 0 ? "+" : ""}{strat.surplus_deficit_max}%
-            </span>
+        {/* Macros cibles */}
+        {macroTargets.some(m => m.targetG || m.targetPct) && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+            {macroTargets.map(m => (
+              <div key={m.key} style={{ background: C.s2, borderRadius: 10, padding: "8px 10px", border: "1px solid " + m.color + "25", textAlign: "center" }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: m.color, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{m.label}</div>
+                {m.targetPct != null && <div style={{ fontSize: 20, fontWeight: 900, color: m.color, lineHeight: 1 }}>{m.targetPct}<span style={{ fontSize: 11 }}>%</span></div>}
+                {m.targetG != null && <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginTop: m.targetPct != null ? 1 : 0 }}>{m.targetG} g</div>}
+                {m.targetG == null && m.targetPct == null && <div style={{ fontSize: 13, color: C.tx3 }}>—</div>}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* ── Bloc 2 — Saisie quotidienne ───────────────────────────────────── */}
+      {/* ── Log du jour ── */}
       <div style={card}>
-        <div style={{ ...sectionTitle, marginBottom: 14 }}>Log du jour — {today}</div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 14 }}>
+          Mon suivi — {today}
+        </div>
 
         {logLoading ? (
           <div style={{ color: C.tx3, fontSize: 13, textAlign: "center", padding: "10px 0" }}>Chargement...</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-            {strat.can_track_calories && (
-              <div>
-                <label style={labelStyle}>Calories actives (kcal brûlées — montre/app)</label>
+            {/* Calories actives si mode active ou hybrid */}
+            {showActiveCal && (
+              <div style={{ padding: "10px 12px", borderRadius: 10, background: C.s2, border: "1px solid " + C.brdL }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+                  Calories actives (montre/app){mode === "hybrid" && <span style={{ fontWeight: 400, color: C.tx3 }}> — optionnel</span>}
+                </div>
                 <input
-                  style={inputStyle}
-                  type="number"
-                  min={0}
-                  max={5000}
-                  placeholder="ex: 400"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+                  type="number" min={0} max={5000} placeholder="ex: 400"
                   value={log.active_calories ?? ""}
                   onChange={viewOnly ? undefined : (e => upd("active_calories", e.target.value ? parseInt(e.target.value) : null))}
                   readOnly={viewOnly}
@@ -256,79 +203,97 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
               </div>
             )}
 
-            <div>
-              <label style={labelStyle}>Total calories consommées (kcal)</label>
-              <input
-                style={inputStyle}
-                type="number"
-                min={0}
-                max={10000}
-                placeholder="ex: 2200"
-                value={log.total_calories_consumed ?? ""}
-                onChange={viewOnly ? undefined : (e => upd("total_calories_consumed", e.target.value ? parseInt(e.target.value) : null))}
-                readOnly={viewOnly}
-              />
-            </div>
+            {/* Macros individuelles */}
+            {macroTargets.map(m => {
+              const consumed = log[m.key] ?? null;
+              const target = m.targetG;
+              const pct = consumed != null && target ? Math.min(Math.round((consumed / target) * 100), 100) : null;
+              const over = consumed != null && target ? consumed > target : false;
+              const barColor = over ? C.o : m.color;
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              {[
-                { key: "glucides_consumed" as const, label: "Glucides (g)", color: C.b },
-                { key: "lipides_consumed" as const, label: "Lipides (g)", color: C.o },
-                { key: "proteines_consumed" as const, label: "Protéines (g)", color: C.g },
-              ].map(m => (
-                <div key={m.key}>
-                  <label style={{ ...labelStyle, color: m.color }}>{m.label}</label>
+              return (
+                <div key={m.key} style={{ background: C.s2, borderRadius: 12, padding: "12px 14px", border: "1px solid " + m.color + "20" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: m.color }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.label}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.tx3 }}>
+                      {target != null
+                        ? <><span style={{ fontWeight: 700, color: consumed != null ? (over ? C.o : C.tx) : C.tx3 }}>{consumed ?? "—"}</span><span> / {target} g</span></>
+                        : <span style={{ fontWeight: 700, color: C.tx3 }}>{consumed ?? "—"} g</span>
+                      }
+                    </div>
+                  </div>
+
+                  {/* Barre progression */}
+                  {target != null && (
+                    <div style={{ height: 4, background: C.s1, borderRadius: 2, marginBottom: 8, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: (pct ?? 0) + "%", background: barColor, borderRadius: 2, transition: "width 0.3s" }} />
+                    </div>
+                  )}
+
                   <input
-                    style={{ ...inputStyle, borderColor: m.color + "40" }}
-                    type="number"
-                    min={0}
-                    max={1000}
-                    placeholder="0"
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid " + m.color + "40", background: C.s1, color: C.tx, fontSize: 15, fontWeight: 700, fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, textAlign: "center" as const }}
+                    type="number" min={0} max={1000} placeholder="0 g"
                     value={log[m.key] ?? ""}
                     onChange={viewOnly ? undefined : (e => upd(m.key, e.target.value ? parseInt(e.target.value) : null))}
                     readOnly={viewOnly}
                   />
                 </div>
-              ))}
-            </div>
+              );
+            })}
+
+            {/* Récap calories calculées */}
+            {calConsumed > 0 && (
+              <div style={{ padding: "10px 14px", borderRadius: 10, background: C.s2, border: "1px solid " + (calDiff !== null ? (inRange ? C.g : C.o) + "40" : C.brdL), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 2 }}>Calories calculées</div>
+                  <div style={{ fontSize: 20, fontWeight: 900, color: calDiff !== null ? (inRange ? C.g : C.o) : C.tx }}>
+                    {calConsumed.toLocaleString("fr-FR")}
+                    <span style={{ fontSize: 11, color: C.tx3, fontWeight: 400 }}> kcal</span>
+                  </div>
+                </div>
+                {calDiff !== null && targetCal > 0 && (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: calDiff > 0 ? C.g : C.r }}>
+                      {calDiff > 0 ? "+" : ""}{calDiff} kcal
+                    </div>
+                    <div style={{ fontSize: 10, color: C.tx3 }}>
+                      {calDiffPct != null ? (calDiffPct > 0 ? "+" : "") + calDiffPct.toFixed(1) + "%" : ""}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {!viewOnly && (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
-                background: saving ? C.s2 : C.ac, color: saving ? C.tx3 : "#fff",
-                fontSize: 14, fontWeight: 700, cursor: saving ? "default" : "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {saving ? "Enregistrement..." : "Enregistrer"}
-            </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none", background: saving ? C.s2 : C.ac, color: saving ? C.tx3 : "#fff", fontSize: 14, fontWeight: 700, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}
+              >
+                {saving ? "Enregistrement..." : "Enregistrer"}
+              </button>
             )}
           </div>
         )}
       </div>
 
-      {/* ── Bloc 3 — Feedback ─────────────────────────────────────────────── */}
-      {consumed > 0 && surplusPct !== null && (
-        <div style={{
-          ...card,
-          background: inRange ? C.gS : C.oS,
-          border: "1px solid " + (inRange ? C.g : C.o) + "40",
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: inRange ? C.g : C.o, marginBottom: 8 }}>
+      {/* ── Feedback ── */}
+      {calDiffPct !== null && (
+        <div style={{ ...card, background: inRange ? C.gS : C.oS, border: "1px solid " + (inRange ? C.g : C.o) + "40" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: inRange ? C.g : C.o, marginBottom: 6 }}>
             {inRange
-              ? `✅ Excellent ! Tu respectes ton plan ${stratLabel}. Continue comme ça !`
-              : `⚠️ Tu es à ${surplusPct.toFixed(1)}% aujourd'hui. Ton objectif est entre ${strat.surplus_deficit_min}% et ${strat.surplus_deficit_max}%. Ajuste ton prochain repas, tu es sur la bonne voie !`
+              ? `✅ Dans l'objectif ${stratLabel} aujourd'hui !`
+              : `⚠️ ${calDiffPct > 0 ? "+" : ""}${calDiffPct.toFixed(1)}% par rapport à la cible`
             }
           </div>
           <div style={{ fontSize: 11, color: C.tx2 }}>
-            Surplus / Déficit du jour :&nbsp;
-            <span style={{ fontWeight: 700, color: surplusPct > 0 ? C.g : C.r }}>
-              {surplusPct > 0 ? "+" : ""}{surplusPct.toFixed(1)}%
-              &nbsp;({surplusKcal != null && surplusKcal > 0 ? "+" : ""}{surplusKcal ?? 0} kcal)
-            </span>
+            {calConsumed} kcal consommées · cible {targetCal} kcal
+            {strat.surplus_deficit_min != null && strat.surplus_deficit_max != null && (
+              <span style={{ color: C.tx3 }}> · fenêtre {strat.surplus_deficit_min > 0 ? "+" : ""}{strat.surplus_deficit_min}% à {strat.surplus_deficit_max > 0 ? "+" : ""}{strat.surplus_deficit_max}%</span>
+            )}
           </div>
         </div>
       )}

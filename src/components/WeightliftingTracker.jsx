@@ -79,16 +79,18 @@ const getReco=score=>{if(score>=80)return{label:"Optimal",desc:"Seance a pleine 
 const getAlerts=w=>{const a=[];if(w?.fatigue<=2)a.push("Récupération faible: surveiller la technique");if(w?.doms<=2)a.push("DOMS intenses: adapter les muscles cibles");if(w?.stress<=2)a.push("Stress élevé: séance technique recommandée");if(w?.energie<=2)a.push("Énergie faible: réduire le volume");return a;};
 
 const DEF_METHODS={myoreps:{label:"Myoreps",c:"#7B6FFF",e:"MR"},dropset:{label:"Dropset",c:"#F5A623",e:"DS"},restpause:{label:"Rest-pause",c:"#EF4B4B",e:"RP"},cluster:{label:"Cluster",c:"#C060D0",e:"CL"},superset:{label:"Superset",c:"#22C993",e:"SS"},amrap:{label:"AMRAP",c:"#3B8DF0",e:"AM"},excentrique:{label:"Excentrique",c:"#D4538E",e:"EX"},isometrique:{label:"Isometrique",c:"#9194A0",e:"ISO"}};
-const MDEF={dropset:{drops:3,pct:20},myoreps:{activation:12,minisets:4,reps_mini:5,pause:5},restpause:{rounds:3,pause:15},cluster:{clusters:3,reps_per_cluster:2,pause:10},superset:{paired:null},amrap:{type:"failure",duration:30},excentrique:{eccentric_sec:4},isometrique:{hold_sec:30,positions:2}};
+const MDEF={dropset:{drops:3,pct:20},myoreps:{activation:12,minisets:4,reps_mini:5,pause:5},restpause:{rounds:3,pause:15},cluster:{clusters:3,reps:[2,2,2],pause:10},superset:{paired:null},amrap:{type:"failure",duration:30},excentrique:{eccentric_sec:4},isometrique:{hold_sec:30,positions:2}};
+const clusterReps=p=>p.reps||Array.from({length:p.clusters||3},()=>p.reps_per_cluster||2);
+const fmtMR=(method,mp,sets,repsRange)=>{if(!method||method==="excentrique"||method==="superset")return sets+"x"+(repsRange||"?");if(method==="cluster")return sets+"×("+clusterReps(mp||{}).join("+")+")";if(method==="dropset")return sets+"x"+(repsRange||"?")+" DS×"+(mp?.drops||2)+" -"+(mp?.pct||20)+"%";if(method==="myoreps")return sets+" | "+(mp?.activation||12)+"+"+(mp?.minisets||4)+"×"+(mp?.reps_mini||5);if(method==="restpause")return sets+"x"+(repsRange||"?")+" RP×"+(mp?.rounds||3);if(method==="amrap")return sets+" AMRAP";if(method==="isometrique")return sets+"×"+(mp?.positions||2)+"×"+(mp?.hold_sec||30)+"s";return sets+"x"+(repsRange||"?");};
 
 const generateRows=(planned,method,mp)=>{
   const sets=planned?.sets||3,kg=planned?.kg||0,reps=parseReps(planned?.repsRange)||0,rir=planned?.rir??2;
   const p=mp||MDEF[method]||{};
   if(!method||method==="excentrique")return Array.from({length:sets},()=>({type:"set",kg,reps,rir,done:false}));
-  if(method==="dropset"){const rows=[];for(let s=0;s<sets;s++){rows.push({type:"set",setIdx:s+1,kg,reps,rir,done:false});for(let d=0;d<(p.drops||2);d++){const dkg=Math.round(kg*Math.pow(1-(p.pct||20)/100,d+1)/2.5)*2.5;rows.push({type:"drop",setIdx:s+1,dropIdx:d+1,kg:dkg,reps,done:false});}}return rows;}
+  if(method==="dropset"){const rows=[];for(let s=0;s<sets;s++){rows.push({type:"set",setIdx:s+1,kg,reps,rir,done:false});for(let d=0;d<(p.drops||2);d++){const dkg=p.dropWeights?.[d]??Math.round(kg*Math.pow(1-(p.pct||20)/100,d+1)/2.5)*2.5;rows.push({type:"drop",setIdx:s+1,dropIdx:d+1,kg:dkg,reps,done:false});}}return rows;}
   if(method==="myoreps"){const rows=[{type:"activation",kg,reps:p.activation||12,rir,done:false}];for(let m=0;m<(p.minisets||4);m++)rows.push({type:"mini",idx:m+1,kg,reps:p.reps_mini||5,done:false,pauseSec:p.pause||5});return rows;}
   if(method==="restpause")return Array.from({length:p.rounds||3},(_,i)=>({type:"round",idx:i+1,kg,reps,rir,done:false,pauseSec:p.pause||15}));
-  if(method==="cluster"){const rows=[];const nCl=p.clusters||3;const rpc=p.reps_per_cluster||2;const ps=p.pause||10;for(let s=0;s<sets;s++){for(let c=0;c<nCl;c++){rows.push({type:"cluster",setIdx:s+1,clusterIdx:c+1,totalClusters:nCl,kg,reps:rpc,rir,done:false,pauseSec:ps,isLast:c===nCl-1});}}return rows;}
+  if(method==="cluster"){const rows=[];const nCl=p.clusters||3;const ps=p.pause||10;const ra=clusterReps(p);for(let s=0;s<sets;s++){for(let c=0;c<nCl;c++){rows.push({type:"cluster",setIdx:s+1,clusterIdx:c+1,totalClusters:nCl,kg,reps:ra[c]||2,rir,done:false,pauseSec:ps,isLast:c===nCl-1});}}return rows;}
   if(method==="amrap")return[{type:"amrap",kg,reps:0,done:false,timed:p.type==="timed",duration:p.duration||30}];
   if(method==="isometrique")return Array.from({length:p.positions||2},(_,i)=>({type:"iso",idx:i+1,holdSec:p.hold_sec||30,done:false}));
   return Array.from({length:sets},()=>({type:"set",kg,reps,rir,done:false}));
@@ -129,7 +131,7 @@ const roundHalf=v=>Math.round(v*2)/2;
 const BLOC_TO_TIER={"PERF":1,"ESTH":2,"ASSOC":2,"BESOIN":3,"CORE":3,"MOBIL":3};
 const getExTier=(name,ex)=>ex?.tier||(EX_TIER[name]||(ex?.bloc?BLOC_TO_TIER[ex.bloc]:null)||3);
 const DEF_BLOCK_CONFIG={totalWeeks:6,deloadWeek:6,progressionPct:2.5,progressionType:"linear",deloadPct:40,tierConfig:DEF_TIER_CONFIG};
-const SKEYS={exos:"asp:exos",exMeta:"asp:exMeta",sets:"asp:sets",wellness:"asp:wellness",wellnessHistory:"asp:wh",bw:"asp:bw",completed:"asp:completed",goals:"asp:goals",anotes:"asp:anotes",custMethods:"asp:custmethods",weightLog:"asp:wlog",weightMilestones:"asp:wmile",injuries:"asp:injuries",sessions:"asp:sessions",blockConfig:"asp:blockConfig",blockHistory:"asp:blockHistory",weekSchedule:"asp:weekschedule"};
+const SKEYS={exos:"asp:exos",exMeta:"asp:exMeta",sets:"asp:sets",wellness:"asp:wellness",wellnessHistory:"asp:wh",bw:"asp:bw",completed:"asp:completed",goals:"asp:goals",anotes:"asp:anotes",custMethods:"asp:custmethods",weightLog:"asp:wlog",weightMilestones:"asp:wmile",injuries:"asp:injuries",sessions:"asp:sessions",blockConfig:"asp:blockConfig",blockHistory:"asp:blockHistory",weekSchedule:"asp:weekschedule",sessionLogs:"asp:sessionlogs",freeSessions:"asp:freesess"};
 async function sLoad(k,fb,aid){
   if(!aid)return fb;
   try{
@@ -354,7 +356,7 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
 
 function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,setAthleteNotes,method,methodParams,allMethods,exosMap,viewOnly=false}){
   const initRows=()=>generateRows(planned,method,methodParams);
-  const rows=sessionSets[storeKey]||initRows();
+  const rows=(()=>{const stored=sessionSets[storeKey];if(!stored||!stored.length)return initRows();const specialType={cluster:"cluster",myoreps:"activation",restpause:"round",amrap:"amrap",isometrique:"iso",dropset:"drop"}[method||""];if(specialType&&!stored.some(r=>r.type===specialType))return initRows();if(!specialType&&stored.some(r=>r.type!=="set"))return initRows();return stored;})();
   const upd=(i,f,v)=>updateSets(storeKey,rows.map((r,j)=>j===i?{...r,[f]:v}:r));
   const updR=(i,patch)=>updateSets(storeKey,rows.map((r,j)=>j===i?{...r,...patch}:r));
   const done=rows.filter(r=>r.done||r.skipped).length;const note=athleteNotes?.[storeKey]||"";
@@ -374,7 +376,7 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
         {isIso&&<div style={{fontSize:11,color:C.tx2,textAlign:"center"}}>{r.holdSec}s</div>}
         {!isIso&&<span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span>}
         {!isIso&&<input type="number" value={r.reps||0} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={isAmrap?"max":""} style={iS}/>}
-        {!isIso&&!isAmrap&&!isMini&&!isDrop&&<RIRMini value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
+        {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&<RIRMini value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
         <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button><button onClick={viewOnly?undefined:()=>updR(i,{done:!r.done,skipped:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
       </div>{showPause&&<div style={{textAlign:"center",fontSize:9,color:C.tx3,padding:"2px 0",marginBottom:2}}>{r.pauseSec}s repos</div>}</div>);
     })}
@@ -412,16 +414,16 @@ function MuscleSelector({value,onChange,multi}){
   return(<div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MTREE.map(g=>{const isGroup=g.s.length>0,isActive=isOn(g.id),hasSub=isGroup&&g.s.some(s=>isOn(s.id));const c=getMC(g.id);return(<div key={g.id} style={{marginBottom:(isGroup&&expanded[g.id])?0:4}}><div style={{display:"flex",gap:2,alignItems:"center"}}><button onClick={()=>toggle(g.id)} style={{padding:"5px 10px",borderRadius:7,border:"1.5px solid "+((isActive||hasSub)?c:C.brdL),background:(isActive||hasSub)?c+"20":"transparent",color:(isActive||hasSub)?c:C.tx3,fontSize:11,fontWeight:(isActive||hasSub)?700:400,cursor:"pointer",fontFamily:"inherit"}}>{mL(g.id)}</button>{isGroup&&<button onClick={()=>tog(g.id)} style={{padding:"3px 6px",borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:9,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}>{expanded[g.id]?"▲":"▼"}</button>}</div>{isGroup&&expanded[g.id]&&(<div style={{display:"flex",flexWrap:"wrap",gap:3,padding:"4px 0 4px 8px",borderLeft:"2px solid "+c+"40",marginLeft:4,marginBottom:4}}>{g.s.map(s=>(<button key={s.id} onClick={()=>toggle(s.id)} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+(isOn(s.id)?c:C.brdL),background:isOn(s.id)?c+"20":"transparent",color:isOn(s.id)?c:C.tx3,fontSize:10,fontWeight:isOn(s.id)?700:400,cursor:"pointer",fontFamily:"inherit"}}>{mL(s.id)}</button>))}</div>)}</div>);})}</div>);
 }
 
-function MethodParamsForm({method,params,onChange,exosInSession,currentExId}){
+function MethodParamsForm({method,params,onChange,exosInSession,currentExId,plannedKg}){
   if(!method||!MDEF[method])return null;const p=params||MDEF[method];const upd=(k,v)=>onChange({...p,[k]:v});
   const row=(label,key,min,max,step)=>(<div key={key}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>{label}</div><div style={{display:"flex",alignItems:"center",gap:4}}><button onClick={()=>upd(key,Math.max(min,+(p[key]||0)-(step||1)))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>-</button><div style={{flex:1,textAlign:"center",fontSize:14,fontWeight:700,color:C.tx}}>{p[key]||0}</div><button onClick={()=>upd(key,Math.min(max,+(p[key]||0)+(step||1)))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+</button></div></div>);
   const mc=DEF_METHODS[method]?.c||C.ac;
   return(<div style={{marginTop:10,padding:"12px",borderRadius:10,background:C.s2,border:"1px solid "+mc+"40"}}>
     <div style={{fontSize:10,fontWeight:600,color:mc,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>{DEF_METHODS[method]?.label} - Parametres</div>
-    {method==="dropset"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{row("Nb drops","drops",1,6)}{row("Reduction %","pct",5,50,5)}</div>}
+    {method==="dropset"&&(()=>{const nD=p.drops||2;const pct=p.pct||20;const autoW=i=>plannedKg?Math.round(plannedKg*Math.pow(1-pct/100,i+1)/2.5)*2.5:null;const dw=i=>p.dropWeights?.[i]??autoW(i);const updNCl=(n)=>{const newW=plannedKg?Array.from({length:n},(_,i)=>dw(i)):undefined;onChange({...p,drops:n,...(newW?{dropWeights:newW}:{})});};const updPct=(v)=>{const newW=plannedKg?Array.from({length:nD},(_,i)=>Math.round(plannedKg*Math.pow(1-v/100,i+1)/2.5)*2.5):undefined;onChange({...p,pct:v,...(newW?{dropWeights:newW}:{})});};const updDW=(i,v)=>{const arr=Array.from({length:nD},(_,j)=>dw(j));arr[i]=v;onChange({...p,dropWeights:arr});};return(<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:plannedKg?10:0}}><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>Nb drops</div><div style={{display:"flex",alignItems:"center",gap:4}}><button onClick={()=>updNCl(Math.max(1,nD-1))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>-</button><div style={{flex:1,textAlign:"center",fontSize:14,fontWeight:700,color:C.tx}}>{nD}</div><button onClick={()=>updNCl(Math.min(6,nD+1))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+</button></div></div><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>Réduction %</div><div style={{display:"flex",alignItems:"center",gap:4}}><button onClick={()=>updPct(Math.max(5,pct-5))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>-</button><div style={{flex:1,textAlign:"center",fontSize:14,fontWeight:700,color:C.tx}}>{pct}%</div><button onClick={()=>updPct(Math.min(50,pct+5))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+</button></div></div></div>{plannedKg&&<div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:6}}>Charges par drop</div><div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}><div style={{textAlign:"center",padding:"4px 8px",borderRadius:6,background:C.s1,fontSize:12,fontWeight:700,color:C.tx}}>{plannedKg}<span style={{fontSize:9,color:C.tx3}}> kg</span></div>{Array.from({length:nD},(_,i)=>{const w=dw(i);return(<div key={i} style={{display:"flex",alignItems:"center",gap:4}}><span style={{color:C.tx3,fontSize:12}}>→</span><div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><div style={{fontSize:9,color:C.o}}>Drop {i+1}</div><div style={{display:"flex",alignItems:"center",gap:2}}><button onClick={()=>updDW(i,Math.max(0,Math.round(((w||0)-2.5)/2.5)*2.5))} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",fontSize:10,flexShrink:0}}>-</button><div style={{width:36,textAlign:"center",fontSize:12,fontWeight:700,color:C.o}}>{w??"-"}</div><button onClick={()=>updDW(i,Math.round(((w||0)+2.5)/2.5)*2.5)} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",fontSize:10,flexShrink:0}}>+</button></div></div></div>);})}</div></div>}</div>);})()}
     {method==="myoreps"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{row("Reps activ.","activation",5,25)}{row("Nb mini-sets","minisets",2,10)}{row("Reps/mini","reps_mini",2,10)}{row("Pause (s)","pause",3,30)}</div>}
     {method==="restpause"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{row("Nb rounds","rounds",2,6)}{row("Pause (s)","pause",5,60,5)}</div>}
-    {method==="cluster"&&<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>{row("Nb clusters","clusters",2,8)}{row("Reps/cluster","reps_per_cluster",1,10)}{row("Pause (s)","pause",5,30,5)}</div><div style={{padding:"6px 10px",borderRadius:6,background:C.s1,fontSize:12,fontWeight:700,color:mc,textAlign:"center",letterSpacing:"1px"}}>{Array.from({length:p.clusters||3},()=>(p.reps_per_cluster||2)).join("+")} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>({p.pause||10}s repos)</span></div></div>}
+    {method==="cluster"&&(()=>{const ra=clusterReps(p);const nCl=p.clusters||3;const updRep=(i,v)=>{const nr=[...ra];nr[i]=v;onChange({...p,reps:nr});};const updNCl=(n)=>{const nr=n>ra.length?[...ra,...Array(n-ra.length).fill(ra[ra.length-1]||2)]:ra.slice(0,n);onChange({...p,clusters:n,reps:nr});};return(<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:4,textAlign:"center"}}>Nb clusters</div><div style={{display:"flex",alignItems:"center",gap:4}}><button onClick={()=>updNCl(Math.max(2,nCl-1))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>-</button><div style={{flex:1,textAlign:"center",fontSize:14,fontWeight:700,color:C.tx}}>{nCl}</div><button onClick={()=>updNCl(Math.min(8,nCl+1))} style={{width:26,height:26,borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>+</button></div></div>{row("Pause (s)","pause",5,30,5)}</div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:6}}>Reps par cluster</div><div style={{display:"flex",gap:4,marginBottom:8,flexWrap:"wrap"}}>{ra.map((v,i)=>(<div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1,minWidth:32}}><div style={{fontSize:9,color:C.tx3}}>C{i+1}</div><div style={{display:"flex",alignItems:"center",gap:2}}><button onClick={()=>updRep(i,Math.max(1,v-1))} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",fontSize:10,flexShrink:0}}>-</button><div style={{width:22,textAlign:"center",fontSize:13,fontWeight:700,color:mc}}>{v}</div><button onClick={()=>updRep(i,Math.min(10,v+1))} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,cursor:"pointer",fontFamily:"inherit",fontSize:10,flexShrink:0}}>+</button></div></div>))}</div><div style={{padding:"6px 10px",borderRadius:6,background:C.s1,fontSize:12,fontWeight:700,color:mc,textAlign:"center",letterSpacing:"1px"}}>{ra.join("+")} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>({p.pause||10}s repos)</span></div></div>);})()}
     {method==="superset"&&<div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:6}}>Exercice associe</div><select value={p.paired||""} onChange={e=>upd("paired",e.target.value)} style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit"}}><option value="">-- Choisir --</option>{(exosInSession||[]).filter(e=>e.id!==currentExId).map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></div>}
     {method==="amrap"&&<div><div style={{display:"flex",gap:6,marginBottom:8}}>{["failure","timed"].map(t=><button key={t} onClick={()=>upd("type",t)} style={{flex:1,padding:"6px 0",borderRadius:7,border:"1px solid "+(p.type===t?C.b:C.brdL),background:p.type===t?C.bS:"transparent",color:p.type===t?C.b:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t==="failure"?"A l echec":"Chrono"}</button>)}</div>{p.type==="timed"&&row("Duree (s)","duration",10,300,5)}</div>}
     {method==="excentrique"&&row("Phase neg. (s)","eccentric_sec",2,10)}
@@ -430,7 +432,7 @@ function MethodParamsForm({method,params,onChange,exosInSession,currentExId}){
       {method==="dropset"&&(p.drops||2)+" drops, -"+(p.pct||20)+"%"}
       {method==="myoreps"&&(p.activation||12)+" reps + "+(p.minisets||4)+"x"+(p.reps_mini||5)+" ("+(p.pause||5)+"s)"}
       {method==="restpause"&&(p.rounds||3)+" rounds, "+(p.pause||15)+"s"}
-      {method==="cluster"&&Array.from({length:p.clusters||3},()=>(p.reps_per_cluster||2)).join("+")+", "+(p.pause||10)+"s"}
+      {method==="cluster"&&clusterReps(p).join("+")+", "+(p.pause||10)+"s"}
       {method==="amrap"&&(p.type==="timed"?"Chrono: "+(p.duration||30)+"s":"A l echec")}
       {method==="excentrique"&&"Phase negative: "+(p.eccentric_sec||4)+"s"}
       {method==="isometrique"&&(p.positions||2)+"x"+(p.hold_sec||30)+"s"}
@@ -1342,7 +1344,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     <span style={{fontSize:13,fontWeight:600}}>{ex.name}</span>
                     {eType!=="muscu"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:typeColors[eType]+"20",color:typeColors[eType],fontWeight:600}}>{typeLabels[eType]}</span>}
                   </div>
-                  {!isFlex&&(wd.pdc||wd.kg)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.pdc?"PDC":wd.kg+"kg"} - {wd.sets}x{wd.repsRange||"?"} - <span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>{curM?" - "+curM.e+" "+curM.label:""}</div>
+                  {!isFlex&&(wd.pdc||wd.kg)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(wd.method,wd.methodParams,wd.sets,wd.repsRange)}{(!wd.method||wd.method==="excentrique"||wd.method==="superset"||wd.method==="dropset"||wd.method==="restpause")?" - ":""}{(!wd.method||wd.method==="excentrique"||wd.method==="superset"||wd.method==="dropset"||wd.method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>
                   :isFlex&&wd.sets?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>
                   :<div style={{fontSize:11,color:C.tx3,marginTop:2}}>Aucune prescription</div>}
                 </div>
@@ -1381,11 +1383,11 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 {!isFlex&&(<div style={{marginBottom:14}}>
                   <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Methode</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                    <button onClick={()=>{updField(ex.id,"method",null);updMP(ex.id,null);}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(!wd.method?C.coach:C.brdL),background:!wd.method?C.coachS:"transparent",color:!wd.method?C.coach:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:!wd.method?700:400}}>Standard</button>
-                    {Object.entries(allMethods).map(([k,m])=><button key={k} onClick={()=>{updField(ex.id,"method",wd.method===k?null:k);if(wd.method!==k)updMP(ex.id,MDEF[k]||null);}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(wd.method===k?m.c:C.brdL),background:wd.method===k?m.c+"20":"transparent",color:wd.method===k?m.c:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:wd.method===k?700:400}}>{m.e} {m.label}</button>)}
+                    <button onClick={()=>{setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:null,methodParams:null}}}:e)}));}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(!wd.method?C.coach:C.brdL),background:!wd.method?C.coachS:"transparent",color:!wd.method?C.coach:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:!wd.method?700:400}}>Standard</button>
+                    {Object.entries(allMethods).map(([k,m])=><button key={k} onClick={()=>{const nm=wd.method===k?null:k;setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:nm,methodParams:nm?(MDEF[nm]||null):null}}}:e)}));}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(wd.method===k?m.c:C.brdL),background:wd.method===k?m.c+"20":"transparent",color:wd.method===k?m.c:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:wd.method===k?700:400}}>{m.e} {m.label}</button>)}
                     <button onClick={()=>setNewMForm(o=>!o)} style={{padding:"5px 10px",borderRadius:7,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+ Custom</button>
                   </div>
-                  {wd.method&&<MethodParamsForm method={wd.method} params={wd.methodParams} onChange={p=>updMP(ex.id,p)} exosInSession={exList} currentExId={ex.id}/>}
+                  {wd.method&&<MethodParamsForm method={wd.method} params={wd.methodParams} onChange={p=>updMP(ex.id,p)} exosInSession={exList} currentExId={ex.id} plannedKg={wd.pdc?null:wd.kg}/>}
                   {newMForm&&(<div style={{marginTop:8,padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+C.brdL}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}><input value={newM.label} onChange={e=>setNewM(p=>({...p,label:e.target.value}))} placeholder="Nom" style={{padding:"6px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit"}}/><input value={newM.e} onChange={e=>setNewM(p=>({...p,e:e.target.value}))} placeholder="Code" style={{padding:"6px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit"}}/></div><button onClick={addCM} style={{padding:"6px 14px",borderRadius:7,border:"none",background:C.coachS,color:C.coach,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Ajouter</button></div>)}
                 </div>)}
                 <div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Consigne technique</div><textarea value={wd.coachNote||""} onChange={e=>updField(ex.id,"coachNote",e.target.value)} placeholder="Ex: garder les omoplates retractees..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.coach+"60",background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/></div>
@@ -1965,16 +1967,52 @@ function InjuriesView({injuries,addInjury,updateInjury,deleteInjury}){
   </div>);
 }
 
-function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false}){
+function SessionEndModal({duration,onSave,C}){
+  const[note,setNote]=useState("");
+  const[forme,setForme]=useState(7);
+  const mins=Math.floor(duration/60);const secs=duration%60;
+  const formeColor=forme>=8?C.g:forme>=5?C.o:C.r;
+  return(<><div onClick={()=>onSave("",null)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:399}}/><div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:600,background:C.s1,borderRadius:"20px 20px 0 0",padding:24,zIndex:400,boxSizing:"border-box"}}>
+    <div style={{fontSize:20,fontWeight:800,marginBottom:4,textAlign:"center"}}>Séance terminée !</div>
+    <div style={{fontSize:13,color:C.tx2,textAlign:"center",marginBottom:18}}>Durée : {mins}min {secs}s</div>
+    <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Ressenti, points forts, à améliorer..." style={{width:"100%",minHeight:80,background:C.s2,border:"1px solid "+C.brdL,borderRadius:12,color:C.tx,fontSize:13,fontFamily:"inherit",padding:"10px 12px",resize:"vertical",outline:"none",boxSizing:"border-box",marginBottom:16}}/>
+    <div style={{marginBottom:18}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><span style={{fontSize:12,fontWeight:600,color:C.tx2}}>Forme du jour</span><span style={{fontSize:20,fontWeight:900,color:formeColor,fontFamily:"monospace"}}>{forme}<span style={{fontSize:11,color:C.tx3}}>/10</span></span></div>
+      <input type="range" min={0} max={10} value={forme} onChange={e=>setForme(+e.target.value)} style={{width:"100%",accentColor:formeColor,height:6,cursor:"pointer"}}/>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:C.tx3,marginTop:4}}><span>Épuisé</span><span>Top shape</span></div>
+    </div>
+    <button onClick={()=>onSave(note,forme)} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit",marginBottom:10}}>Valider la séance</button>
+    <button onClick={()=>onSave("",null)} style={{width:"100%",padding:"10px 0",borderRadius:12,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Passer</button>
+  </div></>);
+}
+
+function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const[step,setStep]=useState(initialSess?1:0);const[wk,setWk]=useState(currentWeek);
   const[selectedSess,setSelectedSess]=useState(initialSess||null);const[openEx,setOpenEx]=useState(null);
+  const[showEndModal,setShowEndModal]=useState(false);const[endDuration,setEndDuration]=useState(0);
+  const[selectedFree,setSelectedFree]=useState(null);const[showFreeEndModal,setShowFreeEndModal]=useState(false);const[freeEndDuration,setFreeEndDuration]=useState(0);
+  const[sessStartedAt,setSessStartedAt]=useState(null);const[elapsedSecs,setElapsedSecs]=useState(0);
+  const[freeStartedAt,setFreeStartedAt]=useState(null);const[freeElapsed,setFreeElapsed]=useState(0);
   useEffect(()=>{if(step===0)setWk(currentWeek);},[currentWeek,step]);
   const sid=selectedSess?.id||null;const exercises=sid?exos[sid]||[]:[];
   const sessIsDone=(completedSessions[wk]||[]).includes(sid);
   const allSetsDone=useMemo(()=>{if(!sid||!exercises.length)return false;return exercises.every(ex=>{const s=sets[ex.id+"_"+wk];return s?.length>0&&s.every(x=>x.done||x.skipped);});},[exercises,sets,wk,sid]);
-  useEffect(()=>{if(allSetsDone&&sid&&step===1&&!sessIsDone)completeSession(sid,wk);},[allSetsDone,sid,wk,step,sessIsDone]);
+  // Restore session start from localStorage
+  useEffect(()=>{if(!sid||step!==1){setSessStartedAt(null);return;}try{const d=JSON.parse(localStorage.getItem('mpp:sess_start')||'null');if(d?.sid===sid&&d?.wk===wk){setSessStartedAt(d.startedAt);}else{setSessStartedAt(null);}}catch{}},[sid,wk,step]);
+  // Restore free session start from localStorage
+  useEffect(()=>{if(!selectedFree||step!==2){setFreeStartedAt(null);return;}try{const d=JSON.parse(localStorage.getItem('mpp:free_start')||'null');if(d?.id===selectedFree.id){setFreeStartedAt(d.startedAt);}else{setFreeStartedAt(null);}}catch{}},[selectedFree?.id,step]);
+  // Live elapsed counters
+  useEffect(()=>{if(!sessStartedAt)return;setElapsedSecs(Math.floor((Date.now()-sessStartedAt)/1000));const t=setInterval(()=>setElapsedSecs(Math.floor((Date.now()-sessStartedAt)/1000)),1000);return()=>clearInterval(t);},[sessStartedAt]);
+  useEffect(()=>{if(!freeStartedAt)return;setFreeElapsed(Math.floor((Date.now()-freeStartedAt)/1000));const t=setInterval(()=>setFreeElapsed(Math.floor((Date.now()-freeStartedAt)/1000)),1000);return()=>clearInterval(t);},[freeStartedAt]);
+  const fmtTime=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return(h>0?h+"h ":"")+m+"min "+String(sec).padStart(2,"0")+"s";};
+  const startSess=()=>{const at=Date.now();localStorage.setItem('mpp:sess_start',JSON.stringify({sid,wk,startedAt:at}));setSessStartedAt(at);};
+  const startFree=()=>{const at=Date.now();localStorage.setItem('mpp:free_start',JSON.stringify({id:selectedFree.id,startedAt:at}));setFreeStartedAt(at);};
+  const endSess=()=>{const dur=sessStartedAt?Math.floor((Date.now()-sessStartedAt)/1000):0;setEndDuration(dur);setShowEndModal(true);};
+  const endFree=()=>{const dur=freeStartedAt?Math.floor((Date.now()-freeStartedAt)/1000):0;setFreeEndDuration(dur);setShowFreeEndModal(true);};
+  const onSessValidate=(note,forme)=>{completeSession(sid,wk);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);};
+  const onFreeValidate=(note,forme)=>{const updFn=(patch)=>{const updated={...selectedFree,...patch};setSelectedFree(updated);setFreeSessions(prev=>prev.map(f=>f.id===selectedFree.id?updated:f));};updFn({completed:true,duration:freeEndDuration,note,forme});localStorage.removeItem('mpp:free_start');setFreeStartedAt(null);setShowFreeEndModal(false);};
   const exosMap=useMemo(()=>exercises.reduce((a,e)=>({...a,[e.id]:e.name}),{}),[exercises]);
 
   const crumb=(<div style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px 0",fontSize:11,color:C.tx3,flexWrap:"wrap"}}>
@@ -1983,7 +2021,9 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   </div>);
 
   if(step===0){
-    const weekDone=(completedSessions[wk]||[]).length;const weekTotal=goals.sessionsPerWeek;const weekPct=Math.min(Math.round((weekDone/weekTotal)*100),100);
+    const weekDone=(completedSessions[wk]||[]).length;const weekTotal=weeklyTarget[wk]||sessions.filter(s=>(exos[s.id]||[]).some(ex=>ex.weeks?.[wk]?.sets)).length||goals.sessionsPerWeek;const weekPct=Math.min(Math.round((weekDone/weekTotal)*100),100);
+    const lsActiveSess=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:sess_start')||'null');if(d?.sid&&d?.wk){const s=sessions.find(x=>x.id===d.sid);return s?{...d,name:s.name,short:s.short}:null;}return null;}catch{return null;}})();
+    const lsActiveFree=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:free_start')||'null');if(d?.id){const f=freeSessions.find(x=>x.id===d.id);return f&&!f.completed?{...d,name:f.name}:null;}return null;}catch{return null;}})();
     return(<div style={{padding:"0 0 40px"}}><div style={{padding:"16px 16px 0"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
       <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px"}}>Semaine {wk}</div>
@@ -2009,29 +2049,70 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         {done&&!viewOnly&&<div style={{position:"absolute",top:8,right:8}}><button onClick={e=>{e.stopPropagation();uncompleteSession(s.id,wk);}} style={{width:20,height:20,borderRadius:5,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button></div>}
       </button>);})}</div>
     {(()=>{const next=sessions.find(s=>!(completedSessions[wk]||[]).includes(s.id)&&(exos[s.id]||[]).length>0);if(!next)return weekPct>=100?<div style={{padding:"14px",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:13,fontWeight:700,textAlign:"center"}}>Semaine {wk} complete !</div>:null;if(viewOnly)return null;return(<button onClick={()=>{setSelectedSess(next);setStep(1);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",letterSpacing:"-0.3px"}}>Commencer {next.short} - {next.name} ›</button>);})()}
-  </div></div>);}
+    {!viewOnly&&freeSessions.filter(f=>f.date===new Date().toISOString().slice(0,10)).map(f=>(<button key={f.id} onClick={()=>{setSelectedFree(f);setStep(2);}} style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid "+(f.completed?C.g+"40":C.brdL),background:C.s1,cursor:"pointer",fontFamily:"inherit",textAlign:"left",marginTop:6,display:"flex",alignItems:"center",gap:10}}><div style={{width:38,height:38,borderRadius:10,background:f.completed?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📝</div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:f.completed?C.g:C.tx}}>{f.name}</div><div style={{fontSize:10,color:C.tx3}}>{f.exercises.length} exo{f.completed?" · Terminée":""}</div></div>{f.completed&&<span style={{color:C.g,fontSize:14}}>✓</span>}</button>))}
+    {!viewOnly&&<button onClick={()=>{const id="free_"+Date.now();const fs={id,name:"Séance libre",date:new Date().toISOString().slice(0,10),completed:false,duration:null,note:"",exercises:[]};setFreeSessions(prev=>[...prev,fs]);setSelectedFree(fs);setStep(2);}} style={{width:"100%",padding:"12px 0",borderRadius:12,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>+ Séance libre</button>}
+  </div>
+  {lsActiveSess&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
+    <button onClick={()=>{const s=sessions.find(x=>x.id===lsActiveSess.sid);if(s){setSelectedSess(s);setWk(lsActiveSess.wk);setStep(1);}}} style={{width:"100%",padding:"12px 16px",borderRadius:16,border:"none",background:C.ac,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10,justifyContent:"center",boxShadow:"0 4px 24px rgba(123,111,255,0.45)"}}>
+      <span style={{fontSize:16}}>▶</span><span>Reprendre — {lsActiveSess.name}</span>
+    </button>
+  </div>}
+  {lsActiveFree&&!lsActiveSess&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
+    <button onClick={()=>{const f=freeSessions.find(x=>x.id===lsActiveFree.id);if(f){setSelectedFree(f);setStep(2);}}} style={{width:"100%",padding:"12px 16px",borderRadius:16,border:"none",background:C.ac,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10,justifyContent:"center",boxShadow:"0 4px 24px rgba(123,111,255,0.45)"}}>
+      <span style={{fontSize:16}}>▶</span><span>Reprendre — {lsActiveFree.name}</span>
+    </button>
+  </div>}
+  </div>);}
 
   if(step===1&&sid){let lb=null;return(<div style={{padding:"0 0 40px"}}>{crumb}<div style={{padding:"12px 16px 0"}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,padding:"14px 16px",borderRadius:14,background:C.s1,border:"1px solid "+C.ac+"25"}}><div style={{flex:1}}><div style={{fontSize:17,fontWeight:800}}>{selectedSess.name}</div><div style={{fontSize:11,color:C.tx3,marginTop:2}}>{exercises.length} exo - S{wk}</div></div>{sessIsDone&&<div style={{padding:"4px 10px",borderRadius:8,background:C.gS,color:C.g,fontSize:11,fontWeight:700}}>OK</div>}</div>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,padding:"14px 16px",borderRadius:14,background:C.s1,border:"1px solid "+C.ac+"25"}}><div style={{flex:1}}><div style={{fontSize:17,fontWeight:800}}>{selectedSess.name}</div><div style={{fontSize:11,color:C.tx3,marginTop:2}}>{exercises.length} exo - S{wk}</div></div>{sessStartedAt&&!sessIsDone&&<div style={{padding:"4px 10px",borderRadius:8,background:C.acS,color:C.ac,fontSize:13,fontWeight:800,fontFamily:"monospace"}}>{fmtTime(elapsedSecs)}</div>}{sessIsDone&&<div style={{padding:"4px 10px",borderRadius:8,background:C.gS,color:C.g,fontSize:11,fontWeight:700}}>OK</div>}</div>
+    {!sessIsDone&&!viewOnly&&!sessStartedAt&&<button onClick={startSess} style={{width:"100%",marginBottom:16,padding:"15px 0",borderRadius:14,border:"none",background:C.ac,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>▶ Débuter la séance</button>}
     {wk===dw&&<div style={{padding:"8px 14px",borderRadius:8,background:C.bS,border:"1px solid "+C.b+"40",marginBottom:10,fontSize:11,color:C.b,fontWeight:600}}>Semaine deload</div>}
     <div style={{display:"flex",gap:3,marginBottom:14,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWk(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===wk?"2px solid "+C.ac:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===wk?C.acS:(w===dw?C.bS:"transparent"),color:w===wk?C.ac:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>
-    <div style={{marginBottom:14,background:C.s1,borderRadius:12,padding:"10px 12px",border:"1px solid "+C.brd}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Timer repos</div><RestTimer timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onSetDur={onTimerSetDur} onStart={onTimerStart} onStop={onTimerStop}/></div>
-    {exercises.map(ex=>{const wd=ex.weeks[wk];const showH=ex.bloc!==lb;lb=ex.bloc;const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;const rows=sets[sk]||[];const done=rows.filter(r=>r.done||r.skipped).length;const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
+    {sessStartedAt&&<div style={{marginBottom:14,background:C.s1,borderRadius:12,padding:"10px 12px",border:"1px solid "+C.brd}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Timer repos</div><RestTimer timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onSetDur={onTimerSetDur} onStart={onTimerStart} onStop={onTimerStop}/></div>}
+    <div style={{opacity:(!sessStartedAt&&!sessIsDone)?0.3:1,transition:"opacity 0.3s"}}>{exercises.map(ex=>{const wd=ex.weeks[wk];const showH=ex.bloc!==lb;lb=ex.bloc;const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;const rows=sets[sk]||[];const done=rows.filter(r=>r.done||r.skipped).length;const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
       return(<div key={ex.id}>
         {showH&&<div style={{display:"flex",alignItems:"center",gap:8,margin:"14px 0 8px",padding:"7px 12px",borderRadius:8,background:bt.c+"18",border:"1px solid "+bt.c+"35"}}><div style={{width:4,height:16,borderRadius:2,background:bt.c,flexShrink:0}}/><span style={{fontSize:10,fontWeight:700,color:bt.c,textTransform:"uppercase",letterSpacing:"0.8px"}}>{bt.l}</span></div>}
         <div style={{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}>
           <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
             <div style={{width:3,height:32,borderRadius:2,background:allDone?C.g:bt.c,flexShrink:0}}/>
-            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {wd.sets}x{wd.repsRange||"?"}{wd.tempo?" - "+wd.tempo:""} - <span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span></div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&Array.from({length:mp.clusters||3},()=>(mp.reps_per_cluster||2)).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
+            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
             <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>{rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}<span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span></div>
           </div>
-          {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+          {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
         </div>
       </div>);
-    })}
-    {!sessIsDone&&!viewOnly&&<button onClick={()=>completeSession(sid,wk)} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la seance</button>}
-    {sessIsDone&&<div style={{marginTop:16}}><div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Seance validee !</div>{!viewOnly&&<button onClick={()=>uncompleteSession(sid,wk)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler la validation</button>}</div>}
+    })}</div>
+    {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={endSess} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
+    {sessIsDone&&<div style={{marginTop:16}}><div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Séance validée !</div>{sessionLogs?.[sid+"_"+wk]?.note&&<div style={{padding:"10px 12px",borderRadius:8,background:C.s2,fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic",marginBottom:6}}>"{sessionLogs[sid+"_"+wk].note}"</div>}{sessionLogs?.[sid+"_"+wk]?.duration&&<div style={{fontSize:11,color:C.tx3,textAlign:"center",marginBottom:8}}>Durée : {fmtTime(sessionLogs[sid+"_"+wk].duration)}</div>}{!viewOnly&&<button onClick={()=>uncompleteSession(sid,wk)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler la validation</button>}</div>}
+    {showEndModal&&<SessionEndModal duration={endDuration} onSave={onSessValidate} C={C}/>}
   </div></div>);}
+  if(step===2&&selectedFree){
+    const sf=selectedFree;
+    const updFree=(patch)=>{const updated={...sf,...patch};setSelectedFree(updated);setFreeSessions(prev=>prev.map(f=>f.id===sf.id?updated:f));};
+    const addExo=()=>{const ex={id:"fex_"+Date.now(),name:"",sets:[{kg:0,reps:0,done:false}]};updFree({exercises:[...sf.exercises,ex]});};
+    const updExo=(eid,patch)=>updFree({exercises:sf.exercises.map(e=>e.id===eid?{...e,...patch}:e)});
+    const updSet=(eid,sidx,patch)=>updExo(eid,{sets:sf.exercises.find(e=>e.id===eid).sets.map((s,i)=>i===sidx?{...s,...patch}:s)});
+    const removeExo=(eid)=>updFree({exercises:sf.exercises.filter(e=>e.id!==eid)});
+    return(<div style={{padding:"0 0 40px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px 0",fontSize:11,color:C.tx3}}>
+        <button onClick={()=>{setStep(0);setSelectedFree(null);}} style={{background:"none",border:"none",color:C.tx2,cursor:"pointer",fontFamily:"inherit",fontSize:11,padding:0}}>Séances</button>
+        <span>&gt;</span><span style={{color:C.ac,fontWeight:700}}>{sf.name}</span>
+      </div>
+      <div style={{padding:"12px 16px 0"}}>
+        <input value={sf.name} onChange={e=>updFree({name:e.target.value})} style={{width:"100%",fontSize:18,fontWeight:800,background:"transparent",border:"none",color:C.tx,fontFamily:"inherit",outline:"none",marginBottom:10,padding:0,boxSizing:"border-box"}}/>
+        <textarea value={sf.quickNote||""} onChange={e=>updFree({quickNote:e.target.value})} placeholder="Commentaire rapide (optionnel)..." style={{width:"100%",minHeight:60,background:C.s1,border:"1px solid "+C.brdL,borderRadius:10,color:C.tx2,fontSize:12,fontFamily:"inherit",padding:"8px 10px",resize:"none",outline:"none",boxSizing:"border-box",marginBottom:14}} readOnly={sf.completed}/>
+        {sf.exercises.map((ex,ei)=>{const allDone=ex.sets.length>0&&ex.sets.every(s=>s.done);return(<div key={ex.id} style={{background:C.s1,borderRadius:12,marginBottom:8,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",padding:"10px 12px",gap:8}}><input value={ex.name} onChange={e=>updExo(ex.id,{name:e.target.value})} placeholder={"Exercice "+(ei+1)} style={{flex:1,background:"transparent",border:"none",color:C.tx,fontSize:14,fontWeight:600,fontFamily:"inherit",outline:"none"}}/><button onClick={()=>removeExo(ex.id)} style={{width:20,height:20,borderRadius:5,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>×</button></div><div style={{padding:"0 12px 12px"}}>{ex.sets.map((s,si)=>(<div key={si} style={{display:"grid",gridTemplateColumns:"40px 1fr 10px 1fr 28px",gap:4,alignItems:"center",marginBottom:4,padding:"5px 8px",borderRadius:8,background:s.done?C.g+"10":C.s2,border:"1px solid "+(s.done?C.g+"30":C.brd)}}><span style={{fontSize:9,color:C.tx3,textAlign:"center"}}>S{si+1}</span><input type="number" value={s.kg||""} onChange={e=>updSet(ex.id,si,{kg:+e.target.value})} placeholder="0" style={{background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"5px 2px",width:"100%"}}/><span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span><input type="number" value={s.reps||""} onChange={e=>updSet(ex.id,si,{reps:+e.target.value})} placeholder="0" style={{background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"5px 2px",width:"100%"}}/><button onClick={()=>updSet(ex.id,si,{done:!s.done})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(s.done?C.g:C.brdL),background:s.done?C.g:"transparent",color:s.done?"#fff":C.tx3,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</button></div>))}<button onClick={()=>{const last=ex.sets[ex.sets.length-1]||{kg:0,reps:0};updExo(ex.id,{sets:[...ex.sets,{kg:last.kg,reps:last.reps,done:false}]});}} style={{width:"100%",padding:"5px 0",borderRadius:7,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:2}}>+ Série</button></div></div>);})}
+        <button onClick={addExo} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx2,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginBottom:14}}>+ Ajouter un exercice</button>
+        {!sf.completed&&!freeStartedAt&&<button onClick={startFree} style={{width:"100%",padding:"15px 0",borderRadius:14,border:"none",background:C.ac,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>▶ Débuter la séance</button>}
+        {!sf.completed&&freeStartedAt&&<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><div style={{flex:1,padding:"8px 12px",borderRadius:10,background:C.acS,border:"1px solid "+C.ac+"40",fontSize:14,fontWeight:800,color:C.ac,fontFamily:"monospace"}}>{fmtTime(freeElapsed)}</div><button onClick={endFree} style={{padding:"8px 18px",borderRadius:10,border:"none",background:C.g,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer</button></div>}
+        {sf.completed&&<div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Séance validée !</div>}
+        {sf.completed&&sf.note&&<div style={{padding:"10px 12px",borderRadius:8,background:C.s2,fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic",marginBottom:6}}>"{sf.note}"</div>}
+        {sf.completed&&sf.duration&&<div style={{fontSize:11,color:C.tx3,textAlign:"center"}}>Durée : {fmtTime(sf.duration)}</div>}
+      </div>
+      {showFreeEndModal&&<SessionEndModal duration={freeEndDuration} onSave={onFreeValidate} C={C}/>}
+    </div>);
+  }
   return null;
 }
 
@@ -2612,6 +2693,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[showWellness,setShowWellness]=useState(false);const[milestoneNotif,setMilestoneNotif]=useState(null);const[autoProgNotif,setAutoProgNotif]=useState(null);
   const[blockHistory,setBlockHistoryState]=useState([]);
   const[weekSchedule,setWeekScheduleState]=useState({});
+  const[sessionLogs,setSessionLogsState]=useState({});
+  const[freeSessions,setFreeSessionsState]=useState([]);
   const[showNewBlock,setShowNewBlock]=useState(false);const[showBlockHistory,setShowBlockHistory]=useState(false);
   const[chatHistory,setChatHistory]=useState([]);
   const[aiChatOpen,setAiChatOpen]=useState(false);
@@ -2629,9 +2712,9 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   useEffect(()=>{
     clearAllLocalStorage();
     (async()=>{
-      const[e,m,s,w,wh,bw,cs,g,an,cm,wl,wmil,inj,sess,bc,bh,ws,ns,nl]=await Promise.all([load(SKEYS.exos,{}),load(SKEYS.exMeta,{}),load(SKEYS.sets,{}),load(SKEYS.wellness,null),load(SKEYS.wellnessHistory,{}),load(SKEYS.bw,{current:0,target:0}),load(SKEYS.completed,{}),load(SKEYS.goals,{sessionsPerWeek:6,sleepTarget:8}),load(SKEYS.anotes,{}),load(SKEYS.custMethods,[]),load(SKEYS.weightLog,{}),load(SKEYS.weightMilestones,[]),load(SKEYS.injuries,[]),load(SKEYS.sessions,DEF_SESSIONS),load(SKEYS.blockConfig,DEF_BLOCK_CONFIG),load(SKEYS.blockHistory,[]),load(SKEYS.weekSchedule,{}),getNutritionStrategy(athleteId).catch(()=>null),load("asp:nutrition_log",{})]);
+      const[e,m,s,w,wh,bw,cs,g,an,cm,wl,wmil,inj,sess,bc,bh,ws,ns,nl,sl,fs]=await Promise.all([load(SKEYS.exos,{}),load(SKEYS.exMeta,{}),load(SKEYS.sets,{}),load(SKEYS.wellness,null),load(SKEYS.wellnessHistory,{}),load(SKEYS.bw,{current:0,target:0}),load(SKEYS.completed,{}),load(SKEYS.goals,{sessionsPerWeek:6,sleepTarget:8}),load(SKEYS.anotes,{}),load(SKEYS.custMethods,[]),load(SKEYS.weightLog,{}),load(SKEYS.weightMilestones,[]),load(SKEYS.injuries,[]),load(SKEYS.sessions,DEF_SESSIONS),load(SKEYS.blockConfig,DEF_BLOCK_CONFIG),load(SKEYS.blockHistory,[]),load(SKEYS.weekSchedule,{}),getNutritionStrategy(athleteId).catch(()=>null),load("asp:nutrition_log",{}),load(SKEYS.sessionLogs,{}),load(SKEYS.freeSessions,[])]);
       const todayW=w?.date===todayKey()?w:null;if(w&&!todayW)save(SKEYS.wellness,null).catch(()=>{});
-      setExosState(e);setExMetaState(m);setSetsState(s);setWellnessState(todayW);setWellnessHistoryState(wh);setBodyWeightState(bw);setCompletedSessionsState(cs);setGoalsState(g);setAthleteNotesState(an);setCustomMethodsState(cm);setWeightLogState(wl);setWeightMilestonesState(wmil);setInjuriesState(inj);setSessionsState(sess);setBlockConfigState(bc);setBlockHistoryState(bh||[]);setWeekScheduleState(ws||{});setNutritionStrategy(ns);setNutritionLogState(nl||{});setLoaded(true);
+      setExosState(e);setExMetaState(m);setSetsState(s);setWellnessState(todayW);setWellnessHistoryState(wh);setBodyWeightState(bw);setCompletedSessionsState(cs);setGoalsState(g);setAthleteNotesState(an);setCustomMethodsState(cm);setWeightLogState(wl);setWeightMilestonesState(wmil);setInjuriesState(inj);setSessionsState(sess);setBlockConfigState(bc);setBlockHistoryState(bh||[]);setWeekScheduleState(ws||{});setNutritionStrategy(ns);setNutritionLogState(nl||{});setSessionLogsState(sl);setFreeSessionsState(fs);setLoaded(true);
     })();
   },[]);
 
@@ -2660,6 +2743,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const updateInjury=inj=>setInjuries(injuries.map(i=>i.id===inj.id?inj:i));
   const deleteInjury=id=>setInjuries(injuries.filter(i=>i.id!==id));
   const setBlockHistory=v=>{setBlockHistoryState(v);save(SKEYS.blockHistory,v).then(()=>flash(true)).catch(()=>flash(false));};
+  const setSessionLogs=v=>{setSessionLogsState(v);save(SKEYS.sessionLogs,v).catch(()=>{});};
+  const setFreeSessions=v=>{setFreeSessionsState(v);save(SKEYS.freeSessions,v).catch(()=>{});};
   const archiveAndNewBlock=(opts)=>{
     const hasData=Object.values(exos).flat().length>0||Object.values(completedSessions).flat().length>0;
     if(hasData){
@@ -2701,10 +2786,11 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const tw=blockConfig.totalWeeks||6;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const isDeload=w=>blockConfig.deloadWeek&&w===blockConfig.deloadWeek;
-  const currentWeek=useMemo(()=>{for(let w=1;w<=tw;w++){if((completedSessions[w]||[]).length<goals.sessionsPerWeek)return w;}return tw;},[completedSessions,goals.sessionsPerWeek,tw]);
-  const totalTarget=goals.sessionsPerWeek*tw;
-  const streak=useMemo(()=>{let s=0;for(let w=currentWeek-1;w>=1;w--){if((completedSessions[w]||[]).length>=goals.sessionsPerWeek)s++;else break;}return s;},[completedSessions,currentWeek,goals.sessionsPerWeek]);
-  const weekAdherence=Math.round(((completedSessions[currentWeek]||[]).length/goals.sessionsPerWeek)*100);
+  const weeklyTarget=useMemo(()=>{const t={};for(let w=1;w<=tw;w++){const n=sessions.filter(s=>(exos[s.id]||[]).some(ex=>ex.weeks?.[w]?.sets)).length;t[w]=n>0?n:goals.sessionsPerWeek;}return t;},[sessions,exos,tw,goals.sessionsPerWeek]);
+  const currentWeek=useMemo(()=>{for(let w=1;w<=tw;w++){if((completedSessions[w]||[]).length<(weeklyTarget[w]||goals.sessionsPerWeek))return w;}return tw;},[completedSessions,weeklyTarget,goals.sessionsPerWeek,tw]);
+  const totalTarget=useMemo(()=>weeksArr.reduce((acc,w)=>acc+(weeklyTarget[w]||goals.sessionsPerWeek),0),[weeksArr,weeklyTarget,goals.sessionsPerWeek]);
+  const streak=useMemo(()=>{let s=0;for(let w=currentWeek-1;w>=1;w--){if((completedSessions[w]||[]).length>=(weeklyTarget[w]||goals.sessionsPerWeek))s++;else break;}return s;},[completedSessions,currentWeek,weeklyTarget,goals.sessionsPerWeek]);
+  const weekAdherence=Math.round(((completedSessions[currentWeek]||[]).length/(weeklyTarget[currentWeek]||goals.sessionsPerWeek))*100);
   const motivMsg=()=>{if(isDeload(currentWeek))return{t:"Semaine deload",d:"Recuperation active.",c:C.b};if(currentWeek===tw)return{t:"Derniere semaine !",d:"Tout donner.",c:C.coach};if(streak>=3&&(wellness?.score||50)>=70)return{t:"En feu ! "+streak+" sem.",d:"Continue.",c:C.g};if((wellness?.score||50)<40)return{t:"Corps en recuperation",d:"Seance legere.",c:C.o};if(weekAdherence>=100)return{t:"Semaine "+currentWeek+" complete !",d:"Repos merite.",c:C.g};return{t:"Reste focus",d:"Chaque seance compte.",c:C.ac};};
   const msg=motivMsg();
   const prs=getAllPRs(exos);const muscSets=getMuscSets(exos,exMeta);
@@ -2782,7 +2868,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       setTimeout(()=>setAutoProgNotif(null),3500);
     }
   };
-  const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);autoProgressOnComplete(sessId,week);if(newW.length>=goals.sessionsPerWeek){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
+  const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);autoProgressOnComplete(sessId,week);if(newW.length>=(weeklyTarget[week]||goals.sessionsPerWeek)){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
   const uncompleteSession=(sessId,week)=>setCompletedSessions({...completedSessions,[week]:(completedSessions[week]||[]).filter(s=>s!==sessId)});
   const[bankAddEx,setBankAddEx]=useState(null);const[bankAddMsg,setBankAddMsg]=useState('');
   const handleBankAdd=ex=>{
@@ -2913,6 +2999,70 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             {onEditProfile&&<button onClick={onEditProfile} style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+C.coach+"50",background:C.coachS,color:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✎ Créer le profil</button>}
           </div>
         )}
+        {/* ── Stratégie alimentaire ── */}
+        <div style={{fontSize:16,fontWeight:700,marginBottom:4,marginTop:4}}>Stratégie alimentaire</div>
+        <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>Plan nutritionnel défini</div>
+        {nutritionStrategy?(()=>{
+          const ns=nutritionStrategy;
+          const SC={maintenance:C.b,seche:C.r,prise_de_masse:C.g};
+          const SL={maintenance:"Maintenance",seche:"Sèche",prise_de_masse:"Prise de masse"};
+          const sc=SC[ns.strategy]||C.ac;
+          const sl=SL[ns.strategy]||ns.strategy;
+          const theorKcal=((ns.macros_glucides||0)*4)+((ns.macros_lipides||0)*9)+((ns.macros_proteines||0)*4);
+          const NAP_L={1.2:"Sédentaire",1.375:"Légère",1.55:"Modérée",1.725:"Intense",1.9:"Très intense"};
+          return(<div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden",marginBottom:16}}>
+            <div style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid "+C.brd}}>
+              <span style={{fontSize:13,fontWeight:700,color:sc}}>{sl}</span>
+              {ns.target_weight&&<span style={{fontSize:12,color:C.tx3}}>Cible : <span style={{color:C.ac,fontWeight:700}}>{ns.target_weight} kg</span></span>}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:C.brd}}>
+              <div style={{background:C.s2,padding:"10px 12px"}}>
+                <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>Calories cibles</div>
+                <div style={{fontSize:16,fontWeight:800,color:C.o}}>{ns.total_calories_coach?ns.total_calories_coach.toLocaleString("fr-FR")+"  kcal":"—"}</div>
+                {ns.nap&&<div style={{fontSize:10,color:C.tx3,marginTop:2}}>NAP {NAP_L[ns.nap]||ns.nap} (×{ns.nap})</div>}
+              </div>
+              <div style={{background:C.s2,padding:"10px 12px"}}>
+                <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>
+                  {ns.strategy==="seche"?"Déficit cible":ns.strategy==="prise_de_masse"?"Surplus cible":"Tolérance"}
+                </div>
+                {ns.surplus_deficit_min!=null&&ns.surplus_deficit_max!=null?(
+                  <div style={{fontSize:16,fontWeight:800,color:sc}}>
+                    {ns.strategy==="seche"?Math.abs(ns.surplus_deficit_min)+"%":ns.strategy==="prise_de_masse"?"+"+ns.surplus_deficit_max+"%":"±"+ns.surplus_deficit_max+"%"}
+                  </div>
+                ):<div style={{fontSize:13,color:C.tx3}}>—</div>}
+              </div>
+            </div>
+            {(ns.macros_glucides||ns.macros_lipides||ns.macros_proteines||ns.macros_glucides_pct||ns.macros_lipides_pct||ns.macros_proteines_pct)&&(
+              <div style={{padding:"10px 16px",borderTop:"1px solid "+C.brd}}>
+                <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Macros cibles</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                  {[{label:"Glucides",pct:ns.macros_glucides_pct,g:ns.macros_glucides,color:C.b},{label:"Lipides",pct:ns.macros_lipides_pct,g:ns.macros_lipides,color:C.o},{label:"Protéines",pct:ns.macros_proteines_pct,g:ns.macros_proteines,color:C.g}].map(m=>(
+                    <div key={m.label} style={{background:C.s2,borderRadius:8,padding:"8px",textAlign:"center",border:"1px solid "+m.color+"20"}}>
+                      <div style={{fontSize:9,color:m.color,fontWeight:700,marginBottom:3}}>{m.label}</div>
+                      {m.pct!=null&&<div style={{fontSize:18,fontWeight:900,color:m.color,lineHeight:1}}>{m.pct}<span style={{fontSize:10}}>%</span></div>}
+                      {m.g!=null&&<div style={{fontSize:12,fontWeight:600,color:C.tx2,marginTop:1}}>{m.g} g</div>}
+                      {m.pct==null&&m.g==null&&<div style={{fontSize:12,color:C.tx3}}>—</div>}
+                    </div>
+                  ))}
+                </div>
+                {theorKcal>0&&<div style={{marginTop:8,fontSize:11,color:C.tx3,textAlign:"right"}}>Total macros : <span style={{fontWeight:700,color:C.tx}}>{theorKcal} kcal</span></div>}
+              </div>
+            )}
+            <div style={{padding:"8px 16px",borderTop:"1px solid "+C.brd,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:11,color:C.tx3}}>{
+                (ns.calorie_mode||"nap")==="active"?"Mode : BMR + calories actives (athlète)":
+                (ns.calorie_mode||"nap")==="hybrid"?"Mode : Hybride (NAP ou actives)":
+                "Mode : BMR × NAP (calories fixes)"
+              }</span>
+              {onEditProfile&&<button onClick={onEditProfile} style={{padding:"4px 12px",borderRadius:7,border:"1px solid "+C.coach+"50",background:C.coachS,color:C.coach,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Modifier</button>}
+            </div>
+          </div>);
+        })():(
+          <div style={{background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:13,color:C.tx3}}>Aucune stratégie définie</div>
+            {onEditProfile&&<button onClick={onEditProfile} style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+C.coach+"50",background:C.coachS,color:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Définir</button>}
+          </div>
+        )}
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Gestion des données</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Supprimer sélectivement des données</div>
       </div>
@@ -2930,6 +3080,11 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       /></>)}
     </div>)}
 
+    {mode==="athlete"&&tab!=="log"&&(()=>{const lsA=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:sess_start')||'null');if(d?.sid&&d?.wk){const s=sessions.find(x=>x.id===d.sid);return s?{...d,name:s.name}:null;}return null;}catch{return null;}})();const lsF=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:free_start')||'null');if(d?.id){const f=(freeSessions||[]).find(x=>x.id===d.id);return f&&!f.completed?{...d,name:f.name}:null;}return null;}catch{return null;}})();if(!lsA&&!lsF)return null;const active=lsA||lsF;return(<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
+      <button onClick={()=>setTab("log")} style={{width:"100%",padding:"12px 16px",borderRadius:16,border:"none",background:C.ac,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10,justifyContent:"center",boxShadow:"0 4px 24px rgba(123,111,255,0.45)"}}>
+        <span style={{fontSize:16}}>▶</span><span>Reprendre — {active.name}</span>
+      </button>
+    </div>);})()}
     {mode==="athlete"&&(<>
       {tab==="dash"&&(<div style={{padding:"16px 16px 40px"}}>
         <div style={{marginBottom:18}}><div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.5px"}}>Bonjour</div>{sessions.length>0?<div style={{fontSize:12,color:C.tx2,marginTop:2}}>{blockConfig?.blockName||"Programme"} · S{currentWeek}/{tw}{isDeload(currentWeek)?" (Deload)":""}</div>:<div style={{fontSize:12,color:C.tx3,marginTop:2}}>Aucun bloc actif</div>}</div>
@@ -2968,7 +3123,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
               </>
             )}
           </div>);})()}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1.5px solid "+msg.c+"30",marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Motivation</div><div style={{padding:"4px 10px",borderRadius:8,background:msg.c+"18",color:msg.c,fontSize:11,fontWeight:700}}>{msg.t}</div></div><div style={{display:"flex",gap:8,marginBottom:12}}><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Streak</div><div style={{fontSize:24,fontWeight:800,color:streak>0?C.o:C.tx3}}>{streak}</div><div style={{fontSize:8,color:C.tx3}}>sem.</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>S{currentWeek}</div><div style={{fontSize:24,fontWeight:800,color:weekAdherence>=100?C.g:C.ac}}>{(completedSessions[currentWeek]||[]).length}/{goals.sessionsPerWeek}</div><div style={{fontSize:8,color:C.tx3}}>seances</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Bloc</div><div style={{fontSize:24,fontWeight:800,color:C.b}}>{Math.round((totalDone/totalTarget)*100)}%</div><div style={{fontSize:8,color:C.tx3}}>complete</div></div></div>
+        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1.5px solid "+msg.c+"30",marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Motivation</div><div style={{padding:"4px 10px",borderRadius:8,background:msg.c+"18",color:msg.c,fontSize:11,fontWeight:700}}>{msg.t}</div></div><div style={{display:"flex",gap:8,marginBottom:12}}><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Streak</div><div style={{fontSize:24,fontWeight:800,color:streak>0?C.o:C.tx3}}>{streak}</div><div style={{fontSize:8,color:C.tx3}}>sem.</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>S{currentWeek}</div><div style={{fontSize:24,fontWeight:800,color:weekAdherence>=100?C.g:C.ac}}>{(completedSessions[currentWeek]||[]).length}/{weeklyTarget[currentWeek]||goals.sessionsPerWeek}</div><div style={{fontSize:8,color:C.tx3}}>seances</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Bloc</div><div style={{fontSize:24,fontWeight:800,color:C.b}}>{Math.round((totalDone/totalTarget)*100)}%</div><div style={{fontSize:8,color:C.tx3}}>complete</div></div></div>
         {(()=>{
           const todayDow=(new Date().getDay()+6)%7;
           const doneNow=completedSessions[currentWeek]||[];
@@ -3056,7 +3211,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 })()}</div></div>
       </div>)}
 
-      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly}/>}
+      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions}/>}
 
       {tab==="stats"&&(()=>{
         const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
