@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useAuth, Profile } from "@/hooks/useAuth";
+import { Switch } from "@/components/ui/switch";
+import {
+  getNutritionStrategy,
+  upsertNutritionStrategy,
+  NutritionStrategyType,
+  NutritionStrategy,
+} from "@/lib/nutrition";
 
 const C = {
   bg: "#08090C", s1: "#111318", s2: "#181B24",
@@ -7,7 +15,8 @@ const C = {
   tx: "#F2F2F4", tx2: "#9194A0", tx3: "#555866",
   ac: "#7B6FFF", acS: "rgba(123,111,255,0.12)",
   coach: "#D4538E", coachS: "rgba(212,83,142,0.12)",
-  g: "#22C993", r: "#EF4B4B",
+  g: "#22C993", gS: "rgba(34,201,147,0.1)",
+  r: "#EF4B4B", b: "#3B8DF0", o: "#F5A623",
 };
 
 type MetaMode = "manual" | "formula_no_bf" | "formula_bf";
@@ -44,6 +53,38 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // ── Nutrition strategy state ──────────────────────────────────────────────
+  const [nutStrategy, setNutStrategy] = useState<NutritionStrategyType>("maintenance");
+  const [nutTargetWeight, setNutTargetWeight] = useState("");
+  const [nutCanTrack, setNutCanTrack] = useState(false);
+  const [nutTotalCalCoach, setNutTotalCalCoach] = useState("");
+  const [nutSurplusMin, setNutSurplusMin] = useState("");
+  const [nutSurplusMax, setNutSurplusMax] = useState("");
+  const [nutGlucides, setNutGlucides] = useState("");
+  const [nutLipides, setNutLipides] = useState("");
+  const [nutProteines, setNutProteines] = useState("");
+  const [nutSaving, setNutSaving] = useState(false);
+  const [nutLoaded, setNutLoaded] = useState(false);
+
+  useEffect(() => {
+    getNutritionStrategy(athlete.id)
+      .then(s => {
+        if (s) {
+          setNutStrategy(s.strategy);
+          setNutTargetWeight(s.target_weight?.toString() ?? "");
+          setNutCanTrack(s.can_track_calories);
+          setNutTotalCalCoach(s.total_calories_coach?.toString() ?? "");
+          setNutSurplusMin(s.surplus_deficit_min?.toString() ?? "");
+          setNutSurplusMax(s.surplus_deficit_max?.toString() ?? "");
+          setNutGlucides(s.macros_glucides?.toString() ?? "");
+          setNutLipides(s.macros_lipides?.toString() ?? "");
+          setNutProteines(s.macros_proteines?.toString() ?? "");
+        }
+      })
+      .catch(console.error)
+      .finally(() => setNutLoaded(true));
+  }, [athlete.id]);
+
   // Auto-calculate metabolism when formula inputs change
   useEffect(() => {
     if (metaMode === "formula_no_bf") {
@@ -61,6 +102,30 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
       }
     }
   }, [metaMode, weightKg, heightCm, age, gender, bodyFatPct]);
+
+  async function handleSaveNutrition() {
+    if (!user?.id) return;
+    setNutSaving(true);
+    try {
+      const payload: NutritionStrategy = {
+        strategy: nutStrategy,
+        can_track_calories: nutCanTrack,
+        target_weight: nutTargetWeight ? parseFloat(nutTargetWeight) : null,
+        total_calories_coach: nutTotalCalCoach ? parseInt(nutTotalCalCoach) : null,
+        surplus_deficit_min: nutSurplusMin ? parseFloat(nutSurplusMin) : null,
+        surplus_deficit_max: nutSurplusMax ? parseFloat(nutSurplusMax) : null,
+        macros_glucides: nutGlucides ? parseInt(nutGlucides) : null,
+        macros_lipides: nutLipides ? parseInt(nutLipides) : null,
+        macros_proteines: nutProteines ? parseInt(nutProteines) : null,
+      };
+      await upsertNutritionStrategy(athlete.id, payload);
+      toast.success("Stratégie nutritionnelle enregistrée !");
+    } catch (e: any) {
+      toast.error(e.message || "Erreur lors de l'enregistrement");
+    } finally {
+      setNutSaving(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -253,6 +318,133 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
             {error}
           </div>
         )}
+
+        {/* ── Alimentation ────────────────────────────────────────────────── */}
+        <div style={sectionTitle}>Alimentation</div>
+
+        {/* Général */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Poids cible (kg)</label>
+          <input
+            style={inputStyle}
+            type="number" min={30} max={250} step={0.1}
+            placeholder="ex: 80.0"
+            value={nutTargetWeight}
+            onChange={e => setNutTargetWeight(e.target.value)}
+          />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, background: C.s2, border: "1px solid " + C.brdL, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 13, color: C.tx, fontWeight: 600 }}>L'athlète peut tracker ses calories</div>
+            <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>Montre connectée, app tierce…</div>
+          </div>
+          <Switch
+            checked={nutCanTrack}
+            onCheckedChange={setNutCanTrack}
+            className="data-[state=checked]:bg-[#7B6FFF]"
+          />
+        </div>
+
+        {!nutCanTrack && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Total calorique journalier fixé par le coach (kcal)</label>
+            <input
+              style={inputStyle}
+              type="number" min={500} max={8000}
+              placeholder="ex: 2200"
+              value={nutTotalCalCoach}
+              onChange={e => setNutTotalCalCoach(e.target.value)}
+            />
+          </div>
+        )}
+
+        {/* Stratégie */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Stratégie</label>
+          <select
+            style={{ ...inputStyle }}
+            value={nutStrategy}
+            onChange={e => setNutStrategy(e.target.value as NutritionStrategyType)}
+          >
+            <option value="maintenance">Maintenance</option>
+            <option value="seche">Sèche</option>
+            <option value="prise_de_masse">Prise de masse</option>
+          </select>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          <div>
+            <label style={labelStyle}>
+              Surplus/Déficit min (%)
+            </label>
+            <input
+              style={inputStyle}
+              type="number" step={0.5}
+              placeholder={nutStrategy === "seche" ? "-20" : nutStrategy === "prise_de_masse" ? "+3" : "-3"}
+              value={nutSurplusMin}
+              onChange={e => setNutSurplusMin(e.target.value)}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>
+              Surplus/Déficit max (%)
+            </label>
+            <input
+              style={inputStyle}
+              type="number" step={0.5}
+              placeholder={nutStrategy === "seche" ? "-5" : nutStrategy === "prise_de_masse" ? "+15" : "+3"}
+              value={nutSurplusMax}
+              onChange={e => setNutSurplusMax(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Macronutriments */}
+        <div style={{ marginBottom: 6 }}>
+          <label style={labelStyle}>Macronutriments cibles</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            {[
+              { label: "Glucides (g)", val: nutGlucides, set: setNutGlucides, color: C.b },
+              { label: "Lipides (g)", val: nutLipides, set: setNutLipides, color: C.o },
+              { label: "Protéines (g)", val: nutProteines, set: setNutProteines, color: C.g },
+            ].map(m => (
+              <div key={m.label}>
+                <label style={{ ...labelStyle, color: m.color }}>{m.label}</label>
+                <input
+                  style={{ ...inputStyle, borderColor: m.color + "40" }}
+                  type="number" min={0} max={1000}
+                  placeholder="0"
+                  value={m.val}
+                  onChange={e => m.set(e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+          {(nutGlucides || nutLipides || nutProteines) && (
+            <div style={{ marginTop: 8, fontSize: 11, color: C.tx3 }}>
+              Total théorique :&nbsp;
+              <span style={{ fontWeight: 700, color: C.tx }}>
+                {((parseInt(nutGlucides) || 0) * 4) + ((parseInt(nutLipides) || 0) * 9) + ((parseInt(nutProteines) || 0) * 4)} kcal
+              </span>
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={handleSaveNutrition}
+          disabled={nutSaving || !nutLoaded}
+          style={{
+            width: "100%", padding: "11px 0", borderRadius: 10, border: "none",
+            background: nutSaving || !nutLoaded ? C.s2 : C.coach,
+            color: nutSaving || !nutLoaded ? C.tx3 : "#fff",
+            fontSize: 14, fontWeight: 700,
+            cursor: nutSaving || !nutLoaded ? "default" : "pointer",
+            fontFamily: "inherit", marginTop: 16, marginBottom: 4,
+          }}
+        >
+          {nutSaving ? "Enregistrement..." : "Enregistrer la stratégie"}
+        </button>
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>

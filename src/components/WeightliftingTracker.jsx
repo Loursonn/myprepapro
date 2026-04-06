@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, ReferenceLine } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { getNutritionStrategy } from "@/lib/nutrition";
+import NutritionView from "@/components/athlete/NutritionView";
 import * as XLSX from "xlsx";
 import { PDFDocument } from "pdf-lib";
 
-const C={bg:"#08090C",s1:"#111318",s2:"#181B24",brd:"rgba(255,255,255,0.04)",brdL:"rgba(255,255,255,0.08)",tx:"#F2F2F4",tx2:"#9194A0",tx3:"#555866",ac:"#7B6FFF",acS:"rgba(123,111,255,0.12)",g:"#22C993",gS:"rgba(34,201,147,0.1)",o:"#F5A623",oS:"rgba(245,166,35,0.1)",r:"#EF4B4B",rS:"rgba(239,75,75,0.1)",b:"#3B8DF0",bS:"rgba(59,141,240,0.1)",coach:"#D4538E",coachS:"rgba(212,83,142,0.12)"};
+const C={bg:"#08090C",s1:"#111318",s2:"#181B24",brd:"rgba(255,255,255,0.04)",brdL:"rgba(255,255,255,0.08)",tx:"#F2F2F4",tx2:"#9194A0",tx3:"#555866",ac:"#7B6FFF",acS:"rgba(123,111,255,0.12)",g:"#22C993",gS:"rgba(34,201,147,0.1)",o:"#F5A623",oS:"rgba(245,166,35,0.1)",y:"#E8C93A",yS:"rgba(232,201,58,0.1)",r:"#EF4B4B",rS:"rgba(239,75,75,0.1)",b:"#3B8DF0",bS:"rgba(59,141,240,0.1)",coach:"#D4538E",coachS:"rgba(212,83,142,0.12)"};
 const BT={PERF:{c:"#EF4B4B",l:"Mvt principal"},ESTH:{c:"#7B6FFF",l:"Hypertrophie"},BESOIN:{c:"#F5A623",l:"Besoin indiv."},ASSOC:{c:"#22C993",l:"Muscles assoc."},CORE:{c:"#9194A0",l:"Core"}};
 const BLOC_COLORS=["#EF4B4B","#7B6FFF","#F5A623","#22C993","#9194A0","#3B8DF0","#D4538E","#C060D0","#E06030","#22C9C9"];
 // Returns the blocs array for a session, with fallback for old data (BT keys)
@@ -444,7 +446,8 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   const STYLES=["Mixte force/volume","Push/Pull/Legs","Full body","Upper/Lower","Specialisation"];
   const[aiTab,setAiTab]=useState("import");
   const[importText,setImportText]=useState("");
-  const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview}]
+  const[importFiles,setImportFiles]=useState([]);// [{name,mimeType,data,preview,sessionTags}]
+  const importTargetRef=useRef([]);// sessions ciblées — ref pour éviter problèmes d'async state
   const fileRef=useRef(null);
   // Chat IA conversationnel
   const[convMsgs,setConvMsgs]=useState([]);// [{role:"user"|"ai", content:string}]
@@ -479,7 +482,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
             });
             const text=lines.join("\n\n");
             setImportText(prev=>(prev?prev+"\n\n":"")+`[Fichier Excel: ${file.name}]\n${text}`);
-            setImportFiles(prev=>[...prev,{name:file.name,mimeType:"text/plain",data:null,preview:null,isExcel:true}]);
+            setImportFiles(prev=>[...prev,{name:file.name,mimeType:"text/plain",data:null,preview:null,isExcel:true,sessionTags:[]}]);
           }catch(err){console.error("Erreur lecture Excel",err);}
         };
         reader.readAsArrayBuffer(file);
@@ -492,7 +495,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
           canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
           const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);
           const b64=canvas.toDataURL("image/jpeg",0.82).split(",")[1];
-          setImportFiles(prev=>[...prev,{name:file.name,mimeType:"image/jpeg",data:b64,preview:url}]);
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:"image/jpeg",data:b64,preview:url,sessionTags:[]}]);
         };
         img.src=url;
       }else{
@@ -500,7 +503,7 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
         const reader=new FileReader();
         reader.onload=ev=>{
           const b64=ev.target.result.split(",")[1];
-          setImportFiles(prev=>[...prev,{name:file.name,mimeType:file.type||"application/pdf",data:b64,preview:null}]);
+          setImportFiles(prev=>[...prev,{name:file.name,mimeType:file.type||"application/pdf",data:b64,preview:null,sessionTags:[]}]);
         };
         reader.readAsDataURL(file);
       }
@@ -509,6 +512,16 @@ function AIGeneratorModal({onGenerate,onClose,allMethods,existingExos,sessions:S
   };
   const removeImportFile=(idx)=>{
     setImportFiles(prev=>prev.filter((_,i)=>i!==idx));
+  };
+  const toggleFileSessionTag=(idx,sessId)=>{
+    setImportFiles(prev=>prev.map((f,i)=>{
+      if(i!==idx)return f;
+      const tags=f.sessionTags||[];
+      return{...f,sessionTags:tags.includes(sessId)?tags.filter(t=>t!==sessId):[...tags,sessId]};
+    }));
+  };
+  const clearFileTags=(idx)=>{
+    setImportFiles(prev=>prev.map((f,i)=>i===idx?{...f,sessionTags:[]}:f));
   };
   const sendConvMessage=async()=>{
     const msg=convInput.trim();if(!msg||convLoading||convCooldown>0||!preview)return;
@@ -632,12 +645,21 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
     setLoading(true);setError(null);
     try{
       const payload={mode:"import",prompt:importText||(importFiles.length?"Programme dans les fichiers ci-joints":""),sessions:SESSIONS};
-      // Exclure les fichiers Excel (data=null), fusionner images + PDFs en 1 seul fichier chacun
       const binaryFiles=importFiles.filter(f=>f.data!==null);
+      // Collecter les sessions explicitement ciblées (tous fichiers confondus)
+      const targetIds=[...new Set(importFiles.flatMap(f=>f.sessionTags||[]))];
+      importTargetRef.current=targetIds;
       if(binaryFiles.length){
-        const merged=await mergeFilesForImport(binaryFiles);
-        payload.filesData=merged.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name}));
+        const hasTagged=binaryFiles.some(f=>f.sessionTags?.length>0);
+        if(hasTagged){
+          payload.filesData=binaryFiles.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name,sessionTags:f.sessionTags||[]}));
+        }else{
+          const merged=await mergeFilesForImport(binaryFiles);
+          payload.filesData=merged.map(f=>({mimeType:f.mimeType,data:f.data,name:f.name,sessionTags:[]}));
+        }
       }
+      // Restreindre l'IA aux sessions ciblées si précisées
+      if(targetIds.length>0)payload.targetSessions=targetIds;
       const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY},body:JSON.stringify(payload)});
       const data=await resp.json();
       if(!resp.ok)throw new Error(data.error||"Erreur serveur");
@@ -679,18 +701,37 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
               {importFiles.length?`${importFiles.length} fichier${importFiles.length>1?"s":" "} selectionne${importFiles.length>1?"s":""} — Ajouter d'autres`:"+ Ajouter fichiers (JPG, PNG, PDF…)"}
             </button>
             {importFiles.length>0&&(<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6}}>
-              {importFiles.map((f,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:C.s2,borderRadius:8,padding:"8px 10px",border:"1px solid "+C.brdL}}>
-                  {f.preview
-                    ?<img src={f.preview} alt={f.name} style={{width:36,height:36,borderRadius:6,objectFit:"cover",background:C.s1,flexShrink:0}}/>
-                    :<div style={{width:36,height:36,borderRadius:6,background:C.rS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📄</div>}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:11,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
-                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase"}}>{f.mimeType.split("/")[1]}</div>
+              {importFiles.map((f,i)=>{
+                const tags=f.sessionTags||[];
+                const isTagged=tags.length>0;
+                return(<div key={i} style={{background:C.s2,borderRadius:8,padding:"8px 10px",border:"1px solid "+(isTagged?C.coach+"50":C.brdL)}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {f.preview
+                      ?<img src={f.preview} alt={f.name} style={{width:36,height:36,borderRadius:6,objectFit:"cover",background:C.s1,flexShrink:0}}/>
+                      :<div style={{width:36,height:36,borderRadius:6,background:isTagged?C.coachS:C.s1,border:"1px solid "+C.brdL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📄</div>}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:11,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                      <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase"}}>{f.mimeType.split("/")[1]}</div>
+                    </div>
+                    <button onClick={()=>removeImportFile(i)} style={{background:"none",border:"none",color:C.tx3,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0,fontFamily:"inherit"}}>×</button>
                   </div>
-                  <button onClick={()=>removeImportFile(i)} style={{background:"none",border:"none",color:C.tx3,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0,fontFamily:"inherit"}}>×</button>
+                  <div style={{marginTop:7}}>
+                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.3px",marginBottom:5}}>Affecter à :</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                      <button onClick={()=>clearFileTags(i)} style={{padding:"3px 9px",borderRadius:5,border:"1px solid "+(!isTagged?C.coach:C.brdL),background:!isTagged?C.coachS:"transparent",color:!isTagged?C.coach:C.tx3,fontSize:9,fontWeight:!isTagged?700:400,cursor:"pointer",fontFamily:"inherit"}}>Global</button>
+                      {SESSIONS.map(s=>{
+                        const on=tags.includes(s.id);
+                        return(<button key={s.id} onClick={()=>toggleFileSessionTag(i,s.id)} style={{padding:"3px 9px",borderRadius:5,border:"1px solid "+(on?C.coach:C.brdL),background:on?C.coachS:"transparent",color:on?C.coach:C.tx3,fontSize:9,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{s.short||s.id}</button>);
+                      })}
+                    </div>
+                  </div>
+                </div>);
+              })}
+              {importFiles.some(f=>(f.sessionTags||[]).length>0)&&(
+                <div style={{padding:"7px 10px",borderRadius:7,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:10,color:C.coach,lineHeight:1.5}}>
+                  L'IA placera les exercices de chaque fichier tagué uniquement dans les séances sélectionnées.
                 </div>
-              ))}
+              )}
             </div>)}
           </div>
           {error&&<div style={{padding:"10px 14px",borderRadius:8,background:C.rS,border:"1px solid "+C.r+"40",color:C.r,fontSize:11,marginBottom:12}}>{error}</div>}
@@ -771,7 +812,26 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
         {/* Actions */}
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>{setStep(0);setConvMsgs([]);setConvError(null);}} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Régénérer</button>
-          <button onClick={()=>onGenerate(preview.sessions)} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
+          <button onClick={()=>{
+            const targets=importTargetRef.current;
+            if(targets.length>0){
+              // Fusion : garder les séances existantes non ciblées, appliquer l'IA sur les séances ciblées
+              const merged={};
+              SESSIONS.forEach(s=>{
+                if(targets.includes(s.id)){
+                  // Séance ciblée : prendre le résultat IA s'il a des exercices, sinon garder l'existant
+                  const aiResult=preview.sessions[s.id];
+                  merged[s.id]=(aiResult&&aiResult.length>0)?aiResult:(existingExos[s.id]||[]);
+                }else{
+                  // Séance non ciblée : toujours garder l'existant
+                  merged[s.id]=existingExos[s.id]||[];
+                }
+              });
+              onGenerate(merged);
+            }else{
+              onGenerate(preview.sessions);
+            }
+          }} style={{flex:2,padding:"12px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
         </div>
         <div style={{fontSize:10,color:C.tx3,textAlign:"center",marginTop:8}}>Tu pourras modifier chaque exercice dans l'éditeur</div>
       </div>)}
@@ -2246,6 +2306,7 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
         <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.b}}/><span style={{fontSize:9,color:C.tx3}}>À faire</span></div>
         <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.g}}/><span style={{fontSize:9,color:C.tx3}}>Fait</span></div>
         <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.r}}/><span style={{fontSize:9,color:C.tx3}}>Manqué</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.y}}/><span style={{fontSize:9,color:C.tx3}}>Autre</span></div>
       </div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:selectDay!==null?10:0}}>
@@ -2259,8 +2320,8 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
         const hasDone=sessList.some(s=>doneSet.has(s.id));
         const hasMissed=isPast&&sessList.some(s=>!doneSet.has(s.id));
         const allDone=sessList.length>0&&sessList.every(s=>doneSet.has(s.id));
-        const borderC=isSel?C.ac:allDone?C.g+"60":hasMissed?C.r+"60":sessList.length>0?C.b+"50":exs.length>0?C.o+"50":isToday?C.ac+"40":C.brd;
-        const bgC=allDone?C.g+"10":hasMissed&&!hasDone?C.r+"08":sessList.length>0&&!isPast?C.bS:isToday&&!sessList.length?C.acS:isSel?"rgba(123,111,255,0.08)":exs.length>0&&!sessList.length?C.oS:C.s2;
+        const borderC=isSel?C.ac:allDone?C.g+"60":hasMissed?C.r+"60":sessList.length>0?C.b+"50":exs.length>0?C.y+"60":isToday?C.ac+"40":C.brd;
+        const bgC=allDone?C.g+"10":hasMissed&&!hasDone?C.r+"08":sessList.length>0&&!isPast?C.bS:isToday&&!sessList.length?C.acS:isSel?"rgba(123,111,255,0.08)":exs.length>0&&!sessList.length?C.yS:C.s2;
         return(<div key={i} onClick={()=>setSelectDay(isSel?null:i)} style={{borderRadius:10,padding:"7px 3px",textAlign:"center",cursor:"pointer",border:"1.5px solid "+borderC,background:bgC,transition:"all 0.15s"}}>
           <div style={{fontSize:9,fontWeight:isToday?700:400,color:isToday?C.ac:C.tx3,marginBottom:2}}>{DAYS[i]}</div>
           <div style={{fontSize:12,fontWeight:isToday?800:500,color:isToday?C.ac:isPast?C.tx3:C.tx,marginBottom:(sessList.length||exs.length)?3:5}}>{date.getDate()}</div>
@@ -2281,20 +2342,20 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
       <div style={{fontSize:10,fontWeight:600,color:C.tx3,marginBottom:8}}>{DAYS[selectDay]}</div>
       {sessionsForDay(selectDay).length>0&&(
         <div style={{marginBottom:10,display:"flex",flexWrap:"wrap",gap:5}}>
-          {sessionsForDay(selectDay).map(s=>{const done=doneSet.has(s.id);const missed=!done;const dotC=done?C.g:C.b;return(<span key={s.id} style={{fontSize:10,padding:"3px 9px",borderRadius:6,background:dotC+"18",border:"1px solid "+dotC+"40",color:dotC,fontWeight:600}}>{done?"✓ ":""}{s.name}</span>);})}
+          {sessionsForDay(selectDay).map(s=>{const done=doneSet.has(s.id);const selDayDate=weekDays[selectDay];const isPastDay=selDayDate<new Date(new Date().setHours(0,0,0,0));const missed=isPastDay&&!done;const dotC=done?C.g:missed?C.r:C.b;return(<span key={s.id} style={{fontSize:10,padding:"3px 9px",borderRadius:6,background:dotC+"18",border:"1px solid "+dotC+"40",color:dotC,fontWeight:600}}>{done?"✓ ":missed?"✗ ":""}{s.name}</span>);})}
         </div>
       )}
       <div style={{borderTop:sessionsForDay(selectDay).length>0?"1px solid "+C.brd:"none",paddingTop:sessionsForDay(selectDay).length>0?8:0}}>
-        <div style={{fontSize:10,fontWeight:600,color:C.o,marginBottom:7}}>+ Activité libre</div>
+        <div style={{fontSize:10,fontWeight:600,color:C.y,marginBottom:7}}>+ Activité libre</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:6}}>
-          {ACTIVITIES.map(a=>(<button key={a.label} onClick={()=>addExtra(selectDay,a.label,a.emoji)} style={{padding:"4px 9px",borderRadius:7,border:"1px solid "+C.o+"40",background:C.oS,color:C.o,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>{a.emoji} {a.label}</button>))}
+          {ACTIVITIES.map(a=>(<button key={a.label} onClick={()=>addExtra(selectDay,a.label,a.emoji)} style={{padding:"4px 9px",borderRadius:7,border:"1px solid "+C.y+"60",background:C.yS,color:C.y,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>{a.emoji} {a.label}</button>))}
         </div>
         <div style={{display:"flex",gap:6}}>
           <input value={customLabel} onChange={e=>setCustomLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&customLabel.trim()){addExtra(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} placeholder="Autre activité..." style={{flex:1,padding:"5px 10px",borderRadius:7,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
-          <button onClick={()=>{if(customLabel.trim()){addExtra(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} style={{padding:"5px 12px",borderRadius:7,border:"none",background:C.o,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+          <button onClick={()=>{if(customLabel.trim()){addExtra(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} style={{padding:"5px 12px",borderRadius:7,border:"none",background:C.y,color:"#000",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+</button>
         </div>
         {dayExtras(selectDay).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
-          {dayExtras(selectDay).map(e=>(<span key={e.id} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,background:C.o+"20",border:"1px solid "+C.o+"40",color:C.o,fontSize:10,fontWeight:600}}>{e.emoji} {e.label}<span onClick={ev=>{ev.stopPropagation();removeExtra(selectDay,e.id);}} style={{cursor:"pointer",fontSize:12,lineHeight:1,marginLeft:2}}>×</span></span>))}
+          {dayExtras(selectDay).map(e=>(<span key={e.id} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,background:C.y+"20",border:"1px solid "+C.y+"50",color:C.y,fontSize:10,fontWeight:600}}>{e.emoji} {e.label}<span onClick={ev=>{ev.stopPropagation();removeExtra(selectDay,e.id);}} style={{cursor:"pointer",fontSize:12,lineHeight:1,marginLeft:2}}>×</span></span>))}
         </div>}
       </div>
     </div>)}
@@ -2538,6 +2599,9 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[athleteNotes,setAthleteNotesState]=useState({});const[customMethods,setCustomMethodsState]=useState([]);
   const[weightLog,setWeightLogState]=useState({});const[weightMilestones,setWeightMilestonesState]=useState([]);
   const[injuries,setInjuriesState]=useState([]);
+  const[nutritionStrategy,setNutritionStrategy]=useState(null);
+  const[nutritionLog,setNutritionLogState]=useState({});
+  const[prExName,setPrExName]=useState(null);const[prSearch,setPrSearch]=useState('');const[prTab,setPrTab]=useState("est");
   const[sessions,setSessionsState]=useState(DEF_SESSIONS);
   const[blockConfig,setBlockConfigState]=useState(DEF_BLOCK_CONFIG);
   const[loaded,setLoaded]=useState(false);const[saveStatus,setSaveStatus]=useState(null);
@@ -2562,9 +2626,9 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   useEffect(()=>{
     clearAllLocalStorage();
     (async()=>{
-      const[e,m,s,w,wh,bw,cs,g,an,cm,wl,wmil,inj,sess,bc,bh,ws]=await Promise.all([load(SKEYS.exos,{}),load(SKEYS.exMeta,{}),load(SKEYS.sets,{}),load(SKEYS.wellness,null),load(SKEYS.wellnessHistory,{}),load(SKEYS.bw,{current:0,target:0}),load(SKEYS.completed,{}),load(SKEYS.goals,{sessionsPerWeek:6,sleepTarget:8}),load(SKEYS.anotes,{}),load(SKEYS.custMethods,[]),load(SKEYS.weightLog,{}),load(SKEYS.weightMilestones,[]),load(SKEYS.injuries,[]),load(SKEYS.sessions,DEF_SESSIONS),load(SKEYS.blockConfig,DEF_BLOCK_CONFIG),load(SKEYS.blockHistory,[]),load(SKEYS.weekSchedule,{})]);
+      const[e,m,s,w,wh,bw,cs,g,an,cm,wl,wmil,inj,sess,bc,bh,ws,ns,nl]=await Promise.all([load(SKEYS.exos,{}),load(SKEYS.exMeta,{}),load(SKEYS.sets,{}),load(SKEYS.wellness,null),load(SKEYS.wellnessHistory,{}),load(SKEYS.bw,{current:0,target:0}),load(SKEYS.completed,{}),load(SKEYS.goals,{sessionsPerWeek:6,sleepTarget:8}),load(SKEYS.anotes,{}),load(SKEYS.custMethods,[]),load(SKEYS.weightLog,{}),load(SKEYS.weightMilestones,[]),load(SKEYS.injuries,[]),load(SKEYS.sessions,DEF_SESSIONS),load(SKEYS.blockConfig,DEF_BLOCK_CONFIG),load(SKEYS.blockHistory,[]),load(SKEYS.weekSchedule,{}),getNutritionStrategy(athleteId).catch(()=>null),load("asp:nutrition_log",{})]);
       const todayW=w?.date===todayKey()?w:null;if(w&&!todayW)save(SKEYS.wellness,null).catch(()=>{});
-      setExosState(e);setExMetaState(m);setSetsState(s);setWellnessState(todayW);setWellnessHistoryState(wh);setBodyWeightState(bw);setCompletedSessionsState(cs);setGoalsState(g);setAthleteNotesState(an);setCustomMethodsState(cm);setWeightLogState(wl);setWeightMilestonesState(wmil);setInjuriesState(inj);setSessionsState(sess);setBlockConfigState(bc);setBlockHistoryState(bh||[]);setWeekScheduleState(ws||{});setLoaded(true);
+      setExosState(e);setExMetaState(m);setSetsState(s);setWellnessState(todayW);setWellnessHistoryState(wh);setBodyWeightState(bw);setCompletedSessionsState(cs);setGoalsState(g);setAthleteNotesState(an);setCustomMethodsState(cm);setWeightLogState(wl);setWeightMilestonesState(wmil);setInjuriesState(inj);setSessionsState(sess);setBlockConfigState(bc);setBlockHistoryState(bh||[]);setWeekScheduleState(ws||{});setNutritionStrategy(ns);setNutritionLogState(nl||{});setLoaded(true);
     })();
   },[]);
 
@@ -2725,7 +2789,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     else setBankAddEx(ex);
   };
   const coachTabs=[{k:"prog",l:"Prog"},{k:"exos",l:"Exos"},{k:"banque",l:"Banque"},{k:"config",l:"Config"},{k:"stats",l:"Stats"},{k:"data",l:"Données"}];
-  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"},{k:"profil",l:"Profil"}];
+  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"},{k:"alim",l:"Alim"},{k:"profil",l:"Profil"}];
   const activeTabs=mode==="coach"?coachTabs:athTabs;const activeTab=mode==="coach"?coachTab:tab;const setActiveTab=mode==="coach"?setCoachTab:setTab;
   const tabS=t=>({flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(activeTab===t?(mode==="coach"?C.coach:C.ac):"transparent"),background:"transparent",color:activeTab===t?(mode==="coach"?C.coach:C.ac):C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"});
 
@@ -2877,6 +2941,29 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           </div>):<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"10px 0"}}>Appuyez pour remplir le bilan</div>}
         </button>
         <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C}/>
+        {nutritionStrategy&&(()=>{const todayISO=new Date().toISOString().slice(0,10);const todayNL=nutritionLog[todayISO]||null;const strat=nutritionStrategy;const consumed=todayNL?.total_calories_consumed||null;const bmrV=athleteProfile?.base_metabolism||0;const targetCal=strat.can_track_calories?(bmrV+(todayNL?.active_calories||0)):strat.total_calories_coach||null;const stratC=strat.strategy==="seche"?C.r:strat.strategy==="prise_de_masse"?C.g:C.b;const stratL=strat.strategy==="seche"?"Sèche":strat.strategy==="prise_de_masse"?"Prise":"Maintenance";
+          const surplusPct=(consumed&&targetCal&&targetCal>0)?((consumed-targetCal)/targetCal)*100:null;
+          const inRange=surplusPct!==null&&strat.surplus_deficit_min!=null&&strat.surplus_deficit_max!=null&&surplusPct>=strat.surplus_deficit_min&&surplusPct<=strat.surplus_deficit_max;
+          const feedbackC=surplusPct===null?null:inRange?C.g:C.o;
+          const feedbackMsg=surplusPct===null?null:inRange?"✅ Dans la fourchette aujourd'hui":"⚠️ "+(surplusPct>0?"+":"")+surplusPct.toFixed(1)+"% — objectif "+strat.surplus_deficit_min+"% à "+strat.surplus_deficit_max+"%";
+          return(<div style={{background:C.s1,borderRadius:14,padding:"11px 16px",border:"1px solid "+(feedbackC?feedbackC+"40":C.brd),marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:consumed?8:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Alimentation</div>
+                <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:4,background:stratC+"18",color:stratC}}>{stratL}</span>
+              </div>
+              <button onClick={()=>setTab("alim")} style={{fontSize:10,color:C.ac,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0}}>Détail →</button>
+            </div>
+            {!consumed?(<div style={{fontSize:11,color:C.tx3}}>Aucune saisie aujourd'hui</div>):(
+              <>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:feedbackMsg?8:0}}>
+                  <div><span style={{fontSize:20,fontWeight:800,color:feedbackC||stratC}}>{consumed}</span>{targetCal&&<span style={{fontSize:10,color:C.tx3}}> / {targetCal} kcal</span>}</div>
+                  <div style={{display:"flex",gap:10,marginLeft:"auto"}}>{[{l:"G",v:todayNL?.glucides_consumed,c:C.b},{l:"L",v:todayNL?.lipides_consumed,c:C.o},{l:"P",v:todayNL?.proteines_consumed,c:C.g}].map(macro=>(<div key={macro.l} style={{textAlign:"center"}}><div style={{fontSize:12,fontWeight:700,color:macro.c}}>{macro.v??"—"}</div><div style={{fontSize:9,color:C.tx3}}>{macro.l} (g)</div></div>))}</div>
+                </div>
+                {feedbackMsg&&<div style={{fontSize:11,fontWeight:600,color:feedbackC,padding:"5px 10px",borderRadius:7,background:feedbackC+"12"}}>{feedbackMsg}</div>}
+              </>
+            )}
+          </div>);})()}
         <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1.5px solid "+msg.c+"30",marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Motivation</div><div style={{padding:"4px 10px",borderRadius:8,background:msg.c+"18",color:msg.c,fontSize:11,fontWeight:700}}>{msg.t}</div></div><div style={{display:"flex",gap:8,marginBottom:12}}><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Streak</div><div style={{fontSize:24,fontWeight:800,color:streak>0?C.o:C.tx3}}>{streak}</div><div style={{fontSize:8,color:C.tx3}}>sem.</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>S{currentWeek}</div><div style={{fontSize:24,fontWeight:800,color:weekAdherence>=100?C.g:C.ac}}>{(completedSessions[currentWeek]||[]).length}/{goals.sessionsPerWeek}</div><div style={{fontSize:8,color:C.tx3}}>seances</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Bloc</div><div style={{fontSize:24,fontWeight:800,color:C.b}}>{Math.round((totalDone/totalTarget)*100)}%</div><div style={{fontSize:8,color:C.tx3}}>complete</div></div></div>
         {(()=>{
           const todayDow=(new Date().getDay()+6)%7;
@@ -2903,8 +2990,66 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           return(<button onClick={()=>{setInitialLogSess(nextSess);setTab("log");}} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"none",background:C.acS,color:C.ac,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><div><div style={{fontSize:11,fontWeight:700}}>Prochaine séance</div><div style={{fontSize:10,color:C.tx2}}>{nextSess.short} - {nextSess.name}</div></div><span style={{marginLeft:"auto",fontSize:14}}>&gt;</span></button>);
         })()}
         </div>
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Records 1RM</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>{[{label:"Squat",name:"Back squat",c:C.b},{label:"Bench",name:"Dev. couche barre",c:C.r},{label:"Traction",name:"Traction lestee",c:C.g}].map(({label,name,c})=>{const pr=prs[name]||null;return(<div key={label} style={{background:C.s2,borderRadius:12,padding:"12px 10px",textAlign:"center",border:"1px solid "+c+"20"}}><div style={{fontSize:10,fontWeight:600,color:C.tx3,marginBottom:6}}>{label}</div>{pr?(<><div style={{fontSize:22,fontWeight:800,color:c,letterSpacing:"-1px",lineHeight:1}}>{pr.est}</div><div style={{fontSize:9,color:C.tx3,marginTop:2}}>kg est.</div><div style={{fontSize:9,color:C.tx3,marginTop:4,padding:"2px 6px",borderRadius:4,background:C.s1,display:"inline-block"}}>S{pr.week}</div></>):<div style={{fontSize:11,color:C.tx3,marginTop:4}}>--</div>}</div>);})}</div></div>
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Objectifs</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Seances realisees</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:14,color:C.tx3}}>/{totalTarget}</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>{Math.max(0,totalTarget-totalDone)} restantes</div></div><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Poids de corps</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.ac,letterSpacing:"-1px"}}>{bodyWeight.current||"--"}</span><span style={{fontSize:14,color:C.tx3}}>/{bodyWeight.target||"--"} kg</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(bodyWeight.current&&bodyWeight.target?Math.min((bodyWeight.current/bodyWeight.target)*100,100):0)+"%",background:C.ac,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>Objectif: {bodyWeight.target||"--"} kg</div></div></div></div>
+        {(()=>{
+          const seen=new Set();
+          const progExNames=Object.values(exos||{}).flat().map(ex=>ex.name||'').filter(n=>{if(!n||seen.has(n.toLowerCase()))return false;seen.add(n.toLowerCase());return true;}).sort();
+          const filtered=prSearch?progExNames.filter(n=>n.toLowerCase().includes(prSearch.toLowerCase())):progExNames;
+          const getActual1rm=(exName,w)=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===exName.toLowerCase()).map(ex=>ex.id);let best=null;exIds.forEach(id=>{(sets[id+"_"+w]||[]).filter(r=>r.done&&r.kg>0).forEach(r=>{const est=e1rm(r.kg,r.reps||1);if(!best||est>best)best=est;});});return best;};
+          const actual1rmByWeek=prExName?Array.from({length:tw},(_,i)=>({w:i+1,week:"S"+(i+1),val:getActual1rm(prExName,i+1)})):[];
+          const bestActual=actual1rmByWeek.reduce((mx,d)=>d.val&&d.val>mx.val?d:mx,{val:0,w:null});
+          const showDropdown=prSearch&&filtered.length>0&&!progExNames.find(n=>n.toLowerCase()===prSearch.toLowerCase());
+          return(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>1RM Exercice</div>
+            <div style={{position:"relative",marginBottom:12}}>
+              <input value={prSearch} onChange={e=>{setPrSearch(e.target.value);setPrExName(null);}} placeholder={progExNames.length?"Rechercher un exercice...":"Aucun exercice dans le programme"} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+              {showDropdown&&(<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,zIndex:50,maxHeight:160,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                {filtered.slice(0,8).map(n=>(<div key={n} onClick={()=>{setPrExName(n);setPrSearch(n);}} style={{padding:"9px 12px",fontSize:12,cursor:"pointer",color:C.tx,borderBottom:"1px solid "+C.brd}}>{n}</div>))}
+              </div>)}
+            </div>
+            {prExName?(
+              <>
+                <div style={{display:"flex",gap:6,marginBottom:14}}>
+                  {[{k:"est",l:"1RM Estimé"},{k:"evo",l:"Évolution"}].map(t=>(<button key={t.k} onClick={()=>setPrTab(t.k)} style={{padding:"5px 14px",borderRadius:8,border:"none",background:prTab===t.k?C.acS:C.s2,color:prTab===t.k?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}
+                </div>
+                {prTab==="est"&&(<div style={{textAlign:"center"}}>
+                  <div style={{fontSize:48,fontWeight:900,color:C.ac,letterSpacing:"-3px",lineHeight:1}}>{bestActual.val||"--"}</div>
+                  <div style={{fontSize:11,color:C.tx3,marginTop:4}}>kg estimé 1RM</div>
+                  {bestActual.w&&<div style={{marginTop:8,fontSize:11,color:C.tx3,padding:"2px 10px",borderRadius:5,background:C.s2,display:"inline-block"}}>Meilleure perf. S{bestActual.w}</div>}
+                  {(()=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===prExName.toLowerCase()).map(ex=>ex.id);let wkSets=[];exIds.forEach(id=>{wkSets=[...wkSets,...(sets[id+"_"+currentWeek]||[]).filter(r=>r.done&&r.kg>0)];});if(!wkSets.length)return null;return(<div style={{marginTop:12,background:C.s2,borderRadius:10,padding:"10px 12px",textAlign:"left"}}><div style={{fontSize:9,color:C.tx3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Séries S{currentWeek}</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{wkSets.slice(0,8).map((r,i)=>(<span key={i} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:C.acS,color:C.ac,fontWeight:600}}>{r.kg}kg × {r.reps}</span>))}</div></div>);})()}
+                </div>)}
+                {prTab==="evo"&&(<>
+                  {actual1rmByWeek.some(d=>d.val)?<MiniChart data={actual1rmByWeek} color={C.ac} h={80}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune série effectuée pour cet exercice</div>}
+                </>)}
+              </>
+            ):(
+              <div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"16px 0"}}>{progExNames.length?"Recherche et sélectionne un exercice ci-dessus":"Aucun exercice dans la programmation"}</div>
+            )}
+          </div>);
+        })()}
+        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectifs</div>{nutritionStrategy&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5,background:(nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b)+"20",color:nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b}}>{nutritionStrategy.strategy==="seche"?"Sèche":nutritionStrategy.strategy==="prise_de_masse"?"Prise de masse":"Maintenance"}</span>}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Seances realisees</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:14,color:C.tx3}}>/{totalTarget}</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>{Math.max(0,totalTarget-totalDone)} restantes</div></div>{(()=>{
+  const lastEntry=Object.keys(weightLog).length>0?Object.entries(weightLog).sort((a,b)=>a[0]>b[0]?-1:1)[0][1]:null;
+  const todayW=weightLog[todayKey()]||lastEntry||bodyWeight.current||null;
+  const start=bodyWeight.current||null;
+  const tgt=nutritionStrategy?.target_weight||bodyWeight.target||null;
+  const isGain=start&&tgt?tgt>=start:true;
+  const delta=tgt&&todayW?+(tgt-todayW).toFixed(1):null;
+  const pct=start&&tgt&&start!==tgt&&todayW?Math.min(100,Math.max(0,isGain?((todayW-start)/(tgt-start))*100:((start-todayW)/(start-tgt))*100)):0;
+  const reached=delta!==null&&Math.abs(delta)<0.3;
+  const wC=reached?C.g:C.ac;
+  const deltaLabel=delta===null?("Objectif: "+(tgt||"--")+" kg"):reached?"Objectif atteint !":(delta>0===isGain?(Math.abs(delta)+" kg restants"):("Hors objectif ("+Math.abs(delta)+" kg)"));
+  return(<div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{fontSize:10,color:C.tx3}}>Poids de corps</div>
+      {start&&tgt&&<span style={{fontSize:9,fontWeight:700,color:isGain?C.g:C.b,padding:"2px 6px",borderRadius:4,background:(isGain?C.g:C.b)+"18"}}>{isGain?"▲ Prise":"▼ Sèche"}</span>}
+    </div>
+    <div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}>
+      <span style={{fontSize:26,fontWeight:800,color:wC,letterSpacing:"-1px"}}>{todayW||"--"}</span>
+      <span style={{fontSize:14,color:C.tx3}}>/{tgt||"--"} kg</span>
+    </div>
+    <div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:wC,borderRadius:3,transition:"width 0.4s"}}/></div>
+    <div style={{fontSize:9,color:reached?C.g:C.tx3,marginTop:5,fontWeight:reached?600:400}}>{deltaLabel}</div>
+  </div>);
+})()}</div></div>
       </div>)}
 
       {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop}/>}
@@ -2971,6 +3116,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           {activeInjuries.map(inj=>{const sc=stC(inj.status);const zn=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non precisee";return(<div key={inj.id} style={{padding:"8px 12px",borderRadius:8,background:C.s2,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:12,fontWeight:600,color:C.tx}}>{zn}</div><div style={{fontSize:10,color:C.tx3}}>Intensite {inj.intensity}/10</div></div><span style={{fontSize:10,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:5,background:sc+"15"}}>{inj.status}</span></div>);})}
         </div>)}
       </div>);})()}
+
+      {tab==="alim"&&<NutritionView athleteId={athleteId} bmr={athleteProfile?.base_metabolism||null} nutritionStrategy={nutritionStrategy} onLogSaved={(date,log)=>setNutritionLogState(prev=>({...prev,[date]:log}))}/>}
 
       {tab==="profil"&&(<div style={{padding:"16px 16px 40px"}}>
         <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:20}}>Mon profil</div>
