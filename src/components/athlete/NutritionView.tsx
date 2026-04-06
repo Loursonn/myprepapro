@@ -40,9 +40,10 @@ interface Props {
   bmr: number | null;
   nutritionStrategy: NutritionStrategy | null;
   onLogSaved?: (date: string, log: NutritionDailyLog) => void;
+  viewOnly?: boolean;
 }
 
-export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLogSaved }: Props) {
+export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLogSaved, viewOnly = false }: Props) {
   const today = todayISO();
   const [log, setLog] = useState<Partial<NutritionDailyLog>>({});
   const [logLoading, setLogLoading] = useState(true);
@@ -249,7 +250,8 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
                   max={5000}
                   placeholder="ex: 400"
                   value={log.active_calories ?? ""}
-                  onChange={e => upd("active_calories", e.target.value ? parseInt(e.target.value) : null)}
+                  onChange={viewOnly ? undefined : (e => upd("active_calories", e.target.value ? parseInt(e.target.value) : null))}
+                  readOnly={viewOnly}
                 />
               </div>
             )}
@@ -263,7 +265,8 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
                 max={10000}
                 placeholder="ex: 2200"
                 value={log.total_calories_consumed ?? ""}
-                onChange={e => upd("total_calories_consumed", e.target.value ? parseInt(e.target.value) : null)}
+                onChange={viewOnly ? undefined : (e => upd("total_calories_consumed", e.target.value ? parseInt(e.target.value) : null))}
+                readOnly={viewOnly}
               />
             </div>
 
@@ -282,12 +285,14 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
                     max={1000}
                     placeholder="0"
                     value={log[m.key] ?? ""}
-                    onChange={e => upd(m.key, e.target.value ? parseInt(e.target.value) : null)}
+                    onChange={viewOnly ? undefined : (e => upd(m.key, e.target.value ? parseInt(e.target.value) : null))}
+                    readOnly={viewOnly}
                   />
                 </div>
               ))}
             </div>
 
+            {!viewOnly && (
             <button
               onClick={handleSave}
               disabled={saving}
@@ -300,6 +305,7 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
             >
               {saving ? "Enregistrement..." : "Enregistrer"}
             </button>
+            )}
           </div>
         )}
       </div>
