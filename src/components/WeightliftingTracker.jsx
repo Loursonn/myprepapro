@@ -130,7 +130,7 @@ const DEF_TIER_CONFIG={
 const roundHalf=v=>Math.round(v*2)/2;
 const BLOC_TO_TIER={"PERF":1,"ESTH":2,"ASSOC":2,"BESOIN":3,"CORE":3,"MOBIL":3};
 const getExTier=(name,ex)=>ex?.tier||(EX_TIER[name]||(ex?.bloc?BLOC_TO_TIER[ex.bloc]:null)||3);
-const DEF_BLOCK_CONFIG={totalWeeks:6,deloadWeek:6,progressionPct:2.5,progressionType:"linear",deloadPct:40,tierConfig:DEF_TIER_CONFIG};
+const DEF_BLOCK_CONFIG={totalWeeks:6,deloadWeek:6,progressionPct:2.5,progressionType:"linear",deloadPct:40,tierConfig:DEF_TIER_CONFIG,startDate:null};
 const SKEYS={exos:"asp:exos",exMeta:"asp:exMeta",sets:"asp:sets",wellness:"asp:wellness",wellnessHistory:"asp:wh",bw:"asp:bw",completed:"asp:completed",goals:"asp:goals",anotes:"asp:anotes",custMethods:"asp:custmethods",weightLog:"asp:wlog",weightMilestones:"asp:wmile",injuries:"asp:injuries",sessions:"asp:sessions",blockConfig:"asp:blockConfig",blockHistory:"asp:blockHistory",weekSchedule:"asp:weekschedule",sessionLogs:"asp:sessionlogs",freeSessions:"asp:freesess"};
 async function sLoad(k,fb,aid){
   if(!aid)return fb;
@@ -372,10 +372,10 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
     {rows.map((r,i)=>{const isIso=r.type==="iso";const isAmrap=r.type==="amrap";const isDrop=r.type==="drop";const isMini=r.type==="mini";const isCluster=r.type==="cluster";const showPause=((r.type==="round"||r.type==="mini")&&i<rows.length-1&&rows[i+1]?.type===r.type)||(isCluster&&!r.isLast&&i<rows.length-1&&rows[i+1]?.type==="cluster");
       return(<div key={i}><div style={{display:"grid",gridTemplateColumns:isIso?"40px 1fr 28px 28px":"40px 1fr 10px 1fr "+((!isAmrap&&!isMini&&!isDrop&&!isCluster)?"44px ":"")+"28px 28px",gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#C060D008":C.s2,border:"1px solid "+(r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#C060D030":C.brd),opacity:r.done||r.skipped?0.5:1,transition:"all 0.2s"}}>
         <span style={{fontSize:9,color:rowC(r),fontWeight:600,textAlign:"center"}}>{rowLabel(r)}</span>
-        {!isIso&&<input type="number" value={r.kg||0} onChange={viewOnly?undefined:e=>upd(i,"kg",+e.target.value)} readOnly={viewOnly} style={iS}/>}
+        {!isIso&&<input type="number" step="0.5" value={r.kg||""} onChange={viewOnly?undefined:e=>upd(i,"kg",+e.target.value)} readOnly={viewOnly} placeholder="0" style={iS}/>}
         {isIso&&<div style={{fontSize:11,color:C.tx2,textAlign:"center"}}>{r.holdSec}s</div>}
         {!isIso&&<span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span>}
-        {!isIso&&<input type="number" value={r.reps||0} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={isAmrap?"max":""} style={iS}/>}
+        {!isIso&&<input type="number" value={r.reps||""} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={isAmrap?"max":"0"} style={iS}/>}
         {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&<RIRMini value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
         <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button><button onClick={viewOnly?undefined:()=>updR(i,{done:!r.done,skipped:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
       </div>{showPause&&<div style={{textAlign:"center",fontSize:9,color:C.tx3,padding:"2px 0",marginBottom:2}}>{r.pauseSec}s repos</div>}</div>);
@@ -1011,6 +1011,16 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const[dragOverBloc,setDragOverBloc]=useState(null);
   const[dragBlocId,setDragBlocId]=useState(null);
   const[dragOverBlocId,setDragOverBlocId]=useState(null);
+  const[touchDragId,setTouchDragId]=useState(null);
+  const touchTimerRef=useRef(null);
+  const touchStartPosRef=useRef(null);
+  // Bloquer scroll + sélection pendant touch drag
+  useEffect(()=>{
+    if(!touchDragId)return;
+    const prev={us:document.body.style.userSelect,wus:document.body.style.webkitUserSelect,ov:document.body.style.overflow};
+    document.body.style.userSelect='none';document.body.style.webkitUserSelect='none';document.body.style.overflow='hidden';
+    return()=>{document.body.style.userSelect=prev.us;document.body.style.webkitUserSelect=prev.wus;document.body.style.overflow=prev.ov;};
+  },[touchDragId]);
   const[calWeek,setCalWeek]=useState(currentWeek);
   const[calDetail,setCalDetail]=useState(null);
 
@@ -1139,7 +1149,15 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const moveExToBloc=(fromId,toId,targetBlocId)=>{setExos(prev=>{const list=[...(prev[sid]||[])];const fi=list.findIndex(e=>e.id===fromId);const ti=list.findIndex(e=>e.id===toId);if(fi<0||ti<0)return prev;const moved={...list[fi],bloc:targetBlocId||null};list.splice(fi,1);const nti=list.findIndex(e=>e.id===toId);list.splice(nti>=0?nti:ti,0,moved);return{...prev,[sid]:list};});};
   const updField=(eid,f,val)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),[f]:f==="sets"||f==="kg"||f==="rir"?isNaN(+val)?val:+val:val}}}:e)}));
   const updExField=(eid,f,val)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,[f]:val}:e)}));
-  const updMP=(eid,p)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),methodParams:p}}}:e)}));
+  const updMP=(eid,p)=>setExos(prev=>{
+    const list=(prev[sid]||[]).map(e=>e.id===eid?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),methodParams:p}}}:e);
+    const thisMethod=list.find(e=>e.id===eid)?.weeks?.[week]?.method;
+    // Auto-pairing superset : met à jour automatiquement l'exercice associé
+    if(thisMethod==="superset"&&p?.paired){
+      return{...prev,[sid]:list.map(e=>e.id!==p.paired?e:{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:"superset",methodParams:{paired:eid}}}})};
+    }
+    return{...prev,[sid]:list};
+  });
   const fS={background:C.s2,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:8,padding:"7px 4px",width:"100%"};
   const addCM=()=>{if(!newM.label)return;const key="custom_"+Date.now();setCustomMethods(p=>[...p,{key,...newM}]);setNewMForm(false);};
 
@@ -1336,7 +1354,11 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           <div style={{padding:bloc?"6px 8px":"0"}}>
           {groupExs.map(ex=>{
             const exIdx=exList.indexOf(ex);const wd=ex.weeks[week]||{};const isOpen=openEx===ex.id;const sk=ex.id+"_"+week;const aNote=athleteNotes[sk]||"";const curM=allMethods[wd.method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";const exTier=getExTier(ex.name,ex);const exTc=tierCfg[exTier]||tierCfg[3];const typeLabels={muscu:"Muscu",plio:"Plio",mobilite:"Mobilité",halterophilie:"Halté."};const typeColors={muscu:C.tx3,plio:C.o,mobilite:C.b,halterophilie:"#8b5cf6"};
-            return(<div key={ex.id} draggable={true} onDragStart={e=>{setDragId(ex.id);e.dataTransfer.effectAllowed="move";}} onDragOver={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();setDragOverId(ex.id);if(dragId)setDragOverBloc(ex.bloc||null);}} onDrop={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();if(dragId&&dragId!==ex.id)moveExToBloc(dragId,ex.id,ex.bloc);setDragId(null);setDragOverId(null);setDragOverBloc(null);}} onDragEnd={()=>{setDragId(null);setDragOverId(null);setDragOverBloc(null);}} style={{background:C.s1,borderRadius:10,marginBottom:4,border:"1px solid "+(dragOverId===ex.id?C.ac:C.brd),overflow:"hidden",opacity:dragId===ex.id?0.65:1,animation:dragId===ex.id?"exShake 0.4s ease-in-out infinite":"none",transition:"opacity 0.15s,border-color 0.15s"}}>
+            return(<div key={ex.id} data-exid={ex.id} draggable={true} onDragStart={e=>{setDragId(ex.id);e.dataTransfer.effectAllowed="move";}} onDragOver={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();setDragOverId(ex.id);if(dragId)setDragOverBloc(ex.bloc||null);}} onDrop={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();if(dragId&&dragId!==ex.id)moveExToBloc(dragId,ex.id,ex.bloc);setDragId(null);setDragOverId(null);setDragOverBloc(null);}} onDragEnd={()=>{setDragId(null);setDragOverId(null);setDragOverBloc(null);}}
+              onTouchStart={e=>{const t=e.touches[0];touchStartPosRef.current={x:t.clientX,y:t.clientY};touchTimerRef.current=setTimeout(()=>{setTouchDragId(ex.id);setDragId(ex.id);if(navigator.vibrate)navigator.vibrate(40);},800);}}
+              onTouchMove={e=>{if(!touchDragId){const t=e.touches[0];if(Math.abs(t.clientX-(touchStartPosRef.current?.x||0))>8||Math.abs(t.clientY-(touchStartPosRef.current?.y||0))>8)clearTimeout(touchTimerRef.current);return;}e.preventDefault();const t=e.touches[0];const hit=[...document.querySelectorAll('[data-exid]')].find(el=>{const r=el.getBoundingClientRect();return t.clientY>=r.top&&t.clientY<=r.bottom;});if(hit&&hit.dataset.exid!==touchDragId){setDragOverId(hit.dataset.exid);setDragOverBloc(exList.find(x=>x.id===hit.dataset.exid)?.bloc||null);}}}
+              onTouchEnd={()=>{clearTimeout(touchTimerRef.current);if(touchDragId){if(dragOverId&&touchDragId!==dragOverId){const tgt=exList.find(x=>x.id===dragOverId);if(tgt)moveExToBloc(touchDragId,dragOverId,tgt.bloc);}setTouchDragId(null);setDragId(null);setDragOverId(null);setDragOverBloc(null);}}}
+              style={{background:C.s1,borderRadius:10,marginBottom:4,border:"1px solid "+(dragOverId===ex.id?C.ac:C.brd),overflow:"hidden",opacity:dragId===ex.id?0.65:1,animation:dragId===ex.id?"exShake 0.4s ease-in-out infinite":"none",transition:"opacity 0.15s,border-color 0.15s",userSelect:"none",WebkitUserSelect:"none"}}>
               <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"11px 13px",cursor:"pointer",gap:10}}>
                 <div style={{width:3,height:28,borderRadius:2,background:blocC,flexShrink:0,position:"relative"}}><span style={{position:"absolute",top:-6,left:-3,fontSize:7,fontWeight:800,color:exTc.c,background:exTc.c+"20",padding:"0 3px",borderRadius:3}}>{isFlex?"":("T"+exTier)}</span></div>
                 <div style={{flex:1}}>
@@ -1373,7 +1395,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     </div>
                   </div>
                 </div>
-                {!isFlex?(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>Charge<button onClick={()=>updField(ex.id,"pdc",!wd.pdc)} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(wd.pdc?C.ac:C.brdL),background:wd.pdc?C.acS:"transparent",color:wd.pdc?C.ac:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>PDC</button></div>{wd.pdc?<div style={{...fS,display:"flex",alignItems:"center",justifyContent:"center",background:C.acS,border:"1px solid "+C.ac,color:C.ac,fontWeight:700}}>PDC</div>:<input type="number" value={wd.kg??""} placeholder="--" onChange={e=>updField(ex.id,"kg",e.target.value)} style={fS}/>}</div><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div><input type="number" value={wd.sets??""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/></div></div>
+                {!isFlex?(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>Charge<button onClick={()=>updField(ex.id,"pdc",!wd.pdc)} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(wd.pdc?C.ac:C.brdL),background:wd.pdc?C.acS:"transparent",color:wd.pdc?C.ac:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>PDC</button></div>{wd.pdc?<div style={{...fS,display:"flex",alignItems:"center",justifyContent:"center",background:C.acS,border:"1px solid "+C.ac,color:C.ac,fontWeight:700}}>PDC</div>:<input type="number" step="0.5" value={wd.kg??""} placeholder="--" onChange={e=>updField(ex.id,"kg",e.target.value)} style={fS}/>}</div><div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div><input type="number" value={wd.sets??""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/></div></div>
                 ):(<div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div><input type="number" value={wd.sets||""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/></div>)}
                 <div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5}}>Repetitions / Duree</div><input type="text" value={wd.repsRange||""} placeholder={isFlex?"30s ou 10":"10 ou 8-12"} onChange={e=>updField(ex.id,"repsRange",e.target.value)} style={{...fS,textAlign:"left",paddingLeft:10}}/></div>
                 <div style={{display:"grid",gridTemplateColumns:isFlex?"1fr":"1fr 1fr",gap:8,marginBottom:14}}>
@@ -1383,8 +1405,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 {!isFlex&&(<div style={{marginBottom:14}}>
                   <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Methode</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                    <button onClick={()=>{setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:null,methodParams:null}}}:e)}));}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(!wd.method?C.coach:C.brdL),background:!wd.method?C.coachS:"transparent",color:!wd.method?C.coach:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:!wd.method?700:400}}>Standard</button>
-                    {Object.entries(allMethods).map(([k,m])=><button key={k} onClick={()=>{const nm=wd.method===k?null:k;setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:nm,methodParams:nm?(MDEF[nm]||null):null}}}:e)}));}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(wd.method===k?m.c:C.brdL),background:wd.method===k?m.c+"20":"transparent",color:wd.method===k?m.c:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:wd.method===k?700:400}}>{m.e} {m.label}</button>)}
+                    <button onClick={()=>{const oldP=wd.method==="superset"?wd.methodParams?.paired:null;setExos(prev=>{let list=(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:null,methodParams:null}}}:e);if(oldP)list=list.map(e=>e.id!==oldP?e:{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:null,methodParams:null}}});return{...prev,[sid]:list};});}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(!wd.method?C.coach:C.brdL),background:!wd.method?C.coachS:"transparent",color:!wd.method?C.coach:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:!wd.method?700:400}}>Standard</button>
+                    {Object.entries(allMethods).map(([k,m])=><button key={k} onClick={()=>{const nm=wd.method===k?null:k;const oldP=wd.method==="superset"?wd.methodParams?.paired:null;setExos(prev=>{let list=(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:nm,methodParams:nm?(MDEF[nm]||null):null}}}:e);if(oldP&&nm!=="superset")list=list.map(e=>e.id!==oldP?e:{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:null,methodParams:null}}});return{...prev,[sid]:list};});}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(wd.method===k?m.c:C.brdL),background:wd.method===k?m.c+"20":"transparent",color:wd.method===k?m.c:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:wd.method===k?700:400}}>{m.e} {m.label}</button>)}
                     <button onClick={()=>setNewMForm(o=>!o)} style={{padding:"5px 10px",borderRadius:7,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+ Custom</button>
                   </div>
                   {wd.method&&<MethodParamsForm method={wd.method} params={wd.methodParams} onChange={p=>updMP(ex.id,p)} exosInSession={exList} currentExId={ex.id} plannedKg={wd.pdc?null:wd.kg}/>}
@@ -1797,6 +1819,12 @@ function CoachConfig({goals,setGoals,bodyWeight,setBodyWeight,completedSessions,
         <div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Nom du bloc</div>
         <input value={blockConfig?.blockName||""} onChange={e=>setBlockConfig(c=>({...c,blockName:e.target.value}))} placeholder="Ex: Prepa competition, Hypertrophie S1..." style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:"inherit",boxSizing:"border-box"}}/>
       </div>
+      <div style={{padding:"8px 0 4px",borderBottom:"1px solid "+C.brd}}>
+        <div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Date de début du bloc</div>
+        <input type="date" value={blockConfig?.startDate||""} onChange={e=>setBlockConfig(c=>({...c,startDate:e.target.value||null}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+(blockConfig?.startDate?C.brdL:C.o+"60"),background:C.s2,color:blockConfig?.startDate?C.tx:C.o,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}/>
+        {!blockConfig?.startDate&&<div style={{fontSize:10,color:C.o,marginTop:4}}>A definir — la semaine courante sera calculee depuis cette date</div>}
+        {blockConfig?.startDate&&(()=>{const days=Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000);const wk=Math.min(Math.max(1,Math.floor(days/7)+1),tw);return<div style={{fontSize:10,color:C.tx3,marginTop:4}}>Semaine en cours : S{wk} · Jour {days+1} du bloc</div>;})()}
+      </div>
       {row("Nb semaines","Duree du bloc",tw,()=>setBlockConfig(c=>({...c,totalWeeks:Math.max(3,c.totalWeeks-1)})),()=>setBlockConfig(c=>({...c,totalWeeks:Math.min(16,c.totalWeeks+1)})),v=>v+" sem.")}
       {row("Semaine deload","0 = pas de deload",blockConfig?.deloadWeek||0,()=>setBlockConfig(c=>({...c,deloadWeek:Math.max(0,(c.deloadWeek||0)-1)})),()=>setBlockConfig(c=>({...c,deloadWeek:Math.min(tw,(c.deloadWeek||0)+1)})),v=>v===0?"Aucune":"S"+v)}
       <div style={{padding:"10px 0"}}><div style={{fontSize:10,color:C.tx3,lineHeight:1.5}}>La semaine deload reduit charges et volume pour la recuperation.</div></div>
@@ -1997,6 +2025,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const[freeStartedAt,setFreeStartedAt]=useState(null);const[freeElapsed,setFreeElapsed]=useState(0);
   useEffect(()=>{if(step===0)setWk(currentWeek);},[currentWeek,step]);
   const sid=selectedSess?.id||null;const exercises=sid?exos[sid]||[]:[];
+  const exercisesSorted=useMemo(()=>{if(!exercises.length)return exercises;const sBlocs=getSessionBlocs(selectedSess,exercises);const order=sBlocs.map(b=>b.id);return[...exercises].sort((a,b)=>{const ai=order.indexOf(a.bloc??'');const bi=order.indexOf(b.bloc??'');if(ai===bi)return 0;if(ai===-1)return 1;if(bi===-1)return-1;return ai-bi;});},[exercises,selectedSess]);
   const sessIsDone=(completedSessions[wk]||[]).includes(sid);
   const allSetsDone=useMemo(()=>{if(!sid||!exercises.length)return false;return exercises.every(ex=>{const s=sets[ex.id+"_"+wk];return s?.length>0&&s.every(x=>x.done||x.skipped);});},[exercises,sets,wk,sid]);
   // Restore session start from localStorage
@@ -2070,19 +2099,75 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
     {wk===dw&&<div style={{padding:"8px 14px",borderRadius:8,background:C.bS,border:"1px solid "+C.b+"40",marginBottom:10,fontSize:11,color:C.b,fontWeight:600}}>Semaine deload</div>}
     <div style={{display:"flex",gap:3,marginBottom:14,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWk(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===wk?"2px solid "+C.ac:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===wk?C.acS:(w===dw?C.bS:"transparent"),color:w===wk?C.ac:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>
     {sessStartedAt&&<div style={{marginBottom:14,background:C.s1,borderRadius:12,padding:"10px 12px",border:"1px solid "+C.brd}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Timer repos</div><RestTimer timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onSetDur={onTimerSetDur} onStart={onTimerStart} onStop={onTimerStop}/></div>}
-    <div style={{opacity:(!sessStartedAt&&!sessIsDone)?0.3:1,transition:"opacity 0.3s"}}>{exercises.map(ex=>{const wd=ex.weeks[wk];const showH=ex.bloc!==lb;lb=ex.bloc;const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;const rows=sets[sk]||[];const done=rows.filter(r=>r.done||r.skipped).length;const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
-      return(<div key={ex.id}>
-        {showH&&<div style={{display:"flex",alignItems:"center",gap:8,margin:"14px 0 8px",padding:"7px 12px",borderRadius:8,background:bt.c+"18",border:"1px solid "+bt.c+"35"}}><div style={{width:4,height:16,borderRadius:2,background:bt.c,flexShrink:0}}/><span style={{fontSize:10,fontWeight:700,color:bt.c,textTransform:"uppercase",letterSpacing:"0.8px"}}>{bt.l}</span></div>}
-        <div style={{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}>
-          <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
-            <div style={{width:3,height:32,borderRadius:2,background:allDone?C.g:bt.c,flexShrink:0}}/>
-            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>{rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}<span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span></div>
+    <div style={{opacity:(!sessStartedAt&&!sessIsDone)?0.3:1,transition:"opacity 0.3s"}}>{(()=>{
+      // ── Pré-groupe les supersets ──────────────────────────────────────────
+      const rGroups=[];const seen=new Set();
+      exercisesSorted.forEach(ex=>{
+        if(seen.has(ex.id))return;
+        const wd=ex.weeks[wk];
+        const pid=wd?.method==="superset"?wd?.methodParams?.paired:null;
+        if(pid){
+          const pEx=exercisesSorted.find(e=>e.id===pid);
+          if(pEx&&!seen.has(pid)){
+            seen.add(ex.id);seen.add(pid);
+            const gExs=[ex,pEx];
+            // Chaîne : si pEx est lui-même en superset avec un 3ème
+            const wd2=pEx.weeks[wk];const pid2=wd2?.method==="superset"?wd2?.methodParams?.paired:null;
+            if(pid2&&pid2!==ex.id){const e3=exercisesSorted.find(e=>e.id===pid2);if(e3&&!seen.has(pid2)){gExs.push(e3);seen.add(pid2);}}
+            rGroups.push({ss:true,exs:gExs});return;
+          }
+        }
+        seen.add(ex.id);rGroups.push({ss:false,ex});
+      });
+      // ── Helper : rendu d'une carte exercice ───────────────────────────────
+      const exCard=(ex,inSS,isLastInSS)=>{
+        const wd=ex.weeks[wk];const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};
+        const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;
+        const rows=sets[sk]||[];const done=rows.filter(r=>r.done||r.skipped).length;
+        const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;
+        const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];
+        const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
+        return(
+          <div key={ex.id}>
+            <div style={inSS?{background:"transparent",overflow:"hidden"}:{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}>
+              <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
+                <div style={{width:3,height:32,borderRadius:2,background:allDone?C.g:bt.c,flexShrink:0}}/>
+                <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&method!=="superset"&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&method!=="superset"&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>{rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}<span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span></div>
+              </div>
+              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+            </div>
+            {/* Badge SS centré entre les exercices du superset */}
+            {inSS&&!isLastInSS&&<div style={{position:"relative",display:"flex",alignItems:"center",height:20,margin:"0 16px"}}>
+              <div style={{flex:1,borderTop:"1px dashed "+C.g+"28"}}/>
+              <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",background:C.s2,border:"1px solid "+C.g+"50",borderRadius:10,padding:"1px 10px",fontSize:8,fontWeight:800,color:C.g,letterSpacing:"0.8px",whiteSpace:"nowrap"}}>SS</div>
+            </div>}
           </div>
-          {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
-        </div>
-      </div>);
-    })}</div>
+        );
+      };
+      // ── Rendu des groupes ─────────────────────────────────────────────────
+      return rGroups.map((item)=>{
+        if(!item.ss){
+          const ex=item.ex;const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};
+          const showH=ex.bloc!==lb;lb=ex.bloc;
+          return(<div key={ex.id}>{showH&&<div style={{display:"flex",alignItems:"center",gap:8,margin:"14px 0 8px",padding:"7px 12px",borderRadius:8,background:bt.c+"18",border:"1px solid "+bt.c+"35"}}><div style={{width:4,height:16,borderRadius:2,background:bt.c,flexShrink:0}}/><span style={{fontSize:10,fontWeight:700,color:bt.c,textTransform:"uppercase",letterSpacing:"0.8px"}}>{bt.l}</span></div>}{exCard(ex,false,false)}</div>);
+        } else {
+          const firstEx=item.exs[0];const bt=BT[firstEx.bloc]||{c:C.tx3,l:firstEx.bloc};
+          const showH=firstEx.bloc!==lb;lb=firstEx.bloc;
+          const ssC=C.g;
+          return(
+            <div key={firstEx.id+"_ss"}>
+              {showH&&<div style={{display:"flex",alignItems:"center",gap:8,margin:"14px 0 8px",padding:"7px 12px",borderRadius:8,background:bt.c+"18",border:"1px solid "+bt.c+"35"}}><div style={{width:4,height:16,borderRadius:2,background:bt.c,flexShrink:0}}/><span style={{fontSize:10,fontWeight:700,color:bt.c,textTransform:"uppercase",letterSpacing:"0.8px"}}>{bt.l}</span></div>}
+              {/* ── Conteneur visuel superset — sans header, badge centré entre les exos ── */}
+              <div style={{border:"2px solid "+ssC+"45",borderRadius:14,overflow:"hidden",marginBottom:8,background:ssC+"05"}}>
+                {/* Exercices liés */}
+                {item.exs.map((ex,ei)=>exCard(ex,true,ei===item.exs.length-1))}
+              </div>
+            </div>
+          );
+        }
+      });
+    })()}</div>
     {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={endSess} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
     {sessIsDone&&<div style={{marginTop:16}}><div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Séance validée !</div>{sessionLogs?.[sid+"_"+wk]?.note&&<div style={{padding:"10px 12px",borderRadius:8,background:C.s2,fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic",marginBottom:6}}>"{sessionLogs[sid+"_"+wk].note}"</div>}{sessionLogs?.[sid+"_"+wk]?.duration&&<div style={{fontSize:11,color:C.tx3,textAlign:"center",marginBottom:8}}>Durée : {fmtTime(sessionLogs[sid+"_"+wk].duration)}</div>}{!viewOnly&&<button onClick={()=>uncompleteSession(sid,wk)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler la validation</button>}</div>}
     {showEndModal&&<SessionEndModal duration={endDuration} onSave={onSessValidate} C={C}/>}
@@ -2102,7 +2187,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
       <div style={{padding:"12px 16px 0"}}>
         <input value={sf.name} onChange={e=>updFree({name:e.target.value})} style={{width:"100%",fontSize:18,fontWeight:800,background:"transparent",border:"none",color:C.tx,fontFamily:"inherit",outline:"none",marginBottom:10,padding:0,boxSizing:"border-box"}}/>
         <textarea value={sf.quickNote||""} onChange={e=>updFree({quickNote:e.target.value})} placeholder="Commentaire rapide (optionnel)..." style={{width:"100%",minHeight:60,background:C.s1,border:"1px solid "+C.brdL,borderRadius:10,color:C.tx2,fontSize:12,fontFamily:"inherit",padding:"8px 10px",resize:"none",outline:"none",boxSizing:"border-box",marginBottom:14}} readOnly={sf.completed}/>
-        {sf.exercises.map((ex,ei)=>{const allDone=ex.sets.length>0&&ex.sets.every(s=>s.done);return(<div key={ex.id} style={{background:C.s1,borderRadius:12,marginBottom:8,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",padding:"10px 12px",gap:8}}><input value={ex.name} onChange={e=>updExo(ex.id,{name:e.target.value})} placeholder={"Exercice "+(ei+1)} style={{flex:1,background:"transparent",border:"none",color:C.tx,fontSize:14,fontWeight:600,fontFamily:"inherit",outline:"none"}}/><button onClick={()=>removeExo(ex.id)} style={{width:20,height:20,borderRadius:5,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>×</button></div><div style={{padding:"0 12px 12px"}}>{ex.sets.map((s,si)=>(<div key={si} style={{display:"grid",gridTemplateColumns:"40px 1fr 10px 1fr 28px",gap:4,alignItems:"center",marginBottom:4,padding:"5px 8px",borderRadius:8,background:s.done?C.g+"10":C.s2,border:"1px solid "+(s.done?C.g+"30":C.brd)}}><span style={{fontSize:9,color:C.tx3,textAlign:"center"}}>S{si+1}</span><input type="number" value={s.kg||""} onChange={e=>updSet(ex.id,si,{kg:+e.target.value})} placeholder="0" style={{background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"5px 2px",width:"100%"}}/><span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span><input type="number" value={s.reps||""} onChange={e=>updSet(ex.id,si,{reps:+e.target.value})} placeholder="0" style={{background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"5px 2px",width:"100%"}}/><button onClick={()=>updSet(ex.id,si,{done:!s.done})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(s.done?C.g:C.brdL),background:s.done?C.g:"transparent",color:s.done?"#fff":C.tx3,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</button></div>))}<button onClick={()=>{const last=ex.sets[ex.sets.length-1]||{kg:0,reps:0};updExo(ex.id,{sets:[...ex.sets,{kg:last.kg,reps:last.reps,done:false}]});}} style={{width:"100%",padding:"5px 0",borderRadius:7,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:2}}>+ Série</button></div></div>);})}
+        {sf.exercises.map((ex,ei)=>{const allDone=ex.sets.length>0&&ex.sets.every(s=>s.done);return(<div key={ex.id} style={{background:C.s1,borderRadius:12,marginBottom:8,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}><div style={{display:"flex",alignItems:"center",padding:"10px 12px",gap:8}}><input value={ex.name} onChange={e=>updExo(ex.id,{name:e.target.value})} placeholder={"Exercice "+(ei+1)} style={{flex:1,background:"transparent",border:"none",color:C.tx,fontSize:14,fontWeight:600,fontFamily:"inherit",outline:"none"}}/><button onClick={()=>removeExo(ex.id)} style={{width:20,height:20,borderRadius:5,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>×</button></div><div style={{padding:"0 12px 12px"}}>{ex.sets.map((s,si)=>(<div key={si} style={{display:"grid",gridTemplateColumns:"40px 1fr 10px 1fr 28px",gap:4,alignItems:"center",marginBottom:4,padding:"5px 8px",borderRadius:8,background:s.done?C.g+"10":C.s2,border:"1px solid "+(s.done?C.g+"30":C.brd)}}><span style={{fontSize:9,color:C.tx3,textAlign:"center"}}>S{si+1}</span><input type="number" step="0.5" value={s.kg||""} onChange={e=>updSet(ex.id,si,{kg:+e.target.value})} placeholder="0" style={{background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"5px 2px",width:"100%"}}/><span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span><input type="number" value={s.reps||""} onChange={e=>updSet(ex.id,si,{reps:+e.target.value})} placeholder="0" style={{background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"5px 2px",width:"100%"}}/><button onClick={()=>updSet(ex.id,si,{done:!s.done})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(s.done?C.g:C.brdL),background:s.done?C.g:"transparent",color:s.done?"#fff":C.tx3,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</button></div>))}<button onClick={()=>{const last=ex.sets[ex.sets.length-1]||{kg:0,reps:0};updExo(ex.id,{sets:[...ex.sets,{kg:last.kg,reps:last.reps,done:false}]});}} style={{width:"100%",padding:"5px 0",borderRadius:7,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:2}}>+ Série</button></div></div>);})}
         <button onClick={addExo} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx2,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginBottom:14}}>+ Ajouter un exercice</button>
         {!sf.completed&&!freeStartedAt&&<button onClick={startFree} style={{width:"100%",padding:"15px 0",borderRadius:14,border:"none",background:C.ac,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>▶ Débuter la séance</button>}
         {!sf.completed&&freeStartedAt&&<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><div style={{flex:1,padding:"8px 12px",borderRadius:10,background:C.acS,border:"1px solid "+C.ac+"40",fontSize:14,fontWeight:800,color:C.ac,fontFamily:"monospace"}}>{fmtTime(freeElapsed)}</div><button onClick={endFree} style={{padding:"8px 18px",borderRadius:10,border:"none",background:C.g,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer</button></div>}
@@ -2758,7 +2843,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     else{const newExos={...exos};(opts.sessions||[]).forEach(s=>{if(!newExos[s.id])newExos[s.id]=[];});setExos(newExos);}
     // Block config
     const newBc=opts.config?{...blockConfig}:{...DEF_BLOCK_CONFIG};
-    newBc.blockName=opts.blockName||"";newBc.objective=opts.objective||"";newBc.totalWeeks=opts.totalWeeks||6;newBc.deloadWeek=opts.deloadWeek||0;
+    newBc.blockName=opts.blockName||"";newBc.objective=opts.objective||"";newBc.totalWeeks=opts.totalWeeks||6;newBc.deloadWeek=opts.deloadWeek||0;newBc.startDate=new Date().toISOString().slice(0,10);
     setBlockConfig(newBc);
     setGoals(g=>({...g,sessionsPerWeek:opts.sessPerWeek||g.sessionsPerWeek}));
     // Always reset progress
@@ -2787,7 +2872,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const isDeload=w=>blockConfig.deloadWeek&&w===blockConfig.deloadWeek;
   const weeklyTarget=useMemo(()=>{const t={};for(let w=1;w<=tw;w++){const n=sessions.filter(s=>(exos[s.id]||[]).some(ex=>ex.weeks?.[w]?.sets)).length;t[w]=n>0?n:goals.sessionsPerWeek;}return t;},[sessions,exos,tw,goals.sessionsPerWeek]);
-  const currentWeek=useMemo(()=>{for(let w=1;w<=tw;w++){if((completedSessions[w]||[]).length<(weeklyTarget[w]||goals.sessionsPerWeek))return w;}return tw;},[completedSessions,weeklyTarget,goals.sessionsPerWeek,tw]);
+  const currentWeek=useMemo(()=>{
+    if(blockConfig?.startDate){
+      const days=Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000);
+      return Math.min(Math.max(1,Math.floor(days/7)+1),tw);
+    }
+    // Fallback pour les blocs sans date de début (ancien comportement)
+    for(let w=1;w<=tw;w++){if((completedSessions[w]||[]).length<(weeklyTarget[w]||goals.sessionsPerWeek))return w;}
+    return tw;
+  },[blockConfig?.startDate,completedSessions,weeklyTarget,goals.sessionsPerWeek,tw]);
   const totalTarget=useMemo(()=>weeksArr.reduce((acc,w)=>acc+(weeklyTarget[w]||goals.sessionsPerWeek),0),[weeksArr,weeklyTarget,goals.sessionsPerWeek]);
   const streak=useMemo(()=>{let s=0;for(let w=currentWeek-1;w>=1;w--){if((completedSessions[w]||[]).length>=(weeklyTarget[w]||goals.sessionsPerWeek))s++;else break;}return s;},[completedSessions,currentWeek,weeklyTarget,goals.sessionsPerWeek]);
   const weekAdherence=Math.round(((completedSessions[currentWeek]||[]).length/(weeklyTarget[currentWeek]||goals.sessionsPerWeek))*100);

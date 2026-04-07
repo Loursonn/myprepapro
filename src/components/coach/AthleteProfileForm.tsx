@@ -6,6 +6,7 @@ import {
   upsertNutritionStrategy,
   NutritionStrategyType,
   CalorieMode,
+  DeficitMode,
 } from "@/lib/nutrition";
 
 const C = {
@@ -66,7 +67,10 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
   const [nutTargetWeight, setNutTargetWeight] = useState("");
   const [nutCalorieMode, setNutCalorieMode] = useState<CalorieMode>("nap");
   const [nutNap, setNutNap] = useState("");                 // NAP sélectionné (ex: "1.55")
-  const [nutTargetPct, setNutTargetPct] = useState("");     // déficit/surplus/tolérance cible
+  const [nutTargetPct, setNutTargetPct] = useState("");     // déficit/surplus/tolérance cible (mode fixe)
+  const [nutDeficitMode, setNutDeficitMode] = useState<DeficitMode>("fixed");
+  const [nutRangeMin, setNutRangeMin] = useState("");       // borne min fourchette (% signé)
+  const [nutRangeMax, setNutRangeMax] = useState("");       // borne max fourchette (% signé)
   const [nutTotalCalCoach, setNutTotalCalCoach] = useState(""); // kcal total calculé ou manuel
   const [nutGlucides, setNutGlucides] = useState("");
   const [nutLipides, setNutLipides] = useState("");
@@ -178,7 +182,14 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
           setNutCalorieMode(s.calorie_mode ?? (s.can_track_calories ? "active" : "nap"));
           setNutNap(s.nap?.toString() ?? "");
           setNutTotalCalCoach(s.total_calories_coach?.toString() ?? "");
-          setNutTargetPct(deriveTargetPct(s.surplus_deficit_min ?? null, s.surplus_deficit_max ?? null, s.strategy));
+          const dm = s.deficit_mode ?? "fixed";
+          setNutDeficitMode(dm);
+          if (dm === "range") {
+            setNutRangeMin(s.surplus_deficit_min?.toString() ?? "");
+            setNutRangeMax(s.surplus_deficit_max?.toString() ?? "");
+          } else {
+            setNutTargetPct(deriveTargetPct(s.surplus_deficit_min ?? null, s.surplus_deficit_max ?? null, s.strategy));
+          }
           setNutGlucides(s.macros_glucides?.toString() ?? "");
           setNutLipides(s.macros_lipides?.toString() ?? "");
           setNutProteines(s.macros_proteines?.toString() ?? "");
@@ -208,7 +219,13 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
   async function handleSave() {
     setSaving(true);
     setError("");
-    const [sdMin, sdMax] = computeMinMax(nutTargetPct, nutStrategy);
+    let sdMin: number | null, sdMax: number | null;
+    if (nutDeficitMode === "range") {
+      sdMin = nutRangeMin !== "" ? parseFloat(nutRangeMin) : null;
+      sdMax = nutRangeMax !== "" ? parseFloat(nutRangeMax) : null;
+    } else {
+      [sdMin, sdMax] = computeMinMax(nutTargetPct, nutStrategy);
+    }
     try {
       await Promise.all([
         updateAthleteProfile(athlete.id, {
@@ -225,6 +242,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
           strategy: nutStrategy,
           can_track_calories: nutCalorieMode !== "nap",
           calorie_mode: nutCalorieMode,
+          deficit_mode: nutDeficitMode,
           nap: nutNap ? parseFloat(nutNap) : null,
           target_weight: nutTargetWeight ? parseFloat(nutTargetWeight) : null,
           total_calories_coach: nutTotalCalCoach ? parseInt(nutTotalCalCoach) : null,
@@ -377,21 +395,82 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
 
       {/* Déficit / Surplus / Tolérance selon stratégie */}
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>{stratPctMeta.label}</label>
-        <input
-          style={inputStyle}
-          type="number" min={stratPctMeta.min} max={stratPctMeta.max} step={0.5}
-          placeholder={stratPctMeta.placeholder}
-          value={nutTargetPct}
-          onChange={e => setNutTargetPct(e.target.value)}
-        />
-        {nutTargetPct && tdee > 0 && (
-          <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
-            <span style={{ color: C.tx3 }}>Calories cibles : </span>
-            <span style={{ fontWeight: 800, color: nutStrategy === "seche" ? C.r : nutStrategy === "prise_de_masse" ? C.g : C.b }}>
-              {computeTargetKcal(tdee, nutTargetPct, nutStrategy).toLocaleString("fr-FR")} kcal/j
-            </span>
+        {/* Toggle fixe / fourchette */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <label style={{ ...labelStyle, marginBottom: 0 }}>{stratPctMeta.label}</label>
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["fixed", "range"] as DeficitMode[]).map(m => (
+              <button key={m} onClick={() => setNutDeficitMode(m)} style={{
+                padding: "4px 10px", borderRadius: 6, cursor: "pointer",
+                fontFamily: "inherit", fontSize: 11, fontWeight: 600,
+                border: "1px solid " + (nutDeficitMode === m ? C.coach : C.brdL),
+                background: nutDeficitMode === m ? C.coachS : "transparent",
+                color: nutDeficitMode === m ? C.coach : C.tx3,
+              }}>
+                {m === "fixed" ? "% Fixe" : "Fourchette"}
+              </button>
+            ))}
           </div>
+        </div>
+
+        {nutDeficitMode === "fixed" ? (
+          <>
+            <input
+              style={inputStyle}
+              type="number" min={stratPctMeta.min} max={stratPctMeta.max} step={0.5}
+              placeholder={stratPctMeta.placeholder}
+              value={nutTargetPct}
+              onChange={e => setNutTargetPct(e.target.value)}
+            />
+            {nutTargetPct && tdee > 0 && (
+              <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
+                <span style={{ color: C.tx3 }}>Calories cibles : </span>
+                <span style={{ fontWeight: 800, color: nutStrategy === "seche" ? C.r : nutStrategy === "prise_de_masse" ? C.g : C.b }}>
+                  {computeTargetKcal(tdee, nutTargetPct, nutStrategy).toLocaleString("fr-FR")} kcal/j
+                </span>
+                <span style={{ color: C.tx3, fontSize: 11 }}> · tolérance ±5%</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 6 }}>
+              Écart acceptable vs la cible kcal (valeurs signées, ex: -10 à +5)
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Min %</div>
+                <input
+                  style={inputStyle}
+                  type="number" step={0.5} placeholder={nutStrategy === "prise_de_masse" ? "ex: +5" : "ex: -15"}
+                  value={nutRangeMin}
+                  onChange={e => setNutRangeMin(e.target.value)}
+                />
+              </div>
+              <div style={{ color: C.tx3, fontSize: 13, paddingTop: 18 }}>→</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Max %</div>
+                <input
+                  style={inputStyle}
+                  type="number" step={0.5} placeholder={nutStrategy === "seche" ? "ex: -5" : "ex: +15"}
+                  value={nutRangeMax}
+                  onChange={e => setNutRangeMax(e.target.value)}
+                />
+              </div>
+            </div>
+            {nutRangeMin !== "" && nutRangeMax !== "" && tdee > 0 && (() => {
+              const minV = parseFloat(nutRangeMin), maxV = parseFloat(nutRangeMax);
+              const kcal = parseInt(nutTotalCalCoach) || tdee;
+              return (
+                <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
+                  <span style={{ color: C.tx3 }}>Fourchette : </span>
+                  <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + minV / 100)).toLocaleString("fr-FR")}</span>
+                  <span style={{ color: C.tx3 }}> → </span>
+                  <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + maxV / 100)).toLocaleString("fr-FR")} kcal</span>
+                </div>
+              );
+            })()}
+          </>
         )}
       </div>
 

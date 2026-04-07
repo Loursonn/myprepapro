@@ -124,9 +124,21 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
   // Écart par rapport à la cible
   const calDiff = calConsumed > 0 && targetCal > 0 ? calConsumed - targetCal : null;
   const calDiffPct = calDiff !== null && targetCal > 0 ? (calDiff / targetCal) * 100 : null;
+
+  const deficitMode = strat.deficit_mode ?? null;
+
+  // Fourchette explicite
   const inRange = calDiffPct !== null
     && strat.surplus_deficit_min != null && strat.surplus_deficit_max != null
     && calDiffPct >= strat.surplus_deficit_min && calDiffPct <= strat.surplus_deficit_max;
+
+  // Mode fixe : proche = écart ≤ 5%, exact = écart ≤ 2%
+  const FIXED_CLOSE = 5;
+  const FIXED_EXACT = 2;
+  const isFixedExact = deficitMode === "fixed" && calDiffPct !== null && Math.abs(calDiffPct) <= FIXED_EXACT;
+  const isFixedClose = deficitMode === "fixed" && calDiffPct !== null && Math.abs(calDiffPct) <= FIXED_CLOSE;
+
+  const isOk = inRange || isFixedExact;
 
   return (
     <div style={{ padding: "16px 16px 40px" }}>
@@ -245,27 +257,31 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
             })}
 
             {/* Récap calories calculées */}
-            {calConsumed > 0 && (
-              <div style={{ padding: "10px 14px", borderRadius: 10, background: C.s2, border: "1px solid " + (calDiff !== null ? (inRange ? C.g : C.o) + "40" : C.brdL), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 2 }}>Calories calculées</div>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: calDiff !== null ? (inRange ? C.g : C.o) : C.tx }}>
-                    {calConsumed.toLocaleString("fr-FR")}
-                    <span style={{ fontSize: 11, color: C.tx3, fontWeight: 400 }}> kcal</span>
+            {calConsumed > 0 && (() => {
+              const statusColor = isOk ? C.g : (deficitMode === "fixed" && isFixedClose) ? C.o : (calDiffPct !== null ? C.o : undefined);
+              const borderColor = statusColor ? statusColor + "40" : C.brdL;
+              return (
+                <div style={{ padding: "10px 14px", borderRadius: 10, background: C.s2, border: "1px solid " + borderColor, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: C.tx3, marginBottom: 2 }}>Calories calculées</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: statusColor ?? C.tx }}>
+                      {calConsumed.toLocaleString("fr-FR")}
+                      <span style={{ fontSize: 11, color: C.tx3, fontWeight: 400 }}> kcal</span>
+                    </div>
                   </div>
+                  {calDiff !== null && targetCal > 0 && (
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: calDiff > 0 ? C.g : C.r }}>
+                        {calDiff > 0 ? "+" : ""}{calDiff} kcal
+                      </div>
+                      <div style={{ fontSize: 10, color: C.tx3 }}>
+                        {calDiffPct != null ? (calDiffPct > 0 ? "+" : "") + calDiffPct.toFixed(1) + "%" : ""}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {calDiff !== null && targetCal > 0 && (
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: calDiff > 0 ? C.g : C.r }}>
-                      {calDiff > 0 ? "+" : ""}{calDiff} kcal
-                    </div>
-                    <div style={{ fontSize: 10, color: C.tx3 }}>
-                      {calDiffPct != null ? (calDiffPct > 0 ? "+" : "") + calDiffPct.toFixed(1) + "%" : ""}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
 
             {!viewOnly && (
               <button
@@ -281,22 +297,53 @@ export default function NutritionView({ athleteId, bmr, nutritionStrategy, onLog
       </div>
 
       {/* ── Feedback ── */}
-      {calDiffPct !== null && (
-        <div style={{ ...card, background: inRange ? C.gS : C.oS, border: "1px solid " + (inRange ? C.g : C.o) + "40" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: inRange ? C.g : C.o, marginBottom: 6 }}>
-            {inRange
-              ? `✅ Dans l'objectif ${stratLabel} aujourd'hui !`
-              : `⚠️ ${calDiffPct > 0 ? "+" : ""}${calDiffPct.toFixed(1)}% par rapport à la cible`
-            }
+      {calDiffPct !== null && (() => {
+        let bg: string, border: string, color: string, icon: string, title: string, sub: string;
+
+        if (deficitMode === "fixed") {
+          if (isFixedExact) {
+            bg = C.gS; border = C.g + "40"; color = C.g;
+            icon = "✅"; title = `Dans l'objectif ${stratLabel} !`;
+            sub = `${calConsumed} kcal consommées · cible ${targetCal} kcal · écart ${calDiffPct > 0 ? "+" : ""}${calDiffPct.toFixed(1)}%`;
+          } else if (isFixedClose) {
+            bg = C.oS; border = C.o + "40"; color = C.o;
+            icon = "🟡"; title = `Proche de l'objectif (${calDiffPct > 0 ? "+" : ""}${calDiffPct.toFixed(1)}%)`;
+            sub = `${calConsumed} kcal consommées · cible ${targetCal} kcal · tolérance ±${FIXED_CLOSE}%`;
+          } else {
+            bg = C.rS; border = C.r + "40"; color = C.r;
+            icon = "⚠️"; title = `Hors objectif (${calDiffPct > 0 ? "+" : ""}${calDiffPct.toFixed(1)}%)`;
+            sub = `${calConsumed} kcal consommées · cible ${targetCal} kcal`;
+          }
+        } else if (deficitMode === "range") {
+          if (inRange) {
+            bg = C.gS; border = C.g + "40"; color = C.g;
+            icon = "✅"; title = `Dans la fourchette ${stratLabel} !`;
+            sub = `${calConsumed} kcal · cible ${targetCal} kcal · fenêtre ${strat.surplus_deficit_min! > 0 ? "+" : ""}${strat.surplus_deficit_min}% → ${strat.surplus_deficit_max! > 0 ? "+" : ""}${strat.surplus_deficit_max}%`;
+          } else {
+            bg = C.oS; border = C.o + "40"; color = C.o;
+            icon = "⚠️"; title = `Hors fourchette (${calDiffPct > 0 ? "+" : ""}${calDiffPct.toFixed(1)}%)`;
+            sub = `${calConsumed} kcal · cible ${targetCal} kcal · fenêtre ${strat.surplus_deficit_min! > 0 ? "+" : ""}${strat.surplus_deficit_min}% → ${strat.surplus_deficit_max! > 0 ? "+" : ""}${strat.surplus_deficit_max}%`;
+          }
+        } else {
+          // ancien comportement (deficit_mode null)
+          if (inRange) {
+            bg = C.gS; border = C.g + "40"; color = C.g;
+            icon = "✅"; title = `Dans l'objectif ${stratLabel} aujourd'hui !`;
+            sub = `${calConsumed} kcal · cible ${targetCal} kcal`;
+          } else {
+            bg = C.oS; border = C.o + "40"; color = C.o;
+            icon = "⚠️"; title = `${calDiffPct > 0 ? "+" : ""}${calDiffPct.toFixed(1)}% par rapport à la cible`;
+            sub = `${calConsumed} kcal · cible ${targetCal} kcal`;
+          }
+        }
+
+        return (
+          <div style={{ ...card, background: bg, border: "1px solid " + border }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 6 }}>{icon} {title}</div>
+            <div style={{ fontSize: 11, color: C.tx2 }}>{sub}</div>
           </div>
-          <div style={{ fontSize: 11, color: C.tx2 }}>
-            {calConsumed} kcal consommées · cible {targetCal} kcal
-            {strat.surplus_deficit_min != null && strat.surplus_deficit_max != null && (
-              <span style={{ color: C.tx3 }}> · fenêtre {strat.surplus_deficit_min > 0 ? "+" : ""}{strat.surplus_deficit_min}% à {strat.surplus_deficit_max > 0 ? "+" : ""}{strat.surplus_deficit_max}%</span>
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
