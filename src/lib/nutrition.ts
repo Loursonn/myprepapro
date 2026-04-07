@@ -4,10 +4,13 @@ export type NutritionStrategyType = "maintenance" | "seche" | "prise_de_masse";
 
 export type CalorieMode = "nap" | "active" | "hybrid";
 
+export type DeficitMode = "fixed" | "range";
+
 export interface NutritionStrategy {
   strategy: NutritionStrategyType;
   can_track_calories: boolean; // legacy, remplacé par calorie_mode
   calorie_mode?: CalorieMode | null;
+  deficit_mode?: DeficitMode | null;
   nap?: number | null;
   total_calories_coach?: number | null;
   target_weight?: number | null;
