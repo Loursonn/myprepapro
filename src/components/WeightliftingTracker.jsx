@@ -1122,6 +1122,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     const coachNote=suffix||"";
     const isMuscu=newEx.exType==="muscu"||newEx.exType==="halterophilie";
     setExos(prev=>({...prev,[sid]:[...(prev[sid]||[]),{id,name:norm||raw,bloc:newEx.bloc,target:newEx.target,exType:newEx.exType||"muscu",isFlexibility:!isMuscu,tier:isMuscu?(newEx.tier||3):undefined,weeks:{1:{coachNote:coachNote||undefined}}}]}));
+    setOpenEx(id);
     setNewEx({name:"",bloc:sessBlocs[0]?.id||null,target:"Pecs",exType:"muscu",tier:3});setExSearch("");setAddForm(false);
   };
 
@@ -2026,7 +2027,7 @@ function SessionEndModal({duration,onSave,C}){
   </div></>);
 }
 
-function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions}){
+function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions,onAddExercise}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const[step,setStep]=useState(initialSess?1:0);const[wk,setWk]=useState(currentWeek);
@@ -2055,6 +2056,23 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const onSessValidate=(note,forme)=>{completeSession(sid,wk);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);};
   const onFreeValidate=(note,forme)=>{const updFn=(patch)=>{const updated={...selectedFree,...patch};setSelectedFree(updated);setFreeSessions(prev=>prev.map(f=>f.id===selectedFree.id?updated:f));};updFn({completed:true,duration:freeEndDuration,note,forme});localStorage.removeItem('mpp:free_start');setFreeStartedAt(null);setShowFreeEndModal(false);};
   const exosMap=useMemo(()=>exercises.reduce((a,e)=>({...a,[e.id]:e.name}),{}),[exercises]);
+  const[addBankModal,setAddBankModal]=useState(false);
+  const[bankExos,setBankExos]=useState([]);
+  const[bankSearch,setBankSearch]=useState("");
+  const[bankPick,setBankPick]=useState(null);
+  const[bankForm,setBankForm]=useState({sets:3,repsRange:"10",kg:"",rir:2});
+  useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type').order('name').then(({data})=>{if(data)setBankExos(data);});},[]);
+  const bankFiltered=bankExos.filter(e=>!bankSearch||e.name.toLowerCase().includes(bankSearch.toLowerCase())).slice(0,30);
+  const addFromBankConfirm=()=>{
+    if(!bankPick||!sid)return;
+    const id="athl_"+sid+"_"+Date.now();
+    const ex={id,name:bankPick.name,target:bankPick.target||"Pecs",exType:bankPick.ex_type||"muscu",isFlexibility:false,bloc:null,tier:3,weeks:{[wk]:{sets:+bankForm.sets||3,repsRange:bankForm.repsRange||"10",...(bankForm.kg?{kg:+bankForm.kg}:{}),rir:bankForm.rir??2}}};
+    if(onAddExercise)onAddExercise(sid,ex);
+    const sk=id+"_"+wk;
+    const rows=Array.from({length:+bankForm.sets||3},()=>({type:"set",kg:bankForm.kg?+bankForm.kg:0,reps:parseFloat(bankForm.repsRange)||10,rir:bankForm.rir??2,done:false}));
+    updSets(sk,rows);
+    setAddBankModal(false);setBankSearch("");setBankPick(null);setBankForm({sets:3,repsRange:"10",kg:"",rir:2});
+  };
 
   const crumb=(<div style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px 0",fontSize:11,color:C.tx3,flexWrap:"wrap"}}>
     <button onClick={()=>{setStep(0);setSelectedSess(null);}} style={{background:"none",border:"none",color:step>0?C.tx2:C.ac,cursor:"pointer",fontFamily:"inherit",fontSize:11,padding:0,fontWeight:step===0?700:400}}>Seances</button>
@@ -2195,6 +2213,33 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
     {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={endSess} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
     {sessIsDone&&<div style={{marginTop:16}}><div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Séance validée !</div>{sessionLogs?.[sid+"_"+wk]?.note&&<div style={{padding:"10px 12px",borderRadius:8,background:C.s2,fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic",marginBottom:6}}>"{sessionLogs[sid+"_"+wk].note}"</div>}{sessionLogs?.[sid+"_"+wk]?.duration&&<div style={{fontSize:11,color:C.tx3,textAlign:"center",marginBottom:8}}>Durée : {fmtTime(sessionLogs[sid+"_"+wk].duration)}</div>}{!viewOnly&&<button onClick={()=>uncompleteSession(sid,wk)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler la validation</button>}</div>}
     {showEndModal&&<SessionEndModal duration={endDuration} onSave={onSessValidate} C={C}/>}
+    {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={()=>setAddBankModal(true)} style={{width:"100%",marginTop:8,padding:"11px 0",borderRadius:12,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>+ Ajouter un exercice depuis la banque</button>}
+    {addBankModal&&(<div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end"}} onClick={()=>setAddBankModal(false)}>
+      <div style={{background:C.s1,borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:12}}>Ajouter un exercice</div>
+        {!bankPick?(<>
+          <input value={bankSearch} onChange={e=>setBankSearch(e.target.value)} placeholder="Rechercher dans la banque..." autoFocus style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontFamily:"inherit",boxSizing:"border-box",marginBottom:8,outline:"none"}}/>
+          <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:220,overflowY:"auto"}}>
+            {bankFiltered.map(e=>(<button key={e.id} onClick={()=>setBankPick(e)} style={{padding:"9px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,textAlign:"left",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontWeight:600}}>{e.name}</span><span style={{fontSize:10,color:C.tx3}}>{e.target}</span></button>))}
+            {bankSearch&&bankFiltered.length===0&&<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"16px 0"}}>Aucun résultat — tape "Entrée" pour créer</div>}
+            {bankSearch&&bankFiltered.length===0&&<button onClick={()=>setBankPick({id:"new",name:bankSearch,target:"Pecs",ex_type:"muscu"})} style={{padding:"9px 12px",borderRadius:8,border:"1px dashed "+C.ac+"60",background:C.acS,color:C.ac,fontSize:13,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>+ Ajouter "{bankSearch}"</button>}
+          </div>
+        </>):(<>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,padding:"10px 12px",borderRadius:10,background:C.ac+"18",border:"1px solid "+C.ac+"40"}}>
+            <div style={{flex:1,fontSize:13,fontWeight:700,color:C.tx}}>{bankPick.name}</div>
+            <button onClick={()=>setBankPick(null)} style={{background:"none",border:"none",color:C.tx3,fontSize:18,cursor:"pointer",fontFamily:"inherit",padding:"0 4px"}}>×</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+            <div><div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Séries</div><input type="number" min={1} max={10} value={bankForm.sets} onChange={e=>setBankForm(p=>({...p,sets:+e.target.value||3}))} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:15,fontWeight:700,textAlign:"center",fontFamily:"inherit",boxSizing:"border-box"}}/></div>
+            <div><div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Répétitions</div><input value={bankForm.repsRange} onChange={e=>setBankForm(p=>({...p,repsRange:e.target.value}))} placeholder="ex: 10 ou 8-12" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:14,fontFamily:"inherit",boxSizing:"border-box"}}/></div>
+            <div><div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Charge (kg)</div><input type="number" min={0} step={0.5} value={bankForm.kg} onChange={e=>setBankForm(p=>({...p,kg:e.target.value}))} placeholder="0" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:14,fontFamily:"inherit",boxSizing:"border-box"}}/></div>
+            <div><div style={{fontSize:10,color:C.tx3,marginBottom:4}}>RIR cible</div><select value={bankForm.rir} onChange={e=>setBankForm(p=>({...p,rir:+e.target.value}))} style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:14,fontFamily:"inherit",boxSizing:"border-box"}}>{[0,1,2,3,4,5].map(v=><option key={v} value={v}>RIR {v}</option>)}</select></div>
+          </div>
+          <button onClick={addFromBankConfirm} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Ajouter à la séance</button>
+        </>)}
+        <button onClick={()=>{setAddBankModal(false);setBankSearch("");setBankPick(null);}} style={{width:"100%",marginTop:10,padding:"10px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+      </div>
+    </div>)}
   </div></div>);}
   if(step===2&&selectedFree){
     const sf=selectedFree;
@@ -3615,7 +3660,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 })()}</div></div>
       </div>)}
 
-      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions}/>}
+      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))}/>}
 
       {tab==="stats"&&(()=>{
         const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
