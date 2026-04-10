@@ -139,6 +139,7 @@ export default function CoachDashboard() {
 
   // ── Accueil coach (aucun athlète sélectionné) ──
   return (
+    <>
     <div style={{ minHeight: "100vh", background: C.bg }}>
       <div style={{ padding: "20px 16px", maxWidth: 480, margin: "0 auto" }}>
 
@@ -174,20 +175,27 @@ export default function CoachDashboard() {
               )}
 
               {athletes.map(a => (
-                <button key={a.id} onClick={() => setActiveAthleteId(a.id)}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s2, marginBottom: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: C.coach + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: C.coach, flexShrink: 0 }}>
-                    {a.full_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{a.full_name}</div>
-                    <div style={{ fontSize: 11, color: C.tx3 }}>
-                      {a.age ? `${a.age} ans` : ""}{a.age && a.height_cm ? " · " : ""}{a.height_cm ? `${a.height_cm} cm` : ""}
-                      {!a.age && !a.height_cm ? "Profil non renseigné" : ""}
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <button onClick={() => setActiveAthleteId(a.id)}
+                    style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s2, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                    <div style={{ width: 38, height: 38, borderRadius: "50%", background: C.coach + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: C.coach, flexShrink: 0 }}>
+                      {a.full_name.charAt(0).toUpperCase()}
                     </div>
-                  </div>
-                  <div style={{ fontSize: 18, color: C.tx3 }}>›</div>
-                </button>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{a.full_name}</div>
+                      <div style={{ fontSize: 11, color: C.tx3 }}>
+                        {a.age ? `${a.age} ans` : ""}{a.age && a.height_cm ? " · " : ""}{a.height_cm ? `${a.height_cm} cm` : ""}
+                        {!a.age && !a.height_cm ? "Profil non renseigné" : ""}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 18, color: C.tx3 }}>›</div>
+                  </button>
+                  <button onClick={() => setConfirmRemove(a.id)}
+                    style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10, border: "1px solid " + C.r + "40", background: "rgba(239,75,75,0.08)", color: C.r, fontSize: 16, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    title="Retirer cet athlète">
+                    ×
+                  </button>
+                </div>
               ))}
 
               {isCoachAthlete && (
@@ -221,5 +229,33 @@ export default function CoachDashboard() {
             )}
           </div>
     </div>
+
+    {/* Confirmation retrait athlète */}
+    {confirmRemove && (() => {
+      const a = athletes.find(x => x.id === confirmRemove);
+      return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+          onClick={() => !removing && setConfirmRemove(null)}>
+          <div style={{ background: C.s1, borderRadius: 16, padding: 24, maxWidth: 340, width: "100%", border: "1px solid " + C.brd }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 8 }}>Retirer l'athlète ?</div>
+            <div style={{ fontSize: 13, color: C.tx3, marginBottom: 20 }}>
+              <span style={{ fontWeight: 600, color: C.tx }}>{a?.full_name}</span> sera dissocié de ton compte. Il pourra se rattacher à un autre coach.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setConfirmRemove(null)} disabled={removing}
+                style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 13, fontWeight: 600, cursor: removing ? "default" : "pointer", fontFamily: "inherit" }}>
+                Annuler
+              </button>
+              <button onClick={() => handleRemoveAthlete(confirmRemove)} disabled={removing}
+                style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none", background: removing ? C.s2 : C.r, color: removing ? C.tx3 : "#fff", fontSize: 13, fontWeight: 700, cursor: removing ? "default" : "pointer", fontFamily: "inherit" }}>
+                {removing ? "Retrait…" : "Retirer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+    </>
   );
 }
