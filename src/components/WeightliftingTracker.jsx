@@ -388,12 +388,24 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
 const DarkTip=({active,payload,label})=>{if(!active||!payload?.length)return null;return(<div style={{background:C.s2,border:"1px solid "+C.brdL,borderRadius:8,padding:"8px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:4}}>{label}</div>{payload.map((p,i)=>p.value!=null&&<div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{width:8,height:8,borderRadius:2,background:p.fill||p.stroke||C.ac}}/><span style={{fontSize:10,color:C.tx2}}>{p.name}:</span><span style={{fontSize:11,fontWeight:700,color:p.fill||p.stroke||C.ac}}>{p.value}</span></div>)}</div>);};
 function MiniChart({data,color,h}){const H=h||52;const pts=data.filter(d=>d.val!=null);if(!pts.length)return null;const vals=pts.map(d=>d.val),mn=Math.min(...vals),mx=Math.max(...vals),rng=mx-mn||1;const W=280,mapped=data.map((d,i)=>({...d,x:(i/(data.length-1||1))*(W-20)+10,y:d.val!=null?H-12-((d.val-mn)/rng)*(H-24):null}));const act=mapped.filter(p=>p.y!=null),line=act.map((p,i)=>(i===0?"M":"L")+p.x+","+p.y).join(" ");const area=act.length>1?line+" L"+act[act.length-1].x+","+H+" L"+act[0].x+","+H+" Z":"";const gId="mc"+color.replace("#","")+(Math.random().toString(36).slice(2,5));return(<svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:H,display:"block"}}><defs><linearGradient id={gId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.2"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>{area&&<path d={area} fill={"url(#"+gId+")"}/>}{act.length>1&&<path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}{mapped.map((p,i)=>p.y!=null?(<g key={i}><circle cx={p.x} cy={p.y} r={3.5} fill={C.bg} stroke={color} strokeWidth="1.5"/><text x={p.x} y={p.y-8} textAnchor="middle" fill={color} fontSize="9" fontWeight="700" fontFamily="system-ui">{p.val}</text><text x={p.x} y={H-1} textAnchor="middle" fill={C.tx3} fontSize="8" fontFamily="system-ui">{p.week}</text></g>):(<text key={i} x={p.x} y={H-1} textAnchor="middle" fill={C.tx3} fontSize="8" fontFamily="system-ui">{p.week}</text>))}</svg>);}
 
-function WeightChart({log,milestones,target}){
+function WeightChart({log,milestones,target,nutritionStrategy}){
   const data=getWeightChartData(log,milestones,target);
   if(!data.length)return(<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune donnee</div>);
-  const vals=data.map(d=>d.kg);const mn=Math.min(...vals,target)-0.5,mx=Math.max(...vals,target)+0.5;
+  const vals=data.map(d=>d.kg);const dataMin=Math.min(...vals),dataMax=Math.max(...vals),dataRange=Math.max(dataMax-dataMin,1),pad=Math.max(0.5,dataRange*0.2),mid=(dataMin+dataMax)/2,inclT=target!=null&&Math.abs(target-mid)<dataRange*2+3;const mn=Math.min(dataMin,inclT?target:dataMin)-pad,mx=Math.max(dataMax,inclT?target:dataMax)+pad;
+  // Tendance par régression linéaire
+  const nPts=vals.length;let trend=null;
+  if(nPts>=3){const mX=(nPts-1)/2,mY=vals.reduce((s,v)=>s+v,0)/nPts,num=vals.reduce((s,v,i)=>s+(i-mX)*(v-mY),0),den=vals.reduce((s,_,i)=>s+(i-mX)*(i-mX),0),slope=den?num/den:0;const rate=+(slope*7).toFixed(2);
+    let tc;const strat=nutritionStrategy?.strategy;const wt=nutritionStrategy?.weekly_target_kg;
+    if(strat==="seche"){const exp=wt??-0.25;const tol=Math.max(0.05,Math.abs(exp)*0.4);tc=rate<=exp+tol&&rate<-0.05?C.g:Math.abs(rate)<0.1?C.o:C.r;}
+    else if(strat==="prise_de_masse"){const exp=wt??0.2;const tol=Math.max(0.05,Math.abs(exp)*0.4);tc=rate>=exp-tol&&rate>0.05?C.g:Math.abs(rate)<0.1?C.o:C.r;}
+    else if(strat==="maintenance"){tc=Math.abs(rate)<0.1?C.g:Math.abs(rate)<0.25?C.o:C.r;}
+    else{const isToward=target!=null?(target>mY?rate>0:rate<0):null;tc=Math.abs(rate)<0.05?C.tx3:isToward===null?C.ac:isToward?C.g:C.r;}
+    trend={rate,tc,dir:Math.abs(rate)<0.05?"→":rate>0?"↑":"↓",label:Math.abs(rate)<0.05?"Stable":(rate>0?"+":"")+rate+" kg/sem"};}
   return(<div>
-    <div style={{display:"flex",gap:12,marginBottom:8,flexWrap:"wrap"}}>{[{c:C.ac,l:"Poids"},{c:"rgba(255,200,0,0.6)",l:"Objectif"},{c:C.g,l:"Palier"}].map(({c,l})=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:2,background:c}}/><span style={{fontSize:10,color:C.tx3}}>{l}</span></div>)}</div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6}}>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>{[{c:C.ac,l:"Poids"},{c:"rgba(255,200,0,0.6)",l:"Objectif"},{c:C.g,l:"Palier"}].map(({c,l})=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:2,background:c}}/><span style={{fontSize:10,color:C.tx3}}>{l}</span></div>)}</div>
+      {trend&&<div title="Tendance estimée (régression linéaire, ~quotidien)" style={{display:"flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:20,background:trend.tc+"15",border:"1px solid "+trend.tc+"30",cursor:"default"}}><span style={{fontSize:13,color:trend.tc,lineHeight:1}}>{trend.dir}</span><span style={{fontSize:10,fontWeight:700,color:trend.tc}}>{trend.label}</span></div>}
+    </div>
     <ResponsiveContainer width="100%" height={180}><LineChart data={data} margin={{top:10,right:10,left:-20,bottom:0}}><XAxis dataKey="d" tick={{fill:C.tx3,fontSize:9}} axisLine={false} tickLine={false} interval="preserveStartEnd"/><YAxis domain={[mn,mx]} tick={{fill:C.tx3,fontSize:9}} axisLine={false} tickLine={false}/><Tooltip content={<DarkTip/>}/><ReferenceLine y={target} stroke="rgba(255,200,0,0.5)" strokeDasharray="4 2"/>{milestones?.map((m,i)=><ReferenceLine key={i} y={m.kg} stroke={C.g+"40"} strokeDasharray="3 3"/>)}<Line type="monotone" dataKey="kg" name="Poids" stroke={C.ac} strokeWidth={2.5} dot={{fill:C.bg,stroke:C.ac,r:3}} activeDot={{r:5}}/></LineChart></ResponsiveContainer>
   </div>);
 }
@@ -2032,22 +2044,34 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
     <div style={{height:4,background:C.s2,borderRadius:3,overflow:"hidden",marginBottom:16}}><div style={{height:"100%",width:weekPct+"%",background:weekPct>=100?C.g:C.ac,borderRadius:3,transition:"width 0.4s"}}/></div>
     <div style={{display:"flex",gap:4,marginBottom:18,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>{weeksArr.map(w=>{const wd=(completedSessions[w]||[]).length,total=goals.sessionsPerWeek,complete=wd>=total,isCur=w===currentWeek,isDL=w===dw,sel=w===wk;return(<button key={w} onClick={()=>setWk(w)} style={{flexShrink:0,width:42,padding:"8px 0",borderRadius:10,border:sel?"2px solid "+(isDL?C.b:complete?C.g:C.ac):"1px solid "+(complete?C.g+"30":C.brd),background:sel?(isDL?C.bS:complete?C.gS:C.acS):(complete?C.g+"08":"transparent"),cursor:"pointer",fontFamily:"inherit",textAlign:"center",position:"relative",transition:"all 0.2s"}}>{isDL&&<span style={{position:"absolute",top:-5,right:-2,fontSize:6,background:C.b,color:"#fff",padding:"1px 3px",borderRadius:3,fontWeight:700}}>DL</span>}{isCur&&!sel&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:4,height:4,borderRadius:"50%",background:C.ac}}/>}<div style={{fontSize:10,fontWeight:sel?800:600,color:sel?(isDL?C.b:complete?C.g:C.ac):(complete?C.g:C.tx3)}}>S{w}</div>{complete&&<div style={{fontSize:8,color:C.g,marginTop:1}}>✓</div>}</button>);})}</div>
     {dw>0&&wk===dw&&<div style={{padding:"10px 14px",borderRadius:10,background:C.bS,border:"1px solid "+C.b+"40",marginBottom:14,fontSize:12,color:C.b,fontWeight:600,display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16}}>~</span> Deload - Recuperation active</div>}
-    <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>{sessions.map(s=>{const done=(completedSessions[wk]||[]).includes(s.id);const sessExos=exos[s.id]||[];const hasExos=sessExos.length>0;const exosDone=sessExos.filter(ex=>{const sk=ex.id+"_"+wk;const rows=sets[sk]||[];return rows.length>0&&rows.every(r=>r.done||r.skipped);}).length;const muscles=[...new Set(sessExos.map(e=>e.target))];
-      return(<button key={s.id} onClick={()=>{if(!done&&hasExos&&!viewOnly){setSelectedSess(s);setStep(1);setOpenEx(null);}}} style={{width:"100%",padding:0,borderRadius:14,border:"1.5px solid "+(done?C.g+"40":C.brd),background:C.s1,cursor:done||!hasExos||viewOnly?"default":"pointer",fontFamily:"inherit",textAlign:"center",display:"block",opacity:hasExos?1:0.35,overflow:"hidden",position:"relative",transition:"all 0.2s",boxSizing:"border-box"}}>
+    {(()=>{const DAY_S=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];return(<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>{sessions.map(s=>{
+      const done=(completedSessions[wk]||[]).includes(s.id);
+      const sessExos=exos[s.id]||[];const hasExos=sessExos.length>0;
+      const exosDone=sessExos.filter(ex=>{const sk=ex.id+"_"+wk;const rows=sets[sk]||[];return rows.length>0&&rows.every(r=>r.done||r.skipped);}).length;
+      const muscles=[...new Set(sessExos.map(e=>e.target))];
+      const dayLabel=s.day_of_week!=null?DAY_S[s.day_of_week]:null;
+      const sLog=sessionLogs?.[s.id+"_"+wk];
+      return(<button key={s.id} onClick={()=>{if(!done&&hasExos&&!viewOnly){setSelectedSess(s);setStep(1);setOpenEx(null);}}} style={{width:"100%",padding:0,borderRadius:14,border:"1.5px solid "+(done?C.g+"40":C.brd),background:C.s1,cursor:done||!hasExos||viewOnly?"default":"pointer",fontFamily:"inherit",textAlign:"left",display:"block",opacity:hasExos?1:0.35,overflow:"hidden",position:"relative",transition:"all 0.2s",boxSizing:"border-box"}}>
         {done&&<div style={{position:"absolute",top:0,left:0,right:0,height:3,background:C.g,borderRadius:"14px 14px 0 0"}}/>}
-        <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-          <div style={{width:48,height:48,borderRadius:12,background:done?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1.5px solid "+(done?C.g+"40":C.ac+"30")}}>
+        <div style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:44,height:44,borderRadius:12,background:done?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1.5px solid "+(done?C.g+"40":C.ac+"30")}}>
             {done?<span style={{fontSize:20,color:C.g,fontWeight:700}}>✓</span>:<span style={{fontSize:13,fontWeight:800,color:C.ac,letterSpacing:"-0.3px"}}>{s.short}</span>}
           </div>
-          <div style={{width:"100%",overflow:"hidden"}}>
-            <div style={{fontSize:15,fontWeight:800,color:done?C.g:C.tx,letterSpacing:"-0.3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
-            {!done&&hasExos&&<div style={{fontSize:10,color:C.tx2,fontWeight:600,marginTop:2}}>{sessExos.length} exercices</div>}
-            {hasExos&&<div style={{display:"flex",gap:3,marginTop:6,flexWrap:"wrap",justifyContent:"center"}}>{muscles.slice(0,4).map(m=>{const mc=getMC(m);return(<span key={m} style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:mc+"18",color:mc,fontWeight:600}}>{mL(m)}</span>);})}</div>}
-            {!done&&hasExos&&exosDone>0&&<div style={{marginTop:6}}><div style={{height:3,background:C.s2,borderRadius:2,overflow:"hidden",width:"100%"}}><div style={{height:"100%",width:Math.round((exosDone/sessExos.length)*100)+"%",background:C.ac,borderRadius:2}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:2}}>{exosDone}/{sessExos.length} faits</div></div>}
+          <div style={{flex:1,overflow:"hidden",minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:800,color:done?C.g:C.tx,letterSpacing:"-0.3px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+            <div style={{fontSize:10,color:C.tx3,marginTop:1,display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+              {dayLabel&&<span style={{fontWeight:600,color:done?C.g+"90":C.tx3}}>{dayLabel}</span>}
+              {dayLabel&&<span>·</span>}
+              <span>{sessExos.length} exercice{sessExos.length>1?"s":""}</span>
+              {done&&sLog?.duration&&<><span>·</span><span>{fmtTime(sLog.duration)}</span></>}
+            </div>
+            {hasExos&&muscles.length>0&&<div style={{display:"flex",gap:3,marginTop:5,flexWrap:"wrap"}}>{muscles.slice(0,5).map(m=>{const mc=getMC(m);return(<span key={m} style={{fontSize:8,padding:"1px 6px",borderRadius:4,background:mc+"18",color:mc,fontWeight:600}}>{mL(m)}</span>);})}</div>}
+            {!done&&hasExos&&exosDone>0&&<div style={{marginTop:6,display:"flex",alignItems:"center",gap:6}}><div style={{flex:1,height:3,background:C.s2,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:Math.round((exosDone/sessExos.length)*100)+"%",background:C.ac,borderRadius:2}}/></div><span style={{fontSize:9,color:C.tx3,flexShrink:0}}>{exosDone}/{sessExos.length}</span></div>}
+            {done&&sLog?.note&&<div style={{fontSize:9,color:C.tx3,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontStyle:"italic"}}>"{sLog.note}"</div>}
           </div>
+          {done&&!viewOnly?<button onClick={e=>{e.stopPropagation();uncompleteSession(s.id,wk);}} style={{width:22,height:22,borderRadius:6,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>×</button>:(!done&&hasExos&&!viewOnly&&<span style={{fontSize:16,color:C.tx3,flexShrink:0}}>›</span>)}
         </div>
-        {done&&!viewOnly&&<div style={{position:"absolute",top:8,right:8}}><button onClick={e=>{e.stopPropagation();uncompleteSession(s.id,wk);}} style={{width:20,height:20,borderRadius:5,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button></div>}
-      </button>);})}</div>
+      </button>);})}</div>);})()}
     {(()=>{const next=sessions.find(s=>!(completedSessions[wk]||[]).includes(s.id)&&(exos[s.id]||[]).length>0);if(!next)return weekPct>=100?<div style={{padding:"14px",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:13,fontWeight:700,textAlign:"center"}}>Semaine {wk} complete !</div>:null;if(viewOnly)return null;return(<button onClick={()=>{setSelectedSess(next);setStep(1);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",letterSpacing:"-0.3px"}}>Commencer {next.short} - {next.name} ›</button>);})()}
     {!viewOnly&&freeSessions.filter(f=>f.date===new Date().toISOString().slice(0,10)).map(f=>(<button key={f.id} onClick={()=>{setSelectedFree(f);setStep(2);}} style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid "+(f.completed?C.g+"40":C.brdL),background:C.s1,cursor:"pointer",fontFamily:"inherit",textAlign:"left",marginTop:6,display:"flex",alignItems:"center",gap:10}}><div style={{width:38,height:38,borderRadius:10,background:f.completed?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📝</div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:f.completed?C.g:C.tx}}>{f.name}</div><div style={{fontSize:10,color:C.tx3}}>{f.exercises.length} exo{f.completed?" · Terminée":""}</div></div>{f.completed&&<span style={{color:C.g,fontSize:14}}>✓</span>}</button>))}
     {!viewOnly&&<button onClick={()=>{const id="free_"+Date.now();const fs={id,name:"Séance libre",date:new Date().toISOString().slice(0,10),completed:false,duration:null,note:"",exercises:[]};setFreeSessions(prev=>[...prev,fs]);setSelectedFree(fs);setStep(2);}} style={{width:"100%",padding:"12px 0",borderRadius:12,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>+ Séance libre</button>}
@@ -2364,83 +2388,343 @@ function AIChatBar({exos,sessions,chatHistory,setChatHistory,onApply,onOpenChang
   </>);
 }
 
-function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C}){
+function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={}}){
   const[selectDay,setSelectDay]=useState(null);
   const[customLabel,setCustomLabel]=useState('');
+  const[weekOffset,setWeekOffset]=useState(0);
+  const[filters,setFilters]=useState({sessions:true,wellness:true,nutrition:true,activities:true});
+  const[detailType,setDetailType]=useState(null);
+  const[activityModal,setActivityModal]=useState(null);// {dayIdx} | null
+  const[activityForm,setActivityForm]=useState({label:'',emoji:'🏅',duration:30,intensity:3,notes:''});
   const DAYS=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+  const DAYS_FULL=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+  const MONTHS=["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
   const ACTIVITIES=[{label:'Course',emoji:'🏃'},{label:'Five',emoji:'⚽'},{label:'Vélo',emoji:'🚴'},{label:'Natation',emoji:'🏊'},{label:'Tennis',emoji:'🎾'},{label:'Boxe',emoji:'🥊'},{label:'Yoga',emoji:'🧘'},{label:'Basket',emoji:'🏀'},{label:'Ski',emoji:'🎿'},{label:'Golf',emoji:'⛳'}];
+  const EMOJI_OPTS=['🏃','🚴','🏊','⚽','🎾','🥊','🧘','🏀','🎿','⛳','🏋','🤸','🧗','🏄','⛷','🏇','🤺','🏓','🥋','🤾','🎯','🛹','🏂','🤽','🚣','🎸','📚','🎨','🛼','🧩','🎭','🥾'];
   const today=new Date();
   const dow=today.getDay();
-  const monday=new Date(today);
-  monday.setDate(today.getDate()-(dow===0?6:dow-1));
+  const baseMonday=new Date(today);
+  baseMonday.setDate(today.getDate()-(dow===0?6:dow-1));
+  const monday=new Date(baseMonday);
+  monday.setDate(baseMonday.getDate()+weekOffset*7);
+  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
   const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(monday);d.setDate(monday.getDate()+i);return d;});
   const todStr=todayKey();
   const doneSet=new Set(completedSessions[currentWeek]||[]);
   const wk=weekSchedule||{};
   const extras=wk.extras||{};
   const dayExtras=idx=>extras[idx]||[];
-  // Sessions come from coach-assigned day_of_week on each session
   const sessionsForDay=dayIdx=>(sessions||[]).filter(s=>s.day_of_week===dayIdx);
-  const addExtra=(dayIdx,label,emoji)=>{const cur=dayExtras(dayIdx);setWeekSchedule({...wk,extras:{...extras,[dayIdx]:[...cur,{id:String(Date.now()),label,emoji}]}});};
+  const savedActivities=wk.savedActivities||[];
+  const allActivities=[...ACTIVITIES,...savedActivities.filter(s=>!ACTIVITIES.find(a=>a.label===s.label))];
+  const INT_LABELS=['Récup','Très facile','Facile','Modéré','Modéré+','Soutenu','Dur','Très dur','Maximal','Limite'];
+  const INT_COLORS=['#4ADE80','#6FCF97','#86EFAC',C.o,'#F59E0B','#F97316','#EF4444','#DC2626','#B91C1C','#7F1D1D'];
+  const chargeScore=(dur,int)=>Math.round((dur||0)*(int||1)/10);
+  const openActivityModal=(dayIdx,label,emoji)=>{setActivityForm({label,emoji:emoji||'🏅',duration:30,intensity:7,notes:''});setActivityModal({dayIdx});};
+  const confirmActivity=()=>{
+    if(!activityModal)return;
+    const{dayIdx}=activityModal;
+    const{label,emoji,duration,intensity,notes}=activityForm;
+    if(!label.trim())return;
+    const cur=dayExtras(dayIdx);
+    const newExtra={id:String(Date.now()),label:label.trim(),emoji,duration,intensity,notes:notes.trim()||undefined};
+    const isDefault=ACTIVITIES.find(a=>a.label===label.trim());
+    const newSaved=isDefault?savedActivities:[...savedActivities.filter(a=>a.label!==label.trim()),{label:label.trim(),emoji}];
+    setWeekSchedule({...wk,extras:{...extras,[dayIdx]:[...cur,newExtra]},savedActivities:newSaved});
+    setActivityModal(null);
+  };
   const removeExtra=(dayIdx,id)=>{const cur=dayExtras(dayIdx).filter(e=>e.id!==id);setWeekSchedule({...wk,extras:{...extras,[dayIdx]:cur.length?cur:undefined}});};
-  return(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Semaine du {monday.getDate()}/{monday.getMonth()+1}</div>
-      <div style={{display:"flex",gap:10,alignItems:"center"}}>
-        <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.b}}/><span style={{fontSize:9,color:C.tx3}}>À faire</span></div>
-        <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.g}}/><span style={{fontSize:9,color:C.tx3}}>Fait</span></div>
-        <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.r}}/><span style={{fontSize:9,color:C.tx3}}>Manqué</span></div>
-        <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.y}}/><span style={{fontSize:9,color:C.tx3}}>Autre</span></div>
+  const removeCustomActivity=(label)=>{const newSaved=savedActivities.filter(a=>a.label!==label);setWeekSchedule({...wk,savedActivities:newSaved});};
+  const dKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
+  const isoKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const getWell=d=>wellnessHistory[dKey(d)]||null;
+  const getNutr=d=>nutritionLog[isoKey(d)]||nutritionLog[dKey(d)]||null;
+  const wScore=w=>w?Math.round(((w.fatigue||3)+(w.sommeil||3)+(w.stress||3)+(w.energie||3)+(w.doms||3))/25*100):null;
+  const wColor=s=>s>=80?C.g:s>=65?"#6FCF97":s>=50?C.o:s>=35?"#E8956D":C.r;
+  const toggleFilter=k=>{setFilters(p=>({...p,[k]:!p[k]}));};
+  const isThisWeek=weekOffset===0;
+  const sameMonth=monday.getMonth()===sunday.getMonth();
+  const weekLabel=isThisWeek?"Cette semaine":sameMonth?(monday.getDate()+" – "+sunday.getDate()+" "+MONTHS[monday.getMonth()]):(monday.getDate()+" "+MONTHS[monday.getMonth()]+" – "+sunday.getDate()+" "+MONTHS[sunday.getMonth()]);
+  // Stats résumé de la semaine
+  const weekSessions=weekDays.flatMap((_,i)=>sessionsForDay(i));
+  const weekDone=weekSessions.filter(s=>doneSet.has(s.id)).length;
+  const weekWellDays=weekDays.filter(d=>getWell(d)!==null).length;
+  const weekAvgWell=(()=>{const sc=weekDays.map(d=>{const w=getWell(d);return w?wScore(w):null}).filter(v=>v!==null);return sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null;})();
+  const selData=selectDay!==null?{date:weekDays[selectDay],well:getWell(weekDays[selectDay]),nutr:getNutr(weekDays[selectDay]),sessList:sessionsForDay(selectDay),exs:dayExtras(selectDay)}:null;
+
+  return(<div style={{background:C.s1,borderRadius:18,border:"1px solid "+C.brd,overflow:"hidden",marginBottom:14}}>
+    {/* Header */}
+    <div style={{padding:"14px 16px 12px",borderBottom:"1px solid "+C.brd+"80"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        {/* Nav semaine */}
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>{setWeekOffset(p=>p-1);setSelectDay(null);setDetailType(null);}} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,fontSize:15,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.15s"}}>‹</button>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:isThisWeek?C.ac:C.tx,letterSpacing:"-0.2px"}}>{weekLabel}</div>
+            {isThisWeek&&<div style={{fontSize:9,color:C.tx3,marginTop:1}}>Semaine en cours</div>}
+          </div>
+          <button onClick={()=>{if(weekOffset<0){setWeekOffset(p=>p+1);setSelectDay(null);setDetailType(null);}}} style={{width:28,height:28,borderRadius:8,border:"1px solid "+(weekOffset<0?C.brdL:C.brd+"40"),background:weekOffset<0?C.s2:"transparent",color:weekOffset<0?C.tx2:C.tx3+"30",fontSize:15,cursor:weekOffset<0?"pointer":"default",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+        </div>
+        {/* KPIs semaine */}
+        <div style={{display:"flex",gap:8}}>
+          {weekSessions.length>0&&<div style={{textAlign:"center",padding:"4px 10px",borderRadius:8,background:C.s2}}>
+            <div style={{fontSize:13,fontWeight:800,color:weekDone===weekSessions.length?C.g:C.tx}}>{weekDone}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/{weekSessions.length}</span></div>
+            <div style={{fontSize:8,color:C.tx3,marginTop:1}}>séances</div>
+          </div>}
+          {weekAvgWell!==null&&<div style={{textAlign:"center",padding:"4px 10px",borderRadius:8,background:wColor(weekAvgWell)+"15"}}>
+            <div style={{fontSize:13,fontWeight:800,color:wColor(weekAvgWell)}}>{weekAvgWell}</div>
+            <div style={{fontSize:8,color:C.tx3,marginTop:1}}>forme moy.</div>
+          </div>}
+          {weekWellDays>0&&weekAvgWell===null&&<div style={{textAlign:"center",padding:"4px 10px",borderRadius:8,background:C.s2}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.g}}>{weekWellDays}</div>
+            <div style={{fontSize:8,color:C.tx3,marginTop:1}}>wellness</div>
+          </div>}
+        </div>
+      </div>
+      {/* Filtres */}
+      <div style={{display:"flex",gap:4}}>
+        {[{k:"sessions",l:"Séances",e:"🏋",c:C.b},{k:"wellness",l:"Forme",e:"💚",c:C.g},{k:"nutrition",l:"Nutrition",e:"🍽",c:C.o},{k:"activities",l:"Activités",e:"⚡",c:C.y}].map(f=>(
+          <button key={f.k} onClick={()=>toggleFilter(f.k)} style={{display:"flex",alignItems:"center",gap:3,padding:"4px 8px",borderRadius:20,border:"1px solid "+(filters[f.k]?f.c+"50":C.brd+"60"),background:filters[f.k]?f.c+"12":"transparent",color:filters[f.k]?f.c:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>
+            <span style={{fontSize:9}}>{f.e}</span>{f.l}
+          </button>
+        ))}
       </div>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:selectDay!==null?10:0}}>
+
+    {/* Grille jours */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:0}}>
       {weekDays.map((date,i)=>{
-        const dateStr=String(date.getFullYear())+String(date.getMonth()+1).padStart(2,"0")+String(date.getDate()).padStart(2,"0");
-        const isToday=dateStr===todStr;
+        const isToday=dKey(date)===todStr;
         const isPast=date<new Date(new Date().setHours(0,0,0,0))&&!isToday;
-        const sessList=sessionsForDay(i);
-        const exs=dayExtras(i);
+        const isFuture=!isPast&&!isToday;
+        const sessList=filters.sessions?sessionsForDay(i):[];
+        const exs=filters.activities?dayExtras(i):[];
         const isSel=selectDay===i;
-        const hasDone=sessList.some(s=>doneSet.has(s.id));
-        const hasMissed=isPast&&sessList.some(s=>!doneSet.has(s.id));
         const allDone=sessList.length>0&&sessList.every(s=>doneSet.has(s.id));
-        const borderC=isSel?C.ac:allDone?C.g+"60":hasMissed?C.r+"60":sessList.length>0?C.b+"50":exs.length>0?C.y+"60":isToday?C.ac+"40":C.brd;
-        const bgC=allDone?C.g+"10":hasMissed&&!hasDone?C.r+"08":sessList.length>0&&!isPast?C.bS:isToday&&!sessList.length?C.acS:isSel?"rgba(123,111,255,0.08)":exs.length>0&&!sessList.length?C.yS:C.s2;
-        return(<div key={i} onClick={()=>setSelectDay(isSel?null:i)} style={{borderRadius:10,padding:"7px 3px",textAlign:"center",cursor:"pointer",border:"1.5px solid "+borderC,background:bgC,transition:"all 0.15s"}}>
-          <div style={{fontSize:9,fontWeight:isToday?700:400,color:isToday?C.ac:C.tx3,marginBottom:2}}>{DAYS[i]}</div>
-          <div style={{fontSize:12,fontWeight:isToday?800:500,color:isToday?C.ac:isPast?C.tx3:C.tx,marginBottom:(sessList.length||exs.length)?3:5}}>{date.getDate()}</div>
-          {sessList.length>0&&<div style={{display:"flex",flexDirection:"column",gap:1}}>
-            {sessList.map(s=>{
-              const done=doneSet.has(s.id);
-              const missed=isPast&&!done;
-              const dotC=done?C.g:missed?C.r:C.b;
-              return(<div key={s.id} style={{fontSize:7,fontWeight:700,padding:"1px 2px",borderRadius:3,background:dotC+"25",color:dotC,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{done?"✓":missed?"✗":""}{s.short}</div>);
-            })}
+        const anyDone=sessList.some(s=>doneSet.has(s.id));
+        const hasMissed=isPast&&sessList.some(s=>!doneSet.has(s.id));
+        const well=filters.wellness?getWell(date):null;
+        const ws=well?wScore(well):null;
+        const nutr=filters.nutrition?getNutr(date):null;
+        // Couleur de fond
+        const bgTop=allDone?C.g+"12":hasMissed&&!anyDone?C.r+"08":isToday?C.ac+"10":isSel?C.ac+"08":"transparent";
+        const accentLeft=allDone?C.g:hasMissed&&!anyDone?C.r:sessList.length>0&&isFuture?C.b:isToday?C.ac:isSel?C.ac+"80":"transparent";
+        return(<div key={i} onClick={()=>{setSelectDay(isSel?null:i);setDetailType(null);}}
+          style={{position:"relative",padding:"10px 4px 8px",textAlign:"center",cursor:"pointer",background:bgTop,borderRight:i<6?"1px solid "+C.brd+"40":"none",borderBottom:isSel?"2px solid "+C.ac:"2px solid transparent",transition:"all 0.15s",minHeight:80}}>
+          {/* Accent ligne gauche pour aujourd'hui */}
+          {isToday&&<div style={{position:"absolute",top:6,left:0,width:2,height:"calc(100% - 12px)",borderRadius:2,background:C.ac}}/>}
+          {/* Jour label */}
+          <div style={{fontSize:8,fontWeight:isToday?700:500,color:isToday?C.ac:C.tx3,marginBottom:3,letterSpacing:"0.3px",textTransform:"uppercase"}}>{DAYS[i]}</div>
+          {/* Numéro */}
+          <div style={{fontSize:isToday?16:14,fontWeight:isToday?800:500,color:isToday?C.ac:isPast?C.tx3:C.tx,marginBottom:4,lineHeight:1}}>{date.getDate()}</div>
+          {/* Sessions */}
+          {sessList.length>0&&<div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:3,padding:"0 2px"}}>
+            {sessList.map(s=>{const done=doneSet.has(s.id);const missed=isPast&&!done;const dc=done?C.g:missed?C.r:C.b;return(<div key={s.id} style={{fontSize:7,fontWeight:700,padding:"2px 3px",borderRadius:4,background:dc+"20",color:dc,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",justifyContent:"center",gap:1}}><span>{done?"✓":missed?"✗":"·"}</span><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{s.short||s.name.slice(0,3)}</span></div>);})}
           </div>}
-          {exs.length>0&&<div style={{display:"flex",flexDirection:"column",gap:1,marginTop:sessList.length?1:0}}>{exs.map(e=>(<div key={e.id} style={{fontSize:8,lineHeight:1.3}}>{e.emoji}</div>))}</div>}
-          {sessList.length===0&&exs.length===0&&<div style={{width:5,height:5,borderRadius:"50%",background:C.s1,margin:"0 auto"}}/>}
+          {/* Wellness dot */}
+          {ws!==null&&<div title={"Forme "+ws+"/100"} style={{width:18,height:18,borderRadius:"50%",background:wColor(ws),margin:"2px auto",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px "+wColor(ws)+"50"}}><span style={{fontSize:7,fontWeight:800,color:"#fff",lineHeight:1}}>{ws}</span></div>}
+          {/* Icônes bottom */}
+          <div style={{display:"flex",justifyContent:"center",gap:2,marginTop:2,flexWrap:"wrap"}}>
+            {nutr&&<span style={{fontSize:9}} title="Nutrition">🍽</span>}
+            {exs.slice(0,2).map(e=>(<span key={e.id} style={{fontSize:9}}>{e.emoji}</span>))}
+          </div>
+          {/* Jour vide */}
+          {sessList.length===0&&exs.length===0&&ws===null&&!nutr&&<div style={{width:3,height:3,borderRadius:"50%",background:C.brd,margin:"4px auto 0"}}/>}
         </div>);
       })}
     </div>
-    {selectDay!==null&&(<div style={{padding:"10px 12px",borderRadius:12,background:C.s2,border:"1px solid "+C.brdL}}>
-      <div style={{fontSize:10,fontWeight:600,color:C.tx3,marginBottom:8}}>{DAYS[selectDay]}</div>
-      {sessionsForDay(selectDay).length>0&&(
-        <div style={{marginBottom:10,display:"flex",flexWrap:"wrap",gap:5}}>
-          {sessionsForDay(selectDay).map(s=>{const done=doneSet.has(s.id);const selDayDate=weekDays[selectDay];const isPastDay=selDayDate<new Date(new Date().setHours(0,0,0,0));const missed=isPastDay&&!done;const dotC=done?C.g:missed?C.r:C.b;return(<span key={s.id} style={{fontSize:10,padding:"3px 9px",borderRadius:6,background:dotC+"18",border:"1px solid "+dotC+"40",color:dotC,fontWeight:600}}>{done?"✓ ":missed?"✗ ":""}{s.name}</span>);})}
+
+    {/* Panel détail jour */}
+    {selectDay!==null&&selData&&(<div style={{borderTop:"1px solid "+C.brd+"80",background:C.s2}}>
+      {/* Header du jour */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px 8px"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:C.tx}}>{DAYS_FULL[selectDay]}</div>
+          <div style={{fontSize:10,color:C.tx3}}>{selData.date.getDate()} {MONTHS[selData.date.getMonth()]} {selData.date.getFullYear()}</div>
+        </div>
+        {/* Tabs détail */}
+        <div style={{display:"flex",gap:4}}>
+          {selData.well&&<button onClick={()=>setDetailType(detailType==="wellness"?null:"wellness")} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+(detailType==="wellness"?C.g:C.brd),background:detailType==="wellness"?C.g+"20":"transparent",color:detailType==="wellness"?C.g:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>💚 Forme</button>}
+          {selData.sessList.length>0&&<button onClick={()=>setDetailType(detailType==="session"?null:"session")} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+(detailType==="session"?C.b:C.brd),background:detailType==="session"?C.b+"20":"transparent",color:detailType==="session"?C.b:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>🏋 Séance</button>}
+          {selData.nutr&&<button onClick={()=>setDetailType(detailType==="nutrition"?null:"nutrition")} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+(detailType==="nutrition"?C.o:C.brd),background:detailType==="nutrition"?C.o+"20":"transparent",color:detailType==="nutrition"?C.o:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>🍽 Alim.</button>}
+        </div>
+      </div>
+      {/* Vue résumé (sans onglet actif) */}
+      {!detailType&&(<div style={{padding:"0 14px 10px",display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        {selData.well&&(()=>{const ws2=wScore(selData.well);const wc=wColor(ws2);return(<div onClick={()=>setDetailType("wellness")} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:wc+"15",border:"1px solid "+wc+"30",cursor:"pointer"}}>
+          <div style={{width:24,height:24,borderRadius:"50%",background:wc,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px "+wc+"60"}}><span style={{fontSize:9,fontWeight:800,color:"#fff"}}>{ws2}</span></div>
+          <div><div style={{fontSize:11,fontWeight:700,color:wc}}>{ws2>=80?"Optimal":ws2>=65?"Bon":ws2>=50?"Modéré":ws2>=35?"Fatigué":"Surmenage"}</div><div style={{fontSize:9,color:C.tx3}}>forme</div></div>
+        </div>);})()}
+        {selData.sessList.map(s=>{const done=doneSet.has(s.id);const isPD=selData.date<new Date(new Date().setHours(0,0,0,0));const missed=isPD&&!done;const dc=done?C.g:missed?C.r:C.b;const log=sessionLogs[s.id+"_"+currentWeek];return(<div key={s.id} onClick={()=>setDetailType("session")} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:dc+"12",border:"1px solid "+dc+"30",cursor:"pointer"}}>
+          <span style={{fontSize:14}}>{done?"✅":missed?"❌":"🏋"}</span>
+          <div><div style={{fontSize:11,fontWeight:700,color:dc}}>{s.name}</div>{log?.duration&&<div style={{fontSize:9,color:C.tx3}}>{fmtTime(log.duration)}</div>}</div>
+        </div>);})}
+        {selData.nutr&&<div onClick={()=>setDetailType("nutrition")} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:C.o+"12",border:"1px solid "+C.o+"30",cursor:"pointer"}}>
+          <span style={{fontSize:14}}>🍽</span>
+          <div><div style={{fontSize:11,fontWeight:700,color:C.o}}>{selData.nutr.total_calories_consumed!=null?selData.nutr.total_calories_consumed+" kcal":"Nutrition"}</div><div style={{fontSize:9,color:C.tx3}}>consommées</div></div>
+        </div>}
+        {selData.exs.length>0&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",borderRadius:10,background:C.y+"12",border:"1px solid "+C.y+"30"}}>
+          <span style={{fontSize:12}}>{selData.exs.map(e=>e.emoji).join(" ")}</span>
+          <div style={{fontSize:10,fontWeight:600,color:C.y}}>{selData.exs.map(e=>e.label).join(", ")}</div>
+        </div>}
+        {!selData.well&&!selData.sessList.length&&!selData.nutr&&!selData.exs.length&&<span style={{fontSize:11,color:C.tx3}}>Aucune donnée pour ce jour</span>}
+      </div>)}
+      {/* Détail Wellness */}
+      {detailType==="wellness"&&selData.well&&(()=>{const w=selData.well;const ws2=wScore(w);const wc=wColor(w);return(<div style={{padding:"0 14px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <div style={{width:44,height:44,borderRadius:"50%",background:wc,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px "+wc+"50"}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{ws2}</span></div>
+          <div><div style={{fontSize:14,fontWeight:700,color:wc}}>{ws2>=80?"Optimal":ws2>=65?"Bon":ws2>=50?"Modéré":ws2>=35?"Fatigué":"Surmenage"}</div><div style={{fontSize:10,color:C.tx3}}>Score de forme global</div></div>
+          {w.weight&&<div style={{marginLeft:"auto",textAlign:"right",padding:"6px 10px",borderRadius:8,background:C.s1}}><div style={{fontSize:15,fontWeight:800,color:C.tx}}>{w.weight}<span style={{fontSize:9,color:C.tx3}}> kg</span></div><div style={{fontSize:9,color:C.tx3}}>Poids</div></div>}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:8}}>
+          {[{l:"Récup.",v:w.fatigue,e:"😴"},{l:"Sommeil",v:w.sommeil,e:"💤"},{l:"Stress",v:w.stress,e:"🧠"},{l:"Énergie",v:w.energie,e:"⚡"},{l:"DOMS",v:w.doms,e:"💪"}].map(item=>{const iv=item.v||0;const ic=iv>=4?C.g:iv>=3?C.o:C.r;return(
+            <div key={item.l} style={{background:C.s1,borderRadius:10,padding:"8px 4px",textAlign:"center",border:"1px solid "+ic+"20"}}>
+              <div style={{fontSize:13,marginBottom:2}}>{item.e}</div>
+              <div style={{fontSize:15,fontWeight:800,color:ic}}>{item.v||"—"}<span style={{fontSize:8,color:C.tx3}}>/5</span></div>
+              <div style={{fontSize:8,color:C.tx3,marginTop:1}}>{item.l}</div>
+            </div>);})}</div>
+        {w.sleepDuration!=null&&<div style={{padding:"7px 12px",borderRadius:10,background:C.s1,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><span style={{fontSize:10,color:C.tx3}}>🕐 Durée sommeil</span><span style={{fontSize:13,fontWeight:700,color:C.tx}}>{typeof w.sleepDuration==="number"?w.sleepDuration.toFixed(1):w.sleepDuration}h</span></div>}
+        {w.domsZones?.length>0&&<div style={{padding:"7px 12px",borderRadius:10,background:C.s1,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:4}}><span style={{fontSize:10,color:C.tx3}}>Zones DOMS :</span>{w.domsZones.map(z=><span key={z} style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.o+"20",color:C.o}}>{z}</span>)}</div>}
+        {w.injComment&&<div style={{padding:"7px 12px",borderRadius:10,background:C.r+"10",border:"1px solid "+C.r+"30",fontSize:10,color:C.r}}>⚠ {w.injComment}</div>}
+      </div>);})()}
+      {/* Détail Séance */}
+      {detailType==="session"&&selData.sessList.length>0&&(
+        <div style={{padding:"0 14px 12px"}}>
+          {selData.sessList.map(s=>{
+            const done=doneSet.has(s.id);const isPD=selData.date<new Date(new Date().setHours(0,0,0,0));const missed=isPD&&!done;const dc=done?C.g:missed?C.r:C.b;
+            const log=sessionLogs[s.id+"_"+currentWeek];
+            return(<div key={s.id} style={{marginBottom:6,padding:"10px 12px",borderRadius:10,background:C.s1,border:"1px solid "+dc+"25"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:log?.note?6:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:16}}>{done?"✅":missed?"❌":"🏋"}</span>
+                  <span style={{fontSize:12,fontWeight:700,color:dc}}>{s.name}</span>
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  {log?.forme&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:(log.forme>=4?C.g:log.forme>=3?C.o:C.r)+"20",color:log.forme>=4?C.g:log.forme>=3?C.o:C.r,fontWeight:600}}>Forme {log.forme}/5</span>}
+                  {log?.duration&&<span style={{fontSize:10,color:C.tx3}}>{fmtTime(log.duration)}</span>}
+                </div>
+              </div>
+              {log?.note&&<div style={{fontSize:11,color:C.tx2,lineHeight:1.55,fontStyle:"italic",padding:"6px 8px",borderRadius:6,background:C.s2}}>"{log.note}"</div>}
+              {!log&&done&&<div style={{fontSize:10,color:C.tx3}}>Séance validée sans note</div>}
+            </div>);
+          })}
         </div>
       )}
-      <div style={{borderTop:sessionsForDay(selectDay).length>0?"1px solid "+C.brd:"none",paddingTop:sessionsForDay(selectDay).length>0?8:0}}>
-        <div style={{fontSize:10,fontWeight:600,color:C.y,marginBottom:7}}>+ Activité libre</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:6}}>
-          {ACTIVITIES.map(a=>(<button key={a.label} onClick={()=>addExtra(selectDay,a.label,a.emoji)} style={{padding:"4px 9px",borderRadius:7,border:"1px solid "+C.y+"60",background:C.yS,color:C.y,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>{a.emoji} {a.label}</button>))}
-        </div>
-        <div style={{display:"flex",gap:6}}>
-          <input value={customLabel} onChange={e=>setCustomLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&customLabel.trim()){addExtra(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} placeholder="Autre activité..." style={{flex:1,padding:"5px 10px",borderRadius:7,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:11,fontFamily:"inherit",outline:"none"}}/>
-          <button onClick={()=>{if(customLabel.trim()){addExtra(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} style={{padding:"5px 12px",borderRadius:7,border:"none",background:C.y,color:"#000",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+</button>
-        </div>
-        {dayExtras(selectDay).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
-          {dayExtras(selectDay).map(e=>(<span key={e.id} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:20,background:C.y+"20",border:"1px solid "+C.y+"50",color:C.y,fontSize:10,fontWeight:600}}>{e.emoji} {e.label}<span onClick={ev=>{ev.stopPropagation();removeExtra(selectDay,e.id);}} style={{cursor:"pointer",fontSize:12,lineHeight:1,marginLeft:2}}>×</span></span>))}
+      {/* Détail Nutrition */}
+      {detailType==="nutrition"&&selData.nutr&&(()=>{const n=selData.nutr;return(<div style={{padding:"0 14px 12px"}}>
+        {n.total_calories_consumed!=null&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:10,background:C.o+"12",border:"1px solid "+C.o+"25",marginBottom:8}}><span style={{fontSize:10,color:C.tx3}}>Total consommé</span><span style={{fontSize:16,fontWeight:800,color:C.o}}>{n.total_calories_consumed}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> kcal</span></span></div>}
+        {(n.glucides_consumed!=null||n.lipides_consumed!=null||n.proteines_consumed!=null)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+          {[{l:"Glucides",v:n.glucides_consumed,c:C.b,e:"🍞"},{l:"Lipides",v:n.lipides_consumed,c:C.o,e:"🥑"},{l:"Protéines",v:n.proteines_consumed,c:C.g,e:"🥩"}].map(m=>(
+            <div key={m.l} style={{background:C.s1,borderRadius:10,padding:"10px 6px",textAlign:"center",border:"1px solid "+m.c+"20"}}>
+              <div style={{fontSize:12,marginBottom:3}}>{m.e}</div>
+              <div style={{fontSize:15,fontWeight:800,color:m.c}}>{m.v!=null?m.v:"-"}<span style={{fontSize:9,color:C.tx3}}>g</span></div>
+              <div style={{fontSize:9,color:C.tx3,marginTop:2}}>{m.l}</div>
+            </div>
+          ))}
         </div>}
+      </div>);})()}
+      {/* Activités libres + ajout */}
+      <div style={{borderTop:"1px solid "+C.brd+"60",padding:"10px 14px 12px"}}>
+        <div style={{fontSize:9,fontWeight:700,color:C.y,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>+ Activité libre</div>
+        {/* Activités enregistrées (défaut + custom) */}
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8}}>
+          {allActivities.map(a=>{const isCustom=!ACTIVITIES.find(d=>d.label===a.label);return(
+            <div key={a.label} style={{display:"flex",alignItems:"center",gap:0}}>
+              <button onClick={()=>openActivityModal(selectDay,a.label,a.emoji)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:isCustom?"20px 0 0 20px":20,border:"1px solid "+C.y+"50",borderRight:isCustom?"none":"1px solid "+C.y+"50",background:C.y+"10",color:C.y,fontSize:9,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}><span>{a.emoji}</span>{a.label}</button>
+              {isCustom&&<button onClick={ev=>{ev.stopPropagation();removeCustomActivity(a.label);}} title="Supprimer de la liste" style={{padding:"4px 6px",borderRadius:"0 20px 20px 0",border:"1px solid "+C.y+"50",background:C.y+"10",color:C.y+"80",fontSize:9,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}>×</button>}
+            </div>
+          );})}
+        </div>
+        {/* Saisie activité custom */}
+        <div style={{display:"flex",gap:4}}>
+          <input value={customLabel} onChange={e=>setCustomLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&customLabel.trim()){openActivityModal(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} placeholder="Autre activité..." style={{flex:1,padding:"6px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:10,fontFamily:"inherit",outline:"none"}}/>
+          <button onClick={()=>{if(customLabel.trim()){openActivityModal(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} style={{padding:"6px 12px",borderRadius:8,border:"none",background:C.y,color:"#000",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+</button>
+        </div>
+        {/* Activités du jour */}
+        {dayExtras(selectDay).length>0&&<div style={{display:"flex",flexDirection:"column",gap:5,marginTop:8}}>
+          {dayExtras(selectDay).map(e=>{const charge=chargeScore(e.duration,e.intensity);const ic=e.intensity?INT_COLORS[e.intensity-1]:C.y;return(
+            <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:9,background:C.y+"0C",border:"1px solid "+C.y+"30"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:16}}>{e.emoji}</span>
+                <div>
+                  <div style={{fontSize:11,fontWeight:600,color:C.y}}>{e.label}</div>
+                  <div style={{display:"flex",gap:6,alignItems:"center",marginTop:1}}>
+                    {e.duration&&<span style={{fontSize:9,color:C.tx3}}>⏱ {e.duration} min</span>}
+                    {e.intensity&&<span style={{fontSize:9,fontWeight:600,color:ic}}>RPE {e.intensity}/10</span>}
+                    {charge>0&&<span style={{fontSize:9,padding:"0px 5px",borderRadius:4,background:C.ac+"18",color:C.ac,fontWeight:700}}>+{charge} pts</span>}
+                  </div>
+                  {e.notes&&<div style={{fontSize:9,color:C.tx3,marginTop:1,fontStyle:"italic"}}>"{e.notes}"</div>}
+                </div>
+              </div>
+              <button onClick={ev=>{ev.stopPropagation();removeExtra(selectDay,e.id);}} style={{background:"none",border:"none",color:C.tx3,fontSize:16,cursor:"pointer",padding:4,lineHeight:1}}>×</button>
+            </div>
+          );})}
+        </div>}
+      </div>
+    </div>)}
+
+    {/* Modal ajout activité */}
+    {activityModal!==null&&(<div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setActivityModal(null)}>
+      <div style={{width:"100%",maxWidth:500,background:C.s1,borderRadius:"20px 20px 0 0",padding:"20px 20px 32px",overflowY:"auto",maxHeight:"90vh"}} onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.tx}}>Détails de l'activité</div>
+          <button onClick={()=>setActivityModal(null)} style={{background:"none",border:"none",color:C.tx3,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        {/* Emoji + Nom */}
+        <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:14}}>
+          <div>
+            <div style={{fontSize:9,color:C.tx3,marginBottom:5,textTransform:"uppercase",fontWeight:600,letterSpacing:"0.4px"}}>Logo</div>
+            <div style={{width:46,height:46,borderRadius:12,background:C.s2,border:"2px solid "+C.ac+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>{activityForm.emoji}</div>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:9,color:C.tx3,marginBottom:5,textTransform:"uppercase",fontWeight:600,letterSpacing:"0.4px"}}>Activité</div>
+            <input value={activityForm.label} onChange={e=>setActivityForm(p=>({...p,label:e.target.value}))} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+        </div>
+        {/* Emoji picker */}
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:9,color:C.tx3,marginBottom:6,textTransform:"uppercase",fontWeight:600,letterSpacing:"0.4px"}}>Choisir un logo</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+            {EMOJI_OPTS.map(em=>(<button key={em} onClick={()=>setActivityForm(p=>({...p,emoji:em}))} style={{width:34,height:34,borderRadius:8,border:"2px solid "+(activityForm.emoji===em?C.ac:C.brdL),background:activityForm.emoji===em?C.acS:"transparent",fontSize:17,cursor:"pointer",transition:"all 0.1s"}}>{em}</button>))}
+          </div>
+        </div>
+        {/* Durée */}
+        <div style={{marginBottom:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",fontWeight:600,letterSpacing:"0.4px"}}>Durée</div>
+            <div style={{fontSize:14,fontWeight:800,color:C.tx}}>{activityForm.duration}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> min</span></div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <button onClick={()=>setActivityForm(p=>({...p,duration:Math.max(5,p.duration-5)}))} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,cursor:"pointer",fontFamily:"inherit",fontSize:16,flexShrink:0}}>−</button>
+            <div style={{flex:1,height:5,background:C.s2,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(Math.min(activityForm.duration,180)/180*100)+"%",background:C.ac,borderRadius:3,transition:"width 0.15s"}}/></div>
+            <button onClick={()=>setActivityForm(p=>({...p,duration:Math.min(300,p.duration+5)}))} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,cursor:"pointer",fontFamily:"inherit",fontSize:16,flexShrink:0}}>+</button>
+          </div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {[15,30,45,60,90,120].map(d=>(<button key={d} onClick={()=>setActivityForm(p=>({...p,duration:d}))} style={{padding:"4px 9px",borderRadius:7,border:"1px solid "+(activityForm.duration===d?C.ac:C.brdL),background:activityForm.duration===d?C.acS:"transparent",color:activityForm.duration===d?C.ac:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{d}min</button>))}
+          </div>
+        </div>
+        {/* Intensité */}
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",fontWeight:600,letterSpacing:"0.4px",marginBottom:6}}>Intensité</div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+            {INT_LABELS.map((l,i)=>{const ic=INT_COLORS[i];const active=activityForm.intensity===i+1;return(<button key={i} onClick={()=>setActivityForm(p=>({...p,intensity:i+1}))} style={{flex:"0 0 calc(20% - 3px)",padding:"7px 2px",borderRadius:8,border:"1.5px solid "+(active?ic:C.brdL),background:active?ic+"20":"transparent",color:active?ic:C.tx3,fontSize:8,fontWeight:active?700:400,cursor:"pointer",fontFamily:"inherit",textAlign:"center",lineHeight:1.4,transition:"all 0.15s"}}><span style={{fontSize:12,display:"block",fontWeight:700}}>{i+1}</span>{l}</button>);})}
+          </div>
+        </div>
+        {/* Notes */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",fontWeight:600,letterSpacing:"0.4px",marginBottom:5}}>Notes <span style={{fontSize:8,fontWeight:400}}>(optionnel)</span></div>
+          <textarea value={activityForm.notes} onChange={e=>setActivityForm(p=>({...p,notes:e.target.value}))} placeholder="Détails, ressenti, distance, parcours..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:11,fontFamily:"inherit",outline:"none",resize:"none",boxSizing:"border-box"}}/>
+        </div>
+        {/* Charge estimée */}
+        <div style={{marginBottom:16,padding:"9px 12px",borderRadius:10,background:C.s2,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{fontSize:10,color:C.tx3}}>Charge estimée</div><div style={{fontSize:9,color:C.tx3,marginTop:1}}>durée × RPE / 10</div></div>
+          <div style={{fontSize:20,fontWeight:800,color:C.ac}}>{chargeScore(activityForm.duration,activityForm.intensity)}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> pts</span></div>
+        </div>
+        {/* Confirmer */}
+        <button onClick={confirmActivity} disabled={!activityForm.label.trim()} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:activityForm.label.trim()?C.ac:"#333",color:activityForm.label.trim()?"#fff":C.tx3,fontSize:14,fontWeight:700,cursor:activityForm.label.trim()?"pointer":"default",fontFamily:"inherit",transition:"background 0.15s"}}>
+          ✓ Ajouter l'activité
+        </button>
       </div>
     </div>)}
   </div>);
@@ -2926,7 +3210,10 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {coachTab==="config"&&<><div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Configuration</div><div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Objectifs athlete</div><CoachConfig goals={goals} setGoals={setGoals} bodyWeight={bodyWeight} setBodyWeight={setBodyWeight} completedSessions={completedSessions} uncompleteSession={uncompleteSession} sessions={sessions} blockConfig={blockConfig} setBlockConfig={setBlockConfig} weeksArr={weeksArr} onNewBlock={()=>setShowNewBlock(true)} onShowHistory={()=>setShowBlockHistory(true)} blockHistoryCount={blockHistory.length}/></>}
       {coachTab==="stats"&&(<>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Suivi athlete</div>
-        <div style={{fontSize:12,color:C.tx2,marginBottom:16}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
+        <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
+
+        {/* Calendrier hebdomadaire — en premier */}
+        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog}/>
 
         {/* 1RM Progression */}
         <div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
@@ -2946,7 +3233,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Poids de corps</div>
             <div style={{fontSize:13,fontWeight:800,color:C.ac}}>{bodyWeight.current} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/ {bodyWeight.target} kg</span></div>
           </div>
-          {Object.keys(weightLog).length>0?<WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"14px 0"}}>Aucune mesure</div>}
+          {Object.keys(weightLog).length>0?<WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"14px 0"}}>Aucune mesure</div>}
         </div>
 
         {/* Séries par muscle */}
@@ -2957,7 +3244,31 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           <div style={{fontSize:11,fontWeight:600,color:C.r,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Blessures ({activeInjuries.length} active{activeInjuries.length>1?"s":""})</div>
           {injuries.map(inj=>{const sc=stC(inj.status);const zn=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non precisee";return(<div key={inj.id} style={{padding:"8px 12px",borderRadius:8,background:C.s2,border:"1px solid "+sc+"30",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:12,fontWeight:600,color:C.tx}}>{zn}</div><div style={{fontSize:10,color:C.tx3}}>{inj.type||"Type non precise"} - Intensite {inj.intensity}/10</div></div><span style={{fontSize:10,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:5,background:sc+"15"}}>{inj.status}</span></div>);})}
         </div>):(<div style={{background:C.s1,borderRadius:14,padding:"14px",border:"1px solid "+C.g+"30",textAlign:"center"}}><span style={{fontSize:12,color:C.g,fontWeight:600}}>Aucune blessure</span></div>)}
-      <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C}/>
+      {/* Comptes rendus de séances */}
+      {Object.keys(sessionLogs).filter(k=>sessionLogs[k]?.note||sessionLogs[k]?.forme).length>0&&(()=>{
+        const logs=Object.entries(sessionLogs).filter(([,l])=>l?.note||l?.forme).sort((a,b)=>(b[1].date||"")>(a[1].date||"")?1:-1).slice(0,10);
+        return(<div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Comptes rendus de séances</div>
+          {logs.map(([key,log])=>{
+            const parts=key.split("_");const wkNum=parts[parts.length-1];const sessId=parts.slice(0,-1).join("_");
+            const sess=sessions.find(s=>s.id===sessId);
+            return(<div key={key} style={{padding:"8px 10px",borderRadius:8,background:C.s2,marginBottom:6,border:"1px solid "+C.brd}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:log.note?4:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11,fontWeight:700,color:C.ac}}>{sess?.name||sessId}</span>
+                  <span style={{fontSize:9,color:C.tx3,padding:"1px 6px",borderRadius:4,background:C.acS}}>S{wkNum}</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  {log.forme&&<span style={{fontSize:10,fontWeight:600,color:log.forme>=4?C.g:log.forme>=3?C.o:C.r}}>Forme {log.forme}/5</span>}
+                  {log.duration&&<span style={{fontSize:10,color:C.tx3}}>{fmtTime(log.duration)}</span>}
+                  {log.date&&<span style={{fontSize:9,color:C.tx3}}>{new Date(log.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</span>}
+                </div>
+              </div>
+              {log.note&&<div style={{fontSize:11,color:C.tx2,lineHeight:1.5,fontStyle:"italic"}}>"{log.note}"</div>}
+            </div>);
+          })}
+        </div>);
+      })()}
       </>)}
       {coachTab==="data"&&(<><div style={{padding:"16px 16px 0"}}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Profil athlète</div>
@@ -3099,7 +3410,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             </div>
           </div>):<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"10px 0"}}>Appuyez pour remplir le bilan</div>}
         </button>
-        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C}/>
+        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog}/>
         {nutritionStrategy&&(()=>{const todayISO=new Date().toISOString().slice(0,10);const todayNL=nutritionLog[todayISO]||null;const strat=nutritionStrategy;const consumed=todayNL?.total_calories_consumed||null;const bmrV=athleteProfile?.base_metabolism||0;const targetCal=strat.can_track_calories?(bmrV+(todayNL?.active_calories||0)):strat.total_calories_coach||null;const stratC=strat.strategy==="seche"?C.r:strat.strategy==="prise_de_masse"?C.g:C.b;const stratL=strat.strategy==="seche"?"Sèche":strat.strategy==="prise_de_masse"?"Prise":"Maintenance";
           const surplusPct=(consumed&&targetCal&&targetCal>0)?((consumed-targetCal)/targetCal)*100:null;
           const inRange=surplusPct!==null&&strat.surplus_deficit_min!=null&&strat.surplus_deficit_max!=null&&surplusPct>=strat.surplus_deficit_min&&surplusPct<=strat.surplus_deficit_max;
@@ -3247,7 +3558,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             <div style={{fontSize:13,fontWeight:800,color:C.ac}}>{bodyWeight.current} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/ {bodyWeight.target} kg</span></div>
           </div>
           <div style={{display:"flex",gap:4,marginBottom:10}}>{[{k:"bloc",l:"Ce bloc"},{k:"3m",l:"3 mois"},{k:"all",l:"Tout"}].map(t=><button key={t.k} onClick={()=>setWeightRange(t.k)} style={{padding:"4px 10px",borderRadius:6,border:"none",background:weightRange===t.k?C.acS:"transparent",color:weightRange===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>)}</div>
-          {Object.keys(filteredLog).length>0?<WeightChart log={filteredLog} milestones={weightMilestones} target={bodyWeight.target}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Remplis le wellness pour suivre ton poids</div>}
+          {Object.keys(filteredLog).length>0?<WeightChart log={filteredLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Remplis le wellness pour suivre ton poids</div>}
         </div>
 
         {/* Forme du jour */}
@@ -3256,12 +3567,24 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Forme du jour</div>
             {!viewOnly&&<button onClick={()=>setShowWellness(true)} style={{fontSize:10,color:C.ac,padding:"3px 10px",borderRadius:6,border:"1px solid "+C.ac+"40",background:"transparent",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{wellness?"Modifier":"Remplir"}</button>}
           </div>
-          {wellness?(<div style={{display:"flex",alignItems:"center",gap:14}}>
-            <div style={{position:"relative",width:56,height:56,flexShrink:0}}><svg viewBox="0 0 56 56" style={{width:56,height:56,transform:"rotate(-90deg)"}}><circle cx="28" cy="28" r="22" fill="none" stroke={C.s2} strokeWidth="4"/><circle cx="28" cy="28" r="22" fill="none" stroke={wReco.c} strokeWidth="4" strokeDasharray={String(2*Math.PI*22)} strokeDashoffset={String(2*Math.PI*22*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:wReco.c}}>{wScore}</div></div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:700,color:wReco.c,marginBottom:2}}>{wReco.label}</div>
-              <div style={{fontSize:11,color:C.tx2}}>{wReco.desc}</div>
-              {wellness.sleepDur&&<div style={{fontSize:10,color:C.b,marginTop:4,fontWeight:600}}>Sommeil : {wellness.sleepDur}h</div>}
+          {wellness?(<div>
+            <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
+              <div style={{position:"relative",width:60,height:60,flexShrink:0}}><svg viewBox="0 0 56 56" style={{width:60,height:60,transform:"rotate(-90deg)"}}><circle cx="28" cy="28" r="22" fill="none" stroke={C.s2} strokeWidth="4"/><circle cx="28" cy="28" r="22" fill="none" stroke={wReco.c} strokeWidth="4" strokeDasharray={String(2*Math.PI*22)} strokeDashoffset={String(2*Math.PI*22*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:wReco.c}}>{wScore}</div></div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:wReco.c,marginBottom:2}}>{wReco.label}</div>
+                <div style={{fontSize:11,color:C.tx2,marginBottom:4}}>{wReco.desc}</div>
+                {wellness.sleepDur&&<div style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,color:C.b,fontWeight:600,padding:"2px 8px",borderRadius:5,background:C.b+"15"}}><span>💤</span>{wellness.sleepDur}h de sommeil</div>}
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {[{l:"Récupération",v:wellness.fatigue,e:"😴"},{l:"Sommeil",v:wellness.sommeil,e:"💤"},{l:"Sérénité",v:wellness.stress,e:"🧠"},{l:"Énergie",v:wellness.energie,e:"⚡"},{l:"Fraîcheur",v:wellness.doms,e:"💪"}].map(m=>{
+                const mv=m.v||0;const mc=mv>=4?C.g:mv>=3?C.o:C.r;
+                return(<div key={m.l} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:9,color:C.tx3,width:72,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.e} {m.l}</span>
+                  <div style={{flex:1,height:5,background:C.s2,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(mv/5*100)+"%",background:mc,borderRadius:3,transition:"width 0.5s"}}/></div>
+                  <span style={{fontSize:10,fontWeight:700,color:mc,width:14,textAlign:"right",flexShrink:0}}>{mv||"?"}</span>
+                </div>);
+              })}
             </div>
           </div>):(<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"10px 0"}}>Pas encore rempli aujourd'hui</div>)}
         </div>
@@ -3276,7 +3599,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         </div>)}
       </div>);})()}
 
-      {tab==="alim"&&<NutritionView athleteId={athleteId} bmr={athleteProfile?.base_metabolism||null} nutritionStrategy={nutritionStrategy} onLogSaved={(date,log)=>setNutritionLogState(prev=>({...prev,[date]:log}))} viewOnly={viewOnly}/>}
+      {tab==="alim"&&<NutritionView athleteId={athleteId} bmr={athleteProfile?.base_metabolism||null} nutritionStrategy={nutritionStrategy} onLogSaved={(date,log)=>{const updated={...nutritionLog,[date]:log};setNutritionLogState(updated);save("asp:nutrition_log",updated).catch(()=>{});}} viewOnly={viewOnly}/>}
 
       {tab==="profil"&&(<div style={{padding:"16px 16px 40px"}}>
         <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:20}}>Mon profil</div>

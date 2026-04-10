@@ -13,6 +13,7 @@ export interface NutritionStrategy {
   target_weight?: number | null;
   surplus_deficit_min?: number | null;
   surplus_deficit_max?: number | null;
+  weekly_target_kg?: number | null;
   macros_glucides?: number | null;
   macros_lipides?: number | null;
   macros_proteines?: number | null;

@@ -11,6 +11,7 @@ export interface Profile {
   first_name: string | null;
   last_name: string | null;
   age: number | null;
+  birth_date: string | null;
   height_cm: number | null;
   gender: "male" | "female" | null;
   weight_kg: number | null;
@@ -201,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     first_name: string;
     last_name: string;
     age: number | null;
+    birth_date: string | null;
     height_cm: number | null;
     gender: "male" | "female" | null;
     weight_kg: number | null;
