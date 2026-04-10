@@ -987,6 +987,7 @@ function SessionDetailModal({sid,wk,sessions,exos,sets,completedSessions,allMeth
 
 function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={}}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;const progPct=blockConfig?.progressionPct||2.5;const deloadPct=blockConfig?.deloadPct||40;
+  const blockStarted=!blockConfig?.startDate||Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000)>=0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const[sess,setSess]=useState(0);const[week,setWeek]=useState(1);const[openEx,setOpenEx]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
   const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#7B6FFF",e:"NEW"});
@@ -1201,8 +1202,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:"1px solid "+C.brd,background:C.s2}}>
           <button onClick={()=>setCalWeek(w=>Math.max(1,w-1))} disabled={calWeek<=1} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:calWeek<=1?C.tx3+"40":C.tx2,cursor:calWeek<=1?"default":"pointer",fontSize:16,fontFamily:"inherit",flexShrink:0}}>‹</button>
           <div style={{flex:1,textAlign:"center"}}>
-            <div style={{fontSize:13,fontWeight:800,color:calWeek===currentWeek?C.g:C.tx}}>Semaine {calWeek} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/ {tw}</span></div>
-            <div style={{fontSize:10,fontWeight:600,color:calWeek===dw?C.b:calWeek===currentWeek?C.g:calWeek<currentWeek?C.o:C.tx3}}>{calWeek===dw?"Deload":calWeek===currentWeek?"En cours":calWeek<currentWeek?"Passée":"À venir"}</div>
+            <div style={{fontSize:13,fontWeight:800,color:calWeek===currentWeek&&blockStarted?C.g:C.tx}}>Semaine {calWeek} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/ {tw}</span></div>
+            <div style={{fontSize:10,fontWeight:600,color:calWeek===dw?C.b:calWeek===currentWeek&&blockStarted?C.g:calWeek<currentWeek&&blockStarted?C.o:C.tx3}}>{calWeek===dw?"Deload":calWeek===currentWeek&&blockStarted?"En cours":calWeek<currentWeek&&blockStarted?"Passée":"À venir"}</div>
           </div>
           <button onClick={()=>setCalWeek(w=>Math.min(tw,w+1))} disabled={calWeek>=tw} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:calWeek>=tw?C.tx3+"40":C.tx2,cursor:calWeek>=tw?"default":"pointer",fontSize:16,fontFamily:"inherit",flexShrink:0}}>›</button>
         </div>
@@ -1212,9 +1213,9 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           {safeSessions.map(s=>{
             const done=(completedSessions[calWeek]||[]).includes(s.id);
             const hasP=(exos[s.id]||[]).some(ex=>ex.weeks[calWeek]);
-            const isPast=calWeek<currentWeek;
-            const sc=done?C.g:isPast?C.o:calWeek===currentWeek?C.ac:C.tx3;
-            const sl=done?"Validée":isPast?"Non faite":calWeek===currentWeek?"En cours":"Planifiée";
+            const isPast=calWeek<currentWeek&&blockStarted;
+            const sc=done?C.g:isPast?C.o:calWeek===currentWeek&&blockStarted?C.ac:C.tx3;
+            const sl=done?"Validée":isPast?"Non faite":calWeek===currentWeek&&blockStarted?"En cours":"Planifiée";
             // Stats rapides
             const exs=exos[s.id]||[];
             const setsDoneQ=exs.reduce((a,ex)=>{const r=sets[ex.id+"_"+calWeek]||[];return a+r.filter(x=>x.done).length;},0);
@@ -1837,7 +1838,7 @@ function CoachConfig({goals,setGoals,bodyWeight,setBodyWeight,completedSessions,
         <div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Date de début du bloc</div>
         <input type="date" value={blockConfig?.startDate||""} onChange={e=>setBlockConfig(c=>({...c,startDate:e.target.value||null}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+(blockConfig?.startDate?C.brdL:C.o+"60"),background:C.s2,color:blockConfig?.startDate?C.tx:C.o,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}/>
         {!blockConfig?.startDate&&<div style={{fontSize:10,color:C.o,marginTop:4}}>A definir — la semaine courante sera calculee depuis cette date</div>}
-        {blockConfig?.startDate&&(()=>{const days=Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000);const wk=Math.min(Math.max(1,Math.floor(days/7)+1),tw);return<div style={{fontSize:10,color:C.tx3,marginTop:4}}>Semaine en cours : S{wk} · Jour {days+1} du bloc</div>;})()}
+        {blockConfig?.startDate&&(()=>{const days=Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000);if(days<0)return<div style={{fontSize:10,color:C.b,marginTop:4}}>S1 démarre dans {-days} jour{-days>1?"s":""}</div>;const wk=Math.min(Math.max(1,Math.floor(days/7)+1),tw);return<div style={{fontSize:10,color:C.tx3,marginTop:4}}>Semaine en cours : S{wk} · Jour {days+1} du bloc</div>;})()}
       </div>
       {row("Nb semaines","Duree du bloc",tw,()=>setBlockConfig(c=>({...c,totalWeeks:Math.max(3,c.totalWeeks-1)})),()=>setBlockConfig(c=>({...c,totalWeeks:Math.min(16,c.totalWeeks+1)})),v=>v+" sem.")}
       {row("Semaine deload","0 = pas de deload",blockConfig?.deloadWeek||0,()=>setBlockConfig(c=>({...c,deloadWeek:Math.max(0,(c.deloadWeek||0)-1)})),()=>setBlockConfig(c=>({...c,deloadWeek:Math.min(tw,(c.deloadWeek||0)+1)})),v=>v===0?"Aucune":"S"+v)}

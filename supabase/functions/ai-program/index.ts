@@ -147,6 +147,7 @@ ${hasText ? prompt : fileCount > 1 ? "Programme reparti sur les fichiers joints 
         const t = await response.text();
         console.error("Gemini error:", response.status, t);
         if (response.status === 429) throw new Error("__429__");
+        if (response.status === 503) throw new Error("__503__");
         let detail = "";
         try { detail = JSON.parse(t)?.error?.message?.slice(0, 150) || t.slice(0, 150); } catch { detail = t.slice(0, 150); }
         throw new Error("Gemini " + response.status + ": " + detail);
@@ -185,14 +186,24 @@ ${hasText ? prompt : fileCount > 1 ? "Programme reparti sur les fichiers joints 
       ? "gemini-2.0-flash"
       : "gemini-2.5-flash";
 
+    const fallbackModel = "gemini-2.0-flash";
+
     // Attempt 1
     let parsed: any;
     let attempt1Error = "";
     try {
       parsed = await callGemini(0.3, primaryModel);
     } catch (e: any) {
-      if (e.message === "__429__") {
-        // Rate limited: wait 22s and retry automatically
+      if (e.message === "__503__" && primaryModel !== fallbackModel) {
+        // 503 on premium model → switch immediately to fallback model (no wait)
+        console.warn(`503 on ${primaryModel}, switching to fallback ${fallbackModel}...`);
+        try {
+          parsed = await callGemini(0.3, fallbackModel);
+        } catch (e2: any) {
+          attempt1Error = e2.message || "unknown";
+        }
+      } else if (e.message === "__429__") {
+        // Rate limited: wait 22s and retry
         console.warn("Rate limited (429), waiting 22s before retry...");
         await sleep(22000);
         try {
@@ -210,19 +221,24 @@ ${hasText ? prompt : fileCount > 1 ? "Programme reparti sur les fichiers joints 
       }
 
       if (!parsed && attempt1Error) {
-        console.warn("Tentative 1 echouee (" + attempt1Error.slice(0, 120) + "), retry temp 0.1...");
+        const retryModel = attempt1Error === "__503__" ? fallbackModel : primaryModel;
+        console.warn("Tentative 1 echouee (" + attempt1Error.slice(0, 120) + "), retry temp 0.1 model " + retryModel + "...");
         try {
-          parsed = await callGemini(0.1, primaryModel);
+          parsed = await callGemini(0.1, retryModel);
         } catch (e3: any) {
           if (e3.message === "__429__") {
             await sleep(22000);
             try {
-              parsed = await callGemini(0.1, primaryModel);
+              parsed = await callGemini(0.1, retryModel);
             } catch {
               return new Response(JSON.stringify({ error: "Trop de requetes. Attends 30 secondes et reessaie." }), {
                 status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
               });
             }
+          } else if (e3.message === "__503__") {
+            return new Response(JSON.stringify({ error: "Les modeles Gemini sont surchargés. Reessaie dans quelques secondes." }), {
+              status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
           } else {
             const detail = attempt1Error.startsWith("__json_invalid__") ? "Reponse JSON invalide" : attempt1Error.slice(0, 120);
             return new Response(JSON.stringify({ error: "Generation echouee: " + detail }), {
