@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, ReferenceLine } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { getNutritionStrategy } from "@/lib/nutrition";
@@ -2863,8 +2864,10 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
 // ── EXERCISE BANK COMPONENTS ─────────────────────────────────────────────────
 
 function ExerciseCreateModal({coachId,onSave,onClose}){
+  const{profile}=useAuth();
+  const isAdmin=profile?.is_admin===true;
   const[form,setForm]=useState({name:'',target:'Pecs',secondary:[],equipment:'Barre',difficulty:'Intermédiaire',ex_type:'muscu',is_compound:true,is_unilateral:false,youtube_id:'',instructions:'',tips:''});
-  const[saving,setSaving]=useState(false);
+  const[saving,setSaving]=useState(false);const[saveError,setSaveError]=useState('');
   const TARGETS=['Pecs','Dos-GD','Dos-Trap','Dos-Rhom','Ep-Ant','Ep-Lat','Ep-Post','Quads','Ischios','Fessiers','Adducteurs','Triceps','Biceps','Core','Mollets'];
   const EQUIPS=['Barre','Haltères','Cable','Machine','Poids de corps','Élastique','Kettlebell','Smith'];
   const upd=(k,v)=>setForm(p=>({...p,[k]:v}));
@@ -2872,10 +2875,12 @@ function ExerciseCreateModal({coachId,onSave,onClose}){
   const fS={padding:'9px 12px',borderRadius:9,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:'inherit',width:'100%',boxSizing:'border-box',outline:'none'};
   const lS={fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:5,display:'block'};
   const save=async()=>{
-    if(!form.name.trim())return;setSaving(true);
+    if(!form.name.trim())return;setSaving(true);setSaveError('');
     const ytId=form.youtube_id?parseYtId(form.youtube_id):null;
-    const{error}=await supabase.from('exercises').insert({...form,name:form.name.trim(),youtube_id:ytId||null,created_by:coachId,is_public:true,is_verified:false});
-    setSaving(false);if(!error)onSave();
+    const{error}=await supabase.from('exercises').insert({...form,name:form.name.trim(),youtube_id:ytId||null,created_by:coachId,is_public:true,is_verified:isAdmin});
+    setSaving(false);
+    if(error){setSaveError(error.message||JSON.stringify(error));console.error('ExerciseCreateModal insert error:',error);}
+    else onSave();
   };
   return(<div style={{position:'fixed',inset:0,zIndex:310,background:'rgba(0,0,0,0.88)',overflowY:'auto'}}>
     <div style={{padding:16,maxWidth:480,margin:'0 auto'}}>
@@ -2902,6 +2907,7 @@ function ExerciseCreateModal({coachId,onSave,onClose}){
           <div><label style={lS}>Instructions</label><textarea value={form.instructions} onChange={e=>upd('instructions',e.target.value)} placeholder="Décris l'exécution technique..." rows={3} style={{...fS,resize:'vertical'}}/></div>
           <div><label style={lS}>Conseils</label><textarea value={form.tips} onChange={e=>upd('tips',e.target.value)} placeholder="Erreurs fréquentes, points clés..." rows={2} style={{...fS,resize:'vertical'}}/></div>
         </div>
+        {saveError&&<div style={{background:C.rS,border:'1px solid '+C.r+'60',borderRadius:10,padding:'10px 14px',fontSize:12,color:C.r,marginTop:12}}>{saveError}</div>}
         <button onClick={save} disabled={saving||!form.name.trim()} style={{width:'100%',padding:'12px 0',borderRadius:12,border:'none',background:form.name.trim()?C.ac:'#333',color:'#fff',fontSize:14,fontWeight:700,cursor:form.name.trim()?'pointer':'default',fontFamily:'inherit',marginTop:16}}>{saving?'Enregistrement...':'Créer l\'exercice'}</button>
       </div>
     </div>
@@ -2932,7 +2938,11 @@ function MergeModal({source,onMerge,onClose}){
 }
 
 function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onRefresh}){
+  const{profile}=useAuth();
+  const isAdmin=profile?.is_admin===true;
   const isOwner=!ex.created_by||ex.created_by===coachId;
+  const[promoting,setPromoting]=useState(false);
+  const promote=async()=>{setPromoting(true);await supabase.from('exercises').update({is_verified:true}).eq('id',ex.id);setPromoting(false);onRefresh();onClose();};
   return(<div style={{position:'fixed',inset:0,zIndex:300,background:'rgba(0,0,0,0.88)',overflowY:'auto'}} onClick={onClose}>
     <div style={{minHeight:'100%',display:'flex',alignItems:'flex-end'}} onClick={e=>e.stopPropagation()}>
       <div style={{width:'100%',background:C.s1,borderRadius:'16px 16px 0 0',maxHeight:'92vh',overflowY:'auto',paddingBottom:40}}>
@@ -2962,7 +2972,8 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
           {ex.instructions&&<div style={{marginBottom:12}}><div style={{fontSize:10,fontWeight:700,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6}}>Instructions</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.7,whiteSpace:'pre-wrap'}}>{ex.instructions}</div></div>}
           {ex.tips&&<div style={{marginBottom:16,padding:'10px 12px',borderRadius:10,background:C.oS,border:'1px solid '+C.o+'30'}}><div style={{fontSize:10,fontWeight:700,color:C.o,marginBottom:4}}>💡 Conseils</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.6}}>{ex.tips}</div></div>}
           <button onClick={onAdd} style={{width:'100%',padding:'12px 0',borderRadius:12,border:'none',background:C.ac,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:8}}>+ Ajouter à mes exercices</button>
-          {isOwner&&<div style={{display:'flex',gap:8}}>
+          {isAdmin&&!ex.is_verified&&<button onClick={promote} disabled={promoting} style={{width:'100%',padding:'9px 0',borderRadius:10,border:'1px solid '+C.g+'50',background:C.gS,color:C.g,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:8}}>{promoting?'En cours...':'✓ Promouvoir en Officiel'}</button>}
+          {(isOwner||isAdmin)&&<div style={{display:'flex',gap:8}}>
             <button onClick={onMergeClick} style={{flex:1,padding:'9px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Fusionner</button>
             <button onClick={onDelete} style={{flex:1,padding:'9px 0',borderRadius:10,border:'1px solid '+C.r+'50',background:C.rS,color:C.r,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
           </div>}
@@ -2973,6 +2984,8 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
 }
 
 function ExerciseBank({coachId,onAddToExos}){
+  const{user}=useAuth();
+  const myId=user?.id||coachId;
   const PAGE=20;
   const[exList,setExList]=useState([]);const[loading,setLoading]=useState(true);
   const[search,setSearch]=useState('');const[page,setPage]=useState(0);const[total,setTotal]=useState(0);
@@ -2995,7 +3008,7 @@ function ExerciseBank({coachId,onAddToExos}){
     const{data,count}=await q;
     setExList(data||[]);setTotal(count||0);setLoading(false);
   };
-  const deleteEx=async(id)=>{await supabase.from('exercises').delete().eq('id',id);setConfirmDel(null);setSel(null);loadEx();};
+  const deleteEx=async(id)=>{const{error}=await supabase.from('exercises').delete().eq('id',id);if(error){alert('Erreur suppression : '+error.message);return;}setConfirmDel(null);setSel(null);loadEx();};
   const mergeEx=async(keepId,delId)=>{
     const keep=exList.find(e=>e.id===keepId)||sel;
     const del=exList.find(e=>e.id===delId);
@@ -3066,7 +3079,7 @@ function ExerciseBank({coachId,onAddToExos}){
         </div>}
       </>
     )}
-    {sel&&!showMerge&&<ExerciseDetailModal ex={sel} coachId={coachId} onClose={()=>setSel(null)} onAdd={()=>{onAddToExos(sel);setSel(null);}} onDelete={()=>setConfirmDel(sel.id)} onMergeClick={()=>setShowMerge(true)} onRefresh={()=>{loadEx();setSel(null);}}/>}
+    {sel&&!showMerge&&<ExerciseDetailModal ex={sel} coachId={myId} onClose={()=>setSel(null)} onAdd={()=>{onAddToExos(sel);setSel(null);}} onDelete={()=>setConfirmDel(sel.id)} onMergeClick={()=>setShowMerge(true)} onRefresh={()=>{loadEx();setSel(null);}}/>}
     {sel&&showMerge&&<MergeModal source={sel} onMerge={mergeEx} onClose={()=>setShowMerge(false)}/>}
     {confirmDel&&<div style={{position:'fixed',inset:0,zIndex:320,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
       <div style={{background:C.s1,borderRadius:16,padding:20,width:'100%',maxWidth:320}}>
@@ -3078,7 +3091,7 @@ function ExerciseBank({coachId,onAddToExos}){
         </div>
       </div>
     </div>}
-    {showCreate&&<ExerciseCreateModal coachId={coachId} onSave={()=>{setShowCreate(false);loadEx();}} onClose={()=>setShowCreate(false)}/>}
+    {showCreate&&<ExerciseCreateModal coachId={myId} onSave={()=>{setShowCreate(false);loadEx();}} onClose={()=>setShowCreate(false)}/>}
   </div>);
 }
 

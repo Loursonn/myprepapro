@@ -17,6 +17,7 @@ export interface Profile {
   weight_kg: number | null;
   body_fat_pct: number | null;
   base_metabolism: number | null;
+  is_admin: boolean;
 }
 
 interface AuthContextType {
