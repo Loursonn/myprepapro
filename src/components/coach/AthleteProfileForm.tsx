@@ -39,6 +39,17 @@ function calcKatchMcArdle(weight: number, bodyFat: number): number {
   return Math.round(370 + 21.6 * lbm);
 }
 
+function ageFromBirthDate(dateStr: string): number | null {
+  if (!dateStr) return null;
+  const birth = new Date(dateStr);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let a = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) a--;
+  return a >= 0 && a < 120 ? a : null;
+}
+
 interface Props {
   athlete: Profile;
   onClose: () => void;
@@ -49,36 +60,49 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
   const { updateAthleteProfile, user } = useAuth();
   const isOwnProfile = user?.id === athlete.id;
 
+  // ── Sub-onglet ─────────────────────────────────────────────────────────────
+  const [dataTab, setDataTab] = useState<"profil" | "nutrition">("profil");
+
   // ── Identité + MB ─────────────────────────────────────────────────────────
   const [firstName, setFirstName] = useState(athlete.first_name ?? "");
   const [lastName, setLastName] = useState(athlete.last_name ?? "");
-  const [age, setAge] = useState(athlete.age?.toString() ?? "");
+  const [birthDate, setBirthDate] = useState(athlete.birth_date ?? "");
   const [heightCm, setHeightCm] = useState(athlete.height_cm?.toString() ?? "");
   const [gender, setGender] = useState<"male" | "female" | "">(athlete.gender ?? "");
   const [weightKg, setWeightKg] = useState(athlete.weight_kg?.toString() ?? "");
   const [bodyFatPct, setBodyFatPct] = useState(athlete.body_fat_pct?.toString() ?? "");
   const [metaMode, setMetaMode] = useState<MetaMode>("manual");
   const [metaManual, setMetaManual] = useState(athlete.base_metabolism?.toString() ?? "");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [errorProfile, setErrorProfile] = useState("");
+
+  // Âge dérivé de la date de naissance (ou saisie directe fallback)
+  const derivedAge = ageFromBirthDate(birthDate);
 
   // ── Nutrition ─────────────────────────────────────────────────────────────
   const [nutStrategy, setNutStrategy] = useState<NutritionStrategyType>("maintenance");
   const [nutTargetWeight, setNutTargetWeight] = useState("");
   const [nutCalorieMode, setNutCalorieMode] = useState<CalorieMode>("nap");
-  const [nutNap, setNutNap] = useState("");                 // NAP sélectionné (ex: "1.55")
-  const [nutTargetPct, setNutTargetPct] = useState("");     // déficit/surplus/tolérance cible (mode fixe)
+  const [nutNap, setNutNap] = useState("");
+  const [nutTargetPct, setNutTargetPct] = useState("");
   const [nutDeficitMode, setNutDeficitMode] = useState<DeficitMode>("fixed");
-  const [nutRangeMin, setNutRangeMin] = useState("");       // borne min fourchette (% signé)
-  const [nutRangeMax, setNutRangeMax] = useState("");       // borne max fourchette (% signé)
-  const [nutTotalCalCoach, setNutTotalCalCoach] = useState(""); // kcal total calculé ou manuel
+  const [nutRangeMin, setNutRangeMin] = useState("");
+  const [nutRangeMax, setNutRangeMax] = useState("");
+  const [nutTotalCalCoach, setNutTotalCalCoach] = useState("");
   const [nutGlucides, setNutGlucides] = useState("");
   const [nutLipides, setNutLipides] = useState("");
   const [nutProteines, setNutProteines] = useState("");
   const [nutGlucidesPct, setNutGlucidesPct] = useState("");
   const [nutLipidesPct, setNutLipidesPct] = useState("");
   const [nutProteinesPct, setNutProteinesPct] = useState("");
+  const [nutWeeklyTargetKg, setNutWeeklyTargetKg] = useState("");
   const [nutLoaded, setNutLoaded] = useState(false);
+  const [savingNut, setSavingNut] = useState(false);
+  const [errorNut, setErrorNut] = useState("");
+
+  // Calculateur auto objectif hebdo
+  const [calcKg, setCalcKg] = useState("");
+  const [calcMonths, setCalcMonths] = useState("");
 
   // ── Valeurs dérivées ──────────────────────────────────────────────────────
   const bmr = parseInt(metaManual) || 0;
@@ -92,47 +116,55 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
     prise_de_masse: [50, 25, 25],
   };
 
-  // Label et contraintes du champ % selon stratégie
   const stratPctMeta = {
     seche:          { label: "Déficit (%)", placeholder: "ex: 15", min: 1,  max: 40, sign: -1 },
     prise_de_masse: { label: "Surplus (%)", placeholder: "ex: 10", min: 1,  max: 30, sign: 1  },
     maintenance:    { label: "Tolérance (±%)", placeholder: "ex: 3",  min: 0,  max: 15, sign: 0  },
   }[nutStrategy];
 
-  // ── Dériver targetPct depuis les min/max stockés au chargement ─────────────
   function deriveTargetPct(min: number | null, max: number | null, strategy: NutritionStrategyType): string {
     if (min == null && max == null) return "";
     if (strategy === "seche") return String(Math.abs(min ?? max ?? 0));
     if (strategy === "prise_de_masse") return String(Math.abs(max ?? min ?? 0));
-    return String(Math.abs(max ?? 0)); // maintenance: max = tolérance
+    return String(Math.abs(max ?? 0));
   }
 
-  // ── Calculer min/max depuis targetPct pour la sauvegarde ─────────────────
   function computeMinMax(pct: string, strategy: NutritionStrategyType): [number | null, number | null] {
     const v = parseFloat(pct);
     if (!v) return [null, null];
     if (strategy === "seche")          return [-v, -v / 2];
     if (strategy === "prise_de_masse") return [v / 2, v];
-    return [-v, v]; // maintenance
+    return [-v, v];
   }
 
-  // ── Calcul kcal cibles depuis TDEE + targetPct ────────────────────────────
   function computeTargetKcal(tdeeVal: number, pct: string, strategy: NutritionStrategyType): number {
     const v = parseFloat(pct) || 0;
     if (!tdeeVal) return 0;
     if (strategy === "seche")          return Math.round(tdeeVal * (1 - v / 100));
     if (strategy === "prise_de_masse") return Math.round(tdeeVal * (1 + v / 100));
-    return tdeeVal; // maintenance
+    return tdeeVal;
   }
 
-  // ── Sync kcal cibles quand TDEE ou targetPct changent ────────────────────
+  // Auto-calcul objectif hebdo depuis kg + mois
+  function applyAutoCalc() {
+    const kg = parseFloat(calcKg);
+    const months = parseFloat(calcMonths);
+    if (!kg || !months || months <= 0) return;
+    const weeks = months * 4.33;
+    let rate = +(kg / weeks).toFixed(2);
+    if (nutStrategy === "seche") rate = -Math.abs(rate);
+    else if (nutStrategy === "maintenance") rate = Math.abs(rate) <= 0.1 ? rate : 0;
+    setNutWeeklyTargetKg(String(rate));
+  }
+
+  // ── Sync kcal quand TDEE ou targetPct changent ────────────────────────────
   useEffect(() => {
     if (!tdee) return;
     const kcal = computeTargetKcal(tdee, nutTargetPct, nutStrategy);
     if (kcal) setNutTotalCalCoach(String(kcal));
   }, [tdee, nutTargetPct, nutStrategy]);
 
-  // ── Sync grammes quand totalRefKcal change (si % déjà renseignés) ─────────
+  // ── Sync grammes quand totalRefKcal change ────────────────────────────────
   useEffect(() => {
     const kcal = parseInt(nutTotalCalCoach) || 0;
     if (!kcal) return;
@@ -172,7 +204,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
     setNutProteines(pctToG(String(pP), 4));
   }
 
-  // ── Chargement depuis Supabase ────────────────────────────────────────────
+  // ── Chargement nutrition depuis Supabase ──────────────────────────────────
   useEffect(() => {
     getNutritionStrategy(athlete.id)
       .then(s => {
@@ -196,6 +228,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
           setNutGlucidesPct(s.macros_glucides_pct?.toString() ?? "");
           setNutLipidesPct(s.macros_lipides_pct?.toString() ?? "");
           setNutProteinesPct(s.macros_proteines_pct?.toString() ?? "");
+          setNutWeeklyTargetKg(s.weekly_target_kg?.toString() ?? "");
         }
       })
       .catch(console.error)
@@ -204,21 +237,45 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
 
   // ── Formule MB ────────────────────────────────────────────────────────────
   useEffect(() => {
+    const age = derivedAge ?? 0;
     if (metaMode === "formula_no_bf") {
-      const w = parseFloat(weightKg), h = parseFloat(heightCm), a = parseInt(age);
-      if (w > 0 && h > 0 && a > 0 && (gender === "male" || gender === "female"))
-        setMetaManual(calcMifflin(w, h, a, gender).toString());
+      const w = parseFloat(weightKg), h = parseFloat(heightCm);
+      if (w > 0 && h > 0 && age > 0 && (gender === "male" || gender === "female"))
+        setMetaManual(calcMifflin(w, h, age, gender).toString());
     } else if (metaMode === "formula_bf") {
       const w = parseFloat(weightKg), bf = parseFloat(bodyFatPct);
       if (w > 0 && bf > 0 && bf < 100)
         setMetaManual(calcKatchMcArdle(w, bf).toString());
     }
-  }, [metaMode, weightKg, heightCm, age, gender, bodyFatPct]);
+  }, [metaMode, weightKg, heightCm, birthDate, gender, bodyFatPct]);
 
-  // ── Sauvegarde ────────────────────────────────────────────────────────────
-  async function handleSave() {
-    setSaving(true);
-    setError("");
+  // ── Sauvegardes séparées ──────────────────────────────────────────────────
+  async function handleSaveProfile() {
+    setSavingProfile(true);
+    setErrorProfile("");
+    try {
+      await updateAthleteProfile(athlete.id, {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        age: derivedAge,
+        birth_date: birthDate || null,
+        height_cm: heightCm ? parseInt(heightCm) : null,
+        gender: (gender as "male" | "female") || null,
+        weight_kg: weightKg ? parseFloat(weightKg) : null,
+        body_fat_pct: bodyFatPct ? parseFloat(bodyFatPct) : null,
+        base_metabolism: metaManual ? parseInt(metaManual) : null,
+      });
+      toast.success("Profil enregistré !");
+    } catch (e: any) {
+      setErrorProfile(e.message || "Erreur lors de la sauvegarde");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function handleSaveNutrition() {
+    setSavingNut(true);
+    setErrorNut("");
     let sdMin: number | null, sdMax: number | null;
     if (nutDeficitMode === "range") {
       sdMin = nutRangeMin !== "" ? parseFloat(nutRangeMin) : null;
@@ -227,41 +284,29 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
       [sdMin, sdMax] = computeMinMax(nutTargetPct, nutStrategy);
     }
     try {
-      await Promise.all([
-        updateAthleteProfile(athlete.id, {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          age: age ? parseInt(age) : null,
-          height_cm: heightCm ? parseInt(heightCm) : null,
-          gender: (gender as "male" | "female") || null,
-          weight_kg: weightKg ? parseFloat(weightKg) : null,
-          body_fat_pct: bodyFatPct ? parseFloat(bodyFatPct) : null,
-          base_metabolism: metaManual ? parseInt(metaManual) : null,
-        }),
-        upsertNutritionStrategy(athlete.id, {
-          strategy: nutStrategy,
-          can_track_calories: nutCalorieMode !== "nap",
-          calorie_mode: nutCalorieMode,
-          deficit_mode: nutDeficitMode,
-          nap: nutNap ? parseFloat(nutNap) : null,
-          target_weight: nutTargetWeight ? parseFloat(nutTargetWeight) : null,
-          total_calories_coach: nutTotalCalCoach ? parseInt(nutTotalCalCoach) : null,
-          surplus_deficit_min: sdMin,
-          surplus_deficit_max: sdMax,
-          macros_glucides: nutGlucides ? parseInt(nutGlucides) : null,
-          macros_lipides: nutLipides ? parseInt(nutLipides) : null,
-          macros_proteines: nutProteines ? parseInt(nutProteines) : null,
-          macros_glucides_pct: nutGlucidesPct ? parseFloat(nutGlucidesPct) : null,
-          macros_lipides_pct: nutLipidesPct ? parseFloat(nutLipidesPct) : null,
-          macros_proteines_pct: nutProteinesPct ? parseFloat(nutProteinesPct) : null,
-        }),
-      ]);
-      toast.success("Profil enregistré !");
-      onClose();
+      await upsertNutritionStrategy(athlete.id, {
+        strategy: nutStrategy,
+        can_track_calories: nutCalorieMode !== "nap",
+        calorie_mode: nutCalorieMode,
+        deficit_mode: nutDeficitMode,
+        nap: nutNap ? parseFloat(nutNap) : null,
+        target_weight: nutTargetWeight ? parseFloat(nutTargetWeight) : null,
+        total_calories_coach: nutTotalCalCoach ? parseInt(nutTotalCalCoach) : null,
+        surplus_deficit_min: sdMin,
+        surplus_deficit_max: sdMax,
+        weekly_target_kg: nutWeeklyTargetKg ? parseFloat(nutWeeklyTargetKg) : null,
+        macros_glucides: nutGlucides ? parseInt(nutGlucides) : null,
+        macros_lipides: nutLipides ? parseInt(nutLipides) : null,
+        macros_proteines: nutProteines ? parseInt(nutProteines) : null,
+        macros_glucides_pct: nutGlucidesPct ? parseFloat(nutGlucidesPct) : null,
+        macros_lipides_pct: nutLipidesPct ? parseFloat(nutLipidesPct) : null,
+        macros_proteines_pct: nutProteinesPct ? parseFloat(nutProteinesPct) : null,
+      });
+      toast.success("Plan nutritionnel enregistré !");
     } catch (e: any) {
-      setError(e.message || "Erreur lors de la sauvegarde");
+      setErrorNut(e.message || "Erreur lors de la sauvegarde");
     } finally {
-      setSaving(false);
+      setSavingNut(false);
     }
   }
 
@@ -287,7 +332,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
     <div style={{ padding: inline ? "16px" : "20px 20px 32px" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>{isOwnProfile ? "Mon profil" : "Profil de l'athlète"}</div>
           <div style={{ fontSize: 12, color: C.tx3, marginTop: 2 }}>{athlete.full_name}</div>
@@ -295,85 +340,205 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
         <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 18, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
       </div>
 
-      {/* ── Identité ── */}
-      <div style={sectionTitle}>Identité</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        <div><label style={labelStyle}>Prénom</label><input style={inputStyle} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Prénom" /></div>
-        <div><label style={labelStyle}>Nom</label><input style={inputStyle} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Nom" /></div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        <div><label style={labelStyle}>Âge</label><input style={inputStyle} type="number" min={10} max={100} value={age} onChange={e => setAge(e.target.value)} placeholder="ex: 24" /></div>
-        <div><label style={labelStyle}>Taille (cm)</label><input style={inputStyle} type="number" min={100} max={250} value={heightCm} onChange={e => setHeightCm(e.target.value)} placeholder="ex: 178" /></div>
-      </div>
-      <div style={{ marginBottom: 4 }}>
-        <label style={labelStyle}>Genre</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          {(["male", "female"] as const).map(g => (
-            <button key={g} onClick={() => setGender(g)} style={{ flex: 1, padding: "9px 0", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, border: "1px solid " + (gender === g ? C.ac : C.brdL), background: gender === g ? C.acS : C.s2, color: gender === g ? C.ac : C.tx2 }}>
-              {g === "male" ? "Homme" : "Femme"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Métabolisme de base ── */}
-      <div style={sectionTitle}>Métabolisme de base</div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" as const }}>
-        {([["manual", "Manuel"], ["formula_no_bf", "Formule (sans MG)"], ["formula_bf", "Formule (avec MG)"]] as [MetaMode, string][]).map(([mode, label]) => (
-          <button key={mode} onClick={() => setMetaMode(mode)} style={{ padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600, border: "1px solid " + (metaMode === mode ? C.coach : C.brdL), background: metaMode === mode ? C.coachS : C.s2, color: metaMode === mode ? C.coach : C.tx2 }}>
-            {label}
+      {/* Onglets Profil / Plan nutri */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 20, padding: 4, background: C.s2, borderRadius: 10 }}>
+        {([["profil", "👤 Profil"], ["nutrition", "🥗 Plan nutritionnel"]] as ["profil" | "nutrition", string][]).map(([k, l]) => (
+          <button key={k} onClick={() => setDataTab(k)} style={{ flex: 1, padding: "8px 0", borderRadius: 7, border: "none", background: dataTab === k ? C.coach : "transparent", color: dataTab === k ? "#fff" : C.tx3, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+            {l}
           </button>
         ))}
       </div>
-      {metaMode === "formula_no_bf" && (
-        <div style={{ background: C.s2, borderRadius: 10, padding: 12, marginBottom: 12, border: "1px solid " + C.brd }}>
-          <div style={{ fontSize: 11, color: C.tx3, marginBottom: 10 }}>Formule Mifflin-St Jeor — nécessite poids, taille, âge et genre</div>
-          <div><label style={labelStyle}>Poids (kg)</label><input style={inputStyle} type="number" min={30} max={250} step={0.1} value={weightKg} onChange={e => setWeightKg(e.target.value)} placeholder="ex: 75.5" /></div>
-          {(!heightCm || !age || !gender) && <div style={{ fontSize: 11, color: C.o, marginTop: 8 }}>Complète taille, âge et genre ci-dessus pour calculer automatiquement</div>}
+
+      {/* ═══════════════════════════════════ TAB PROFIL ═══════════════════════════════════ */}
+      {dataTab === "profil" && (<>
+
+        {/* Identité */}
+        <div style={sectionTitle}>Identité</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div><label style={labelStyle}>Prénom</label><input style={inputStyle} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Prénom" /></div>
+          <div><label style={labelStyle}>Nom</label><input style={inputStyle} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Nom" /></div>
         </div>
-      )}
-      {metaMode === "formula_bf" && (
-        <div style={{ background: C.s2, borderRadius: 10, padding: 12, marginBottom: 12, border: "1px solid " + C.brd }}>
-          <div style={{ fontSize: 11, color: C.tx3, marginBottom: 10 }}>Formule Katch-McArdle — nécessite poids et % de masse grasse</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div><label style={labelStyle}>Poids (kg)</label><input style={inputStyle} type="number" min={30} max={250} step={0.1} value={weightKg} onChange={e => setWeightKg(e.target.value)} placeholder="ex: 75.5" /></div>
-            <div><label style={labelStyle}>Masse grasse (%)</label><input style={inputStyle} type="number" min={1} max={60} step={0.1} value={bodyFatPct} onChange={e => setBodyFatPct(e.target.value)} placeholder="ex: 18" /></div>
+
+        {/* Date de naissance → âge auto */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Date de naissance</label>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              style={{ ...inputStyle, flex: 1 }}
+              type="date"
+              value={birthDate}
+              onChange={e => setBirthDate(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
+            />
+            {derivedAge !== null && (
+              <div style={{ padding: "8px 14px", borderRadius: 8, background: C.coach + "18", border: "1px solid " + C.coach + "40", textAlign: "center", flexShrink: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.coach }}>{derivedAge}</div>
+                <div style={{ fontSize: 9, color: C.tx3 }}>ans</div>
+              </div>
+            )}
           </div>
         </div>
-      )}
-      <div>
-        <label style={labelStyle}>{metaMode === "manual" ? "Métabolisme de base (kcal/j)" : "Résultat calculé (kcal/j) — modifiable"}</label>
-        <input style={{ ...inputStyle, border: "1px solid " + (metaMode !== "manual" ? C.coach + "60" : C.brdL) }} type="number" min={800} max={6000} value={metaManual} onChange={e => setMetaManual(e.target.value)} placeholder="ex: 1850" />
-        {metaManual && <div style={{ fontSize: 11, color: C.tx3, marginTop: 4 }}>{parseInt(metaManual).toLocaleString("fr-FR")} kcal / jour</div>}
-      </div>
 
-      {error && <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: C.r + "15", border: "1px solid " + C.r + "40", fontSize: 13, color: C.r }}>{error}</div>}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div><label style={labelStyle}>Taille (cm)</label><input style={inputStyle} type="number" min={100} max={250} value={heightCm} onChange={e => setHeightCm(e.target.value)} placeholder="ex: 178" /></div>
+          <div>
+            <label style={labelStyle}>Genre</label>
+            <div style={{ display: "flex", gap: 6, height: 38 }}>
+              {(["male", "female"] as const).map(g => (
+                <button key={g} onClick={() => setGender(g)} style={{ flex: 1, borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, border: "1px solid " + (gender === g ? C.ac : C.brdL), background: gender === g ? C.acS : C.s2, color: gender === g ? C.ac : C.tx2 }}>
+                  {g === "male" ? "Homme" : "Femme"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
-      {/* ── Alimentation ── */}
-      <div style={sectionTitle}>Alimentation</div>
+        {/* Corps */}
+        <div style={sectionTitle}>Composition corporelle</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <div><label style={labelStyle}>Poids de référence (kg)</label><input style={inputStyle} type="number" min={30} max={250} step={0.1} value={weightKg} onChange={e => setWeightKg(e.target.value)} placeholder="ex: 75.5" /></div>
+          <div><label style={labelStyle}>Masse grasse (%)</label><input style={inputStyle} type="number" min={1} max={60} step={0.1} value={bodyFatPct} onChange={e => setBodyFatPct(e.target.value)} placeholder="ex: 18" /></div>
+        </div>
 
-      {/* Stratégie */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Stratégie</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          {([["seche", "Sèche"], ["maintenance", "Maintenance"], ["prise_de_masse", "Prise de masse"]] as [NutritionStrategyType, string][]).map(([k, l]) => (
-            <button key={k} onClick={() => setNutStrategy(k)} style={{ flex: 1, padding: "9px 4px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, border: "1px solid " + (nutStrategy === k ? C.coach : C.brdL), background: nutStrategy === k ? C.coachS : C.s2, color: nutStrategy === k ? C.coach : C.tx2 }}>
+        {/* Métabolisme de base */}
+        <div style={sectionTitle}>Métabolisme de base</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" as const }}>
+          {([["manual", "Manuel"], ["formula_no_bf", "Formule (sans MG)"], ["formula_bf", "Formule (avec MG)"]] as [MetaMode, string][]).map(([mode, label]) => (
+            <button key={mode} onClick={() => setMetaMode(mode)} style={{ padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600, border: "1px solid " + (metaMode === mode ? C.coach : C.brdL), background: metaMode === mode ? C.coachS : C.s2, color: metaMode === mode ? C.coach : C.tx2 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {metaMode === "formula_no_bf" && (
+          <div style={{ background: C.s2, borderRadius: 10, padding: 10, marginBottom: 12, border: "1px solid " + C.brd, fontSize: 11, color: C.tx3 }}>
+            Formule Mifflin-St Jeor — nécessite poids, taille, âge et genre
+            {(!heightCm || !derivedAge || !gender) && <div style={{ color: C.o, marginTop: 6 }}>Complète taille, date de naissance et genre ci-dessus</div>}
+          </div>
+        )}
+        {metaMode === "formula_bf" && (
+          <div style={{ background: C.s2, borderRadius: 10, padding: 10, marginBottom: 12, border: "1px solid " + C.brd, fontSize: 11, color: C.tx3 }}>
+            Formule Katch-McArdle — nécessite poids et % de masse grasse
+          </div>
+        )}
+        <div>
+          <label style={labelStyle}>{metaMode === "manual" ? "Métabolisme de base (kcal/j)" : "Résultat calculé (kcal/j) — modifiable"}</label>
+          <input style={{ ...inputStyle, border: "1px solid " + (metaMode !== "manual" ? C.coach + "60" : C.brdL) }} type="number" min={800} max={6000} value={metaManual} onChange={e => setMetaManual(e.target.value)} placeholder="ex: 1850" />
+          {metaManual && <div style={{ fontSize: 11, color: C.tx3, marginTop: 4 }}>{parseInt(metaManual).toLocaleString("fr-FR")} kcal / jour</div>}
+        </div>
+
+        {errorProfile && <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: C.r + "15", border: "1px solid " + C.r + "40", fontSize: 13, color: C.r }}>{errorProfile}</div>}
+
+        <button
+          onClick={handleSaveProfile}
+          disabled={savingProfile}
+          style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: savingProfile ? C.s2 : C.coach, color: savingProfile ? C.tx3 : "#fff", fontSize: 15, fontWeight: 700, cursor: savingProfile ? "default" : "pointer", fontFamily: "inherit", marginTop: 24 }}
+        >
+          {savingProfile ? "Enregistrement..." : "Enregistrer le profil"}
+        </button>
+      </>)}
+
+      {/* ═══════════════════════════════════ TAB NUTRITION ═══════════════════════════════════ */}
+      {dataTab === "nutrition" && (<>
+
+        {/* Stratégie */}
+        <div style={sectionTitle}>Stratégie</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          {([["seche", "🔥 Sèche"], ["maintenance", "⚖️ Maintenance"], ["prise_de_masse", "💪 Prise de masse"]] as [NutritionStrategyType, string][]).map(([k, l]) => (
+            <button key={k} onClick={() => setNutStrategy(k)} style={{ flex: 1, padding: "10px 4px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 700, border: "1px solid " + (nutStrategy === k ? C.coach : C.brdL), background: nutStrategy === k ? C.coachS : C.s2, color: nutStrategy === k ? C.coach : C.tx2, lineHeight: 1.4 }}>
               {l}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Poids cible */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Poids cible (kg)</label>
-        <input style={inputStyle} type="number" min={30} max={250} step={0.1} placeholder="ex: 80.0" value={nutTargetWeight} onChange={e => setNutTargetWeight(e.target.value)} />
-      </div>
+        {/* Objectif poids */}
+        <div style={sectionTitle}>Objectif de poids</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          <div>
+            <label style={labelStyle}>Poids cible (kg)</label>
+            <input style={inputStyle} type="number" min={30} max={250} step={0.1} placeholder="ex: 80.0" value={nutTargetWeight} onChange={e => setNutTargetWeight(e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>Objectif hebdomadaire (kg/sem)</label>
+            <input style={{ ...inputStyle, border: "1px solid " + C.coach + "50", color: nutWeeklyTargetKg ? (parseFloat(nutWeeklyTargetKg) < 0 ? C.r : parseFloat(nutWeeklyTargetKg) > 0 ? C.g : C.b) : C.tx }} type="number" step={0.05} placeholder={nutStrategy === "seche" ? "ex: -0.3" : nutStrategy === "prise_de_masse" ? "ex: 0.2" : "ex: 0"} value={nutWeeklyTargetKg} onChange={e => setNutWeeklyTargetKg(e.target.value)} />
+          </div>
+        </div>
 
-      {/* NAP */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Niveau d'activité (NAP)</label>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* Presets objectif hebdo */}
+        <div style={{ display: "flex", gap: 5, marginBottom: 14, flexWrap: "wrap" as const }}>
+          {(nutStrategy === "seche"
+            ? [[-0.6,"−0.6"],[-0.5,"−0.5"],[-0.4,"−0.4"],[-0.3,"−0.3"],[-0.2,"−0.2"],[-0.1,"−0.1"]]
+            : nutStrategy === "prise_de_masse"
+            ? [[0.1,"+0.1"],[0.15,"+0.15"],[0.2,"+0.2"],[0.25,"+0.25"],[0.3,"+0.3"],[0.4,"+0.4"]]
+            : [[-0.1,"−0.1"],[0,"±0"],[0.1,"+0.1"]]
+          ).map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setNutWeeklyTargetKg(String(v))}
+              style={{ padding: "5px 10px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600,
+                border: "1px solid " + (nutWeeklyTargetKg === String(v) ? C.coach : C.brdL),
+                background: nutWeeklyTargetKg === String(v) ? C.coachS : C.s2,
+                color: nutWeeklyTargetKg === String(v) ? C.coach : C.tx2 }}>
+              {l as string}
+            </button>
+          ))}
+        </div>
+
+        {/* Calculateur auto */}
+        <div style={{ background: C.s2, borderRadius: 12, padding: "12px 14px", border: "1px solid " + C.coach + "30", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.coach, marginBottom: 10 }}>🧮 Calculateur automatique</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={{ ...labelStyle, color: C.tx3 }}>Objectif (kg)</label>
+              <input
+                style={{ ...inputStyle, fontSize: 13 }}
+                type="number" step={0.5} min={0.1}
+                placeholder={nutStrategy === "seche" ? "ex: 5" : nutStrategy === "prise_de_masse" ? "ex: 5" : "ex: 1"}
+                value={calcKg}
+                onChange={e => setCalcKg(e.target.value)}
+              />
+              <div style={{ fontSize: 9, color: C.tx3, marginTop: 3 }}>
+                {nutStrategy === "seche" ? "kg à perdre" : nutStrategy === "prise_de_masse" ? "kg à prendre" : "tolérance en kg"}
+              </div>
+            </div>
+            <div>
+              <label style={{ ...labelStyle, color: C.tx3 }}>Délai (mois)</label>
+              <input
+                style={{ ...inputStyle, fontSize: 13 }}
+                type="number" step={0.5} min={0.5}
+                placeholder="ex: 3"
+                value={calcMonths}
+                onChange={e => setCalcMonths(e.target.value)}
+              />
+            </div>
+          </div>
+          {calcKg && calcMonths && parseFloat(calcMonths) > 0 && (() => {
+            const weeks = parseFloat(calcMonths) * 4.33;
+            let rate = +(parseFloat(calcKg) / weeks).toFixed(2);
+            if (nutStrategy === "seche") rate = -Math.abs(rate);
+            const rateColor = rate < 0 ? C.r : rate > 0 ? C.g : C.b;
+            return (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: C.tx3 }}>
+                  → <span style={{ fontWeight: 700, color: rateColor }}>{rate > 0 ? "+" : ""}{rate} kg/sem</span>
+                  <span style={{ fontSize: 10, marginLeft: 6 }}>sur ~{Math.round(weeks)} sem.</span>
+                </div>
+                <button
+                  onClick={applyAutoCalc}
+                  style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: C.coach, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Appliquer
+                </button>
+              </div>
+            );
+          })()}
+          {nutWeeklyTargetKg && (
+            <div style={{ fontSize: 10, color: C.tx3 }}>
+              {nutStrategy === "seche" ? "Recommandé : −0.3 à −0.5 kg/sem (sèche propre)" : nutStrategy === "prise_de_masse" ? "Recommandé : +0.1 à +0.3 kg/sem (lean bulk)" : "Stable : ±0.1 kg/sem max"}
+            </div>
+          )}
+        </div>
+
+        {/* NAP */}
+        <div style={sectionTitle}>Niveau d'activité (NAP)</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
           {NAP_OPTIONS.map(opt => (
             <button key={opt.value} onClick={() => setNutNap(String(opt.value))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", border: "1px solid " + (nutNap === String(opt.value) ? C.coach : C.brdL), background: nutNap === String(opt.value) ? C.coachS : C.s2, textAlign: "left" }}>
               <div>
@@ -385,137 +550,117 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
           ))}
         </div>
         {tdee > 0 && (
-          <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
+          <div style={{ marginBottom: 14, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
             <span style={{ color: C.tx3 }}>TDEE (dépense totale) : </span>
             <span style={{ fontWeight: 800, color: C.tx }}>{tdee.toLocaleString("fr-FR")} kcal/j</span>
             <span style={{ color: C.tx3, fontSize: 10 }}> = BMR {bmr} × {nap}</span>
           </div>
         )}
-      </div>
 
-      {/* Déficit / Surplus / Tolérance selon stratégie */}
-      <div style={{ marginBottom: 14 }}>
-        {/* Toggle fixe / fourchette */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <label style={{ ...labelStyle, marginBottom: 0 }}>{stratPctMeta.label}</label>
-          <div style={{ display: "flex", gap: 4 }}>
-            {(["fixed", "range"] as DeficitMode[]).map(m => (
-              <button key={m} onClick={() => setNutDeficitMode(m)} style={{
-                padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-                fontFamily: "inherit", fontSize: 11, fontWeight: 600,
-                border: "1px solid " + (nutDeficitMode === m ? C.coach : C.brdL),
-                background: nutDeficitMode === m ? C.coachS : "transparent",
-                color: nutDeficitMode === m ? C.coach : C.tx3,
-              }}>
-                {m === "fixed" ? "% Fixe" : "Fourchette"}
+        {/* Déficit / Surplus / Tolérance selon stratégie */}
+        <div style={{ marginBottom: 14 }}>
+          {/* Toggle fixe / fourchette */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>{stratPctMeta.label}</label>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["fixed", "range"] as DeficitMode[]).map(m => (
+                <button key={m} onClick={() => setNutDeficitMode(m)} style={{
+                  padding: "4px 10px", borderRadius: 6, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 11, fontWeight: 600,
+                  border: "1px solid " + (nutDeficitMode === m ? C.coach : C.brdL),
+                  background: nutDeficitMode === m ? C.coachS : "transparent",
+                  color: nutDeficitMode === m ? C.coach : C.tx3,
+                }}>
+                  {m === "fixed" ? "% Fixe" : "Fourchette"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {nutDeficitMode === "fixed" ? (
+            <>
+              <input style={inputStyle} type="number" min={stratPctMeta.min} max={stratPctMeta.max} step={0.5} placeholder={stratPctMeta.placeholder} value={nutTargetPct} onChange={e => setNutTargetPct(e.target.value)} />
+              {nutTargetPct && tdee > 0 && (
+                <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
+                  <span style={{ color: C.tx3 }}>Calories cibles : </span>
+                  <span style={{ fontWeight: 800, color: nutStrategy === "seche" ? C.r : nutStrategy === "prise_de_masse" ? C.g : C.b }}>
+                    {computeTargetKcal(tdee, nutTargetPct, nutStrategy).toLocaleString("fr-FR")} kcal/j
+                  </span>
+                  <span style={{ color: C.tx3, fontSize: 11 }}> · tolérance ±5%</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 11, color: C.tx3, marginBottom: 6 }}>
+                Écart acceptable vs la cible kcal (valeurs signées, ex: -10 à +5)
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Min %</div>
+                  <input style={inputStyle} type="number" step={0.5} placeholder={nutStrategy === "prise_de_masse" ? "ex: +5" : "ex: -15"} value={nutRangeMin} onChange={e => setNutRangeMin(e.target.value)} />
+                </div>
+                <div style={{ color: C.tx3, fontSize: 13, paddingTop: 18 }}>→</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Max %</div>
+                  <input style={inputStyle} type="number" step={0.5} placeholder={nutStrategy === "seche" ? "ex: -5" : "ex: +15"} value={nutRangeMax} onChange={e => setNutRangeMax(e.target.value)} />
+                </div>
+              </div>
+              {nutRangeMin !== "" && nutRangeMax !== "" && tdee > 0 && (() => {
+                const minV = parseFloat(nutRangeMin), maxV = parseFloat(nutRangeMax);
+                const kcal = parseInt(nutTotalCalCoach) || tdee;
+                return (
+                  <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
+                    <span style={{ color: C.tx3 }}>Fourchette : </span>
+                    <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + minV / 100)).toLocaleString("fr-FR")}</span>
+                    <span style={{ color: C.tx3 }}> → </span>
+                    <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + maxV / 100)).toLocaleString("fr-FR")} kcal</span>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
+
+        {/* Mode de calcul calorique */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Mode de calcul calorique</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {([
+              ["nap",    "BMR × NAP",           "Calories fixes basées sur le niveau d'activité"],
+              ["active", "BMR + calories actives", "L'athlète saisit ses calories actives quotidiennes"],
+              ["hybrid", "Hybride",              "NAP par défaut, remplacé si l'athlète saisit ses calories actives"],
+            ] as [CalorieMode, string, string][]).map(([mode, label, sub]) => (
+              <button key={mode} onClick={() => setNutCalorieMode(mode)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", border: "1px solid " + (nutCalorieMode === mode ? C.coach : C.brdL), background: nutCalorieMode === mode ? C.coachS : C.s2, textAlign: "left" }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: nutCalorieMode === mode ? C.coach : C.tx }}>{label}</span>
+                  <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>{sub}</div>
+                </div>
+                {nutCalorieMode === mode && <span style={{ fontSize: 16, color: C.coach }}>✓</span>}
               </button>
             ))}
           </div>
         </div>
 
-        {nutDeficitMode === "fixed" ? (
-          <>
-            <input
-              style={inputStyle}
-              type="number" min={stratPctMeta.min} max={stratPctMeta.max} step={0.5}
-              placeholder={stratPctMeta.placeholder}
-              value={nutTargetPct}
-              onChange={e => setNutTargetPct(e.target.value)}
-            />
-            {nutTargetPct && tdee > 0 && (
-              <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
-                <span style={{ color: C.tx3 }}>Calories cibles : </span>
-                <span style={{ fontWeight: 800, color: nutStrategy === "seche" ? C.r : nutStrategy === "prise_de_masse" ? C.g : C.b }}>
-                  {computeTargetKcal(tdee, nutTargetPct, nutStrategy).toLocaleString("fr-FR")} kcal/j
-                </span>
-                <span style={{ color: C.tx3, fontSize: 11 }}> · tolérance ±5%</span>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 6 }}>
-              Écart acceptable vs la cible kcal (valeurs signées, ex: -10 à +5)
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Min %</div>
-                <input
-                  style={inputStyle}
-                  type="number" step={0.5} placeholder={nutStrategy === "prise_de_masse" ? "ex: +5" : "ex: -15"}
-                  value={nutRangeMin}
-                  onChange={e => setNutRangeMin(e.target.value)}
-                />
-              </div>
-              <div style={{ color: C.tx3, fontSize: 13, paddingTop: 18 }}>→</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Max %</div>
-                <input
-                  style={inputStyle}
-                  type="number" step={0.5} placeholder={nutStrategy === "seche" ? "ex: -5" : "ex: +15"}
-                  value={nutRangeMax}
-                  onChange={e => setNutRangeMax(e.target.value)}
-                />
-              </div>
-            </div>
-            {nutRangeMin !== "" && nutRangeMax !== "" && tdee > 0 && (() => {
-              const minV = parseFloat(nutRangeMin), maxV = parseFloat(nutRangeMax);
-              const kcal = parseInt(nutTotalCalCoach) || tdee;
-              return (
-                <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
-                  <span style={{ color: C.tx3 }}>Fourchette : </span>
-                  <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + minV / 100)).toLocaleString("fr-FR")}</span>
-                  <span style={{ color: C.tx3 }}> → </span>
-                  <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + maxV / 100)).toLocaleString("fr-FR")} kcal</span>
-                </div>
-              );
-            })()}
-          </>
-        )}
-      </div>
-
-      {/* Mode de calcul calorique */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Mode de calcul calorique</label>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {([
-            ["nap",    "BMR × NAP",           "Calories fixes basées sur le niveau d'activité"],
-            ["active", "BMR + calories actives", "L'athlète saisit ses calories actives quotidiennes"],
-            ["hybrid", "Hybride",              "NAP par défaut, remplacé si l'athlète saisit ses calories actives"],
-          ] as [CalorieMode, string, string][]).map(([mode, label, sub]) => (
-            <button key={mode} onClick={() => setNutCalorieMode(mode)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", border: "1px solid " + (nutCalorieMode === mode ? C.coach : C.brdL), background: nutCalorieMode === mode ? C.coachS : C.s2, textAlign: "left" }}>
-              <div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: nutCalorieMode === mode ? C.coach : C.tx }}>{label}</span>
-                <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>{sub}</div>
-              </div>
-              {nutCalorieMode === mode && <span style={{ fontSize: 16, color: C.coach }}>✓</span>}
-            </button>
-          ))}
+        {/* Total kcal */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Total calorique journalier cible (kcal)</label>
+          <input style={{ ...inputStyle, border: "1px solid " + (tdee > 0 ? C.coach + "60" : C.brdL) }} type="number" min={500} max={8000} placeholder="ex: 2200" value={nutTotalCalCoach} onChange={e => setNutTotalCalCoach(e.target.value)} />
+          {tdee > 0 && <div style={{ fontSize: 10, color: C.tx3, marginTop: 4 }}>Auto-calculé depuis TDEE — modifiable si besoin</div>}
         </div>
-      </div>
 
-      {/* Total kcal (affiché toujours, auto-calculé ou manuel) */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Total calorique journalier cible (kcal)</label>
-        <input style={{ ...inputStyle, border: "1px solid " + (tdee > 0 ? C.coach + "60" : C.brdL) }} type="number" min={500} max={8000} placeholder="ex: 2200" value={nutTotalCalCoach} onChange={e => setNutTotalCalCoach(e.target.value)} />
-        {tdee > 0 && <div style={{ fontSize: 10, color: C.tx3, marginTop: 4 }}>Auto-calculé depuis TDEE — modifiable si besoin</div>}
-      </div>
-
-      {/* ── Macronutriments ── */}
-      <div style={{ marginBottom: 6 }}>
+        {/* Macronutriments */}
+        <div style={sectionTitle}>Macronutriments</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <label style={{ ...labelStyle, marginBottom: 0 }}>Répartition des macros</label>
+          <span style={{ fontSize: 11, color: C.tx3 }}>Répartition</span>
           <button type="button" onClick={applyDefaultPcts} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid " + C.coach + "50", background: C.coachS, color: C.coach, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
             Suggestion {nutStrategy === "seche" ? "40/25/35" : nutStrategy === "prise_de_masse" ? "50/25/25" : "45/30/25"}
           </button>
         </div>
-
         {!totalRefKcal && (
           <div style={{ fontSize: 11, color: C.o, marginBottom: 10, padding: "6px 10px", borderRadius: 7, background: C.o + "12", border: "1px solid " + C.o + "30" }}>
             Renseigne les calories cibles ci-dessus pour que les grammes se calculent automatiquement.
           </div>
         )}
-
         {(() => {
           const pctSum = (parseFloat(nutGlucidesPct) || 0) + (parseFloat(nutLipidesPct) || 0) + (parseFloat(nutProteinesPct) || 0);
           const pctOk = pctSum === 0 || (pctSum >= 98 && pctSum <= 102);
@@ -541,7 +686,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
                   </div>
                 ))}
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
                 <span style={{ color: pctOk ? C.tx3 : C.r, fontWeight: pctOk ? 400 : 700 }}>
                   Total % : {pctSum}%{!pctOk && " ≠ 100%"}
                 </span>
@@ -557,16 +702,18 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
             </>
           );
         })()}
-      </div>
 
-      {/* ── Bouton unique ── */}
-      <button
-        onClick={handleSave}
-        disabled={saving || !nutLoaded}
-        style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: saving || !nutLoaded ? C.s2 : C.coach, color: saving || !nutLoaded ? C.tx3 : "#fff", fontSize: 15, fontWeight: 700, cursor: saving || !nutLoaded ? "default" : "pointer", fontFamily: "inherit", marginTop: 24 }}
-      >
-        {saving ? "Enregistrement..." : "Enregistrer"}
-      </button>
+        {errorNut && <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: C.r + "15", border: "1px solid " + C.r + "40", fontSize: 13, color: C.r }}>{errorNut}</div>}
+
+        <button
+          onClick={handleSaveNutrition}
+          disabled={savingNut || !nutLoaded}
+          style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: savingNut || !nutLoaded ? C.s2 : C.coach, color: savingNut || !nutLoaded ? C.tx3 : "#fff", fontSize: 15, fontWeight: 700, cursor: savingNut || !nutLoaded ? "default" : "pointer", fontFamily: "inherit", marginTop: 24 }}
+        >
+          {savingNut ? "Enregistrement..." : "Enregistrer le plan nutritionnel"}
+        </button>
+      </>)}
+
     </div>
   );
 
@@ -576,7 +723,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 480, background: C.s1, borderRadius: "16px 16px 0 0", maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+      <div style={{ width: "100%", maxWidth: 520, background: C.s1, borderRadius: "16px 16px 0 0", maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         {formContent}
       </div>
     </div>
