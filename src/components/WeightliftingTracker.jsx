@@ -47,6 +47,8 @@ const parseReps=r=>{const m=String(r||"").match(/(\d+)/);return m?+m[1]:0;};
 const e1rm=(kg,reps)=>reps===1?kg:Math.round(kg*(1+reps/30));
 // Normalize exercise name: strip tempo/pause/parenthetical suffixes to find base exercise
 const normalizeExName=(n)=>{let s=(n||"").trim();s=s.replace(/\s*\([^)]*\)\s*/g,"").trim();s=s.replace(/\s+(tempo|pause|isométrique|isometrique|iso|lent|explosif|excentrique|concentrique)\s*$/i,"").trim();return s;};
+const normForMatch=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+const fuzzyExMatch=(a,b)=>{const na=normForMatch(a),nb=normForMatch(b);if(na===nb)return true;const wa=na.split(' ').filter(Boolean),wb=nb.split(' ').filter(Boolean);const[sh,lg]=wa.length<=wb.length?[wa,wb]:[wb,wa];return sh.length>0&&sh.every(sw=>lg.some(lw=>lw.startsWith(sw)||sw.startsWith(lw)));}
 const getAllPRs=exos=>{const p={};Object.values(exos).flat().forEach(ex=>{const norm=normalizeExName(ex.name);Object.entries(ex.weeks||{}).forEach(([wk,w])=>{if(!w?.kg)return;const est=e1rm(w.kg,parseReps(w.repsRange)||1);if(!p[norm]||est>p[norm].est)p[norm]={kg:w.kg,reps:parseReps(w.repsRange),est,week:+wk,name:norm};});});return p;};
 const getMuscSets=(exos,exMeta)=>{const s={};Object.values(exos).flat().filter(ex=>{const et=ex.exType||(ex.isFlexibility?"mobilite":"muscu");return et==="muscu";}).forEach(ex=>{const lw=Math.max(...Object.keys(ex.weeks||{}).map(Number).filter(Boolean),0);if(!lw)return;const sets=ex.weeks[lw].sets||0;const meta=exMeta?.[ex.name]||exMeta?.[normalizeExName(ex.name)]||{};const primaries=normPrimary(meta.primary||ex.target);primaries.forEach(m=>{s[m]=(s[m]||0)+sets;});(meta.secondary||[]).forEach(m=>{s[m]=(s[m]||0)+sets*0.5;});});const r={};Object.entries(s).forEach(([k,v])=>{r[k]=Math.round(v);});return r;};
 const get1rmByWeek=(exos,name,tw)=>{const b={};const totalW=tw||6;const normTarget=normalizeExName(name).toLowerCase();Object.values(exos).flat().filter(e=>normalizeExName(e.name).toLowerCase()===normTarget).forEach(ex=>{Object.entries(ex.weeks||{}).forEach(([wk,w])=>{if(!w?.kg)return;const est=e1rm(w.kg,parseReps(w.repsRange)||1);if(!b[wk]||est>b[wk])b[wk]=est;});});return Array.from({length:totalW},(_,i)=>i+1).map(w=>({week:"S"+w,val:b[w]||null}));};
@@ -152,16 +154,16 @@ async function sSave(k,v,aid){
 
 // --- COMPONENTS ---
 
-function RIRMini({value,onChange}){
-  const idx=Math.max(0,RIR_OPTS.indexOf(value));const sy=useRef(null);
-  const go=d=>{const ni=idx+d;if(ni>=0&&ni<RIR_OPTS.length)onChange(RIR_OPTS[ni]);};const c=rC(value);
-  return(<div style={{position:"relative",width:44,height:72,overflow:"hidden",cursor:"ns-resize",borderRadius:8,background:C.s1,border:"1px solid "+C.brdL}} onWheel={e=>{e.preventDefault();go(e.deltaY>0?1:-1);}} onTouchStart={e=>{sy.current=e.touches[0].clientY;}} onTouchMove={e=>{if(!sy.current)return;const dy=sy.current-e.touches[0].clientY;if(Math.abs(dy)>14){go(dy>0?1:-1);sy.current=e.touches[0].clientY;}}}>
-    <div style={{position:"absolute",top:24,height:24,left:3,right:3,background:c+"25",borderRadius:5,zIndex:0}}/>
-    <div style={{position:"absolute",top:0,left:0,right:0,height:24,background:"linear-gradient(to bottom,"+C.s1+",transparent)",zIndex:2,pointerEvents:"none"}}/>
-    <div style={{position:"absolute",bottom:0,left:0,right:0,height:24,background:"linear-gradient(to top,"+C.s1+",transparent)",zIndex:2,pointerEvents:"none"}}/>
-    {[{v:RIR_OPTS[idx-1],d:-1,y:0},{v:value,d:0,y:24},{v:RIR_OPTS[idx+1],d:1,y:48}].map(({v,d,y})=>(
-      <div key={d} onClick={()=>d!==0&&v!==undefined&&go(d)} style={{position:"absolute",top:y,left:0,right:0,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:d===0?11:9,fontWeight:d===0?800:400,color:d===0?c:C.tx3,opacity:d===0?1:0.4,cursor:d!==0&&v!==undefined?"pointer":"default",zIndex:1,userSelect:"none",fontFamily:"monospace"}}>{v!==undefined?rL(v):""}</div>
-    ))}
+function RIRPicker({value,onChange}){
+  const[open,setOpen]=useState(false);const ref=useRef(null);const c=rC(value);
+  useEffect(()=>{if(!open)return;const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);},[open]);
+  return(<div ref={ref} style={{position:'relative',width:44}}>
+    <button onClick={()=>setOpen(v=>!v)} style={{width:44,height:28,borderRadius:7,border:'1.5px solid '+c+'60',background:c+'20',color:c,fontSize:12,fontWeight:800,cursor:'pointer',fontFamily:'monospace',lineHeight:1}}>
+      {rL(value)}
+    </button>
+    {open&&(<div style={{position:'absolute',bottom:'calc(100% + 4px)',left:'50%',transform:'translateX(-50%)',zIndex:200,background:C.s1,border:'1px solid '+C.brdL,borderRadius:10,padding:5,display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:3,boxShadow:'0 8px 32px rgba(0,0,0,0.6)',minWidth:148}}>
+      {RIR_OPTS.map(v=>{const vc=rC(v);const sel=value===v;return(<button key={v} onClick={()=>{onChange(v);setOpen(false);}} style={{padding:'6px 2px',borderRadius:6,border:'1.5px solid '+(sel?vc:C.brdL),background:sel?vc+'25':'transparent',color:sel?vc:C.tx2,fontSize:11,fontWeight:sel?800:500,cursor:'pointer',fontFamily:'monospace'}}>{rL(v)}</button>);})}
+    </div>)}
   </div>);
 }
 
@@ -255,7 +257,19 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   const togDoms=id=>setDomsZones(p=>p.includes(id)?p.filter(z=>z!==id):[...p,id]);
   const progPct=Math.round((Math.min(step,S_BILAN)/S_BILAN)*100);
   const bSm={width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,fontSize:16,cursor:"pointer",fontFamily:"inherit"};
-  const progBar=(<div style={{height:3,background:C.s2,borderRadius:2,overflow:"hidden",marginBottom:24}}><div style={{height:"100%",width:progPct+"%",background:C.ac,borderRadius:2,transition:"width 0.3s"}}/></div>);
+  const goBack=()=>{
+    if(step===0)return;
+    if(step<WELL_ITEMS.length){setStep(step-1);return;}
+    if(step===S_DOMS_ZONES){setStep(WELL_ITEMS.length-1);return;}
+    if(step===S_INJURY){setStep(vals.doms<=3?S_DOMS_ZONES:WELL_ITEMS.length-1);return;}
+    if(step===S_SLEEP){setStep(S_INJURY);return;}
+    if(step===S_WEIGHT){setStep(S_SLEEP);return;}
+    if(step===S_BILAN){setStep(S_WEIGHT);return;}
+  };
+  const progBar=(<div style={{marginBottom:24}}>
+    {step>0&&<button onClick={goBack} style={{background:'none',border:'none',color:C.tx3,fontSize:20,cursor:'pointer',fontFamily:'inherit',padding:'0 0 10px',display:'flex',alignItems:'center',gap:4,lineHeight:1}}>← <span style={{fontSize:11,color:C.tx3}}>Retour</span></button>}
+    <div style={{height:3,background:C.s2,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:progPct+"%",background:C.ac,borderRadius:2,transition:"width 0.3s"}}/></div>
+  </div>);
   const TimePick=({label,time,setTime})=>(<div style={{background:C.s1,borderRadius:12,padding:"12px 14px",flex:1,textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{label}</div><div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><div><button onClick={()=>setTime(t=>({...t,h:(t.h+1)%24}))} style={bSm}>+</button><div style={{fontSize:22,fontWeight:800,color:C.tx,fontFamily:"monospace",margin:"4px 0"}}>{String(time.h).padStart(2,"0")}</div><button onClick={()=>setTime(t=>({...t,h:(t.h-1+24)%24}))} style={bSm}>-</button></div><div style={{fontSize:18,color:C.tx3}}>:</div><div><button onClick={()=>setTime(t=>({...t,m:(t.m+15)%60}))} style={bSm}>+</button><div style={{fontSize:22,fontWeight:800,color:C.tx,fontFamily:"monospace",margin:"4px 0"}}>{String(time.m).padStart(2,"0")}</div><button onClick={()=>setTime(t=>({...t,m:(t.m-15+60)%60}))} style={bSm}>-</button></div></div></div>);
 
   // 5 wellness questions
@@ -377,7 +391,7 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
         {isIso&&<div style={{fontSize:11,color:C.tx2,textAlign:"center"}}>{r.holdSec}s</div>}
         {!isIso&&<span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span>}
         {!isIso&&<input type="number" value={r.reps||""} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={isAmrap?"max":"0"} style={iS}/>}
-        {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&<RIRMini value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
+        {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&<RIRPicker value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
         <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button><button onClick={viewOnly?undefined:()=>updR(i,{done:!r.done,skipped:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
       </div>{showPause&&<div style={{textAlign:"center",fontSize:9,color:C.tx3,padding:"2px 0",marginBottom:2}}>{r.pauseSec}s repos</div>}</div>);
     })}
@@ -854,6 +868,152 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
         <div style={{fontSize:10,color:C.tx3,textAlign:"center",marginTop:8}}>Tu pourras modifier chaque exercice dans l'éditeur</div>
       </div>)}
     </div>
+  </div>);
+}
+
+function RetoursView(){
+  const{user,profile}=useAuth();
+  const isAdmin=profile?.is_admin===true;
+  const[retours,setRetours]=useState([]);
+  const[votes,setVotes]=useState({});
+  const[profiles,setProfiles]=useState({});
+  const[loading,setLoading]=useState(true);
+  const[error,setError]=useState(null);
+  const[newContent,setNewContent]=useState('');
+  const[showAdd,setShowAdd]=useState(false);
+  const[submitting,setSubmitting]=useState(false);
+  const[submitErr,setSubmitErr]=useState(null);
+  const[confirmDel,setConfirmDel]=useState(null);
+
+  const load=async()=>{
+    setLoading(true);setError(null);
+    const{data:rData,error:rErr}=await supabase.from('retours').select('*').order('created_at',{ascending:false});
+    if(rErr){setError(rErr.code==='42P01'?'Les tables ne sont pas encore créées. Applique la migration SQL dans Supabase.':rErr.message);setLoading(false);return;}
+    const{data:vData}=await supabase.from('retours_votes').select('*');
+    // Fetch profiles for authors
+    const ids=[...new Set((rData||[]).map(r=>r.athlete_id))];
+    let profMap={};
+    if(ids.length>0){
+      const{data:pData}=await supabase.from('profiles').select('id,full_name,first_name,last_name').in('id',ids);
+      (pData||[]).forEach(p=>{profMap[p.id]=p;});
+    }
+    setRetours(rData||[]);
+    setProfiles(profMap);
+    if(vData){
+      const v={};
+      vData.forEach(vote=>{
+        if(!v[vote.retour_id])v[vote.retour_id]={likes:0,dislikes:0,myVote:null};
+        if(vote.vote==='like')v[vote.retour_id].likes++;
+        else v[vote.retour_id].dislikes++;
+        if(vote.user_id===user?.id)v[vote.retour_id].myVote=vote.vote;
+      });
+      setVotes(v);
+    }
+    setLoading(false);
+  };
+
+  useEffect(()=>{load();},[]);
+
+  const addRetour=async()=>{
+    if(!newContent.trim()||!user)return;
+    setSubmitting(true);setSubmitErr(null);
+    const{error:err}=await supabase.from('retours').insert({athlete_id:user.id,content:newContent.trim()});
+    if(err){setSubmitErr(err.code==='42P01'?'Table manquante — applique la migration SQL dans Supabase.':err.message);setSubmitting(false);return;}
+    setNewContent('');setShowAdd(false);setSubmitting(false);load();
+  };
+
+  const doVote=async(retourId,voteType)=>{
+    if(!user)return;
+    const current=votes[retourId]?.myVote;
+    if(current===voteType){
+      await supabase.from('retours_votes').delete().match({retour_id:retourId,user_id:user.id});
+    }else{
+      await supabase.from('retours_votes').upsert({retour_id:retourId,user_id:user.id,vote:voteType},{onConflict:'retour_id,user_id'});
+    }
+    load();
+  };
+
+  const deleteRetour=async(id)=>{
+    await supabase.from('retours').delete().eq('id',id);
+    setConfirmDel(null);load();
+  };
+
+  const getName=athleteId=>{
+    if(athleteId===user?.id)return profile?([profile.first_name,profile.last_name].filter(Boolean).join(' ')||profile.full_name||'Moi'):'Moi';
+    const p=profiles[athleteId];
+    return p?([p.first_name,p.last_name].filter(Boolean).join(' ')||p.full_name||'Athlète'):'Athlète';
+  };
+
+  const fmtDate=dt=>{const d=new Date(dt);const now=new Date();const diff=Math.floor((now-d)/60000);if(diff<1)return"à l'instant";if(diff<60)return diff+'min';if(diff<1440)return Math.floor(diff/60)+'h';return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});};
+
+  return(<div style={{padding:'16px 16px 80px'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+      <div style={{fontSize:20,fontWeight:800,letterSpacing:'-0.5px'}}>Retours</div>
+      <button onClick={()=>{setShowAdd(v=>!v);setSubmitErr(null);}} style={{padding:'7px 14px',borderRadius:10,border:'none',background:C.ac,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>+ Ajouter</button>
+    </div>
+    <div style={{fontSize:12,color:C.tx3,marginBottom:20}}>Remarques & suggestions de la communauté</div>
+
+    {showAdd&&(<div style={{background:C.s1,borderRadius:14,padding:16,border:'1px solid '+C.brdL,marginBottom:16}}>
+      <div style={{fontSize:12,fontWeight:600,color:C.tx2,marginBottom:8}}>Nouvelle remarque</div>
+      <textarea value={newContent} onChange={e=>setNewContent(e.target.value)} placeholder="Partage une réflexion, une suggestion, un retour sur l'app..." rows={4} style={{width:'100%',padding:'10px 12px',borderRadius:10,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontFamily:'inherit',resize:'none',boxSizing:'border-box',outline:'none',lineHeight:1.5}}/>
+      {submitErr&&<div style={{marginTop:8,padding:'8px 12px',borderRadius:8,background:C.rS,border:'1px solid '+C.r+'40',fontSize:12,color:C.r}}>{submitErr}</div>}
+      <div style={{display:'flex',gap:8,marginTop:10}}>
+        <button onClick={()=>{setShowAdd(false);setSubmitErr(null);}} style={{flex:1,padding:'10px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Annuler</button>
+        <button onClick={addRetour} disabled={!newContent.trim()||submitting} style={{flex:2,padding:'10px 0',borderRadius:10,border:'none',background:newContent.trim()&&!submitting?C.ac:'#333',color:newContent.trim()&&!submitting?'#fff':C.tx3,fontSize:13,fontWeight:700,cursor:newContent.trim()&&!submitting?'pointer':'default',fontFamily:'inherit'}}>{submitting?'Envoi...':'Publier'}</button>
+      </div>
+    </div>)}
+
+    {loading?<div style={{textAlign:'center',padding:'40px 0',color:C.tx3,fontSize:13}}>Chargement...</div>:
+     error?(<div style={{padding:'16px',borderRadius:12,background:C.rS,border:'1px solid '+C.r+'40',marginTop:8}}>
+      <div style={{fontSize:13,fontWeight:700,color:C.r,marginBottom:4}}>Erreur</div>
+      <div style={{fontSize:12,color:C.r,lineHeight:1.5}}>{error}</div>
+      {error.includes('migration')&&<div style={{marginTop:10,padding:'10px 12px',borderRadius:8,background:'rgba(0,0,0,0.2)',fontSize:11,color:C.tx3,fontFamily:'monospace',lineHeight:1.7}}>Supabase → SQL Editor → colle le contenu de :<br/>supabase/migrations/20260412_retours.sql</div>}
+     </div>):(
+      retours.length===0?(<div style={{textAlign:'center',padding:'40px 0'}}>
+        <div style={{fontSize:32,marginBottom:12}}>💬</div>
+        <div style={{fontSize:14,color:C.tx3}}>Aucun retour pour l'instant. Sois le premier !</div>
+      </div>):(
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {retours.map(r=>{
+            const v=votes[r.id]||{likes:0,dislikes:0,myVote:null};
+            const name=getName(r.athlete_id);
+            const isOwn=r.athlete_id===user?.id;
+            return(<div key={r.id} style={{background:C.s1,borderRadius:14,padding:'14px 16px',border:'1px solid '+C.brd}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <div style={{width:28,height:28,borderRadius:'50%',background:C.acS,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:C.ac,flexShrink:0}}>{name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2)||'?'}</div>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.tx}}>{name}{isOwn&&<span style={{fontSize:9,color:C.tx3,fontWeight:400,marginLeft:4}}>(moi)</span>}</div>
+                    <div style={{fontSize:10,color:C.tx3}}>{fmtDate(r.created_at)}</div>
+                  </div>
+                </div>
+                {(isOwn||isAdmin)&&<button onClick={()=>setConfirmDel(r.id)} style={{background:'none',border:'none',color:C.tx3,fontSize:14,cursor:'pointer',fontFamily:'inherit',padding:'0 4px'}}>✕</button>}
+              </div>
+              <div style={{fontSize:13,color:C.tx,lineHeight:1.6,marginBottom:12}}>{r.content}</div>
+              <div style={{display:'flex',gap:8}}>
+                <button onClick={()=>doVote(r.id,'like')} style={{display:'flex',alignItems:'center',gap:5,padding:'5px 12px',borderRadius:8,border:'1.5px solid '+(v.myVote==='like'?C.g:C.brdL),background:v.myVote==='like'?C.gS:'transparent',color:v.myVote==='like'?C.g:C.tx3,fontSize:12,fontWeight:v.myVote==='like'?700:400,cursor:'pointer',fontFamily:'inherit'}}>
+                  👍 <span>{v.likes}</span>
+                </button>
+                <button onClick={()=>doVote(r.id,'dislike')} style={{display:'flex',alignItems:'center',gap:5,padding:'5px 12px',borderRadius:8,border:'1.5px solid '+(v.myVote==='dislike'?C.r:C.brdL),background:v.myVote==='dislike'?C.rS:'transparent',color:v.myVote==='dislike'?C.r:C.tx3,fontSize:12,fontWeight:v.myVote==='dislike'?700:400,cursor:'pointer',fontFamily:'inherit'}}>
+                  👎 <span>{v.dislikes}</span>
+                </button>
+              </div>
+            </div>);
+          })}
+        </div>
+      )
+    )}
+
+    {confirmDel&&(<div onClick={()=>setConfirmDel(null)} style={{position:'fixed',inset:0,zIndex:400,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.s1,borderRadius:16,padding:24,width:'100%',maxWidth:320}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:8}}>Supprimer ce retour ?</div>
+        <div style={{fontSize:13,color:C.tx3,marginBottom:20}}>Cette action est irréversible.</div>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={()=>setConfirmDel(null)} style={{flex:1,padding:'10px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Annuler</button>
+          <button onClick={()=>deleteRetour(confirmDel)} style={{flex:1,padding:'10px 0',borderRadius:10,border:'none',background:C.r,color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
+        </div>
+      </div>
+    </div>)}
   </div>);
 }
 
@@ -1415,7 +1575,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 <div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5}}>Repetitions / Duree</div><input type="text" value={wd.repsRange||""} placeholder={isFlex?"30s ou 10":"10 ou 8-12"} onChange={e=>updField(ex.id,"repsRange",e.target.value)} style={{...fS,textAlign:"left",paddingLeft:10}}/></div>
                 <div style={{display:"grid",gridTemplateColumns:isFlex?"1fr":"1fr 1fr",gap:8,marginBottom:14}}>
                   <div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5,textAlign:"center"}}>Tempo</div><input type="text" value={wd.tempo||""} placeholder="3-1-2-0" onChange={e=>updField(ex.id,"tempo",e.target.value)} style={{...fS,fontSize:12}}/></div>
-                  {!isFlex&&<div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5,textAlign:"center"}}>RIR cible</div><div style={{display:"flex",justifyContent:"center"}}><RIRMini value={wd.rir??2} onChange={v=>updField(ex.id,"rir",v)}/></div></div>}
+                  {!isFlex&&<div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5,textAlign:"center"}}>RIR cible</div><div style={{display:"flex",justifyContent:"center"}}><RIRPicker value={wd.rir??2} onChange={v=>updField(ex.id,"rir",v)}/></div></div>}
                 </div>
                 {!isFlex&&(<div style={{marginBottom:14}}>
                   <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Methode</div>
@@ -2063,7 +2223,8 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const[bankSearch,setBankSearch]=useState("");
   const[bankPick,setBankPick]=useState(null);
   const[bankForm,setBankForm]=useState({sets:3,repsRange:"10",kg:"",rir:2});
-  useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type').order('name').then(({data})=>{if(data)setBankExos(data);});},[]);
+  const[videoEx,setVideoEx]=useState(null);
+  useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type,youtube_id,image_url').order('name').then(({data})=>{if(data)setBankExos(data);});},[]);
   const bankFiltered=bankExos.filter(e=>!bankSearch||e.name.toLowerCase().includes(bankSearch.toLowerCase())).slice(0,30);
   const addFromBankConfirm=()=>{
     if(!bankPick||!sid)return;
@@ -2171,13 +2332,19 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;
         const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];
         const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
+        const bankEx=bankExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
+        const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
         return(
           <div key={ex.id}>
             <div style={inSS?{background:"transparent",overflow:"hidden"}:{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}>
               <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
                 <div style={{width:3,height:32,borderRadius:2,background:allDone?C.g:bt.c,flexShrink:0}}/>
                 <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&method!=="superset"&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&method!=="superset"&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>{rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}<span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span></div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                  {hasVideo&&<button onClick={e=>{e.stopPropagation();setVideoEx(bankEx);}} style={{background:'none',border:'none',color:C.tx3,fontSize:16,cursor:'pointer',padding:'0',lineHeight:1,pointerEvents:'all'}} title="Voir la vidéo">📹</button>}
+                  {rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}
+                  <span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span>
+                </div>
               </div>
               {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
             </div>
@@ -2215,6 +2382,22 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
     {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={endSess} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
     {sessIsDone&&<div style={{marginTop:16}}><div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Séance validée !</div>{sessionLogs?.[sid+"_"+wk]?.note&&<div style={{padding:"10px 12px",borderRadius:8,background:C.s2,fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic",marginBottom:6}}>"{sessionLogs[sid+"_"+wk].note}"</div>}{sessionLogs?.[sid+"_"+wk]?.duration&&<div style={{fontSize:11,color:C.tx3,textAlign:"center",marginBottom:8}}>Durée : {fmtTime(sessionLogs[sid+"_"+wk].duration)}</div>}{!viewOnly&&<button onClick={()=>uncompleteSession(sid,wk)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler la validation</button>}</div>}
     {showEndModal&&<SessionEndModal duration={endDuration} onSave={onSessValidate} C={C}/>}
+    {videoEx&&(<div onClick={()=>setVideoEx(null)} style={{position:'fixed',inset:0,zIndex:500,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:520}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{videoEx.name}</div>
+          <button onClick={()=>setVideoEx(null)} style={{background:'none',border:'none',color:C.tx2,fontSize:24,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>×</button>
+        </div>
+        {videoEx.youtube_id?(
+          <div style={{position:'relative',paddingBottom:'56.25%',height:0,overflow:'hidden',borderRadius:12,background:C.s1}}>
+            <iframe src={'https://www.youtube.com/embed/'+videoEx.youtube_id+'?autoplay=1'} style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',border:'none'}} allow="autoplay; encrypted-media" allowFullScreen/>
+          </div>
+        ):videoEx.image_url?(
+          <img src={videoEx.image_url} style={{width:'100%',borderRadius:12,display:'block'}} alt={videoEx.name}/>
+        ):null}
+        <button onClick={()=>setVideoEx(null)} style={{width:'100%',marginTop:14,padding:'11px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Fermer</button>
+      </div>
+    </div>)}
     {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={()=>setAddBankModal(true)} style={{width:"100%",marginTop:8,padding:"11px 0",borderRadius:12,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>+ Ajouter un exercice depuis la banque</button>}
     {addBankModal&&(<div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end"}} onClick={()=>setAddBankModal(false)}>
       <div style={{background:C.s1,borderRadius:"16px 16px 0 0",padding:20,width:"100%",maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
@@ -3313,8 +3496,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     if(sessions.length===1){const sid=sessions[0].id;setExos(prev=>({...prev,[sid]:[...(prev[sid]||[]),makeEx(sid)]}));setCoachTab("prog");setBankAddMsg('Ajouté à '+sessions[0].name+' !');setTimeout(()=>setBankAddMsg(''),2500);}
     else setBankAddEx(ex);
   };
-  const coachTabs=[{k:"prog",l:"Prog"},{k:"exos",l:"Exos"},{k:"banque",l:"Banque"},{k:"config",l:"Config"},{k:"stats",l:"Stats"},{k:"data",l:"Données"}];
-  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"},{k:"alim",l:"Alim"},{k:"profil",l:"Profil"}];
+  const coachTabs=[{k:"prog",l:"Prog"},{k:"exos",l:"Exos"},{k:"banque",l:"Banque"},{k:"config",l:"Config"},{k:"stats",l:"Stats"},{k:"data",l:"Données"},{k:"retours",l:"Retours"}];
+  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"},{k:"alim",l:"Alim"},{k:"profil",l:"Profil"},{k:"retours",l:"Retours"}];
   const activeTabs=mode==="coach"?coachTabs:athTabs;const activeTab=mode==="coach"?coachTab:tab;const setActiveTab=mode==="coach"?setCoachTab:setTab;
   const tabS=t=>({flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(activeTab===t?(mode==="coach"?C.coach:C.ac):"transparent"),background:"transparent",color:activeTab===t?(mode==="coach"?C.coach:C.ac):C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"});
 
@@ -3541,6 +3724,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         injuries={injuries} setInjuries={setInjuries}
         weeksArr={weeksArr}
       /></>)}
+      {coachTab==="retours"&&<RetoursView/>}
     </div>)}
 
     {mode==="athlete"&&tab!=="log"&&(()=>{const lsA=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:sess_start')||'null');if(d?.sid&&d?.wk){const s=sessions.find(x=>x.id===d.sid);return s?{...d,name:s.name}:null;}return null;}catch{return null;}})();const lsF=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:free_start')||'null');if(d?.id){const f=(freeSessions||[]).find(x=>x.id===d.id);return f&&!f.completed?{...d,name:f.name}:null;}return null;}catch{return null;}})();if(!lsA&&!lsF)return null;const active=lsA||lsF;return(<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
@@ -3798,6 +3982,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           </div>
         )}
       </div>)}
+
+      {tab==="retours"&&<RetoursView/>}
 
     </>)}
 
