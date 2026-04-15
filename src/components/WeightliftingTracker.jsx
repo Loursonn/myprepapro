@@ -369,7 +369,7 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   </div>);
 }
 
-function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,setAthleteNotes,method,methodParams,allMethods,exosMap,viewOnly=false}){
+function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,setAthleteNotes,method,methodParams,allMethods,exosMap,viewOnly=false,onTimerStart=null,postSession=false}){
   const initRows=()=>generateRows(planned,method,methodParams);
   const rows=(()=>{const stored=sessionSets[storeKey];if(!stored||!stored.length)return initRows();const specialType={cluster:"cluster",myoreps:"activation",restpause:"round",amrap:"amrap",isometrique:"iso",dropset:"drop"}[method||""];if(specialType&&!stored.some(r=>r.type===specialType))return initRows();if(!specialType&&stored.some(r=>r.type!=="set"))return initRows();return stored;})();
   const upd=(i,f,v)=>updateSets(storeKey,rows.map((r,j)=>j===i?{...r,[f]:v}:r));
@@ -385,17 +385,20 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
     {planned?.repsRange&&<div style={{padding:"6px 10px",borderRadius:7,background:C.acS,border:"1px solid "+C.ac+"30",marginBottom:10,fontSize:11,color:C.ac}}>Cible: {planned.repsRange} reps</div>}
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><div style={{flex:1,height:3,background:C.s2,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:(rows.length?(done/rows.length)*100:0)+"%",background:C.g,borderRadius:2,transition:"width 0.3s"}}/></div><span style={{fontSize:10,color:done===rows.length&&rows.length>0?C.g:C.tx3,fontWeight:600}}>{done}/{rows.length}</span></div>
     {rows.map((r,i)=>{const isIso=r.type==="iso";const isAmrap=r.type==="amrap";const isDrop=r.type==="drop";const isMini=r.type==="mini";const isCluster=r.type==="cluster";const showPause=((r.type==="round"||r.type==="mini")&&i<rows.length-1&&rows[i+1]?.type===r.type)||(isCluster&&!r.isLast&&i<rows.length-1&&rows[i+1]?.type==="cluster");
-      return(<div key={i}><div style={{display:"grid",gridTemplateColumns:isIso?"40px 1fr 28px 28px":"40px 1fr 10px 1fr "+((!isAmrap&&!isMini&&!isDrop&&!isCluster)?"44px ":"")+"28px 28px",gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#C060D008":C.s2,border:"1px solid "+(r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#C060D030":C.brd),opacity:r.done||r.skipped?0.5:1,transition:"all 0.2s"}}>
+      const delCol=postSession&&!viewOnly?" 24px":"";
+      return(<div key={i}><div style={{display:"grid",gridTemplateColumns:isIso?"40px 1fr 28px 28px"+delCol:"40px 1fr 10px 1fr "+((!isAmrap&&!isMini&&!isDrop&&!isCluster)?"44px ":"")+"28px 28px"+delCol,gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#C060D008":C.s2,border:"1px solid "+(r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#C060D030":C.brd),opacity:r.skipped?0.5:1,transition:"all 0.2s"}}>
         <span style={{fontSize:9,color:rowC(r),fontWeight:600,textAlign:"center"}}>{rowLabel(r)}</span>
         {!isIso&&<input type="number" step="0.5" value={r.kg||""} onChange={viewOnly?undefined:e=>upd(i,"kg",+e.target.value)} readOnly={viewOnly} placeholder="0" style={iS}/>}
         {isIso&&<div style={{fontSize:11,color:C.tx2,textAlign:"center"}}>{r.holdSec}s</div>}
         {!isIso&&<span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span>}
         {!isIso&&<input type="number" value={r.reps||""} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={isAmrap?"max":"0"} style={iS}/>}
         {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&<RIRPicker value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
-        <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button><button onClick={viewOnly?undefined:()=>updR(i,{done:!r.done,skipped:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
+        <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button>
+        <button onClick={viewOnly?undefined:()=>{const nd=!r.done;updR(i,{done:nd,skipped:false});if(nd&&onTimerStart)onTimerStart();}} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
+        {postSession&&!viewOnly&&<button onClick={()=>updateSets(storeKey,rows.filter((_,j)=>j!==i))} style={{width:22,height:22,borderRadius:6,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>}
       </div>{showPause&&<div style={{textAlign:"center",fontSize:9,color:C.tx3,padding:"2px 0",marginBottom:2}}>{r.pauseSec}s repos</div>}</div>);
     })}
-    {(!method||method==="excentrique")&&!viewOnly&&<button onClick={()=>updateSets(storeKey,[...rows,{type:"set",kg:rows[rows.length-1]?.kg||0,reps:rows[rows.length-1]?.reps||0,rir:2,done:false}])} style={{width:"100%",padding:"7px 0",borderRadius:8,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>+ Serie</button>}
+    {((!method||method==="excentrique")||postSession)&&!viewOnly&&<button onClick={()=>updateSets(storeKey,[...rows,{type:"set",kg:rows[rows.length-1]?.kg||0,reps:rows[rows.length-1]?.reps||0,rir:2,done:false}])} style={{width:"100%",padding:"7px 0",borderRadius:8,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>+ Série</button>}
     <div style={{marginTop:14}}><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Mon ressenti</div><textarea value={note} onChange={viewOnly?undefined:e=>setAthleteNotes&&setAthleteNotes(p=>({...p,[storeKey]:e.target.value}))} readOnly={viewOnly} placeholder="Notes perso, sensations..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/></div>
   </div>);
 }
@@ -1161,7 +1164,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   // Close dropdown on click outside
   useEffect(()=>{if(!showExDropdown)return;const h=e=>{if(dropRef.current&&!dropRef.current.contains(e.target))setShowExDropdown(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[showExDropdown]);
   // Fetch exercises from Supabase DB on mount
-  useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type,secondary').order('name').then(({data})=>{if(data)setSupabaseExos(data);});},[]);
+  useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type,secondary,youtube_id,image_url').order('name').then(({data})=>{if(data)setSupabaseExos(data);});},[]);
   // Inject drag shake keyframe
   useEffect(()=>{const s=document.createElement('style');s.id='exShakeKf';s.textContent='@keyframes exShake{0%,100%{transform:rotate(0deg) translateX(0)}25%{transform:rotate(-0.6deg) translateX(-1.5px)}75%{transform:rotate(0.6deg) translateX(1.5px)}}';if(!document.getElementById('exShakeKf'))document.head.appendChild(s);return()=>{const el=document.getElementById('exShakeKf');if(el)el.remove();};},[]);
   // Build unified exercise DB for picker — deduplicate by normalized name
@@ -1175,6 +1178,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const[undoStack,setUndoStack]=useState([]);
   const[editingSession,setEditingSession]=useState(null);
   const[newSessForm,setNewSessForm]=useState(false);
+  const[videoEx,setVideoEx]=useState(null);
   const[newSess,setNewSess]=useState({name:"",short:""});
   const[editingBlocs,setEditingBlocs]=useState(false);
   const[newBlocForm,setNewBlocForm]=useState(false);
@@ -1529,6 +1533,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           <div style={{padding:bloc?"6px 8px":"0"}}>
           {groupExs.map(ex=>{
             const exIdx=exList.indexOf(ex);const wd=ex.weeks[week]||{};const isOpen=openEx===ex.id;const sk=ex.id+"_"+week;const aNote=athleteNotes[sk]||"";const curM=allMethods[wd.method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";const exTier=getExTier(ex.name,ex);const exTc=tierCfg[exTier]||tierCfg[3];const typeLabels={muscu:"Muscu",plio:"Plio",mobilite:"Mobilité",halterophilie:"Halté."};const typeColors={muscu:C.tx3,plio:C.o,mobilite:C.b,halterophilie:"#8b5cf6"};
+            const bankEx=supabaseExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
+            const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
             return(<div key={ex.id} data-exid={ex.id} draggable={true} onDragStart={e=>{setDragId(ex.id);e.dataTransfer.effectAllowed="move";}} onDragOver={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();setDragOverId(ex.id);if(dragId)setDragOverBloc(ex.bloc||null);}} onDrop={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();if(dragId&&dragId!==ex.id)moveExToBloc(dragId,ex.id,ex.bloc);setDragId(null);setDragOverId(null);setDragOverBloc(null);}} onDragEnd={()=>{setDragId(null);setDragOverId(null);setDragOverBloc(null);}}
               onTouchStart={e=>{const t=e.touches[0];touchStartPosRef.current={x:t.clientX,y:t.clientY};touchTimerRef.current=setTimeout(()=>{setTouchDragId(ex.id);setDragId(ex.id);if(navigator.vibrate)navigator.vibrate(40);},800);}}
               onTouchMove={e=>{if(!touchDragId){const t=e.touches[0];if(Math.abs(t.clientX-(touchStartPosRef.current?.x||0))>8||Math.abs(t.clientY-(touchStartPosRef.current?.y||0))>8)clearTimeout(touchTimerRef.current);return;}e.preventDefault();const t=e.touches[0];const hit=[...document.querySelectorAll('[data-exid]')].find(el=>{const r=el.getBoundingClientRect();return t.clientY>=r.top&&t.clientY<=r.bottom;});if(hit&&hit.dataset.exid!==touchDragId){setDragOverId(hit.dataset.exid);setDragOverBloc(exList.find(x=>x.id===hit.dataset.exid)?.bloc||null);}}}
@@ -1547,6 +1553,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
                   {aNote&&<span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>retour</span>}
+                  {hasVideo&&<button onClick={e=>{e.stopPropagation();setVideoEx(bankEx);}} style={{background:'none',border:'none',color:C.tx3,fontSize:16,cursor:'pointer',padding:'0',lineHeight:1}} title="Voir la vidéo">📹</button>}
                   <button onClick={e=>{e.stopPropagation();moveExercise(ex.id,-1);}} disabled={exIdx===0} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:exIdx===0?C.tx3+"40":C.tx2,fontSize:10,cursor:exIdx===0?"default":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
                   <button onClick={e=>{e.stopPropagation();moveExercise(ex.id,1);}} disabled={exIdx===exList.length-1} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:exIdx===exList.length-1?C.tx3+"40":C.tx2,fontSize:10,cursor:exIdx===exList.length-1?"default":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↓</button>
                   <button onClick={e=>{e.stopPropagation();removeExercise(ex.id);}} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>x</button>
@@ -1673,6 +1680,20 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         </div>
       )}
     </div>
+  {videoEx&&(<div onClick={()=>setVideoEx(null)} style={{position:'fixed',inset:0,zIndex:500,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{width:'100%',maxWidth:480}} onClick={e=>e.stopPropagation()}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{videoEx.name}</div>
+        <button onClick={()=>setVideoEx(null)} style={{background:'none',border:'none',color:C.tx2,fontSize:24,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>×</button>
+      </div>
+      {videoEx.youtube_id?(<div style={{position:'relative',paddingBottom:'56.25%',background:'#000',borderRadius:12,overflow:'hidden'}}>
+        <iframe src={'https://www.youtube.com/embed/'+videoEx.youtube_id+'?autoplay=1'} style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',border:'none'}} allow="autoplay; encrypted-media" allowFullScreen/>
+      </div>):videoEx.image_url?(
+        <img src={videoEx.image_url} style={{width:'100%',borderRadius:12,display:'block'}} alt={videoEx.name}/>
+      ):null}
+      <button onClick={()=>setVideoEx(null)} style={{width:'100%',marginTop:14,padding:'11px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Fermer</button>
+    </div>
+  </div>)}
   </div>);
 }
 
@@ -2189,12 +2210,13 @@ function SessionEndModal({duration,onSave,C}){
   </div></>);
 }
 
-function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions,onAddExercise}){
+function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions,onAddExercise,weekSchedule={}}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const[step,setStep]=useState(initialSess?1:0);const[wk,setWk]=useState(currentWeek);
   const[selectedSess,setSelectedSess]=useState(initialSess||null);const[openEx,setOpenEx]=useState(null);
   const[showEndModal,setShowEndModal]=useState(false);const[endDuration,setEndDuration]=useState(0);
+  const[showSkipWarning,setShowSkipWarning]=useState(false);
   const[selectedFree,setSelectedFree]=useState(null);const[showFreeEndModal,setShowFreeEndModal]=useState(false);const[freeEndDuration,setFreeEndDuration]=useState(0);
   const[sessStartedAt,setSessStartedAt]=useState(null);const[elapsedSecs,setElapsedSecs]=useState(0);
   const[freeStartedAt,setFreeStartedAt]=useState(null);const[freeElapsed,setFreeElapsed]=useState(0);
@@ -2261,7 +2283,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
       const muscles=[...new Set(sessExos.map(e=>e.target))];
       const dayLabel=s.day_of_week!=null?DAY_S[s.day_of_week]:null;
       const sLog=sessionLogs?.[s.id+"_"+wk];
-      return(<button key={s.id} onClick={()=>{if(!done&&hasExos&&!viewOnly){setSelectedSess(s);setStep(1);setOpenEx(null);}}} style={{width:"100%",padding:0,borderRadius:14,border:"1.5px solid "+(done?C.g+"40":C.brd),background:C.s1,cursor:done||!hasExos||viewOnly?"default":"pointer",fontFamily:"inherit",textAlign:"left",display:"block",opacity:hasExos?1:0.35,overflow:"hidden",position:"relative",transition:"all 0.2s",boxSizing:"border-box"}}>
+      return(<button key={s.id} onClick={()=>{if(hasExos&&!viewOnly){setSelectedSess(s);setStep(1);setOpenEx(null);}}} style={{width:"100%",padding:0,borderRadius:14,border:"1.5px solid "+(done?C.g+"40":C.brd),background:C.s1,cursor:!hasExos||viewOnly?"default":"pointer",fontFamily:"inherit",textAlign:"left",display:"block",opacity:hasExos?1:0.35,overflow:"hidden",position:"relative",transition:"all 0.2s",boxSizing:"border-box"}}>
         {done&&<div style={{position:"absolute",top:0,left:0,right:0,height:3,background:C.g,borderRadius:"14px 14px 0 0"}}/>}
         <div style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:44,height:44,borderRadius:12,background:done?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1.5px solid "+(done?C.g+"40":C.ac+"30")}}>
@@ -2284,6 +2306,53 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
       </button>);})}</div>);})()}
     {(()=>{const next=sessions.find(s=>!(completedSessions[wk]||[]).includes(s.id)&&(exos[s.id]||[]).length>0);if(!next)return weekPct>=100?<div style={{padding:"14px",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:13,fontWeight:700,textAlign:"center"}}>Semaine {wk} complete !</div>:null;if(viewOnly)return null;return(<button onClick={()=>{setSelectedSess(next);setStep(1);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",letterSpacing:"-0.3px"}}>Commencer {next.short} - {next.name} ›</button>);})()}
     {!viewOnly&&freeSessions.filter(f=>f.date===new Date().toISOString().slice(0,10)).map(f=>(<button key={f.id} onClick={()=>{setSelectedFree(f);setStep(2);}} style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid "+(f.completed?C.g+"40":C.brdL),background:C.s1,cursor:"pointer",fontFamily:"inherit",textAlign:"left",marginTop:6,display:"flex",alignItems:"center",gap:10}}><div style={{width:38,height:38,borderRadius:10,background:f.completed?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📝</div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:f.completed?C.g:C.tx}}>{f.name}</div><div style={{fontSize:10,color:C.tx3}}>{f.exercises.length} exo{f.completed?" · Terminée":""}</div></div>{f.completed&&<span style={{color:C.g,fontSize:14}}>✓</span>}</button>))}
+    {(()=>{
+      const extras=weekSchedule?.extras||{};
+      // Calculer la plage de dates de la semaine sélectionnée
+      const wkExtras=(()=>{
+        if(blockConfig?.startDate){
+          const s=new Date(blockConfig.startDate);
+          s.setDate(s.getDate()+(wk-1)*7);
+          const e=new Date(s);e.setDate(e.getDate()+6);
+          const fmt=d=>d.toISOString().slice(0,10);
+          const allEntries=[];
+          for(const[dateKey,acts] of Object.entries(extras)){
+            const d=dateKey.slice(0,4)+"-"+dateKey.slice(4,6)+"-"+dateKey.slice(6,8);
+            if(d>=fmt(s)&&d<=fmt(e))acts.forEach(a=>allEntries.push({...a,date:d}));
+          }
+          return allEntries.sort((a,b)=>a.date<b.date?-1:1);
+        }
+        // Sans startDate : afficher les 7 derniers jours
+        const cutoff=new Date();cutoff.setDate(cutoff.getDate()-6);
+        const cutStr=cutoff.toISOString().slice(0,10);
+        const allEntries=[];
+        for(const[dateKey,acts] of Object.entries(extras)){
+          const d=dateKey.slice(0,4)+"-"+dateKey.slice(4,6)+"-"+dateKey.slice(6,8);
+          if(d>=cutStr)acts.forEach(a=>allEntries.push({...a,date:d}));
+        }
+        return allEntries.sort((a,b)=>a.date<b.date?-1:1);
+      })();
+      if(!wkExtras.length)return null;
+      return(<>
+        <div style={{fontSize:10,fontWeight:700,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginTop:16,marginBottom:6}}>Activités libres</div>
+        {wkExtras.map((a,i)=>{
+          const INT_COLORS=["#22c55e","#84cc16","#eab308","#f97316","#ef4444","#dc2626","#b91c1c","#991b1b","#7f1d1d","#450a0a"];
+          const ic=a.intensity?INT_COLORS[a.intensity-1]:C.y;
+          return(<div key={a.id||i} style={{width:"100%",padding:"10px 14px",borderRadius:12,border:"1px solid "+C.y+"40",background:C.y+"08",marginBottom:6,display:"flex",alignItems:"center",gap:10,boxSizing:"border-box"}}>
+            <div style={{width:38,height:38,borderRadius:10,background:C.y+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{a.emoji||"🏅"}</div>
+            <div style={{flex:1,overflow:"hidden",minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.y,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</div>
+              <div style={{fontSize:10,color:C.tx3,marginTop:1,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                <span>{a.date}</span>
+                {a.duration&&<><span>·</span><span>⏱ {a.duration} min</span></>}
+                {a.intensity&&<><span>·</span><span style={{color:ic,fontWeight:600}}>RPE {a.intensity}/10</span></>}
+              </div>
+              {a.notes&&<div style={{fontSize:9,color:C.tx3,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>"{a.notes}"</div>}
+            </div>
+          </div>);
+        })}
+      </>);
+    })()}
     {!viewOnly&&<button onClick={()=>{const id="free_"+Date.now();const fs={id,name:"Séance libre",date:new Date().toISOString().slice(0,10),completed:false,duration:null,note:"",exercises:[]};setFreeSessions(prev=>[...prev,fs]);setSelectedFree(fs);setStep(2);}} style={{width:"100%",padding:"12px 0",borderRadius:12,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>+ Séance libre</button>}
   </div>
   {lsActiveSess&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
@@ -2346,7 +2415,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
                   <span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span>
                 </div>
               </div>
-              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
             </div>
             {/* Badge SS centré entre les exercices du superset */}
             {inSS&&!isLastInSS&&<div style={{position:"relative",display:"flex",alignItems:"center",height:20,margin:"0 16px"}}>
@@ -2379,8 +2448,43 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         }
       });
     })()}</div>
-    {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={endSess} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
+    {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={()=>{const incomplete=exercisesSorted.filter(ex=>{const rows=sets[ex.id+"_"+wk]||[];return rows.length===0||rows.some(r=>!r.done&&!r.skipped);});if(incomplete.length>0){setShowSkipWarning(true);}else{endSess();}}} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
     {sessIsDone&&<div style={{marginTop:16}}><div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Séance validée !</div>{sessionLogs?.[sid+"_"+wk]?.note&&<div style={{padding:"10px 12px",borderRadius:8,background:C.s2,fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic",marginBottom:6}}>"{sessionLogs[sid+"_"+wk].note}"</div>}{sessionLogs?.[sid+"_"+wk]?.duration&&<div style={{fontSize:11,color:C.tx3,textAlign:"center",marginBottom:8}}>Durée : {fmtTime(sessionLogs[sid+"_"+wk].duration)}</div>}{!viewOnly&&<button onClick={()=>uncompleteSession(sid,wk)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler la validation</button>}</div>}
+    {showSkipWarning&&(()=>{
+      const incomplete=exercisesSorted.filter(ex=>{const rows=sets[ex.id+"_"+wk]||[];return rows.length===0||rows.some(r=>!r.done&&!r.skipped);});
+      const autoSkipAndValidate=()=>{
+        incomplete.forEach(ex=>{
+          const sk=ex.id+"_"+wk;
+          const wd=ex.weeks[wk];
+          const existing=sets[sk]||[];
+          const rows=existing.length>0?existing:generateRows(wd,wd?.method,wd?.methodParams);
+          updSets(sk,rows.map(r=>(!r.done&&!r.skipped)?{...r,skipped:true}:r));
+        });
+        setShowSkipWarning(false);
+        endSess();
+      };
+      return(<div style={{position:'fixed',inset:0,zIndex:400,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}} onClick={()=>setShowSkipWarning(false)}>
+        <div style={{background:C.s1,borderRadius:16,padding:24,width:'100%',maxWidth:340,border:'1px solid '+C.brd}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontSize:15,fontWeight:800,color:C.tx,marginBottom:6}}>Séries non renseignées</div>
+          <div style={{fontSize:12,color:C.tx3,marginBottom:12,lineHeight:1.6}}>Les exercices suivants ont des séries non validées :</div>
+          <div style={{marginBottom:16,display:'flex',flexDirection:'column',gap:4,maxHeight:200,overflowY:'auto'}}>
+            {incomplete.map(ex=>{
+              const rows=sets[ex.id+"_"+wk]||[];
+              const untouchedCount=rows.length===0?(ex.weeks[wk]?.sets||0):rows.filter(r=>!r.done&&!r.skipped).length;
+              return(<div key={ex.id} style={{fontSize:12,padding:'7px 10px',borderRadius:8,background:C.o+'12',border:'1px solid '+C.o+'30',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{color:C.tx,fontWeight:600}}>{ex.name}</span>
+                <span style={{color:C.o,fontWeight:700,flexShrink:0,marginLeft:8}}>{untouchedCount} série{untouchedCount>1?'s':''} manquante{untouchedCount>1?'s':''}</span>
+              </div>);
+            })}
+          </div>
+          <div style={{fontSize:11,color:C.tx3,marginBottom:14,padding:'8px 10px',borderRadius:8,background:C.s2}}>En validant, les séries manquantes seront automatiquement marquées comme skippées (—).</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            <button onClick={()=>setShowSkipWarning(false)} style={{width:'100%',padding:'12px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Revenir finir la séance</button>
+            <button onClick={autoSkipAndValidate} style={{width:'100%',padding:'12px 0',borderRadius:10,border:'none',background:C.g,color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Valider et skipper les séries manquantes</button>
+          </div>
+        </div>
+      </div>);
+    })()}
     {showEndModal&&<SessionEndModal duration={endDuration} onSave={onSessValidate} C={C}/>}
     {videoEx&&(<div onClick={()=>setVideoEx(null)} style={{position:'fixed',inset:0,zIndex:500,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:520}}>
@@ -2728,7 +2832,8 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
   const doneSet=new Set(completedSessions[currentWeek]||[]);
   const wk=weekSchedule||{};
   const extras=wk.extras||{};
-  const dayExtras=idx=>extras[idx]||[];
+  const dKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
+  const dayExtras=idx=>extras[dKey(weekDays[idx])]||[];
   const sessionsForDay=dayIdx=>(sessions||[]).filter(s=>s.day_of_week===dayIdx);
   const savedActivities=wk.savedActivities||[];
   const allActivities=[...ACTIVITIES,...savedActivities.filter(s=>!ACTIVITIES.find(a=>a.label===s.label))];
@@ -2741,16 +2846,16 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
     const{dayIdx}=activityModal;
     const{label,emoji,duration,intensity,notes}=activityForm;
     if(!label.trim())return;
+    const dateKey=dKey(weekDays[dayIdx]);
     const cur=dayExtras(dayIdx);
     const newExtra={id:String(Date.now()),label:label.trim(),emoji,duration,intensity,notes:notes.trim()||undefined};
     const isDefault=ACTIVITIES.find(a=>a.label===label.trim());
     const newSaved=isDefault?savedActivities:[...savedActivities.filter(a=>a.label!==label.trim()),{label:label.trim(),emoji}];
-    setWeekSchedule({...wk,extras:{...extras,[dayIdx]:[...cur,newExtra]},savedActivities:newSaved});
+    setWeekSchedule({...wk,extras:{...extras,[dateKey]:[...cur,newExtra]},savedActivities:newSaved});
     setActivityModal(null);
   };
-  const removeExtra=(dayIdx,id)=>{const cur=dayExtras(dayIdx).filter(e=>e.id!==id);setWeekSchedule({...wk,extras:{...extras,[dayIdx]:cur.length?cur:undefined}});};
+  const removeExtra=(dayIdx,id)=>{const dateKey=dKey(weekDays[dayIdx]);const cur=dayExtras(dayIdx).filter(e=>e.id!==id);setWeekSchedule({...wk,extras:{...extras,[dateKey]:cur.length?cur:undefined}});};
   const removeCustomActivity=(label)=>{const newSaved=savedActivities.filter(a=>a.label!==label);setWeekSchedule({...wk,savedActivities:newSaved});};
-  const dKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
   const isoKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const getWell=d=>wellnessHistory[dKey(d)]||null;
   const getNutr=d=>nutritionLog[isoKey(d)]||nutritionLog[dKey(d)]||null;
@@ -3047,6 +3152,8 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
 
 // ── EXERCISE BANK COMPONENTS ─────────────────────────────────────────────────
 
+const parseYtId=v=>{const m=(v||'').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);return m?m[1]:v.trim();};
+
 function ExerciseCreateModal({coachId,onSave,onClose}){
   const{profile}=useAuth();
   const isAdmin=profile?.is_admin===true;
@@ -3055,7 +3162,6 @@ function ExerciseCreateModal({coachId,onSave,onClose}){
   const TARGETS=['Pecs','Dos-GD','Dos-Trap','Dos-Rhom','Ep-Ant','Ep-Lat','Ep-Post','Quads','Ischios','Fessiers','Adducteurs','Triceps','Biceps','Core','Mollets'];
   const EQUIPS=['Barre','Haltères','Cable','Machine','Poids de corps','Élastique','Kettlebell','Smith'];
   const upd=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const parseYtId=v=>{const m=(v||'').match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);return m?m[1]:v.trim();};
   const fS={padding:'9px 12px',borderRadius:9,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:'inherit',width:'100%',boxSizing:'border-box',outline:'none'};
   const lS={fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:5,display:'block'};
   const save=async()=>{
@@ -3127,12 +3233,25 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
   const isOwner=!ex.created_by||ex.created_by===coachId;
   const[promoting,setPromoting]=useState(false);
   const promote=async()=>{setPromoting(true);await supabase.from('exercises').update({is_verified:true}).eq('id',ex.id);setPromoting(false);onRefresh();onClose();};
+  const[localYtId,setLocalYtId]=useState(ex.youtube_id||'');
+  const[ytInput,setYtInput]=useState(ex.youtube_id||'');
+  const[ytSaving,setYtSaving]=useState(false);
+  const[ytMsg,setYtMsg]=useState('');
+  const saveVideo=async(overrideId)=>{
+    setYtSaving(true);setYtMsg('');
+    const raw=overrideId!==undefined?overrideId:ytInput.trim();
+    const id=raw?parseYtId(raw):null;
+    const{error}=await supabase.from('exercises').update({youtube_id:id??null}).eq('id',ex.id);
+    setYtSaving(false);
+    if(error){setYtMsg('Erreur: '+error.message);}
+    else{setLocalYtId(id||'');setYtInput(id||'');setYtMsg(id?'Vidéo ajoutée !':'Vidéo supprimée');onRefresh();setTimeout(()=>setYtMsg(''),2500);}
+  };
   return(<div style={{position:'fixed',inset:0,zIndex:300,background:'rgba(0,0,0,0.88)',overflowY:'auto'}} onClick={onClose}>
     <div style={{minHeight:'100%',display:'flex',alignItems:'flex-end'}} onClick={e=>e.stopPropagation()}>
       <div style={{width:'100%',background:C.s1,borderRadius:'16px 16px 0 0',maxHeight:'92vh',overflowY:'auto',paddingBottom:40}}>
-        {ex.youtube_id&&<div style={{width:'100%',maxWidth:420,margin:'0 auto',background:'#000',aspectRatio:'16/9'}}><iframe src={`https://www.youtube.com/embed/${ex.youtube_id}?rel=0`} style={{width:'100%',height:'100%',border:'none'}} allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen/></div>}
-        {!ex.youtube_id&&ex.image_url&&<img src={ex.image_url} style={{width:'100%',maxWidth:420,margin:'0 auto',aspectRatio:'16/9',objectFit:'cover',display:'block'}} alt={ex.name}/>}
-        {!ex.youtube_id&&!ex.image_url&&<div style={{width:'100%',aspectRatio:'16/9',background:C.s2,display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>💪</div>}
+        {localYtId&&<div style={{width:'100%',maxWidth:420,margin:'0 auto',background:'#000',aspectRatio:'16/9'}}><iframe src={`https://www.youtube.com/embed/${localYtId}?rel=0`} style={{width:'100%',height:'100%',border:'none'}} allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen/></div>}
+        {!localYtId&&ex.image_url&&<img src={ex.image_url} style={{width:'100%',maxWidth:420,margin:'0 auto',aspectRatio:'16/9',objectFit:'cover',display:'block'}} alt={ex.name}/>}
+        {!localYtId&&!ex.image_url&&<div style={{width:'100%',aspectRatio:'16/9',background:C.s2,display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>💪</div>}
         <div style={{padding:'16px 16px 0'}}>
           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:12}}>
             <div style={{flex:1,marginRight:10}}>
@@ -3157,6 +3276,16 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
           {ex.tips&&<div style={{marginBottom:16,padding:'10px 12px',borderRadius:10,background:C.oS,border:'1px solid '+C.o+'30'}}><div style={{fontSize:10,fontWeight:700,color:C.o,marginBottom:4}}>💡 Conseils</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.6}}>{ex.tips}</div></div>}
           <button onClick={onAdd} style={{width:'100%',padding:'12px 0',borderRadius:12,border:'none',background:C.ac,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:8}}>+ Ajouter à mes exercices</button>
           {isAdmin&&!ex.is_verified&&<button onClick={promote} disabled={promoting} style={{width:'100%',padding:'9px 0',borderRadius:10,border:'1px solid '+C.g+'50',background:C.gS,color:C.g,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:8}}>{promoting?'En cours...':'✓ Promouvoir en Officiel'}</button>}
+          {isAdmin&&<div style={{marginBottom:8}}>
+            {!localYtId?(<div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <input value={ytInput} onChange={e=>setYtInput(e.target.value)} placeholder="Lien YouTube (vidéo, Short, live…)" style={{flex:1,padding:'9px 12px',borderRadius:10,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontFamily:'inherit',outline:'none'}}/>
+              <button onClick={()=>saveVideo()} disabled={ytSaving||!ytInput.trim()} style={{padding:'9px 16px',borderRadius:10,border:'none',background:ytInput.trim()?C.ac:C.s2,color:ytInput.trim()?'#fff':C.tx3,fontSize:13,fontWeight:700,cursor:ytInput.trim()?'pointer':'default',fontFamily:'inherit',flexShrink:0,opacity:ytSaving?0.7:1}}>{ytSaving?'...':'+ Vidéo'}</button>
+            </div>):(<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderRadius:10,background:C.s2,border:'1px solid '+C.brdL}}>
+              <span style={{fontSize:12,color:C.tx2,flex:1,fontFamily:'monospace'}}>{localYtId}</span>
+              <button onClick={()=>saveVideo('')} disabled={ytSaving} style={{padding:'5px 12px',borderRadius:8,border:'1px solid '+C.r+'50',background:C.rS,color:C.r,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit',flexShrink:0}}>{ytSaving?'...':'Supprimer vidéo'}</button>
+            </div>)}
+            {ytMsg&&<div style={{marginTop:5,fontSize:11,color:ytMsg.startsWith('Erreur')?C.r:C.g,fontWeight:600}}>{ytMsg}</div>}
+          </div>}
           {(isOwner||isAdmin)&&<div style={{display:'flex',gap:8}}>
             <button onClick={onMergeClick} style={{flex:1,padding:'9px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Fusionner</button>
             <button onClick={onDelete} style={{flex:1,padding:'9px 0',borderRadius:10,border:'1px solid '+C.r+'50',background:C.rS,color:C.r,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
@@ -3282,6 +3411,7 @@ function ExerciseBank({coachId,onAddToExos}){
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function App({athleteId,defaultMode,canToggleMode=true,userName,athleteProfile,onEditProfile,viewOnly=false}){
+  const{profile:myProfile}=useAuth();
   const load=(k,fb)=>sLoad(k,fb,athleteId);
   const save=(k,v)=>sSave(k,v,athleteId);
   const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");
@@ -3513,7 +3643,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0}/>}
     {showBlockHistory&&<BlockHistoryViewer blockHistory={blockHistory} onClose={()=>setShowBlockHistory(false)}/>}
     {mode==="coach"&&coachTab==="prog"&&sessions.length>0&&<AIChatBar exos={exos} sessions={sessions} chatHistory={chatHistory} setChatHistory={setChatHistory} onApply={applyAIEdit} onOpenChange={setAiChatOpen} C={C}/>}
-    {mode==="athlete"&&(timerActive||timerFinished)&&tab!=="log"&&(<div style={{position:"fixed",bottom:64,left:"50%",transform:"translateX(-50%)",zIndex:150,background:timerFinished?"rgba(34,201,147,0.15)":C.s1,border:"1px solid "+(timerFinished?C.g:timerActive&&timerLeft<=10?C.r:C.ac)+"70",borderRadius:50,padding:"9px 18px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",backdropFilter:"blur(8px)"}}>
+    {mode==="athlete"&&(timerActive||timerFinished)&&(<div style={{position:"fixed",bottom:64,left:"50%",transform:"translateX(-50%)",zIndex:150,background:timerFinished?"rgba(34,201,147,0.15)":C.s1,border:"1px solid "+(timerFinished?C.g:timerActive&&timerLeft<=10?C.r:C.ac)+"70",borderRadius:50,padding:"9px 18px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",backdropFilter:"blur(8px)"}}>
       {timerFinished?<span style={{fontSize:16}}>🔔</span>:<div style={{width:24,height:24,position:"relative"}}><svg viewBox="0 0 24 24" style={{width:24,height:24,transform:"rotate(-90deg)"}}><circle cx="12" cy="12" r="9" fill="none" stroke={C.s2} strokeWidth="2.5"/><circle cx="12" cy="12" r="9" fill="none" stroke={timerLeft<=10?C.r:C.ac} strokeWidth="2.5" strokeDasharray={String(2*Math.PI*9)} strokeDashoffset={String(2*Math.PI*9*(1-Math.min((timerDur-timerLeft)/timerDur,1)))} strokeLinecap="round"/></svg></div>}
       <span style={{fontSize:13,fontWeight:700,color:timerFinished?C.g:timerLeft<=10?C.r:C.tx,fontFamily:"monospace",minWidth:42}}>{timerFinished?"Repos OK !":Math.floor(timerLeft/60)+":"+String(timerLeft%60).padStart(2,"0")}</span>
       <button onClick={timerStop} style={{width:22,height:22,borderRadius:"50%",border:"none",background:(timerFinished?C.g:C.r)+"25",color:timerFinished?C.g:C.r,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
@@ -3529,7 +3659,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {canToggleMode&&<div style={{display:"flex",background:C.s1,borderRadius:8,padding:2,border:"1px solid "+C.brdL}}>{[{k:"athlete",l:"Athlete"},{k:"coach",l:"Coach"}].map(({k,l})=>(<button key={k} onClick={()=>switchMode(k)} style={{padding:"5px 10px",borderRadius:6,border:"none",background:mode===k?(k==="coach"?C.coach:C.ac):"transparent",color:mode===k?"#fff":C.tx3,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>))}</div>}
-          {userName&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
+          {userName&&!myProfile?.is_admin&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
           <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/login";}} title="Déconnexion" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⏻</button>
         </div>
       </div>
@@ -3858,7 +3988,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 })()}</div></div>
       </div>)}
 
-      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))}/>}
+      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))} weekSchedule={weekSchedule}/>}
 
       {tab==="stats"&&(()=>{
         const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
