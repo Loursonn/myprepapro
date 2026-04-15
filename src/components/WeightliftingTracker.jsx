@@ -10,6 +10,8 @@ import { PDFDocument } from "pdf-lib";
 const C={bg:"#08090C",s1:"#111318",s2:"#181B24",brd:"rgba(255,255,255,0.04)",brdL:"rgba(255,255,255,0.08)",tx:"#F2F2F4",tx2:"#9194A0",tx3:"#555866",ac:"#7B6FFF",acS:"rgba(123,111,255,0.12)",g:"#22C993",gS:"rgba(34,201,147,0.1)",o:"#F5A623",oS:"rgba(245,166,35,0.1)",y:"#E8C93A",yS:"rgba(232,201,58,0.1)",r:"#EF4B4B",rS:"rgba(239,75,75,0.1)",b:"#3B8DF0",bS:"rgba(59,141,240,0.1)",coach:"#D4538E",coachS:"rgba(212,83,142,0.12)"};
 const BT={PERF:{c:"#EF4B4B",l:"Mvt principal"},ESTH:{c:"#7B6FFF",l:"Hypertrophie"},BESOIN:{c:"#F5A623",l:"Besoin indiv."},ASSOC:{c:"#22C993",l:"Muscles assoc."},CORE:{c:"#9194A0",l:"Core"}};
 const BLOC_COLORS=["#EF4B4B","#7B6FFF","#F5A623","#22C993","#9194A0","#3B8DF0","#D4538E","#C060D0","#E06030","#22C9C9"];
+const HABIT_COLORS=['#F5A623','#22C993','#7B6FFF','#3B8DF0','#EF4B4B','#E8C93A','#D4538E','#C060D0'];
+const HABIT_EMOJIS=['💪','🏃','🧘','💧','📖','🛌','🥗','🎯','⚡','🔥','❤️','🎵','✍️','🏋️','🚴','🌅','🍎','💊','🧠','🎾','⛷️','🏊','🚶','🌿','☀️','🌙','🧹','🧴'];
 // Returns the blocs array for a session, with fallback for old data (BT keys)
 const getSessionBlocs=(sess,exList)=>{
   if(sess?.blocs?.length>0)return sess.blocs;
@@ -65,6 +67,11 @@ const getBig3=(exos)=>{
   ].filter(x=>x.name);
 };
 const todayKey=()=>{const d=new Date();return String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");};
+const hISO=d=>(d||new Date()).toISOString().slice(0,10);
+const hAddDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
+const calcHabitStreak=logs=>{const today=new Date();const todayISO=hISO(today);const todayDone=logs.includes(todayISO);const base=todayDone?0:1;let s=0;for(let i=base;i<365;i++){if(logs.includes(hISO(hAddDays(today,-i))))s++;else break;}return s;};
+const streakMsg=s=>{if(s===0)return"🧊 Fais le aujourd'hui au moins";if(s===1)return"1er jour, garde la pêche 🍑";if(s<=2)return`🔥 ${s} jours d'affilée`;if(s<=4)return`🔥🔥 ${s} jours d'affilée`;if(s<=9)return`🔥🔥🔥 ${s} jours d'affilée`;if(s<=29)return`🔥🔥🔥🔥 ${s} jours d'affilée`;if(s<365)return`🔥🔥🔥🔥🔥 ${s} jours d'affilée`;const y=Math.floor(s/365),d=s%365;return`🏆🔥 ${y} an${y>1?'s':''} et ${d} jours d'affilée !`;};
+const getHabitWeekDays=()=>{const today=new Date();const dow=(today.getDay()+6)%7;const mon=new Date(today);mon.setDate(today.getDate()-dow);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});};
 const checkMilestone=(log,baseline)=>{const sorted=Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1);if(sorted.length<3)return null;const last3=sorted.slice(-3);return last3.every(([,kg])=>kg>baseline)?parseFloat((last3.reduce((s,[,kg])=>s+kg,0)/3).toFixed(1)):null;};
 const getWeightChartData=(log,milestones,target)=>Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1).map(([date,kg])=>({d:date.slice(6)+"/"+date.slice(4,6),kg,target,isMilestone:milestones?.some(m=>m.date===date)?1:null}));
 const getWellnessChartData=(wh,period)=>{const DAY=['D','L','M','Me','J','V','S'];const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];const dateEntries=Object.entries(wh).filter(([k,v])=>/^\d{8}$/.test(k)&&v&&typeof v==='object');const byDate=Object.fromEntries(dateEntries);if(period==='week'){return Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const k=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');const e=byDate[k];return{label:DAY[d.getDay()],score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='month'){const sorted=[...dateEntries].sort((a,b)=>a[0]<b[0]?-1:1).slice(-30);return sorted.map(([k,e])=>{const y=+k.slice(0,4),m=+k.slice(4,6)-1,dd=+k.slice(6,8);const d=new Date(y,m,dd);return{label:dd===1?MON[m]:String(dd),score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='year'){const now=new Date();return Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-11+i,1);const pfx=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0');const mes=dateEntries.filter(([k])=>k.startsWith(pfx)).map(([,v])=>v);const sc=mes.filter(v=>v?.score!=null).map(v=>v.score);const sl=mes.filter(v=>v?.sleepDur!=null).map(v=>v.sleepDur);return{label:MON[d.getMonth()],score:sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null,sleep:sl.length?Math.round(sl.reduce((a,b)=>a+b,0)/sl.length*10)/10:null};});}return[];};
@@ -3410,6 +3417,197 @@ function ExerciseBank({coachId,onAddToExos}){
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── HABIT TRACKER COMPONENTS ─────────────────────────────────────────────────
+
+function HabitCreateModal({onSave,onClose,initial=null}){
+  const[name,setName]=useState(initial?.name||'');
+  const[emoji,setEmoji]=useState(initial?.emoji||'💪');
+  const[color,setColor]=useState(initial?.color||HABIT_COLORS[0]);
+  return(<div onClick={onClose} style={{position:'fixed',inset:0,zIndex:450,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:480,background:C.s1,borderRadius:'16px 16px 0 0',padding:'24px 24px 48px',boxSizing:'border-box'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}><div style={{fontSize:16,fontWeight:800,color:C.tx}}>{initial?'Modifier':'Nouvelle habitude'}</div><button onClick={onClose} style={{background:'none',border:'none',color:C.tx2,fontSize:22,cursor:'pointer',fontFamily:'inherit'}}>×</button></div>
+      <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:14,background:C.s2,border:`2px solid ${color}40`,marginBottom:20}}>
+        <div style={{width:44,height:44,borderRadius:12,background:color+'20',border:`2px solid ${color}60`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>{emoji}</div>
+        <div style={{fontSize:15,fontWeight:700,color:name?C.tx:C.tx3,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{name||"Nom de l'habitude"}</div>
+      </div>
+      <label style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',display:'block',marginBottom:6}}>Nom</label>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex: Boire 2L d'eau" maxLength={40} style={{width:'100%',padding:'10px 14px',borderRadius:10,border:`1px solid ${C.brdL}`,background:C.s2,color:C.tx,fontSize:14,fontFamily:'inherit',outline:'none',boxSizing:'border-box',marginBottom:18}}/>
+      <label style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',display:'block',marginBottom:8}}>Emoji</label>
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:18}}>{HABIT_EMOJIS.map(e=><button key={e} onClick={()=>setEmoji(e)} style={{width:38,height:38,borderRadius:10,border:`2px solid ${emoji===e?color:C.brdL}`,background:emoji===e?color+'20':C.s2,fontSize:20,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{e}</button>)}</div>
+      <label style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',display:'block',marginBottom:8}}>Couleur</label>
+      <div style={{display:'flex',gap:10,marginBottom:24}}>{HABIT_COLORS.map(hc=><button key={hc} onClick={()=>setColor(hc)} style={{width:34,height:34,borderRadius:'50%',background:hc,border:`3px solid ${color===hc?C.tx:'transparent'}`,cursor:'pointer',flexShrink:0,transform:color===hc?'scale(1.2)':'scale(1)',transition:'transform 0.15s'}}/>)}</div>
+      <button onClick={()=>{if(name.trim())onSave({name:name.trim(),emoji,color});}} disabled={!name.trim()} style={{width:'100%',padding:'14px 0',borderRadius:12,border:'none',background:name.trim()?color:C.s2,color:name.trim()?'#fff':C.tx3,fontSize:15,fontWeight:800,cursor:name.trim()?'pointer':'default',fontFamily:'inherit',transition:'all 0.2s'}}>{initial?'Enregistrer':'Créer l\'habitude'}</button>
+    </div>
+  </div>);
+}
+
+function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}){
+  const[showCreate,setShowCreate]=useState(false);
+  const[menuId,setMenuId]=useState(null);
+  const wdays=getHabitWeekDays();
+  const todayISO=hISO();
+  const yISO=hISO(hAddDays(new Date(),-1));
+  const DL=['L','M','M','J','V','S','D'];
+  const handleCreate=async d=>{
+    const{data:h,error}=await supabase.from('habits').insert({...d,athlete_id:athleteId}).select().single();
+    if(!error&&h)setHabits(p=>[...p,h]);
+    setShowCreate(false);
+  };
+  const handleDelete=async id=>{
+    await supabase.from('habits').update({is_active:false}).eq('id',id);
+    setHabits(p=>p.filter(h=>h.id!==id));
+    setMenuId(null);
+  };
+  return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:`1px solid ${C.brd}`,marginBottom:12}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px'}}>Mes habitudes</div>
+      {!viewOnly&&<button onClick={()=>setShowCreate(true)} style={{fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:8,border:`1px solid ${C.ac}40`,background:C.acS,color:C.ac,cursor:'pointer',fontFamily:'inherit'}}>+ Habitude</button>}
+    </div>
+    {habits.length===0?(<div style={{textAlign:'center',padding:'18px 0',color:C.tx3,fontSize:12}}>{viewOnly?'Aucune habitude définie':'Ajoute ta première habitude →'}</div>):(
+      <div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,28px)',gap:4,marginBottom:8}}>
+          <div/>
+          {wdays.map((d,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:hISO(d)===todayISO?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[i]}</div>)}
+        </div>
+        {habits.map(h=>{
+          const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
+          return(<div key={h.id} style={{marginBottom:12}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,28px)',gap:4,alignItems:'center'}}>
+              <button onClick={()=>setMenuId(menuId===h.id?null:h.id)} style={{display:'flex',alignItems:'center',gap:6,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',textAlign:'left',padding:'2px 0',minWidth:0}}>
+                <span style={{fontSize:15,flexShrink:0}}>{h.emoji}</span>
+                <span style={{fontSize:12,fontWeight:600,color:C.tx,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name}</span>
+              </button>
+              {wdays.map((d,i)=>{
+                const iso=hISO(d);const done=logs.includes(iso);const canTap=!viewOnly&&(iso===todayISO||iso===yISO);const future=iso>todayISO;
+                return(<button key={i} onClick={canTap?()=>onToggle(h.id,iso):undefined} style={{width:28,height:28,borderRadius:'50%',border:`2px solid ${done?h.color:future?C.brd:C.brdL}`,background:done?h.color+'22':'transparent',cursor:canTap?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.18s'}}>
+                  {done?<div style={{width:10,height:10,borderRadius:'50%',background:h.color}}/>:(!future&&iso===todayISO&&!viewOnly)?<div style={{width:4,height:4,borderRadius:'50%',background:C.ac}}/>:null}
+                </button>);
+              })}
+            </div>
+            <div style={{fontSize:10,color:streak>0?h.color:C.tx3,fontWeight:streak>0?600:400,paddingLeft:2,marginTop:3}}>{streakMsg(streak)}</div>
+            {menuId===h.id&&!viewOnly&&<div style={{marginTop:6,padding:'8px 10px',borderRadius:10,background:C.s2,border:`1px solid ${C.brd}`,display:'flex',gap:8}}>
+              <button onClick={()=>handleDelete(h.id)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.r}40`,background:C.rS,color:C.r,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
+              <button onClick={()=>setMenuId(null)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx3,fontSize:11,cursor:'pointer',fontFamily:'inherit'}}>Annuler</button>
+            </div>}
+          </div>);
+        })}
+      </div>
+    )}
+    {showCreate&&<HabitCreateModal onSave={handleCreate} onClose={()=>setShowCreate(false)}/>}
+  </div>);
+}
+
+function HabitTrackerProfile({habits,habitLogs,onToggle,viewOnly}){
+  const[hTab,setHTab]=useState('week');
+  const[monthDate,setMonthDate]=useState(new Date());
+  const[selHabit,setSelHabit]=useState(null);
+  const wdays=getHabitWeekDays();
+  const todayISO=hISO();
+  const yISO=hISO(hAddDays(new Date(),-1));
+  const DL=['L','M','M','J','V','S','D'];
+  const activeH=(selHabit&&habits.find(h=>h.id===selHabit))||habits[0];
+
+  const renderWeek=()=>(<div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,34px)',gap:4,marginBottom:10}}>
+      <div/>
+      {wdays.map((d,i)=>{const iso=hISO(d);const isT=iso===todayISO;return(<div key={i} style={{textAlign:'center'}}><div style={{fontSize:9,fontWeight:600,color:isT?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[i]}</div><div style={{fontSize:11,color:isT?C.ac:C.tx2,fontWeight:isT?700:400}}>{d.getDate()}</div></div>);})}
+    </div>
+    {habits.map(h=>{
+      const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
+      return(<div key={h.id} style={{marginBottom:18}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
+          <span style={{fontSize:18}}>{h.emoji}</span>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.tx}}>{h.name}</div><div style={{fontSize:10,color:streak>0?h.color:C.tx3,fontWeight:streak>0?600:400}}>{streakMsg(streak)}</div></div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,34px)',gap:4}}>
+          <div/>
+          {wdays.map((d,i)=>{
+            const iso=hISO(d);const done=logs.includes(iso);const canTap=!viewOnly&&(iso===todayISO||iso===yISO);const future=iso>todayISO;
+            return(<button key={i} onClick={canTap?()=>onToggle(h.id,iso):undefined} style={{width:34,height:34,borderRadius:10,border:`2px solid ${done?h.color:future?C.brd:C.brdL}`,background:done?h.color+'20':'transparent',cursor:canTap?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.18s'}}>
+              {done?<div style={{width:13,height:13,borderRadius:'50%',background:h.color}}/>:(!future&&iso===todayISO&&!viewOnly)?<div style={{width:5,height:5,borderRadius:'50%',background:C.ac}}/>:null}
+            </button>);
+          })}
+        </div>
+      </div>);
+    })}
+  </div>);
+
+  const renderMonth=()=>{
+    const yr=monthDate.getFullYear(),mo=monthDate.getMonth();
+    const fd=new Date(yr,mo,1);const ld=new Date(yr,mo+1,0);
+    const startDow=(fd.getDay()+6)%7;const dim=ld.getDate();
+    const now=new Date();const isCurMo=yr===now.getFullYear()&&mo===now.getMonth();
+    const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
+    return(<div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+        <button onClick={()=>setMonthDate(new Date(yr,mo-1,1))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${C.brdL}`,background:C.s2,color:C.tx2,fontSize:18,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+        <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{MON[mo]} {yr}</div>
+        <button onClick={()=>setMonthDate(new Date(yr,mo+1,1))} disabled={isCurMo} style={{width:32,height:32,borderRadius:8,border:`1px solid ${C.brdL}`,background:C.s2,color:C.tx2,fontSize:18,cursor:isCurMo?'default':'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',opacity:isCurMo?0.3:1}}>›</button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:6}}>{DL.map((l,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:C.tx3,textTransform:'uppercase',padding:'2px 0'}}>{l}</div>)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+        {cells.map((day,i)=>{
+          if(!day)return<div key={i}/>;
+          const iso=`${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const isT=iso===todayISO;const future=iso>todayISO;
+          const dots=habits.filter(h=>(habitLogs[h.id]||[]).includes(iso));
+          return(<div key={i} style={{aspectRatio:'1',borderRadius:8,background:isT?C.acS:C.s2,border:`1px solid ${isT?C.ac+'50':C.brd}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:2,opacity:future?0.35:1}}>
+            <div style={{fontSize:10,fontWeight:isT?700:400,color:isT?C.ac:C.tx3,lineHeight:1.2}}>{day}</div>
+            {dots.length>0&&<div style={{display:'flex',gap:2,flexWrap:'wrap',justifyContent:'center',marginTop:2}}>{dots.slice(0,4).map(h=><div key={h.id} style={{width:5,height:5,borderRadius:'50%',background:h.color}}/>)}{dots.length>4&&<div style={{width:5,height:5,borderRadius:'50%',background:C.tx3}}/>}</div>}
+          </div>);
+        })}
+      </div>
+      {habits.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:12}}>{habits.map(h=><div key={h.id} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:C.tx2}}><div style={{width:7,height:7,borderRadius:'50%',background:h.color,flexShrink:0}}/>{h.emoji} {h.name}</div>)}</div>}
+    </div>);
+  };
+
+  const renderYear=()=>{
+    const h=activeH;if(!h)return<div style={{textAlign:'center',padding:'20px 0',color:C.tx3,fontSize:12}}>Aucune habitude</div>;
+    const logs=habitLogs[h.id]||[];const today=new Date();const cutoff=hISO(hAddDays(today,-364));
+    const cells=Array.from({length:365},(_,i)=>{const d=hAddDays(today,-364+i);const iso=hISO(d);return{iso,done:logs.includes(iso),future:iso>hISO(today)};});
+    const firstDow=(new Date(cells[0].iso).getDay()+6)%7;
+    const padded=[...Array.from({length:firstDow},()=>({iso:'',done:false,future:false,pad:true})),...cells];
+    const weeks=[];for(let i=0;i<padded.length;i+=7)weeks.push(padded.slice(i,i+7));
+    const totalDone=logs.filter(d=>d>=cutoff).length;const streak=calcHabitStreak(logs);
+    return(<div>
+      {habits.length>1&&<div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:14}}>{habits.map(hb=><button key={hb.id} onClick={()=>setSelHabit(hb.id)} style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:8,border:`2px solid ${activeH?.id===hb.id?hb.color:C.brdL}`,background:activeH?.id===hb.id?hb.color+'15':C.s2,cursor:'pointer',fontFamily:'inherit'}}><span style={{fontSize:12}}>{hb.emoji}</span><span style={{fontSize:11,fontWeight:600,color:activeH?.id===hb.id?hb.color:C.tx3}}>{hb.name}</span></button>)}</div>}
+      <div style={{display:'flex',gap:8,marginBottom:12}}>
+        <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:h.color}}>{totalDone}</div><div style={{fontSize:9,color:C.tx3}}>jours / an</div></div>
+        <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:streak>0?h.color:C.tx3}}>{streak}</div><div style={{fontSize:9,color:C.tx3}}>streak actuel</div></div>
+        <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:C.ac}}>{Math.round(totalDone/365*100)}%</div><div style={{fontSize:9,color:C.tx3}}>complétion</div></div>
+      </div>
+      <div style={{fontSize:11,fontWeight:600,color:streak>0?h.color:C.tx3,textAlign:'center',marginBottom:14}}>{streakMsg(streak)}</div>
+      <div style={{overflowX:'auto',paddingBottom:4,WebkitOverflowScrolling:'touch'}}>
+        <div style={{display:'flex',gap:2,width:'max-content'}}>
+          {weeks.map((week,wi)=><div key={wi} style={{display:'flex',flexDirection:'column',gap:2}}>
+            {week.map((day,di)=><div key={di} title={day.pad?'':day.iso} style={{width:11,height:11,borderRadius:2,background:day.pad||day.future?'transparent':day.done?h.color:C.s2,opacity:day.pad||day.future?0:1}}/>)}
+          </div>)}
+        </div>
+      </div>
+      <div style={{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:3,marginTop:6}}>
+        <span style={{fontSize:9,color:C.tx3}}>Moins</span>
+        {[C.s2,h.color+'50',h.color+'90',h.color].map((bg,i)=><div key={i} style={{width:9,height:9,borderRadius:2,background:bg}}/>)}
+        <span style={{fontSize:9,color:C.tx3}}>Plus</span>
+      </div>
+    </div>);
+  };
+
+  return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:`1px solid ${C.brd}`,marginBottom:12}}>
+    <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:14}}>Tracker d'habitudes</div>
+    {habits.length===0?(<div style={{textAlign:'center',padding:'20px 0',color:C.tx3,fontSize:12}}>Aucune habitude. Ajoute-en depuis l'onglet Accueil.</div>):(
+      <>
+        <div style={{display:'flex',gap:6,marginBottom:16}}>{[{k:'week',l:'Semaine'},{k:'month',l:'Mois'},{k:'year',l:'Année'}].map(t=><button key={t.k} onClick={()=>setHTab(t.k)} style={{flex:1,padding:'7px 0',borderRadius:9,border:'none',background:hTab===t.k?C.acS:C.s2,color:hTab===t.k?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}</div>
+        {hTab==='week'&&renderWeek()}
+        {hTab==='month'&&renderMonth()}
+        {hTab==='year'&&renderYear()}
+      </>
+    )}
+  </div>);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function App({athleteId,defaultMode,canToggleMode=true,userName,athleteProfile,onEditProfile,viewOnly=false}){
   const{profile:myProfile}=useAuth();
   const load=(k,fb)=>sLoad(k,fb,athleteId);
@@ -3440,6 +3638,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[chatHistory,setChatHistory]=useState([]);
   const[aiChatOpen,setAiChatOpen]=useState(false);
   const[initialLogSess,setInitialLogSess]=useState(null);
+  const[habits,setHabits]=useState([]);const[habitLogs,setHabitLogs]=useState({});const[habitEnabled,setHabitEnabled]=useState(false);
+  const[profileInfoOpen,setProfileInfoOpen]=useState(false);
   const[timerLeft,setTimerLeft]=useState(120);const[timerDur,setTimerDur]=useState(120);
   const[timerActive,setTimerActive]=useState(false);const[timerFinished,setTimerFinished]=useState(false);
   const timerRef=useRef(null);
@@ -3465,6 +3665,25 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     const tid=setTimeout(()=>{setWellnessState(null);save(SKEYS.wellness,null).catch(()=>{});},midnight-now);
     return()=>clearTimeout(tid);
   },[wellness]);
+
+  useEffect(()=>{
+    if(!athleteId)return;
+    supabase.from('habits').select('*').eq('athlete_id',athleteId).eq('is_active',true).order('created_at').then(({data})=>{if(data)setHabits(data);});
+    const cutoff=hAddDays(new Date(),-365).toISOString().slice(0,10);
+    supabase.from('habit_logs').select('habit_id,date').eq('athlete_id',athleteId).gte('date',cutoff).then(({data})=>{if(data){const l={};data.forEach(r=>{if(!l[r.habit_id])l[r.habit_id]=[];l[r.habit_id].push(r.date);});setHabitLogs(l);}});
+    supabase.from('profiles').select('habit_tracker_enabled').eq('id',athleteId).single().then(({data})=>{if(data)setHabitEnabled(!!data.habit_tracker_enabled);});
+  },[athleteId]);
+
+  const toggleHabitLog=async(habitId,dateISO)=>{
+    const logs=habitLogs[habitId]||[];
+    if(logs.includes(dateISO)){
+      await supabase.from('habit_logs').delete().match({habit_id:habitId,date:dateISO});
+      setHabitLogs(p=>({...p,[habitId]:(p[habitId]||[]).filter(d=>d!==dateISO)}));
+    }else{
+      await supabase.from('habit_logs').insert({habit_id:habitId,athlete_id:athleteId,date:dateISO});
+      setHabitLogs(p=>({...p,[habitId]:[...(p[habitId]||[]),dateISO]}));
+    }
+  };
 
   const flash=ok=>{setSaveStatus(ok?"saved":"error");setTimeout(()=>setSaveStatus(null),2000);};
   const setExos=v=>{const val=typeof v==='function'?v(exos):v;setExosState(val);save(SKEYS.exos,val).then(()=>flash(true)).catch(()=>flash(false));};
@@ -3672,7 +3891,16 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {coachTab==="exos"&&<><div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Exercices</div><div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Muscles, hierarchie &amp; categorie</div><CoachExoParams exMeta={exMeta} setExMeta={setExMeta} exos={exos} setExos={setExos} blockConfig={blockConfig}/></>}
       {coachTab==="banque"&&<><ExerciseBank coachId={athleteId} onAddToExos={handleBankAdd}/>{bankAddMsg&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:250,background:C.g,color:"#fff",borderRadius:12,padding:"10px 20px",fontSize:13,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{bankAddMsg}</div>}</>}
       {bankAddEx&&sessions.length>1&&(<div style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setBankAddEx(null)}><div style={{width:"100%",maxWidth:640,background:C.s1,borderRadius:"16px 16px 0 0",padding:24}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Ajouter à quelle séance ?</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>{bankAddEx.name}</div>{sessions.map(s=>(<button key={s.id} onClick={()=>{const newEx={id:"g_"+Date.now(),name:bankAddEx.name,bloc:bankAddEx.bloc||"ESTH",target:bankAddEx.target||"Pecs",exType:bankAddEx.ex_type||"muscu",exercise_id:bankAddEx.id,weeks:{1:{kg:0,sets:3,repsRange:"10",rir:2}}};setExos(prev=>({...prev,[s.id]:[...(prev[s.id]||[]),newEx]}));setBankAddEx(null);setCoachTab("prog");}} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,marginBottom:8,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}><div style={{width:32,height:32,borderRadius:8,background:C.acS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.ac}}>{s.short||s.name.charAt(0)}</div><div style={{fontSize:13,fontWeight:600,color:C.tx}}>{s.name}</div></button>))}<button onClick={()=>setBankAddEx(null)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"none",background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>Annuler</button></div></div>)}
-      {coachTab==="config"&&<><div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Configuration</div><div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Objectifs athlete</div><CoachConfig goals={goals} setGoals={setGoals} bodyWeight={bodyWeight} setBodyWeight={setBodyWeight} completedSessions={completedSessions} uncompleteSession={uncompleteSession} sessions={sessions} blockConfig={blockConfig} setBlockConfig={setBlockConfig} weeksArr={weeksArr} onNewBlock={()=>setShowNewBlock(true)} onShowHistory={()=>setShowBlockHistory(true)} blockHistoryCount={blockHistory.length}/></>}
+      {coachTab==="config"&&<><div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Configuration</div><div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Objectifs athlete</div><CoachConfig goals={goals} setGoals={setGoals} bodyWeight={bodyWeight} setBodyWeight={setBodyWeight} completedSessions={completedSessions} uncompleteSession={uncompleteSession} sessions={sessions} blockConfig={blockConfig} setBlockConfig={setBlockConfig} weeksArr={weeksArr} onNewBlock={()=>setShowNewBlock(true)} onShowHistory={()=>setShowBlockHistory(true)} blockHistoryCount={blockHistory.length}/>
+        <div style={{marginTop:12,padding:'14px 16px',borderRadius:14,background:C.s1,border:`1px solid ${C.brd}`}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div><div style={{fontSize:13,fontWeight:700,color:C.tx}}>Tracker d'habitudes</div><div style={{fontSize:11,color:C.tx3,marginTop:2}}>Permettre à l'athlète de suivre ses habitudes</div></div>
+            <button onClick={async()=>{const ne=!habitEnabled;const{error}=await supabase.from('profiles').update({habit_tracker_enabled:ne}).eq('id',athleteId);if(!error)setHabitEnabled(ne);}} style={{width:46,height:26,borderRadius:13,background:habitEnabled?C.g:C.s2,border:`2px solid ${habitEnabled?C.g:C.brdL}`,cursor:'pointer',position:'relative',transition:'all 0.2s',flexShrink:0,outline:'none'}}>
+              <div style={{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:habitEnabled?24:2,transition:'left 0.2s',boxShadow:'0 1px 4px rgba(0,0,0,0.3)'}}/>
+            </button>
+          </div>
+        </div>
+      </>}
       {coachTab==="stats"&&(<>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Suivi athlete</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
@@ -3986,6 +4214,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     <div style={{fontSize:9,color:reached?C.g:C.tx3,marginTop:5,fontWeight:reached?600:400}}>{deltaLabel}</div>
   </div>);
 })()}</div></div>
+        {habitEnabled&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
       </div>)}
 
       {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))} weekSchedule={weekSchedule}/>}
@@ -4068,12 +4297,18 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {tab==="alim"&&<NutritionView athleteId={athleteId} bmr={athleteProfile?.base_metabolism||null} nutritionStrategy={nutritionStrategy} onLogSaved={(date,log)=>{const updated={...nutritionLog,[date]:log};setNutritionLogState(updated);save("asp:nutrition_log",updated).catch(()=>{});}} viewOnly={viewOnly}/>}
 
       {tab==="profil"&&(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:20}}>Mon profil</div>
+        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon profil</div>
+        {/* Section profil déroulante */}
+        <button onClick={()=>setProfileInfoOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,cursor:"pointer",fontFamily:"inherit",marginBottom:profileInfoOpen?0:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Mes informations</div>
+          <span style={{fontSize:14,color:C.tx3,transition:"transform 0.2s",display:"inline-block",transform:profileInfoOpen?"rotate(180deg)":"rotate(0deg)"}}>∨</span>
+        </button>
+        {profileInfoOpen&&(<div style={{marginBottom:12}}>
         {athleteProfile?(()=>{
           const fullName=[athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"";
           const initials=fullName.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)||"?";
           return(<>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 0 16px"}}>
               <div style={{width:68,height:68,borderRadius:"50%",background:C.acS,border:"3px solid "+C.ac+"50",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,color:C.ac,marginBottom:10}}>{initials}</div>
               <div style={{fontSize:18,fontWeight:800,color:C.tx}}>{fullName}</div>
               <div style={{fontSize:12,color:C.tx3,marginTop:3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":""}</div>
@@ -4105,12 +4340,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             </div>
           </>);
         })():(
-          <div style={{background:C.s1,borderRadius:14,padding:"32px 20px",border:"1px solid "+C.brd,textAlign:"center"}}>
+          <div style={{background:C.s1,borderRadius:14,padding:"32px 20px",border:"1px solid "+C.brd,textAlign:"center",marginTop:8}}>
             <div style={{fontSize:32,marginBottom:12}}>📋</div>
             <div style={{fontSize:15,fontWeight:600,color:C.tx,marginBottom:8}}>Profil non renseigné</div>
             <div style={{fontSize:13,color:C.tx3}}>Ton coach n'a pas encore complété ton profil.</div>
           </div>
         )}
+        </div>)}
+        {/* Tracker d'habitudes */}
+        {habitEnabled&&<HabitTrackerProfile habits={habits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly}/>}
       </div>)}
 
       {tab==="retours"&&<RetoursView/>}
