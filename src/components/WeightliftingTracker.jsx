@@ -3564,31 +3564,61 @@ function HabitTrackerProfile({habits,habitLogs,onToggle,viewOnly}){
 
   const renderYear=()=>{
     const h=activeH;if(!h)return<div style={{textAlign:'center',padding:'20px 0',color:C.tx3,fontSize:12}}>Aucune habitude</div>;
-    const logs=habitLogs[h.id]||[];const today=new Date();const cutoff=hISO(hAddDays(today,-364));
-    const cells=Array.from({length:365},(_,i)=>{const d=hAddDays(today,-364+i);const iso=hISO(d);return{iso,done:logs.includes(iso),future:iso>hISO(today)};});
-    const firstDow=(new Date(cells[0].iso).getDay()+6)%7;
-    const padded=[...Array.from({length:firstDow},()=>({iso:'',done:false,future:false,pad:true})),...cells];
-    const weeks=[];for(let i=0;i<padded.length;i+=7)weeks.push(padded.slice(i,i+7));
-    const totalDone=logs.filter(d=>d>=cutoff).length;const streak=calcHabitStreak(logs);
+    const logs=habitLogs[h.id]||[];const today=new Date();const todayISO=hISO(today);
+    const totalDone=logs.filter(d=>d>=hISO(hAddDays(today,-364))).length;const streak=calcHabitStreak(logs);
+    const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    const DL=['L','M','M','J','V','S','D'];
+    // Build 12 mini-calendars: current month going back 11 months
+    const months=Array.from({length:12},(_,i)=>{
+      const d=new Date(today.getFullYear(),today.getMonth()-11+i,1);
+      return{year:d.getFullYear(),month:d.getMonth()};
+    });
     return(<div>
-      {habits.length>1&&<div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:14}}>{habits.map(hb=><button key={hb.id} onClick={()=>setSelHabit(hb.id)} style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:8,border:`2px solid ${activeH?.id===hb.id?hb.color:C.brdL}`,background:activeH?.id===hb.id?hb.color+'15':C.s2,cursor:'pointer',fontFamily:'inherit'}}><span style={{fontSize:12}}>{hb.emoji}</span><span style={{fontSize:11,fontWeight:600,color:activeH?.id===hb.id?hb.color:C.tx3}}>{hb.name}</span></button>)}</div>}
+      {/* Dropdown sélecteur d'habitude */}
+      {habits.length>0&&<div style={{position:'relative',marginBottom:16}}>
+        <select value={selHabit||habits[0]?.id||''} onChange={e=>setSelHabit(e.target.value)}
+          style={{width:'100%',padding:'10px 36px 10px 14px',borderRadius:10,border:`2px solid ${h.color}50`,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:'inherit',outline:'none',cursor:'pointer',appearance:'none',WebkitAppearance:'none'}}>
+          {habits.map(hb=><option key={hb.id} value={hb.id}>{hb.emoji} {hb.name}</option>)}
+        </select>
+        <div style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontSize:10,color:h.color,pointerEvents:'none'}}>▼</div>
+      </div>}
+      {/* Stats */}
       <div style={{display:'flex',gap:8,marginBottom:12}}>
         <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:h.color}}>{totalDone}</div><div style={{fontSize:9,color:C.tx3}}>jours / an</div></div>
         <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:streak>0?h.color:C.tx3}}>{streak}</div><div style={{fontSize:9,color:C.tx3}}>streak actuel</div></div>
         <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:C.ac}}>{Math.round(totalDone/365*100)}%</div><div style={{fontSize:9,color:C.tx3}}>complétion</div></div>
       </div>
-      <div style={{fontSize:11,fontWeight:600,color:streak>0?h.color:C.tx3,textAlign:'center',marginBottom:14}}>{streakMsg(streak)}</div>
-      <div style={{overflowX:'auto',paddingBottom:4,WebkitOverflowScrolling:'touch'}}>
-        <div style={{display:'flex',gap:2,width:'max-content'}}>
-          {weeks.map((week,wi)=><div key={wi} style={{display:'flex',flexDirection:'column',gap:2}}>
-            {week.map((day,di)=><div key={di} title={day.pad?'':day.iso} style={{width:11,height:11,borderRadius:2,background:day.pad||day.future?'transparent':day.done?h.color:C.s2,opacity:day.pad||day.future?0:1}}/>)}
-          </div>)}
-        </div>
-      </div>
-      <div style={{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:3,marginTop:6}}>
-        <span style={{fontSize:9,color:C.tx3}}>Moins</span>
-        {[C.s2,h.color+'50',h.color+'90',h.color].map((bg,i)=><div key={i} style={{width:9,height:9,borderRadius:2,background:bg}}/>)}
-        <span style={{fontSize:9,color:C.tx3}}>Plus</span>
+      <div style={{fontSize:11,fontWeight:600,color:streak>0?h.color:C.tx3,textAlign:'center',marginBottom:16}}>{streakMsg(streak)}</div>
+      {/* Grille 12 mini-calendriers */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+        {months.map(({year,month})=>{
+          const fd=new Date(year,month,1);const dim=new Date(year,month+1,0).getDate();
+          const startDow=(fd.getDay()+6)%7;
+          const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
+          const monthDone=logs.filter(iso=>iso.startsWith(`${year}-${String(month+1).padStart(2,'0')}-`)).length;
+          const pct=Math.round(monthDone/dim*100);
+          const isCurMonth=year===today.getFullYear()&&month===today.getMonth();
+          return(<div key={`${year}-${month}`} style={{background:C.s2,borderRadius:10,padding:'8px 6px',border:`1px solid ${isCurMonth?h.color+'50':C.brd}`}}>
+            {/* En-tête mois */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5,paddingLeft:2,paddingRight:2}}>
+              <div style={{fontSize:9,fontWeight:700,color:isCurMonth?h.color:C.tx2,textTransform:'uppercase',letterSpacing:'0.3px'}}>{MON[month]}</div>
+              <div style={{fontSize:8,fontWeight:700,color:pct>0?h.color:C.tx3,padding:'1px 5px',borderRadius:4,background:pct>0?h.color+'18':'transparent'}}>{pct>0?pct+'%':''}</div>
+            </div>
+            {/* Jours header */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1,marginBottom:3}}>
+              {DL.map((l,i)=><div key={i} style={{textAlign:'center',fontSize:6,color:C.tx3,fontWeight:600}}>{l}</div>)}
+            </div>
+            {/* Jours */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1}}>
+              {cells.map((day,i)=>{
+                if(!day)return<div key={i}/>;
+                const iso=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const done=logs.includes(iso);const future=iso>todayISO;const isToday=iso===todayISO;
+                return(<div key={i} style={{aspectRatio:'1',borderRadius:2,background:future?'transparent':done?h.color:C.bg,border:isToday?`1px solid ${h.color}`:done?'none':'none',opacity:future?0.15:1,transition:'background 0.15s'}}/>);
+              })}
+            </div>
+          </div>);
+        })}
       </div>
     </div>);
   };
