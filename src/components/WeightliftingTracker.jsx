@@ -3639,6 +3639,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[aiChatOpen,setAiChatOpen]=useState(false);
   const[initialLogSess,setInitialLogSess]=useState(null);
   const[habits,setHabits]=useState([]);const[habitLogs,setHabitLogs]=useState({});const[habitEnabled,setHabitEnabled]=useState(false);
+  const[habitToggling,setHabitToggling]=useState(false);const[habitToggleErr,setHabitToggleErr]=useState('');
   const[profileInfoOpen,setProfileInfoOpen]=useState(false);
   const[timerLeft,setTimerLeft]=useState(120);const[timerDur,setTimerDur]=useState(120);
   const[timerActive,setTimerActive]=useState(false);const[timerFinished,setTimerFinished]=useState(false);
@@ -3957,12 +3958,12 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {coachTab==="data"&&(<><div style={{padding:"16px 16px 0"}}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Profil athlète</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>Informations personnelles</div>
-        {(()=>{const[toggling,setToggling]=useState(false);const[toggleErr,setToggleErr]=useState('');return(<div style={{padding:'12px 14px',borderRadius:12,background:C.s1,border:`1px solid ${C.brd}`,marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-          <div><div style={{fontSize:13,fontWeight:700,color:C.tx}}>Tracker d'habitudes</div><div style={{fontSize:11,color:toggleErr?C.r:C.tx3,marginTop:2}}>{toggleErr||'Activer le suivi d\'habitudes pour cet athlète'}</div></div>
-          <button disabled={toggling} onClick={async()=>{setToggling(true);setToggleErr('');const ne=!habitEnabled;setHabitEnabled(ne);const{error}=await supabase.from('profiles').update({habit_tracker_enabled:ne}).eq('id',athleteId);if(error){setHabitEnabled(!ne);setToggleErr('Erreur : migration SQL non appliquée ?');console.error('habit toggle:',error);}setToggling(false);}} style={{width:46,height:26,borderRadius:13,background:habitEnabled?C.g:C.s2,border:`2px solid ${habitEnabled?C.g:C.brdL}`,cursor:toggling?'default':'pointer',position:'relative',transition:'all 0.2s',flexShrink:0,outline:'none',opacity:toggling?0.6:1}}>
+        <div style={{padding:'12px 14px',borderRadius:12,background:C.s1,border:`1px solid ${C.brd}`,marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.tx}}>Tracker d'habitudes</div><div style={{fontSize:11,color:habitToggleErr?C.r:C.tx3,marginTop:2}}>{habitToggleErr||"Activer le suivi d'habitudes pour cet athlète"}</div></div>
+          <button disabled={habitToggling} onClick={async()=>{setHabitToggling(true);setHabitToggleErr('');const ne=!habitEnabled;setHabitEnabled(ne);const{error}=await supabase.from('profiles').update({habit_tracker_enabled:ne}).eq('id',athleteId);if(error){setHabitEnabled(!ne);setHabitToggleErr('Erreur : migration SQL non appliquée ?');console.error('habit toggle:',error);}setHabitToggling(false);}} style={{width:46,height:26,borderRadius:13,background:habitEnabled?C.g:C.s2,border:`2px solid ${habitEnabled?C.g:C.brdL}`,cursor:habitToggling?'default':'pointer',position:'relative',transition:'all 0.2s',flexShrink:0,outline:'none',opacity:habitToggling?0.6:1}}>
             <div style={{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:habitEnabled?24:2,transition:'left 0.2s',boxShadow:'0 1px 4px rgba(0,0,0,0.3)'}}/>
           </button>
-        </div>);})()}
+        </div>
         {athleteProfile?(
           <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden",marginBottom:16}}>
             <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid "+C.brd}}>
