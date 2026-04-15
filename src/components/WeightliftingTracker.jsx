@@ -4182,6 +4182,41 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           return(<button onClick={()=>{setInitialLogSess(nextSess);setTab("log");}} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"none",background:C.acS,color:C.ac,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><div><div style={{fontSize:11,fontWeight:700}}>Prochaine séance</div><div style={{fontSize:10,color:C.tx2}}>{nextSess.short} - {nextSess.name}</div></div><span style={{marginLeft:"auto",fontSize:14}}>&gt;</span></button>);
         })()}
         </div>
+        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectifs</div>{nutritionStrategy&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5,background:(nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b)+"20",color:nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b}}>{nutritionStrategy.strategy==="seche"?"Sèche":nutritionStrategy.strategy==="prise_de_masse"?"Prise de masse":"Maintenance"}</span>}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Seances realisees</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:14,color:C.tx3}}>/{totalTarget}</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>{Math.max(0,totalTarget-totalDone)} restantes</div></div>{(()=>{
+  const lastEntry=Object.keys(weightLog).length>0?Object.entries(weightLog).sort((a,b)=>a[0]>b[0]?-1:1)[0][1]:null;
+  const todayW=weightLog[todayKey()]||lastEntry||bodyWeight.current||null;
+  const start=bodyWeight.current||null;
+  const tgt=nutritionStrategy?.target_weight||bodyWeight.target||null;
+  const isGain=start&&tgt?tgt>=start:true;
+  const delta=tgt&&todayW?+(tgt-todayW).toFixed(1):null;
+  const pct=start&&tgt&&start!==tgt&&todayW?Math.min(100,Math.max(0,isGain?((todayW-start)/(tgt-start))*100:((start-todayW)/(start-tgt))*100)):0;
+  const reached=delta!==null&&Math.abs(delta)<0.3;
+  const wC=reached?C.g:C.ac;
+  const deltaLabel=delta===null?("Objectif: "+(tgt||"--")+" kg"):reached?"Objectif atteint !":(delta>0===isGain?(Math.abs(delta)+" kg restants"):("Hors objectif ("+Math.abs(delta)+" kg)"));
+  return(<div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{fontSize:10,color:C.tx3}}>Poids de corps</div>
+      {start&&tgt&&<span style={{fontSize:9,fontWeight:700,color:isGain?C.g:C.b,padding:"2px 6px",borderRadius:4,background:(isGain?C.g:C.b)+"18"}}>{isGain?"▲ Prise":"▼ Sèche"}</span>}
+    </div>
+    <div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}>
+      <span style={{fontSize:26,fontWeight:800,color:wC,letterSpacing:"-1px"}}>{todayW||"--"}</span>
+      <span style={{fontSize:14,color:C.tx3}}>/{tgt||"--"} kg</span>
+    </div>
+    <div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:wC,borderRadius:3,transition:"width 0.4s"}}/></div>
+    <div style={{fontSize:9,color:reached?C.g:C.tx3,marginTop:5,fontWeight:reached?600:400}}>{deltaLabel}</div>
+  </div>);
+})()}</div></div>
+        {habitEnabled&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
+      </div>)}
+
+      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))} weekSchedule={weekSchedule}/>}
+
+      {tab==="stats"&&(()=>{
+        const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
+        return(<div style={{padding:"16px 16px 40px"}}>
+        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon bilan</div>
+
+        {/* 1RM Exercice */}
         {(()=>{
           const seen=new Set();
           const progExNames=Object.values(exos||{}).flat().map(ex=>ex.name||'').filter(n=>{if(!n||seen.has(n.toLowerCase()))return false;seen.add(n.toLowerCase());return true;}).sort();
@@ -4218,58 +4253,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             )}
           </div>);
         })()}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectifs</div>{nutritionStrategy&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5,background:(nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b)+"20",color:nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b}}>{nutritionStrategy.strategy==="seche"?"Sèche":nutritionStrategy.strategy==="prise_de_masse"?"Prise de masse":"Maintenance"}</span>}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Seances realisees</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:14,color:C.tx3}}>/{totalTarget}</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>{Math.max(0,totalTarget-totalDone)} restantes</div></div>{(()=>{
-  const lastEntry=Object.keys(weightLog).length>0?Object.entries(weightLog).sort((a,b)=>a[0]>b[0]?-1:1)[0][1]:null;
-  const todayW=weightLog[todayKey()]||lastEntry||bodyWeight.current||null;
-  const start=bodyWeight.current||null;
-  const tgt=nutritionStrategy?.target_weight||bodyWeight.target||null;
-  const isGain=start&&tgt?tgt>=start:true;
-  const delta=tgt&&todayW?+(tgt-todayW).toFixed(1):null;
-  const pct=start&&tgt&&start!==tgt&&todayW?Math.min(100,Math.max(0,isGain?((todayW-start)/(tgt-start))*100:((start-todayW)/(start-tgt))*100)):0;
-  const reached=delta!==null&&Math.abs(delta)<0.3;
-  const wC=reached?C.g:C.ac;
-  const deltaLabel=delta===null?("Objectif: "+(tgt||"--")+" kg"):reached?"Objectif atteint !":(delta>0===isGain?(Math.abs(delta)+" kg restants"):("Hors objectif ("+Math.abs(delta)+" kg)"));
-  return(<div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-      <div style={{fontSize:10,color:C.tx3}}>Poids de corps</div>
-      {start&&tgt&&<span style={{fontSize:9,fontWeight:700,color:isGain?C.g:C.b,padding:"2px 6px",borderRadius:4,background:(isGain?C.g:C.b)+"18"}}>{isGain?"▲ Prise":"▼ Sèche"}</span>}
-    </div>
-    <div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}>
-      <span style={{fontSize:26,fontWeight:800,color:wC,letterSpacing:"-1px"}}>{todayW||"--"}</span>
-      <span style={{fontSize:14,color:C.tx3}}>/{tgt||"--"} kg</span>
-    </div>
-    <div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:wC,borderRadius:3,transition:"width 0.4s"}}/></div>
-    <div style={{fontSize:9,color:reached?C.g:C.tx3,marginTop:5,fontWeight:reached?600:400}}>{deltaLabel}</div>
-  </div>);
-})()}</div></div>
-        {habitEnabled&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
-      </div>)}
-
-      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))} weekSchedule={weekSchedule}/>}
-
-      {tab==="stats"&&(()=>{
-        const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
-        return(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon bilan</div>
-
-        {/* 1RM Progression */}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Progression 1RM</div>
-          {getBig3(exos).map(({label,name,c})=>{const pr=prs[name]||null;const data=get1rmByWeek(exos,name,tw);const filled=data.filter(d=>d.val!=null);const prog=filled.length>=2?filled[filled.length-1].val-filled[0].val:null;return(<div key={name} style={{marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:3,height:18,borderRadius:2,background:c}}/>
-                <span style={{fontSize:13,fontWeight:700}}>{label}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                <span style={{fontSize:20,fontWeight:800,color:c}}>{pr?.est||"--"}</span>
-                <span style={{fontSize:10,color:C.tx3}}>kg</span>
-                {prog!=null&&<span style={{fontSize:12,fontWeight:700,color:prog>0?C.g:prog<0?C.r:C.tx3,padding:"2px 6px",borderRadius:5,background:(prog>0?C.g:prog<0?C.r:C.tx3)+"15"}}>{prog>0?"+":""}{prog}</span>}
-              </div>
-            </div>
-            <MiniChart data={data} color={c} h={44}/>
-          </div>);})}
-        </div>
 
         {/* Volume hebdomadaire */}
         <WeeklyVolumeCard exos={exos} sets={sets} sessions={sessions} weeksArr={weeksArr} tw={tw} C={C}/>
