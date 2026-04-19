@@ -9,6 +9,7 @@ import PerformanceProfile from "@/components/athlete/PerformanceProfile";
 import TestSessionView from "@/components/TestSessionView";
 import CoachPerfNotification from "@/components/coach/CoachPerfNotification";
 import EnergyExerciseBank from "@/components/coach/EnergyExerciseBank";
+import EnergySessionEditor from "@/components/coach/EnergySessionEditor";
 import * as XLSX from "xlsx";
 import { PDFDocument } from "pdf-lib";
 
@@ -417,6 +418,38 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
 
 const DarkTip=({active,payload,label})=>{if(!active||!payload?.length)return null;return(<div style={{background:C.s2,border:"1px solid "+C.brdL,borderRadius:8,padding:"8px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:4}}>{label}</div>{payload.map((p,i)=>p.value!=null&&<div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{width:8,height:8,borderRadius:2,background:p.fill||p.stroke||C.ac}}/><span style={{fontSize:10,color:C.tx2}}>{p.name}:</span><span style={{fontSize:11,fontWeight:700,color:p.fill||p.stroke||C.ac}}>{p.value}</span></div>)}</div>);};
 function MiniChart({data,color,h}){const H=h||52;const pts=data.filter(d=>d.val!=null);if(!pts.length)return null;const vals=pts.map(d=>d.val),mn=Math.min(...vals),mx=Math.max(...vals),rng=mx-mn||1;const W=280,mapped=data.map((d,i)=>({...d,x:(i/(data.length-1||1))*(W-20)+10,y:d.val!=null?H-12-((d.val-mn)/rng)*(H-24):null}));const act=mapped.filter(p=>p.y!=null),line=act.map((p,i)=>(i===0?"M":"L")+p.x+","+p.y).join(" ");const area=act.length>1?line+" L"+act[act.length-1].x+","+H+" L"+act[0].x+","+H+" Z":"";const gId="mc"+color.replace("#","")+(Math.random().toString(36).slice(2,5));return(<svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:H,display:"block"}}><defs><linearGradient id={gId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.2"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>{area&&<path d={area} fill={"url(#"+gId+")"}/>}{act.length>1&&<path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}{mapped.map((p,i)=>p.y!=null?(<g key={i}><circle cx={p.x} cy={p.y} r={3.5} fill={C.bg} stroke={color} strokeWidth="1.5"/><text x={p.x} y={p.y-8} textAnchor="middle" fill={color} fontSize="9" fontWeight="700" fontFamily="system-ui">{p.val}</text><text x={p.x} y={H-1} textAnchor="middle" fill={C.tx3} fontSize="8" fontFamily="system-ui">{p.week}</text></g>):(<text key={i} x={p.x} y={H-1} textAnchor="middle" fill={C.tx3} fontSize="8" fontFamily="system-ui">{p.week}</text>))}</svg>);}
+
+function SleepTunnel({wellnessHistory,C}){
+  const DAY=['D','L','M','Me','J','V','S'];
+  const WIN_START=21*60;const WIN_SPAN=13*60;// 21h→10h next day
+  const toOffset=({h,m})=>{const t=h*60+m;return t<WIN_START?t+24*60-WIN_START:t-WIN_START;};
+  const fmtT=({h,m})=>String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  const entries=Object.entries(wellnessHistory).filter(([k,v])=>/^\d{8}$/.test(k)&&v?.coucher&&v?.reveil).sort((a,b)=>a[0]>b[0]?1:-1).slice(-14);
+  if(!entries.length)return(<div style={{textAlign:'center',color:C.tx3,fontSize:11,padding:'16px 0'}}>Aucune donnée de sommeil</div>);
+  const bars=entries.map(([key,v])=>{
+    const y=+key.slice(0,4),mo=+key.slice(4,6)-1,d=+key.slice(6,8);
+    const dt=new Date(y,mo,d);
+    const s=toOffset(v.coucher);let e=toOffset(v.reveil);
+    if(e<=s)e+=24*60;
+    const durM=e-s;const durH=Math.round(durM/60*10)/10;
+    const clamp=n=>Math.min(Math.max(n,0),WIN_SPAN);
+    return{label:DAY[dt.getDay()]+' '+d,s:clamp(s),e:clamp(e),durH,color:durH>=7.5?C.g:durH>=6.5?C.o:C.r,cs:fmtT(v.coucher),cr:fmtT(v.reveil)};
+  }).reverse();
+  const LW=28,TH=20,ROW=22,VW=300,BW=VW-LW-4,H=bars.length*ROW+TH+4;
+  const tLabels=[{l:'21h',o:0},{l:'0h',o:180},{l:'3h',o:360},{l:'6h',o:540},{l:'10h',o:780}];
+  return(<svg viewBox={'0 0 '+VW+' '+H} style={{width:'100%',display:'block'}}>
+    {tLabels.map(({l,o})=>{const x=LW+(o/WIN_SPAN)*BW;return(<g key={l}><line x1={x} y1={0} x2={x} y2={H-TH} stroke={C.brdL} strokeWidth={0.5}/><text x={x} y={H-4} textAnchor='middle' fill={C.tx3} fontSize={7.5}>{l}</text></g>);})}
+    {bars.map((b,i)=>{const y=i*ROW;const x1=LW+(b.s/WIN_SPAN)*BW;const x2=LW+(b.e/WIN_SPAN)*BW;const bw=Math.max(x2-x1,2);
+      return(<g key={i}>
+        <text x={LW-3} y={y+ROW/2+3.5} textAnchor='end' fill={C.tx3} fontSize={7.5}>{b.label}</text>
+        <rect x={x1} y={y+3} width={bw} height={ROW-6} rx={3} fill={b.color} opacity={0.25}/>
+        <rect x={x1} y={y+3} width={bw} height={ROW-6} rx={3} fill='none' stroke={b.color} strokeWidth={0.8} opacity={0.7}/>
+        {bw>28&&<text x={x1+bw/2} y={y+ROW/2+3.5} textAnchor='middle' fill={b.color} fontSize={7} fontWeight='700'>{b.durH}h</text>}
+        {bw<=28&&<text x={x1+bw+3} y={y+ROW/2+3.5} fill={b.color} fontSize={7} fontWeight='700'>{b.durH}h</text>}
+      </g>);
+    })}
+  </svg>);
+}
 
 function WeightChart({log,milestones,target,nutritionStrategy}){
   const data=getWeightChartData(log,milestones,target);
@@ -1212,7 +1245,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     return()=>{document.body.style.userSelect=prev.us;document.body.style.webkitUserSelect=prev.wus;document.body.style.overflow=prev.ov;};
   },[touchDragId]);
   const[calWeek,setCalWeek]=useState(currentWeek);
-  const[calDetail,setCalDetail]=useState(null);
+  const[showEditorModal,setShowEditorModal]=useState(false);
 
   const safeSessions=Array.isArray(sessions)?sessions:[];
   const safeSess=sess<safeSessions.length?sess:0;
@@ -1367,8 +1400,6 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   };
 
   return(<div>
-    {/* Modal détail séance */}
-    {calDetail&&<SessionDetailModal sid={calDetail.sid} wk={calDetail.wk} sessions={safeSessions} exos={exos} sets={sets} completedSessions={completedSessions} allMethods={allMethods} blockConfig={blockConfig} currentWeek={currentWeek} onClose={()=>setCalDetail(null)}/>}
 
     {/* ── CALENDRIER SEMAINES ── */}
     {(()=>{
@@ -1396,7 +1427,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
             const exs=exos[s.id]||[];
             const setsDoneQ=exs.reduce((a,ex)=>{const r=sets[ex.id+"_"+calWeek]||[];return a+r.filter(x=>x.done).length;},0);
             const setsPlQ=exs.reduce((a,ex)=>a+(ex.weeks[calWeek]?.sets||0),0);
-            return(<div key={s.id} onClick={()=>hasP&&setCalDetail({sid:s.id,wk:calWeek})} style={{flex:1,minWidth:88,maxWidth:140,padding:"10px 6px 8px",textAlign:"center",cursor:hasP?"pointer":"default",borderRight:"1px solid "+C.brd,background:done?C.g+"08":"transparent",opacity:hasP?1:0.3,transition:"background 0.12s",boxSizing:"border-box"}}
+            return(<div key={s.id} onClick={()=>hasP&&(()=>{setSess(safeSessions.findIndex(x=>x.id===s.id));setWeek(calWeek);setShowEditorModal(true);})()} style={{flex:1,minWidth:88,maxWidth:140,padding:"10px 6px 8px",textAlign:"center",cursor:hasP?"pointer":"default",borderRight:"1px solid "+C.brd,background:done?C.g+"08":"transparent",opacity:hasP?1:0.3,transition:"background 0.12s",boxSizing:"border-box"}}
               onMouseEnter={e=>{if(hasP)e.currentTarget.style.background=done?C.g+"14":C.acS;}}
               onMouseLeave={e=>{e.currentTarget.style.background=done?C.g+"08":"transparent";}}>
               <div style={{width:34,height:34,borderRadius:10,background:sc+"20",border:"1.5px solid "+sc+"50",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 5px",fontSize:done?17:12,fontWeight:800,color:sc}}>{done?"✓":s.short}</div>
@@ -1456,6 +1487,21 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     </div>)}
 
     <div style={{fontSize:10,color:C.tx3,marginBottom:10}}>Double-cliquer sur un onglet pour renommer</div>
+
+    {safeSessions.length>0&&<button onClick={()=>setShowEditorModal(true)} style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>✎ Éditer le contenu des séances</button>}
+
+    {showEditorModal&&(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{position:"sticky",top:0,zIndex:5,background:C.bg,borderBottom:"1px solid "+C.brd,padding:"10px 16px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        <button onClick={()=>{setShowEditorModal(false);setOpenEx(null);}} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:800,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{safeSessions[safeSess]?.name||"Séance"}</div>
+          <div style={{fontSize:10,color:C.tx3}}>Semaine {week} / {tw}{week===dw?" · Deload":""}</div>
+        </div>
+        <div style={{display:"flex",gap:3,flexShrink:0,overflowX:"auto",scrollbarWidth:"none",maxWidth:"40%"}}>
+          {safeSessions.map((s,i)=><button key={s.id} onClick={()=>{setSess(i);setOpenEx(null);}} style={{flexShrink:0,padding:"5px 10px",borderRadius:7,border:"1px solid "+(i===safeSess?C.coach:C.brdL),background:i===safeSess?C.coachS:"transparent",color:i===safeSess?C.coach:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{s.short}</button>)}
+        </div>
+      </div>
+      <div style={{padding:"16px",maxWidth:900,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
 
     {/* Bloc management per session */}
     <div style={{marginBottom:12,background:C.s1,borderRadius:10,padding:"10px 12px",border:"1px solid "+C.brdL}}>
@@ -1692,6 +1738,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         </div>
       )}
     </div>
+      </div>
+    </div>)}
   {videoEx&&(<div onClick={()=>setVideoEx(null)} style={{position:'fixed',inset:0,zIndex:500,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
     <div style={{width:'100%',maxWidth:480}} onClick={e=>e.stopPropagation()}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
@@ -1889,7 +1937,7 @@ function DataManager({exos,setExos,sets,setSets,sessions,setSessions,completedSe
   </div>);
 }
 
-function BlockHistoryViewer({blockHistory,onClose}){
+function BlockHistoryViewer({blockHistory,onClose,onDelete}){
   if(!blockHistory?.length)return(<div style={{padding:20,textAlign:"center"}}><div style={{fontSize:14,color:C.tx3,marginBottom:16}}>Aucun bloc archive</div><button onClick={onClose} style={{padding:"8px 20px",borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Fermer</button></div>);
   return(<div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:1}}>
@@ -1898,6 +1946,7 @@ function BlockHistoryViewer({blockHistory,onClose}){
     </div>
     <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
       {blockHistory.slice().reverse().map((block,i)=>{
+        const realIdx=blockHistory.length-1-i;
         const prs=getAllPRs(block.exos||{});const totalDone=Object.values(block.completedSessions||{}).flat().length;
         const tw=block.blockConfig?.totalWeeks||6;const totalTarget=(block.goals?.sessionsPerWeek||6)*tw;
         const adherence=totalTarget?Math.round((totalDone/totalTarget)*100):0;
@@ -1905,11 +1954,14 @@ function BlockHistoryViewer({blockHistory,onClose}){
         const big3=getBig3(block.exos||{});
         return(<div key={block.id||i} style={{background:C.s1,borderRadius:14,padding:16,border:"1px solid "+C.brd}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div>
+            <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:14,fontWeight:700}}>{block.blockConfig?.blockName||"Bloc "+(blockHistory.length-i)}</div>
               <div style={{fontSize:10,color:C.tx3}}>{date} · {tw} sem. · {totalDone}/{totalTarget} seances ({adherence}%)</div>
             </div>
-            <div style={{padding:"4px 10px",borderRadius:8,background:adherence>=80?C.gS:adherence>=50?C.oS:C.rS,color:adherence>=80?C.g:adherence>=50?C.o:C.r,fontSize:11,fontWeight:700}}>{adherence}%</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+              <div style={{padding:"4px 10px",borderRadius:8,background:adherence>=80?C.gS:adherence>=50?C.oS:C.rS,color:adherence>=80?C.g:adherence>=50?C.o:C.r,fontSize:11,fontWeight:700}}>{adherence}%</div>
+              {onDelete&&<button onClick={()=>onDelete(realIdx)} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Suppr.</button>}
+            </div>
           </div>
           {big3.length>0&&<div style={{display:"flex",gap:8,marginBottom:10}}>
             {big3.map(({name,label,c})=>{const pr=prs[name];return(<div key={label} style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid "+c+"20"}}>
@@ -1927,8 +1979,8 @@ function BlockHistoryViewer({blockHistory,onClose}){
   </div>);
 }
 
-function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
-  const[step,setStep]=useState(0);
+function NewBlockModal({onStart,onClose,onResume,hasCurrentData,blockHistory=[],onDelete}){
+  const[step,setStep]=useState(hasCurrentData?0:1);
   const[blockName,setBlockName]=useState("");
   const[objective,setObjective]=useState("");
   const[totalWeeks,setTotalWeeks]=useState(6);
@@ -1937,16 +1989,39 @@ function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
   const[newSessions,setNewSessions]=useState([]);
   const[sessInput,setSessInput]=useState({name:"",short:""});
   const[keep,setKeep]=useState({exos:false,config:true,exMeta:true});
+  const[showHistory,setShowHistory]=useState(false);
+  const[fromHistory,setFromHistory]=useState(false);
+  const[restoredExos,setRestoredExos]=useState(null);
   const toggle=k=>setKeep(p=>({...p,[k]:!p[k]}));
   const addSess=()=>{if(!sessInput.name.trim())return;setNewSessions(p=>[...p,{id:"s_"+Date.now()+"_"+p.length,name:sessInput.name.trim(),short:sessInput.short.trim()||sessInput.name.trim().slice(0,3).toUpperCase()}]);setSessInput({name:"",short:""});};
   const removeSess=i=>setNewSessions(p=>p.filter((_,idx)=>idx!==i));
   const canFinish=blockName.trim();
   const finish=()=>{
     let finalSessions=newSessions;
-    if(finalSessions.length===0){
-      finalSessions=Array.from({length:sessPerWeek},(_,i)=>({id:"s_"+Date.now()+"_"+i,name:"Séance "+(i+1),short:"S"+(i+1)}));
-    }
-    onStart({...keep,blockName:blockName.trim(),objective:objective.trim(),totalWeeks,sessPerWeek,deloadWeek,sessions:finalSessions});
+    if(finalSessions.length===0){finalSessions=Array.from({length:sessPerWeek},(_,i)=>({id:"s_"+Date.now()+"_"+i,name:"Séance "+(i+1),short:"S"+(i+1)}));}
+    onStart({...keep,blockName:blockName.trim(),objective:objective.trim(),totalWeeks,sessPerWeek,deloadWeek,sessions:finalSessions,restoredExos:fromHistory?restoredExos:null});
+  };
+  const loadFromHistory=(block)=>{
+    // Remappe les sessions avec de nouveaux IDs et reconstruit les exos correspondants
+    const idMap={};
+    const mappedSessions=(block.sessions||[]).map(s=>{
+      const newId="s_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+      idMap[s.id]=newId;
+      return{...s,id:newId};
+    });
+    const mappedExos={};
+    Object.entries(block.exos||{}).forEach(([oldId,exList])=>{
+      const newId=idMap[oldId];
+      if(newId)mappedExos[newId]=exList;
+    });
+    setBlockName((block.blockConfig?.blockName||"")+" (reprise)");
+    setObjective(block.blockConfig?.objective||"");
+    setTotalWeeks(block.blockConfig?.totalWeeks||6);
+    setSessPerWeek(block.goals?.sessionsPerWeek||4);
+    setDeloadWeek(block.blockConfig?.deloadWeek||0);
+    setNewSessions(mappedSessions);
+    setRestoredExos(mappedExos);
+    setFromHistory(true);setShowHistory(false);setStep(1);
   };
 
   const rowCtrl=(label,val,onM,onP,fmt)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid "+C.brd}}>
@@ -1960,25 +2035,80 @@ function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
 
   return(<div style={{position:"fixed",inset:0,zIndex:250,background:C.bg,overflowY:"auto"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:1}}>
-      <div style={{fontSize:14,fontWeight:700,color:C.coach}}>Nouveau bloc</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.coach}}>{step===0?"Que faire du bloc actuel ?":"Nouveau bloc"}</div>
       <button onClick={onClose} style={{background:"none",border:"none",color:C.tx3,fontSize:20,cursor:"pointer",fontFamily:"inherit"}}>×</button>
     </div>
     <div style={{padding:16}}>
-      {hasCurrentData&&step===0&&(<>
-        <div style={{fontSize:11,color:C.tx2,marginBottom:12}}>Le bloc actuel sera archivé.</div>
-        <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:8}}>Que garder du bloc précédent ?</div>
-        {[
-          {k:"exos",l:"Exercices (prog)",desc:"Garder les exercices planifiés"},
-          {k:"config",l:"Config (tiers, deload...)",desc:"Garder les réglages de surcharge"},
-          {k:"exMeta",l:"Base Exos (muscles)",desc:"Garder les métadonnées exercices"},
-        ].map(({k,l,desc})=>(<div key={k} onClick={()=>toggle(k)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:keep[k]?C.gS:"transparent",border:"1px solid "+(keep[k]?C.g+"50":C.brdL),marginBottom:6,cursor:"pointer"}}>
-          <div style={{width:18,height:18,borderRadius:5,border:"2px solid "+(keep[k]?C.g:C.tx3),background:keep[k]?C.g:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:800,flexShrink:0}}>{keep[k]?"✓":""}</div>
-          <div><div style={{fontSize:12,fontWeight:600,color:keep[k]?C.g:C.tx2}}>{l}</div><div style={{fontSize:10,color:C.tx3}}>{desc}</div></div>
-        </div>))}
-        <button onClick={()=>setStep(1)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:10}}>Suivant</button>
+
+      {/* Étape 0 : choix si bloc actuel existe */}
+      {step===0&&(<>
+        <div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Un bloc est déjà en cours. Que veux-tu faire ?</div>
+        <button onClick={onResume||onClose} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:12,border:"2px solid "+C.g+"50",background:C.gS,marginBottom:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:C.g+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>↩</div>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.g}}>Reprendre le bloc en cours</div><div style={{fontSize:11,color:C.tx3}}>Continuer exactement là où tu en étais</div></div>
+        </button>
+        <button onClick={()=>setShowHistory(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:12,border:"1px solid "+C.b+"50",background:showHistory?C.bS:"transparent",marginBottom:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:C.b+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📂</div>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.b}}>Reprendre depuis l'historique</div><div style={{fontSize:11,color:C.tx3}}>{blockHistory.length} bloc{blockHistory.length!==1?"s":""} archivé{blockHistory.length!==1?"s":""}</div></div>
+        </button>
+        {showHistory&&blockHistory.length>0&&(<div style={{marginBottom:10,borderRadius:10,border:"1px solid "+C.brd,overflow:"hidden"}}>
+          {blockHistory.slice().reverse().map((block,i)=>{
+            const realIdx=blockHistory.length-1-i;
+            const date=block.archivedAt?new Date(block.archivedAt).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"";
+            const totalDone=Object.values(block.completedSessions||{}).flat().length;
+            return(<div key={block.id||i} style={{display:"flex",alignItems:"center",borderBottom:"1px solid "+C.brd}}>
+              <button onClick={()=>loadFromHistory(block)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:C.tx}}>{block.blockConfig?.blockName||"Bloc "+(blockHistory.length-i)}</div>
+                  <div style={{fontSize:10,color:C.tx3}}>{date} · {block.blockConfig?.totalWeeks||6} sem. · {totalDone} séances</div>
+                </div>
+                <span style={{fontSize:11,color:C.b,fontWeight:600,flexShrink:0,marginLeft:8}}>Reprendre →</span>
+              </button>
+              {onDelete&&<button onClick={e=>{e.stopPropagation();onDelete(realIdx);}} style={{padding:"6px 10px",margin:"0 8px",borderRadius:7,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Suppr.</button>}
+            </div>);
+          })}
+          {blockHistory.length===0&&<div style={{padding:"14px",fontSize:11,color:C.tx3,textAlign:"center"}}>Aucun bloc archivé</div>}
+        </div>)}
+        <button onClick={()=>setStep(1)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:12,border:"1px solid "+C.coach+"50",background:"transparent",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:C.coachS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>➕</div>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Créer un nouveau bloc</div><div style={{fontSize:11,color:C.tx3}}>Archiver le bloc actuel et repartir</div></div>
+        </button>
       </>)}
 
-      {(step===1||(!hasCurrentData))&&(<>
+      {/* Étape 1 : configuration du bloc */}
+      {step===1&&(<>
+        {/* Partir d'un ancien bloc */}
+        {blockHistory.length>0&&(<div style={{marginBottom:16}}>
+          {fromHistory?(
+            <div style={{padding:"10px 14px",borderRadius:10,background:C.bS,border:"1px solid "+C.b+"40",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{fontSize:11,color:C.b,fontWeight:600}}>📂 Basé sur un ancien bloc</div>
+              <button onClick={()=>{setFromHistory(false);setRestoredExos(null);setBlockName("");setObjective("");setNewSessions([]);}} style={{fontSize:10,color:C.r,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Effacer</button>
+            </div>
+          ):(
+            <button onClick={()=>setShowHistory(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,border:"1px solid "+C.b+"40",background:showHistory?C.bS:"transparent",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+              <span style={{fontSize:16}}>📂</span>
+              <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.b}}>Partir d'un ancien bloc</div><div style={{fontSize:10,color:C.tx3}}>{blockHistory.length} bloc{blockHistory.length!==1?"s":""} disponible{blockHistory.length!==1?"s":""}</div></div>
+              <span style={{fontSize:11,color:C.tx3,transform:showHistory?"rotate(180deg)":"none",display:"inline-block",transition:"transform 0.2s"}}>∨</span>
+            </button>
+          )}
+          {showHistory&&!fromHistory&&(<div style={{marginTop:6,borderRadius:10,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            {blockHistory.slice().reverse().map((block,i)=>{
+              const realIdx=blockHistory.length-1-i;
+              const date=block.archivedAt?new Date(block.archivedAt).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"";
+              const totalDone=Object.values(block.completedSessions||{}).flat().length;
+              return(<div key={block.id||i} style={{display:"flex",alignItems:"center",borderBottom:"1px solid "+C.brd}}>
+                <button onClick={()=>loadFromHistory(block)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.tx}}>{block.blockConfig?.blockName||"Bloc "+(blockHistory.length-i)}</div>
+                    <div style={{fontSize:10,color:C.tx3}}>{date}{date?" · ":""}{block.blockConfig?.totalWeeks||6} sem. · {totalDone} séances réalisées</div>
+                  </div>
+                  <span style={{fontSize:11,color:C.b,fontWeight:600,flexShrink:0,marginLeft:8}}>Utiliser →</span>
+                </button>
+                {onDelete&&<button onClick={e=>{e.stopPropagation();onDelete(realIdx);}} style={{padding:"6px 10px",margin:"0 8px",borderRadius:7,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Suppr.</button>}
+              </div>);
+            })}
+          </div>)}
+        </div>)}
         <div style={{marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:600,color:C.coach,textTransform:"uppercase",marginBottom:8}}>Identité du bloc</div>
           <input value={blockName} onChange={e=>setBlockName(e.target.value)} placeholder="Nom du bloc (ex: Force S1, Hypertrophie...)" style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:"inherit",boxSizing:"border-box",marginBottom:8}}/>
@@ -2006,13 +2136,72 @@ function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
             <button onClick={addSess} style={{padding:"8px 14px",borderRadius:8,border:"none",background:C.g,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+</button>
           </div>
         </div>
+        {hasCurrentData&&!fromHistory&&(<div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:8}}>Que garder du bloc précédent ?</div>
+          {[{k:"exos",l:"Exercices (prog)",desc:"Garder les exercices planifiés"},{k:"config",l:"Config (tiers, deload...)",desc:"Garder les réglages de surcharge"},{k:"exMeta",l:"Base Exos (muscles)",desc:"Garder les métadonnées exercices"}].map(({k,l,desc})=>(<div key={k} onClick={()=>toggle(k)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:keep[k]?C.gS:"transparent",border:"1px solid "+(keep[k]?C.g+"50":C.brdL),marginBottom:6,cursor:"pointer"}}>
+            <div style={{width:18,height:18,borderRadius:5,border:"2px solid "+(keep[k]?C.g:C.tx3),background:keep[k]?C.g:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:800,flexShrink:0}}>{keep[k]?"✓":""}</div>
+            <div><div style={{fontSize:12,fontWeight:600,color:keep[k]?C.g:C.tx2}}>{l}</div><div style={{fontSize:10,color:C.tx3}}>{desc}</div></div>
+          </div>))}
+        </div>)}
         <div style={{display:"flex",gap:8}}>
-          {hasCurrentData&&<button onClick={()=>setStep(0)} style={{flex:1,padding:"10px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Retour</button>}
-          <button onClick={onClose} style={{flex:1,padding:"10px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+          <button onClick={()=>hasCurrentData?setStep(0):onClose()} style={{flex:1,padding:"10px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{hasCurrentData?"Retour":"Annuler"}</button>
           <button disabled={!canFinish} onClick={finish} style={{flex:2,padding:"10px 0",borderRadius:10,border:"none",background:canFinish?C.coach:C.s2,color:canFinish?"#fff":C.tx3,fontSize:12,fontWeight:700,cursor:canFinish?"pointer":"default",fontFamily:"inherit"}}>Créer le bloc</button>
         </div>
       </>)}
     </div>
+  </div>);
+}
+
+function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energySessions,setEnergySessions,energySessionsLoaded,setEnergySessionsLoaded,C}){
+  const[creating,setCreating]=useState(false);const[newLabel,setNewLabel]=useState("");const[loading,setLoading]=useState(false);
+  const loadSessions=async()=>{
+    setLoading(true);
+    const{data}=await supabase.from("energy_session_config").select("id,session_key,session_label,appareil_types,updated_at").eq("athlete_id",athleteId).order("updated_at",{ascending:false});
+    setEnergySessions(data||[]);setEnergySessionsLoaded(true);setLoading(false);
+  };
+  useEffect(()=>{if(!energySessionsLoaded)loadSessions();},[athleteId,energySessionsLoaded]);
+  const handleCreate=async()=>{
+    if(!newLabel.trim())return;
+    const key="energy_"+Date.now();
+    const{data,error}=await supabase.from("energy_session_config").insert({athlete_id:athleteId,session_key:key,session_label:newLabel.trim(),appareil_types:[],custom_appareils:[],blocks:[],created_by:athleteId}).select("id,session_key,session_label").single();
+    if(!error&&data){setEnergySessionsLoaded(false);setEnergyEditorKey({key:data.session_key,label:data.session_label});}
+    setCreating(false);setNewLabel("");
+  };
+  const handleDelete=async(sessionKey,e)=>{
+    e.stopPropagation();
+    if(!window.confirm("Supprimer cette séance énergétique ?"))return;
+    await supabase.from("energy_session_config").delete().eq("athlete_id",athleteId).eq("session_key",sessionKey);
+    setEnergySessionsLoaded(false);
+  };
+  if(energyEditorKey){
+    return(<EnergySessionEditor athleteId={athleteId} sessionKey={energyEditorKey.key} sessionLabel={energyEditorKey.label} onClose={()=>{setEnergyEditorKey(null);setEnergySessionsLoaded(false);}} C={C}/>);
+  }
+  return(<div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+      <div><div style={{fontSize:16,fontWeight:700}}>Séances Énergétiques</div><div style={{fontSize:11,color:C.tx3,marginTop:2}}>Cardio, intermittent, fartleck…</div></div>
+      <button onClick={()=>setCreating(true)} style={{padding:"7px 14px",borderRadius:9,border:"none",background:C.coach,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Nouvelle séance</button>
+    </div>
+    {creating&&(<div style={{background:C.s1,borderRadius:12,padding:"14px 16px",border:"1px solid "+C.coach+"40",marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.tx3,marginBottom:8}}>Nom de la séance</div>
+      <div style={{display:"flex",gap:8}}>
+        <input autoFocus value={newLabel} onChange={e=>setNewLabel(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handleCreate();if(e.key==="Escape"){setCreating(false);setNewLabel("");}}} placeholder="ex: Fractionné 30/30" style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+        <button onClick={handleCreate} style={{padding:"8px 16px",borderRadius:8,border:"none",background:C.coach,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer</button>
+        <button onClick={()=>{setCreating(false);setNewLabel("");}} style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+      </div>
+    </div>)}
+    {loading?(<div style={{textAlign:"center",padding:"40px 0",color:C.tx3,fontSize:12}}>Chargement…</div>)
+    :energySessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:36,marginBottom:12}}>⚡</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucune séance énergétique</div><div style={{fontSize:12,color:C.tx3}}>Crée une séance pour configurer le cardio de l'athlète.</div></div>)
+    :energySessions.map(s=>(
+      <div key={s.session_key} onClick={()=>setEnergyEditorKey({key:s.session_key,label:s.session_label||s.session_key})} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,marginBottom:10,cursor:"pointer"}}>
+        <div style={{width:36,height:36,borderRadius:10,background:C.coach+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>⚡</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.session_label||s.session_key}</div>
+          <div style={{fontSize:10,color:C.tx3,marginTop:1}}>{(s.appareil_types||[]).join(", ")||"Appareils non définis"}</div>
+        </div>
+        <button onClick={e=>handleDelete(s.session_key,e)} style={{padding:"4px 10px",borderRadius:7,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Suppr.</button>
+        <div style={{color:C.tx3,fontSize:16,flexShrink:0}}>›</div>
+      </div>
+    ))}
   </div>);
 }
 
@@ -3647,7 +3836,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const{profile:myProfile}=useAuth();
   const load=(k,fb)=>sLoad(k,fb,athleteId);
   const save=(k,v)=>sSave(k,v,athleteId);
-  const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");const[logSubTab,setLogSubTab]=useState("muscu");const[testSubTab,setTestSubTab]=useState("musculation");const[banqueSubTab,setBanqueSubTab]=useState("muscu");
+  const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");const[logSubTab,setLogSubTab]=useState("muscu");const[testSubTab,setTestSubTab]=useState("musculation");const[banqueSubTab,setBanqueSubTab]=useState("muscu");const[progSubTab,setProgSubTab]=useState("muscu");const[energyEditorKey,setEnergyEditorKey]=useState(null);const[energySessions,setEnergySessions]=useState([]);const[energySessionsLoaded,setEnergySessionsLoaded]=useState(false);const[drawerPrOpen,setDrawerPrOpen]=useState(false);const[drawerInjOpen,setDrawerInjOpen]=useState(false);
   const[exos,setExosState]=useState({});const[exMeta,setExMetaState]=useState({});
   const[aW,setAW]=useState(1);const[sets,setSetsState]=useState({});const[anaTab,setAnaTab]=useState("combined");const[weightRange,setWeightRange]=useState("bloc");
   const[wellness,setWellnessState]=useState(null);const[wellnessHistory,setWellnessHistoryState]=useState({});const[wellnessPeriod,setWellnessPeriod]=useState("month");
@@ -3675,7 +3864,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[initialLogSess,setInitialLogSess]=useState(null);
   const[habits,setHabits]=useState([]);const[habitLogs,setHabitLogs]=useState({});const[habitEnabled,setHabitEnabled]=useState(false);
   const[habitToggling,setHabitToggling]=useState(false);const[habitToggleErr,setHabitToggleErr]=useState('');
-  const[profileInfoOpen,setProfileInfoOpen]=useState(false);
+  const[drawerOpen,setDrawerOpen]=useState(false);const[drawerSportOpen,setDrawerSportOpen]=useState(false);const[drawerZoom,setDrawerZoom]=useState(null);
   const[timerLeft,setTimerLeft]=useState(120);const[timerDur,setTimerDur]=useState(120);
   const[timerActive,setTimerActive]=useState(false);const[timerFinished,setTimerFinished]=useState(false);
   const timerRef=useRef(null);
@@ -3749,9 +3938,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     }
     // Set new sessions from wizard
     setSessions(opts.sessions||[]);
-    // Reset or keep exos
-    if(!opts.exos){const newExos={};(opts.sessions||[]).forEach(s=>{newExos[s.id]=[];});setExos(newExos);}
-    else{const newExos={...exos};(opts.sessions||[]).forEach(s=>{if(!newExos[s.id])newExos[s.id]=[];});setExos(newExos);}
+    // Exos : reprise historique > garder actuels > reset
+    if(opts.restoredExos){
+      // Restauration depuis l'historique : exos déjà remappés aux nouveaux IDs
+      setExos(opts.restoredExos);
+    }else if(!opts.exos){
+      const newExos={};(opts.sessions||[]).forEach(s=>{newExos[s.id]=[];});setExos(newExos);
+    }else{
+      const newExos={...exos};(opts.sessions||[]).forEach(s=>{if(!newExos[s.id])newExos[s.id]=[];});setExos(newExos);
+    }
     // Block config
     const newBc=opts.config?{...blockConfig}:{...DEF_BLOCK_CONFIG};
     newBc.blockName=opts.blockName||"";newBc.objective=opts.objective||"";newBc.totalWeeks=opts.totalWeeks||6;newBc.deloadWeek=opts.deloadWeek||0;newBc.startDate=new Date().toISOString().slice(0,10);
@@ -3882,7 +4077,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     else setBankAddEx(ex);
   };
   const coachTabs=[{k:"prog",l:"Prog"},{k:"exos",l:"Exos"},{k:"banque",l:"Banque"},{k:"config",l:"Config"},{k:"stats",l:"Stats"},{k:"data",l:"Données"},{k:"test",l:"Test"},{k:"retours",l:"Retours"}];
-  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"},{k:"alim",l:"Alim"},{k:"profil",l:"Profil"},{k:"test",l:"Test"},{k:"retours",l:"Retours"}];
+  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"alim",l:"Alim"},{k:"test",l:"Test"}];
   const activeTabs=mode==="coach"?coachTabs:athTabs;const activeTab=mode==="coach"?coachTab:tab;const setActiveTab=mode==="coach"?setCoachTab:setTab;
   const tabS=t=>({flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(activeTab===t?(mode==="coach"?C.coach:C.ac):"transparent"),background:"transparent",color:activeTab===t?(mode==="coach"?C.coach:C.ac):C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"});
 
@@ -3890,13 +4085,165 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
   return(<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",color:C.tx,maxWidth:mode==="athlete"?480:"100%",margin:mode==="athlete"?"0 auto":0}}>
 
+    {drawerOpen&&mode==="athlete"&&(<>
+      <div onClick={()=>setDrawerOpen(false)} style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(2px)"}}/>
+      {drawerZoom&&(<div style={{position:"fixed",inset:0,zIndex:103,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:2}}>
+          <button onClick={()=>setDrawerZoom(null)} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
+          <div style={{fontSize:14,fontWeight:700}}>{drawerZoom==="weight"?"Poids de corps":drawerZoom==="wellness"?"Forme du jour":"Score de santé"}</div>
+        </div>
+        <div style={{padding:"16px"}}>
+          {drawerZoom==="weight"&&(<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><div style={{fontSize:13,fontWeight:700}}>Évolution du poids</div><div style={{fontSize:13,fontWeight:800,color:C.ac}}>{bodyWeight.current||"—"}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> / {bodyWeight.target||"—"} kg</span></div></div>{Object.keys(weightLog).length>0?<WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"24px 0"}}>Aucune mesure enregistrée</div>}</div>)}
+          {drawerZoom==="wellness"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {/* Aujourd'hui */}
+            <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Forme du jour</div>
+              {wellness?(<>
+                <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
+                  <div style={{position:"relative",width:72,height:72,flexShrink:0}}><svg viewBox="0 0 64 64" style={{width:72,height:72,transform:"rotate(-90deg)"}}><circle cx="32" cy="32" r="26" fill="none" stroke={C.s2} strokeWidth="5"/><circle cx="32" cy="32" r="26" fill="none" stroke={wReco.c} strokeWidth="5" strokeDasharray={String(2*Math.PI*26)} strokeDashoffset={String(2*Math.PI*26*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:wReco.c}}>{wScore}</div></div>
+                  <div><div style={{fontSize:16,fontWeight:700,color:wReco.c}}>{wReco.label}</div><div style={{fontSize:12,color:C.tx2,marginTop:4}}>{wReco.desc}</div>{wellness.sleepDur&&<div style={{fontSize:11,color:C.b,fontWeight:600,marginTop:4}}>💤 {wellness.sleepDur}h de sommeil</div>}</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>{[{l:"Récupération",v:wellness.fatigue,e:"😴"},{l:"Sommeil",v:wellness.sommeil,e:"💤"},{l:"Sérénité",v:wellness.stress,e:"🧠"},{l:"Énergie",v:wellness.energie,e:"⚡"},{l:"Fraîcheur",v:wellness.doms,e:"💪"}].map(m=>{const mv=m.v||0;const mc=mv>=4?C.g:mv>=3?C.o:C.r;return(<div key={m.l} style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:C.tx3,width:84,flexShrink:0}}>{m.e} {m.l}</span><div style={{flex:1,height:6,background:C.s2,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(mv/5*100)+"%",background:mc,borderRadius:3}}/></div><span style={{fontSize:11,fontWeight:700,color:mc,width:16,textAlign:"right"}}>{mv||"?"}</span></div>);})}</div>
+              </>):<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune donnée de forme aujourd'hui</div>}
+            </div>
+            {/* Historique score */}
+            <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Score de santé</div>
+                <div style={{display:"flex",gap:3}}>{[{k:"week",l:"7j"},{k:"month",l:"30j"},{k:"year",l:"12m"}].map(t=>(<button key={t.k} onClick={()=>setWellnessPeriod(t.k)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:wellnessPeriod===t.k?C.acS:"transparent",color:wellnessPeriod===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div>
+              </div>
+              {(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const has=wData.some(d=>d.score!==null);return has?(<><div style={{display:"flex",gap:10,marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:3,borderRadius:2,background:C.g}}/><span style={{fontSize:9,color:C.tx3}}>Forme /100</span></div><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.b,opacity:0.5}}/><span style={{fontSize:9,color:C.tx3}}>Sommeil (h)</span></div></div><ResponsiveContainer width="100%" height={130}><ComposedChart data={wData} margin={{top:4,right:4,bottom:0,left:-28}}><XAxis dataKey="label" tick={{fontSize:9,fill:C.tx3}} tickLine={false} axisLine={false}/><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const sc=payload.find(p=>p.dataKey==='score');const sl=payload.find(p=>p.dataKey==='sleep');return(<div style={{background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,padding:"6px 10px",fontSize:10}}><div style={{color:C.tx3,marginBottom:4}}>{label}</div>{sc?.value!=null&&<div style={{color:getReco(sc.value).c,fontWeight:700}}>Forme : {sc.value}</div>}{sl?.value!=null&&<div style={{color:C.b}}>Sommeil : {sl.value}h</div>}</div>);}}/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[3,3,0,0]} maxBarSize={20}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={2} dot={(props)=>{if(props.value==null)return<g/>;const rc=getReco(props.value);return<circle cx={props.cx} cy={props.cy} r={3.5} fill={rc.c} stroke={C.bg} strokeWidth={1}/>;}} connectNulls={false}/></ComposedChart></ResponsiveContainer></>):(<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"20px 0"}}>Aucune donnée wellness</div>);})()}
+            </div>
+            {/* Tunnel sommeil */}
+            <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Tunnel de sommeil — 14 jours</div>
+              <div style={{display:"flex",gap:10,marginBottom:10}}>{[{c:C.g,l:"≥ 7.5h"},{c:C.o,l:"6.5–7.5h"},{c:C.r,l:"< 6.5h"}].map(({c,l})=><div key={l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:c,opacity:0.7}}/><span style={{fontSize:9,color:C.tx3}}>{l}</span></div>)}</div>
+              <SleepTunnel wellnessHistory={wellnessHistory} C={C}/>
+            </div>
+          </div>)}
+          {drawerZoom==="health"&&(<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>{(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const hasSomeData=wData.some(d=>d.score!==null);return(<><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:13,fontWeight:700}}>Score de santé</div><div style={{display:"flex",gap:3}}>{[{k:"week",l:"7j"},{k:"month",l:"30j"},{k:"year",l:"12m"}].map(t=>(<button key={t.k} onClick={()=>setWellnessPeriod(t.k)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:wellnessPeriod===t.k?C.acS:"transparent",color:wellnessPeriod===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div></div>{hasSomeData?<ResponsiveContainer width="100%" height={200}><ComposedChart data={wData} margin={{top:4,right:4,bottom:0,left:-28}}><XAxis dataKey="label" tick={{fontSize:9,fill:C.tx3}} tickLine={false} axisLine={false}/><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const sc=payload.find(p=>p.dataKey==='score');const sl=payload.find(p=>p.dataKey==='sleep');return(<div style={{background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,padding:"6px 10px",fontSize:10}}><div style={{color:C.tx3,marginBottom:4}}>{label}</div>{sc?.value!=null&&<div style={{color:getReco(sc.value).c,fontWeight:700}}>Forme : {sc.value}</div>}{sl?.value!=null&&<div style={{color:C.b}}>Sommeil : {sl.value}h</div>}</div>);}}/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[3,3,0,0]} maxBarSize={20}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={2} dot={(props)=>{if(props.value==null)return<g/>;const rc=getReco(props.value);return<circle cx={props.cx} cy={props.cy} r={3.5} fill={rc.c} stroke={C.bg} strokeWidth={1}/>;}} connectNulls={false}/></ComposedChart></ResponsiveContainer>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"30px 0"}}>Aucune donnée wellness</div>}</>);})()}</div>)}
+        </div>
+      </div>)}
+      <div style={{position:"fixed",top:0,right:0,bottom:0,width:"min(360px,92vw)",zIndex:102,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column",boxShadow:"-4px 0 32px rgba(0,0,0,0.6)",borderLeft:"1px solid "+C.brd}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:2}}>
+          <div style={{fontSize:15,fontWeight:700}}>Mon profil</div>
+          <button onClick={()=>setDrawerOpen(false)} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+        <div style={{padding:"16px",flex:1,display:"flex",flexDirection:"column",gap:12}}>
+          {/* Profile card */}
+          <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:C.acS,border:"2px solid "+C.ac+"40",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:C.ac}}>
+                {athleteProfile?([athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"?").split(" ").filter(n=>n).map(n=>n[0]).join("").toUpperCase().slice(0,2):"?"}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{athleteProfile?([athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"Athlète"):"Athlète"}</div>
+                {athleteProfile?.gender&&<div style={{fontSize:11,color:C.tx3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":""}</div>}
+              </div>
+            </div>
+            {athleteProfile&&(<>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:1,background:C.brd,borderTop:"1px solid "+C.brd}}>
+                {[{l:"Âge",v:athleteProfile.age?athleteProfile.age+" ans":null},{l:"Taille",v:athleteProfile.height_cm?athleteProfile.height_cm+" cm":null},{l:"MB",v:athleteProfile.base_metabolism?Math.round(athleteProfile.base_metabolism).toLocaleString("fr-FR")+" kcal":null}].map(s=>(<div key={s.l} style={{background:C.s2,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:10,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>{s.l}</div><div style={{fontSize:13,fontWeight:700,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div></div>))}
+              </div>
+              {(athleteProfile.weight_kg||athleteProfile.body_fat_pct)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:C.brd,borderTop:"1px solid "+C.brd}}>
+                {[{l:"Poids réf.",v:athleteProfile.weight_kg?athleteProfile.weight_kg+" kg":null},{l:"Masse grasse",v:athleteProfile.body_fat_pct?athleteProfile.body_fat_pct+" %":null}].map(s=>(<div key={s.l} style={{background:C.s2,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:10,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>{s.l}</div><div style={{fontSize:13,fontWeight:700,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div></div>))}
+              </div>}
+            </>)}
+            {!athleteProfile&&<div style={{padding:"12px 16px",fontSize:12,color:C.tx3,textAlign:"center"}}>Profil non renseigné</div>}
+          </div>
+          {/* Données sportives */}
+          <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            <button onClick={()=>setDrawerSportOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit"}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Données sportives</div>
+              <span style={{fontSize:12,color:C.tx3,display:"inline-block",transition:"transform 0.2s",transform:drawerSportOpen?"rotate(180deg)":"none"}}>∨</span>
+            </button>
+            {drawerSportOpen&&<div style={{borderTop:"1px solid "+C.brd,padding:"0 0 8px"}}><PerformanceProfile athleteId={athleteId} viewOnly={viewOnly} C={C}/></div>}
+          </div>
+          {/* Poids de corps */}
+          <button onClick={()=>setDrawerZoom("weight")} style={{width:"100%",background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.brd,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Poids de corps</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:13,fontWeight:800,color:C.ac}}>{(()=>{const e=Object.entries(weightLog).sort((a,b)=>b[0]>a[0]?1:-1)[0];return weightLog[todayKey()]||e?.[1]||bodyWeight.current||"—";})()}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> kg</span></span><span style={{fontSize:11,color:C.tx3}}>→</span></div>
+            </div>
+            {Object.keys(weightLog).length>0?<WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{fontSize:11,color:C.tx3,textAlign:"center",padding:"8px 0"}}>Aucune mesure</div>}
+          </button>
+          {/* Forme du jour */}
+          <button onClick={()=>setDrawerZoom("wellness")} style={{width:"100%",background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+(wellness?wReco.c+30:C.brd),textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:wellness?10:0}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Forme du jour</div>
+              {wellness&&<div style={{display:"flex",alignItems:"center",gap:6}}><div style={{position:"relative",width:36,height:36}}><svg viewBox="0 0 32 32" style={{width:36,height:36,transform:"rotate(-90deg)"}}><circle cx="16" cy="16" r="12" fill="none" stroke={C.s2} strokeWidth="3"/><circle cx="16" cy="16" r="12" fill="none" stroke={wReco.c} strokeWidth="3" strokeDasharray={String(2*Math.PI*12)} strokeDashoffset={String(2*Math.PI*12*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:wReco.c}}>{wScore}</div></div><span style={{fontSize:11,color:C.tx3}}>→</span></div>}
+            </div>
+            {wellness?<div style={{fontSize:12,fontWeight:600,color:wReco.c}}>{wReco.label}</div>:<div style={{fontSize:11,color:C.tx3}}>Aucun bilan aujourd'hui</div>}
+          </button>
+          {/* Score de santé */}
+          <button onClick={()=>setDrawerZoom("health")} style={{width:"100%",background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.brd,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Score de santé</div>
+              <span style={{fontSize:11,color:C.tx3}}>→</span>
+            </div>
+            {(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const hasSomeData=wData.some(d=>d.score!==null);return hasSomeData?<ResponsiveContainer width="100%" height={72}><ComposedChart data={wData} margin={{top:2,right:2,bottom:0,left:-28}}><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[2,2,0,0]} maxBarSize={10}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={1.5} dot={false} connectNulls={false}/></ComposedChart></ResponsiveContainer>:<div style={{fontSize:11,color:C.tx3,textAlign:"center",padding:"8px 0"}}>Aucune donnée</div>;})()}
+          </button>
+          {/* 1RM Record */}
+          <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            <button onClick={()=>setDrawerPrOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit"}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>1RM Record</div>
+              <span style={{fontSize:12,color:C.tx3,display:"inline-block",transition:"transform 0.2s",transform:drawerPrOpen?"rotate(180deg)":"none"}}>∨</span>
+            </button>
+            {drawerPrOpen&&(<div style={{borderTop:"1px solid "+C.brd,padding:"12px 16px"}}>
+              {(()=>{
+                const seen=new Set();
+                const progExNames=Object.values(exos||{}).flat().map(ex=>ex.name||'').filter(n=>{if(!n||seen.has(n.toLowerCase()))return false;seen.add(n.toLowerCase());return true;}).sort();
+                const filtered=prSearch?progExNames.filter(n=>n.toLowerCase().includes(prSearch.toLowerCase())):progExNames;
+                const getActual1rm=(exName,w)=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===exName.toLowerCase()).map(ex=>ex.id);let best=null;exIds.forEach(id=>{(sets[id+"_"+w]||[]).filter(r=>r.done&&r.kg>0).forEach(r=>{const est=e1rm(r.kg,r.reps||1);if(!best||est>best)best=est;});});return best;};
+                const actual1rmByWeek=prExName?Array.from({length:tw},(_,i)=>({w:i+1,week:"S"+(i+1),val:getActual1rm(prExName,i+1)})):[];
+                const bestActual=actual1rmByWeek.reduce((mx,d)=>d.val&&d.val>mx.val?d:mx,{val:0,w:null});
+                const showDropdown=prSearch&&filtered.length>0&&!progExNames.find(n=>n.toLowerCase()===prSearch.toLowerCase());
+                return(<>
+                  <div style={{position:"relative",marginBottom:10}}>
+                    <input value={prSearch} onChange={e=>{setPrSearch(e.target.value);setPrExName(null);}} placeholder={progExNames.length?"Rechercher un exercice...":"Aucun exercice"} style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                    {showDropdown&&(<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,zIndex:50,maxHeight:140,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                      {filtered.slice(0,6).map(n=>(<div key={n} onClick={()=>{setPrExName(n);setPrSearch(n);}} style={{padding:"8px 12px",fontSize:12,cursor:"pointer",color:C.tx,borderBottom:"1px solid "+C.brd}}>{n}</div>))}
+                    </div>)}
+                  </div>
+                  {prExName?(
+                    <>
+                      <div style={{display:"flex",gap:5,marginBottom:10}}>
+                        {[{k:"est",l:"1RM Estimé"},{k:"evo",l:"Évolution"}].map(t=>(<button key={t.k} onClick={()=>setPrTab(t.k)} style={{padding:"4px 12px",borderRadius:7,border:"none",background:prTab===t.k?C.acS:C.s2,color:prTab===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}
+                      </div>
+                      {prTab==="est"&&<div style={{textAlign:"center"}}><div style={{fontSize:44,fontWeight:900,color:C.ac,letterSpacing:"-2px",lineHeight:1}}>{bestActual.val||"--"}</div><div style={{fontSize:10,color:C.tx3,marginTop:3}}>kg estimé 1RM</div>{bestActual.w&&<div style={{marginTop:6,fontSize:10,color:C.tx3,padding:"2px 8px",borderRadius:5,background:C.s2,display:"inline-block"}}>Meilleure perf. S{bestActual.w}</div>}</div>}
+                      {prTab==="evo"&&(actual1rmByWeek.some(d=>d.val)?<MiniChart data={actual1rmByWeek} color={C.ac} h={70}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Aucune série effectuée</div>)}
+                    </>
+                  ):(
+                    <div style={{fontSize:11,color:C.tx3,textAlign:"center",padding:"10px 0"}}>{progExNames.length?"Recherche et sélectionne un exercice":"Aucun exercice dans la programmation"}</div>
+                  )}
+                </>);
+              })()}
+            </div>)}
+          </div>
+          {/* Blessures */}
+          {activeInjuries.length>0&&(<div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.r+"30",overflow:"hidden"}}>
+            <button onClick={()=>setDrawerInjOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:6,height:6,borderRadius:"50%",background:C.r}}/><div style={{fontSize:12,fontWeight:600,color:C.r,textTransform:"uppercase",letterSpacing:"0.5px"}}>Blessures actives ({activeInjuries.length})</div></div>
+              <span style={{fontSize:12,color:C.tx3,display:"inline-block",transition:"transform 0.2s",transform:drawerInjOpen?"rotate(180deg)":"none"}}>∨</span>
+            </button>
+            {drawerInjOpen&&(<div style={{borderTop:"1px solid "+C.r+"30",padding:"8px 16px"}}>
+              {activeInjuries.map(inj=>{const sc=stC(inj.status);const zn=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non précisée";return(<div key={inj.id} style={{padding:"8px 10px",borderRadius:8,background:C.s2,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:12,fontWeight:600,color:C.tx}}>{zn}</div><div style={{fontSize:10,color:C.tx3}}>Intensité {inj.intensity}/10</div></div><span style={{fontSize:10,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:5,background:sc+"15"}}>{inj.status}</span></div>);})}
+            </div>)}
+          </div>)}
+          {/* Retours button */}
+          <div style={{marginTop:"auto",paddingTop:8}}>
+            <button onClick={()=>{setTab("retours");setDrawerOpen(false);}} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 20px "+C.ac+"50"}}>Retours & Feedback</button>
+          </div>
+        </div>
+      </div>
+    </>)}
     {showWellness&&(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd}}><div style={{fontSize:14,fontWeight:700}}>Wellness du jour</div><button onClick={()=>setShowWellness(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:20,cursor:"pointer",fontFamily:"inherit"}}>x</button></div><WellnessFlow existing={wellness} onSave={saveWellness} sleepTarget={goals.sleepTarget} onAddInjury={addInjury} weightLog={weightLog}/></div>)}
     {milestoneNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:250,background:C.s1,border:"1px solid "+C.g+"50",borderRadius:14,padding:"12px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><div><div style={{fontSize:13,fontWeight:700,color:C.g}}>Nouveau palier valide !</div><div style={{fontSize:11,color:C.tx2}}>Poids mis a jour : {milestoneNotif} kg</div></div></div>)}
     {autoProgNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:251,background:C.s1,border:"1px solid "+C.coach+"50",borderRadius:14,padding:"10px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><span style={{fontSize:18}}>↗</span><div><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Surcharge progressive mise à jour</div><div style={{fontSize:11,color:C.tx2}}>{autoProgNotif}</div></div></div>)}
     {weekJustCompleted&&(<div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.9)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}><div style={{fontSize:26,fontWeight:800,color:C.g}}>Semaine {weekJustCompleted} validee !</div><div style={{fontSize:14,color:C.tx2}}>{weekJustCompleted<tw?"En route pour S"+(weekJustCompleted+1):"Bloc termine !"}</div><div style={{display:"flex",gap:6,marginTop:8}}>{[...Array(tw)].map((_,i)=><div key={i} style={{width:10,height:10,borderRadius:"50%",background:i<weekJustCompleted?C.g:C.s2}}/>)}</div></div>)}
     {showBilan&&(<div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}><div style={{padding:"40px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:20}}><div style={{fontSize:28,fontWeight:800,textAlign:"center"}}>Bloc termine !</div><div style={{fontSize:14,color:C.tx2}}>{totalDone} seances realisees</div><div style={{display:"flex",gap:12,width:"100%"}}>{getBig3(exos).map(({name,label,c})=>{const pr=prs[name];return(<div key={label} style={{flex:1,background:C.s1,borderRadius:14,padding:"14px 10px",textAlign:"center",border:"1px solid "+c+"30"}}><div style={{fontSize:11,color:C.tx3,marginBottom:4}}>{label}</div><div style={{fontSize:22,fontWeight:800,color:c}}>{pr?.est||"--"}</div><div style={{fontSize:9,color:C.tx3}}>kg est.</div></div>);})}</div><div style={{width:"100%",background:C.s1,borderRadius:14,padding:16,border:"1px solid "+C.brd}}><CombinedStatsChart data={combinedData}/></div><button onClick={()=>{setShowBilan(false);setShowNewBlock(true);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.coach,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button><button onClick={()=>setShowBilan(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Fermer</button></div></div>)}
-    {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0}/>}
-    {showBlockHistory&&<BlockHistoryViewer blockHistory={blockHistory} onClose={()=>setShowBlockHistory(false)}/>}
+    {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} onResume={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0} blockHistory={blockHistory} onDelete={idx=>setBlockHistory(blockHistory.filter((_,i)=>i!==idx))}/>}
+    {showBlockHistory&&<BlockHistoryViewer blockHistory={blockHistory} onClose={()=>setShowBlockHistory(false)} onDelete={idx=>setBlockHistory(blockHistory.filter((_,i)=>i!==idx))}/>}
     {mode==="coach"&&coachTab==="prog"&&sessions.length>0&&<AIChatBar exos={exos} sessions={sessions} chatHistory={chatHistory} setChatHistory={setChatHistory} onApply={applyAIEdit} onOpenChange={setAiChatOpen} C={C}/>}
     {mode==="athlete"&&(timerActive||timerFinished)&&(<div style={{position:"fixed",bottom:64,left:"50%",transform:"translateX(-50%)",zIndex:150,background:timerFinished?"rgba(34,201,147,0.15)":C.s1,border:"1px solid "+(timerFinished?C.g:timerActive&&timerLeft<=10?C.r:C.ac)+"70",borderRadius:50,padding:"9px 18px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",backdropFilter:"blur(8px)"}}>
       {timerFinished?<span style={{fontSize:16}}>🔔</span>:<div style={{width:24,height:24,position:"relative"}}><svg viewBox="0 0 24 24" style={{width:24,height:24,transform:"rotate(-90deg)"}}><circle cx="12" cy="12" r="9" fill="none" stroke={C.s2} strokeWidth="2.5"/><circle cx="12" cy="12" r="9" fill="none" stroke={timerLeft<=10?C.r:C.ac} strokeWidth="2.5" strokeDasharray={String(2*Math.PI*9)} strokeDashoffset={String(2*Math.PI*9*(1-Math.min((timerDur-timerLeft)/timerDur,1)))} strokeLinecap="round"/></svg></div>}
@@ -3914,6 +4261,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {canToggleMode&&<div style={{display:"flex",background:C.s1,borderRadius:8,padding:2,border:"1px solid "+C.brdL}}>{[{k:"athlete",l:"Athlete"},{k:"coach",l:"Coach"}].map(({k,l})=>(<button key={k} onClick={()=>switchMode(k)} style={{padding:"5px 10px",borderRadius:6,border:"none",background:mode===k?(k==="coach"?C.coach:C.ac):"transparent",color:mode===k?"#fff":C.tx3,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>))}</div>}
+          {mode==="athlete"&&<button onClick={()=>setDrawerOpen(true)} title="Mon profil" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>☰</button>}
           {userName&&!myProfile?.is_admin&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
           <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/login";}} title="Déconnexion" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⏻</button>
         </div>
@@ -3923,7 +4271,16 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
     {mode==="coach"&&(<div style={{padding:"20px 40px "+(aiChatOpen?"calc(60vh + 40px)":"60px"),maxWidth:1400,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:C.coachS,border:"1px solid "+C.coach+"30",marginBottom:20}}><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Mode Coach</div><div style={{fontSize:11,color:C.tx3}}>- Planification</div></div>
-      {coachTab==="prog"&&<><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><div style={{fontSize:16,fontWeight:700}}>Programme</div>{blockConfig?.blockName&&<div style={{fontSize:11,color:C.b,fontWeight:600,marginTop:2}}>{blockConfig.blockName}{blockConfig?.objective?" · "+blockConfig.objective:""} · {tw} sem.</div>}</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+C.coach+"40",background:C.coachS,color:C.coach,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button></div>{sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions}/>}</>}
+      {coachTab==="prog"&&(<>
+        {/* Sous-onglets prog */}
+        <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
+          {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"}].map(t=>(
+            <button key={t.k} onClick={()=>{setProgSubTab(t.k);setEnergyEditorKey(null);}} style={{padding:"9px 18px",border:"none",borderBottom:"2px solid "+(progSubTab===t.k?C.coach:"transparent"),background:"transparent",color:progSubTab===t.k?C.coach:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"}}>{t.l}</button>
+          ))}
+        </div>
+        {progSubTab==="muscu"&&<><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><div style={{fontSize:16,fontWeight:700}}>Programme</div>{blockConfig?.blockName&&<div style={{fontSize:11,color:C.b,fontWeight:600,marginTop:2}}>{blockConfig.blockName}{blockConfig?.objective?" · "+blockConfig.objective:""} · {tw} sem.</div>}</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+C.coach+"40",background:C.coachS,color:C.coach,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button></div>{sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions}/>}</>}
+        {progSubTab==="energie"&&(<CoachEnergyProgram athleteId={athleteId} energyEditorKey={energyEditorKey} setEnergyEditorKey={setEnergyEditorKey} energySessions={energySessions} setEnergySessions={setEnergySessions} energySessionsLoaded={energySessionsLoaded} setEnergySessionsLoaded={setEnergySessionsLoaded} C={C}/>)}
+      </>)}
       {coachTab==="exos"&&<><div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Exercices</div><div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Muscles, hierarchie &amp; categorie</div><CoachExoParams exMeta={exMeta} setExMeta={setExMeta} exos={exos} setExos={setExos} blockConfig={blockConfig}/></>}
       {coachTab==="banque"&&(<>
         {/* Sous-onglets banque */}
@@ -4245,158 +4602,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         {logSubTab==="specifique"&&(<div style={{padding:"40px 20px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>⚡</div><div style={{fontSize:15,fontWeight:700,color:C.tx,marginBottom:6}}>Séances Spécifiques</div><div style={{fontSize:13,color:C.tx3}}>Cette fonctionnalité sera disponible prochainement.</div></div>)}
       </>)}
 
-      {tab==="stats"&&(()=>{
-        const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
-        return(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon bilan</div>
-
-        {/* 1RM Exercice */}
-        {(()=>{
-          const seen=new Set();
-          const progExNames=Object.values(exos||{}).flat().map(ex=>ex.name||'').filter(n=>{if(!n||seen.has(n.toLowerCase()))return false;seen.add(n.toLowerCase());return true;}).sort();
-          const filtered=prSearch?progExNames.filter(n=>n.toLowerCase().includes(prSearch.toLowerCase())):progExNames;
-          const getActual1rm=(exName,w)=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===exName.toLowerCase()).map(ex=>ex.id);let best=null;exIds.forEach(id=>{(sets[id+"_"+w]||[]).filter(r=>r.done&&r.kg>0).forEach(r=>{const est=e1rm(r.kg,r.reps||1);if(!best||est>best)best=est;});});return best;};
-          const actual1rmByWeek=prExName?Array.from({length:tw},(_,i)=>({w:i+1,week:"S"+(i+1),val:getActual1rm(prExName,i+1)})):[];
-          const bestActual=actual1rmByWeek.reduce((mx,d)=>d.val&&d.val>mx.val?d:mx,{val:0,w:null});
-          const showDropdown=prSearch&&filtered.length>0&&!progExNames.find(n=>n.toLowerCase()===prSearch.toLowerCase());
-          return(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>1RM Exercice</div>
-            <div style={{position:"relative",marginBottom:12}}>
-              <input value={prSearch} onChange={e=>{setPrSearch(e.target.value);setPrExName(null);}} placeholder={progExNames.length?"Rechercher un exercice...":"Aucun exercice dans le programme"} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-              {showDropdown&&(<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,zIndex:50,maxHeight:160,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
-                {filtered.slice(0,8).map(n=>(<div key={n} onClick={()=>{setPrExName(n);setPrSearch(n);}} style={{padding:"9px 12px",fontSize:12,cursor:"pointer",color:C.tx,borderBottom:"1px solid "+C.brd}}>{n}</div>))}
-              </div>)}
-            </div>
-            {prExName?(
-              <>
-                <div style={{display:"flex",gap:6,marginBottom:14}}>
-                  {[{k:"est",l:"1RM Estimé"},{k:"evo",l:"Évolution"}].map(t=>(<button key={t.k} onClick={()=>setPrTab(t.k)} style={{padding:"5px 14px",borderRadius:8,border:"none",background:prTab===t.k?C.acS:C.s2,color:prTab===t.k?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}
-                </div>
-                {prTab==="est"&&(<div style={{textAlign:"center"}}>
-                  <div style={{fontSize:48,fontWeight:900,color:C.ac,letterSpacing:"-3px",lineHeight:1}}>{bestActual.val||"--"}</div>
-                  <div style={{fontSize:11,color:C.tx3,marginTop:4}}>kg estimé 1RM</div>
-                  {bestActual.w&&<div style={{marginTop:8,fontSize:11,color:C.tx3,padding:"2px 10px",borderRadius:5,background:C.s2,display:"inline-block"}}>Meilleure perf. S{bestActual.w}</div>}
-                  {(()=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===prExName.toLowerCase()).map(ex=>ex.id);let wkSets=[];exIds.forEach(id=>{wkSets=[...wkSets,...(sets[id+"_"+currentWeek]||[]).filter(r=>r.done&&r.kg>0)];});if(!wkSets.length)return null;return(<div style={{marginTop:12,background:C.s2,borderRadius:10,padding:"10px 12px",textAlign:"left"}}><div style={{fontSize:9,color:C.tx3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Séries S{currentWeek}</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{wkSets.slice(0,8).map((r,i)=>(<span key={i} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:C.acS,color:C.ac,fontWeight:600}}>{r.kg}kg × {r.reps}</span>))}</div></div>);})()}
-                </div>)}
-                {prTab==="evo"&&(<>
-                  {actual1rmByWeek.some(d=>d.val)?<MiniChart data={actual1rmByWeek} color={C.ac} h={80}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune série effectuée pour cet exercice</div>}
-                </>)}
-              </>
-            ):(
-              <div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"16px 0"}}>{progExNames.length?"Recherche et sélectionne un exercice ci-dessus":"Aucun exercice dans la programmation"}</div>
-            )}
-          </div>);
-        })()}
-
-        {/* Volume hebdomadaire */}
-        <WeeklyVolumeCard exos={exos} sets={sets} sessions={sessions} weeksArr={weeksArr} tw={tw} C={C}/>
-
-        {/* Poids de corps avec filtre */}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Poids de corps</div>
-            <div style={{fontSize:13,fontWeight:800,color:C.ac}}>{bodyWeight.current} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/ {bodyWeight.target} kg</span></div>
-          </div>
-          <div style={{display:"flex",gap:4,marginBottom:10}}>{[{k:"bloc",l:"Ce bloc"},{k:"3m",l:"3 mois"},{k:"all",l:"Tout"}].map(t=><button key={t.k} onClick={()=>setWeightRange(t.k)} style={{padding:"4px 10px",borderRadius:6,border:"none",background:weightRange===t.k?C.acS:"transparent",color:weightRange===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>)}</div>
-          {Object.keys(filteredLog).length>0?<WeightChart log={filteredLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Remplis le wellness pour suivre ton poids</div>}
-        </div>
-
-        {/* Forme du jour */}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+(wReco.c||C.brd)+"30",marginBottom:12}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Forme du jour</div>
-            {!viewOnly&&<button onClick={()=>setShowWellness(true)} style={{fontSize:10,color:C.ac,padding:"3px 10px",borderRadius:6,border:"1px solid "+C.ac+"40",background:"transparent",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{wellness?"Modifier":"Remplir"}</button>}
-          </div>
-          {wellness?(<div>
-            <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
-              <div style={{position:"relative",width:60,height:60,flexShrink:0}}><svg viewBox="0 0 56 56" style={{width:60,height:60,transform:"rotate(-90deg)"}}><circle cx="28" cy="28" r="22" fill="none" stroke={C.s2} strokeWidth="4"/><circle cx="28" cy="28" r="22" fill="none" stroke={wReco.c} strokeWidth="4" strokeDasharray={String(2*Math.PI*22)} strokeDashoffset={String(2*Math.PI*22*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:wReco.c}}>{wScore}</div></div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:14,fontWeight:700,color:wReco.c,marginBottom:2}}>{wReco.label}</div>
-                <div style={{fontSize:11,color:C.tx2,marginBottom:4}}>{wReco.desc}</div>
-                {wellness.sleepDur&&<div style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,color:C.b,fontWeight:600,padding:"2px 8px",borderRadius:5,background:C.b+"15"}}><span>💤</span>{wellness.sleepDur}h de sommeil</div>}
-              </div>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:7}}>
-              {[{l:"Récupération",v:wellness.fatigue,e:"😴"},{l:"Sommeil",v:wellness.sommeil,e:"💤"},{l:"Sérénité",v:wellness.stress,e:"🧠"},{l:"Énergie",v:wellness.energie,e:"⚡"},{l:"Fraîcheur",v:wellness.doms,e:"💪"}].map(m=>{
-                const mv=m.v||0;const mc=mv>=4?C.g:mv>=3?C.o:C.r;
-                return(<div key={m.l} style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:9,color:C.tx3,width:72,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.e} {m.l}</span>
-                  <div style={{flex:1,height:5,background:C.s2,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(mv/5*100)+"%",background:mc,borderRadius:3,transition:"width 0.5s"}}/></div>
-                  <span style={{fontSize:10,fontWeight:700,color:mc,width:14,textAlign:"right",flexShrink:0}}>{mv||"?"}</span>
-                </div>);
-              })}
-            </div>
-          </div>):(<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"10px 0"}}>Pas encore rempli aujourd'hui</div>)}
-        </div>
-
-        {/* Historique sante */}
-        {(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const hasSomeData=wData.some(d=>d.score!==null);return(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Score de santé</div><div style={{display:"flex",gap:3}}>{[{k:"week",l:"7j"},{k:"month",l:"30j"},{k:"year",l:"12m"}].map(t=>(<button key={t.k} onClick={()=>setWellnessPeriod(t.k)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:wellnessPeriod===t.k?C.acS:"transparent",color:wellnessPeriod===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div></div>{hasSomeData?(<div><div style={{display:"flex",gap:12,marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:3,borderRadius:2,background:C.g}}/><span style={{fontSize:9,color:C.tx3}}>Forme /100</span></div><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.b,opacity:0.5}}/><span style={{fontSize:9,color:C.tx3}}>Sommeil (h)</span></div></div><ResponsiveContainer width="100%" height={110}><ComposedChart data={wData} margin={{top:4,right:4,bottom:0,left:-28}}><XAxis dataKey="label" tick={{fontSize:9,fill:C.tx3}} tickLine={false} axisLine={false}/><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const sc=payload.find(p=>p.dataKey==='score');const sl=payload.find(p=>p.dataKey==='sleep');return(<div style={{background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,padding:"6px 10px",fontSize:10}}><div style={{color:C.tx3,marginBottom:4}}>{label}</div>{sc?.value!=null&&<div style={{color:getReco(sc.value).c,fontWeight:700}}>Forme : {sc.value}</div>}{sl?.value!=null&&<div style={{color:C.b}}>Sommeil : {sl.value}h</div>}</div>);}}/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[3,3,0,0]} maxBarSize={20}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={2} dot={(props)=>{if(props.value==null)return<g/>;const rc=getReco(props.value);return<circle cx={props.cx} cy={props.cy} r={3.5} fill={rc.c} stroke={C.bg} strokeWidth={1}/>;}} connectNulls={false}/></ComposedChart></ResponsiveContainer></div>):(<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Aucune donnée wellness pour cette période</div>)}</div>);})()}
-
-        {/* Blessures actives */}
-        {activeInjuries.length>0&&(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.r+"30",marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.r,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Blessures actives ({activeInjuries.length})</div>
-          {activeInjuries.map(inj=>{const sc=stC(inj.status);const zn=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non precisee";return(<div key={inj.id} style={{padding:"8px 12px",borderRadius:8,background:C.s2,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:12,fontWeight:600,color:C.tx}}>{zn}</div><div style={{fontSize:10,color:C.tx3}}>Intensite {inj.intensity}/10</div></div><span style={{fontSize:10,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:5,background:sc+"15"}}>{inj.status}</span></div>);})}
-        </div>)}
-      </div>);})()}
 
       {tab==="alim"&&<NutritionView athleteId={athleteId} bmr={athleteProfile?.base_metabolism||null} nutritionStrategy={nutritionStrategy} onLogSaved={(date,log)=>{const updated={...nutritionLog,[date]:log};setNutritionLogState(updated);save("asp:nutrition_log",updated).catch(()=>{});}} viewOnly={viewOnly}/>}
-
-      {tab==="profil"&&(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon profil</div>
-        {/* Section profil déroulante */}
-        <button onClick={()=>setProfileInfoOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,cursor:"pointer",fontFamily:"inherit",marginBottom:profileInfoOpen?0:12}}>
-          <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Mes informations</div>
-          <span style={{fontSize:14,color:C.tx3,transition:"transform 0.2s",display:"inline-block",transform:profileInfoOpen?"rotate(180deg)":"rotate(0deg)"}}>∨</span>
-        </button>
-        {profileInfoOpen&&(<div style={{marginBottom:12}}>
-        {athleteProfile?(()=>{
-          const fullName=[athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"";
-          const initials=fullName.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)||"?";
-          return(<>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 0 16px"}}>
-              <div style={{width:68,height:68,borderRadius:"50%",background:C.acS,border:"3px solid "+C.ac+"50",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,color:C.ac,marginBottom:10}}>{initials}</div>
-              <div style={{fontSize:18,fontWeight:800,color:C.tx}}>{fullName}</div>
-              <div style={{fontSize:12,color:C.tx3,marginTop:3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":""}</div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
-              {[{l:"Âge",v:athleteProfile.age,u:"ans"},{l:"Taille",v:athleteProfile.height_cm,u:"cm"},{l:"Poids réf.",v:athleteProfile.weight_kg,u:"kg"}].map(s=>(
-                <div key={s.l} style={{background:C.s1,borderRadius:12,padding:"14px 10px",border:"1px solid "+C.brd,textAlign:"center"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>{s.l}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div>
-                  {s.v&&<div style={{fontSize:11,color:C.tx3,marginTop:2}}>{s.u}</div>}
-                </div>
-              ))}
-            </div>
-            {athleteProfile.base_metabolism&&(<div style={{background:C.s1,borderRadius:14,padding:"16px 18px",border:"1px solid "+C.brd,marginBottom:12}}>
-              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Métabolisme de base</div>
-              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                <div style={{fontSize:30,fontWeight:900,color:C.ac}}>{athleteProfile.base_metabolism.toLocaleString("fr-FR")}</div>
-                <div style={{fontSize:14,color:C.tx3}}>kcal / jour</div>
-              </div>
-            </div>)}
-            <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
-              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 16px",borderBottom:"1px solid "+C.brd}}>Informations complètes</div>
-              {[{l:"Prénom",v:athleteProfile.first_name},{l:"Nom",v:athleteProfile.last_name},{l:"Âge",v:athleteProfile.age?athleteProfile.age+" ans":null},{l:"Taille",v:athleteProfile.height_cm?athleteProfile.height_cm+" cm":null},{l:"Genre",v:athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":null},{l:"Poids réf.",v:athleteProfile.weight_kg?athleteProfile.weight_kg+" kg":null},{l:"Masse grasse",v:athleteProfile.body_fat_pct?athleteProfile.body_fat_pct+" %":null},{l:"Métabolisme de base",v:athleteProfile.base_metabolism?athleteProfile.base_metabolism.toLocaleString("fr-FR")+" kcal/j":null}].map((row,i,arr)=>(
-                <div key={row.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:i<arr.length-1?"1px solid "+C.brd:"none"}}>
-                  <div style={{fontSize:13,color:C.tx3}}>{row.l}</div>
-                  <div style={{fontSize:13,fontWeight:600,color:row.v?C.tx:C.tx3}}>{row.v||"—"}</div>
-                </div>
-              ))}
-            </div>
-          </>);
-        })():(
-          <div style={{background:C.s1,borderRadius:14,padding:"32px 20px",border:"1px solid "+C.brd,textAlign:"center",marginTop:8}}>
-            <div style={{fontSize:32,marginBottom:12}}>📋</div>
-            <div style={{fontSize:15,fontWeight:600,color:C.tx,marginBottom:8}}>Profil non renseigné</div>
-            <div style={{fontSize:13,color:C.tx3}}>Ton coach n'a pas encore complété ton profil.</div>
-          </div>
-        )}
-        </div>)}
-        {/* Données de performance sportive */}
-        <PerformanceProfile athleteId={athleteId} viewOnly={viewOnly} C={C}/>
-        {/* Tracker d'habitudes */}
-        {habitEnabled&&<HabitTrackerProfile habits={habits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly}/>}
-      </div>)}
 
       {tab==="test"&&<TestSessionView athleteId={athleteId} viewOnly={viewOnly} C={C} testSubTab={testSubTab} setTestSubTab={setTestSubTab}/>}
 

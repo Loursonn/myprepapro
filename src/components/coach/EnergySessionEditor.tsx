@@ -31,6 +31,7 @@ export interface EnergyInterval {
 export interface EnergyBlock {
   id: string;
   name: string;
+  sets?: number; // nombre de passages du bloc entier
   modalite: ModaliteType;
   custom_modalite?: string;
   intervals: EnergyInterval[];
@@ -298,12 +299,35 @@ function BlockEditor({
           style={{ flex: 1, background: "transparent", border: "none", color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", outline: "none" }}
           placeholder="Nom du bloc (ex: Échauffement)"
         />
+        {(block.sets ?? 1) > 1 && (
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: C.acS, color: C.ac, flexShrink: 0 }}>
+            × {block.sets} séries
+          </span>
+        )}
         {canDelete && (
           <button onClick={onDelete} style={{ width: 28, height: 28, borderRadius: 7, border: "none", background: "rgba(239,75,75,0.12)", color: "#EF4B4B", fontSize: 14, cursor: "pointer" }}>×</button>
         )}
       </div>
 
       <div style={{ padding: 14, background: C.s1, display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Séries du bloc */}
+        <div>
+          <div style={{ fontSize: 10, color: C.tx3, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+            Séries du bloc complet
+            {(block.sets ?? 1) > 1 && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: C.ac }}>× {block.sets ?? 1}</span>}
+          </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {[1, 2, 3, 4, 5, 6].map(n => (
+              <button key={n} onClick={() => onChange({ ...block, sets: n })}
+                style={{ width: 36, height: 32, borderRadius: 7, border: "1px solid " + ((block.sets ?? 1) === n ? C.ac : C.brdL), background: (block.sets ?? 1) === n ? C.acS : "transparent", color: (block.sets ?? 1) === n ? C.ac : C.tx3, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {n}
+              </button>
+            ))}
+            <input type="number" min={1} max={20} value={block.sets ?? 1} onChange={e => onChange({ ...block, sets: Math.max(1, parseInt(e.target.value) || 1) })}
+              style={{ width: 48, padding: "6px 8px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", textAlign: "center" }} />
+          </div>
+        </div>
+
         {/* Modalité */}
         <div>
           <div style={{ fontSize: 10, color: C.tx3, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>Modalité</div>
