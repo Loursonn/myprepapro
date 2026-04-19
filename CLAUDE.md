@@ -1,260 +1,79 @@
 # MyPrepaPro
 
-Application de suivi d'athlètes en préparation physique, destinée aux coachs et à leurs athlètes.
-Développée d'abord pour un usage personnel (un coach + ses athlètes), avec une architecture pensée pour évoluer vers une plateforme multi-coachs.
+App de suivi d'athlètes en préparation physique (coach + athlètes). Cible finale : mobile iOS/Android.
 
-**Objectif final : application mobile iOS + Android** (priorité sur le mobile).
+> **Ne faire aucune modification avant d'avoir 95% de confiance dans ce qui doit être construit. Poser des questions jusqu'à atteindre cette confiance.**
 
----
+## Stack
 
-## Stack technique
+- **Frontend** : React 18 + TypeScript + Vite, shadcn/ui + Tailwind CSS
+- **Backend** : Supabase (PostgreSQL + Auth + Edge Functions)
+- **IA** : Google Gemini 2.5 Flash (génération de programmes)
+- **Data** : TanStack React Query v5, React Hook Form + Zod, Recharts
+- **Mobile cible** : React Native + Expo
 
-| Couche | Outil | Notes |
-|--------|-------|-------|
-| Frontend | React 18 + TypeScript + Vite | App web actuelle (prototype Lovable) |
-| UI | shadcn/ui + Tailwind CSS | Composants déjà en place |
-| Backend / BDD | Supabase (PostgreSQL) | Données + auth + Edge Functions |
-| IA | Google Gemini 2.5 Flash | Génération de programmes via Edge Function |
-| Mobile (cible) | React Native + Expo | Migration à planifier depuis la base web |
-| Routing | React Router v6 | |
-| Data fetching | TanStack React Query v5 | |
-| Charts | Recharts | Courbes de progression |
-| Formulaires | React Hook Form + Zod | |
+## Architecture
 
----
+Fichier monolithique actuel : `src/components/WeightliftingTracker.jsx` (~2500 lignes, à refactoriser).
 
-## Architecture actuelle (à refactoriser)
-
-Le prototype Lovable est fonctionnel mais tout le code est dans un seul fichier :
-- `src/components/WeightliftingTracker.jsx` — **1 745 lignes**, contient toute l'app
-
-### Structure cible (refactorisation progressive)
-
+Structure cible :
 ```
 src/
-├── pages/
-│   ├── athlete/
-│   │   ├── Dashboard.tsx
-│   │   ├── Session.tsx
-│   │   └── Stats.tsx
-│   └── coach/
-│       ├── Programs.tsx
-│       ├── Exercises.tsx
-│       ├── Athletes.tsx
-│       ├── Stats.tsx
-│       └── Settings.tsx
-├── components/
-│   ├── ui/              (shadcn — ne pas modifier)
-│   ├── athlete/         (composants vue athlète)
-│   └── coach/           (composants vue coach)
-├── hooks/               (logique métier réutilisable)
-├── lib/
-│   └── supabase.ts
-└── integrations/
-    └── supabase/
+├── pages/athlete/    (Dashboard, Session, Stats)
+├── pages/coach/      (Programs, Exercises, Athletes, Stats, Settings)
+├── components/       ui/ | athlete/ | coach/
+├── hooks/
+└── lib/supabase.ts
 ```
 
----
+## Base de données
 
-## Base de données (Supabase)
+BDD actuelle : table `app_data` (JSONB clé-valeur, pas d'auth).
 
-### État actuel
-Une seule table `app_data` (clé-valeur JSONB) — pas d'authentification, pas de multi-utilisateurs.
-
-### Schéma cible (à migrer)
-
-```sql
--- Utilisateurs (géré par Supabase Auth)
--- profiles : coach ou athlète
-
-profiles (id, role: 'coach'|'athlete', full_name, avatar_url, coach_id?)
-
--- Structure entraînement
-programs       (id, coach_id, name, description, created_at)
-blocks         (id, program_id, week_start, week_end, is_deload)
-sessions       (id, block_id, label, day_of_week)
-exercises      (id, name, bloc, target, ex_type, tier)
+Schéma cible :
+```
+profiles          (id, role: coach|athlete, full_name, coach_id?)
+programs          (id, coach_id, name)
+blocks            (id, program_id, week_start, week_end, is_deload)
+sessions          (id, block_id, label, day_of_week)
+exercises         (id, name, bloc, target, ex_type, tier)
 session_exercises (id, session_id, exercise_id, order, weeks_config JSONB)
-
--- Suivi athlète
-workout_logs   (id, athlete_id, session_id, date, completed)
-set_logs       (id, workout_log_id, exercise_id, set_num, kg, reps, rir, method)
-wellness_logs  (id, athlete_id, date, fatigue, sleep, stress, energy, doms JSONB)
-body_weight    (id, athlete_id, date, weight_kg)
-injuries       (id, athlete_id, zone, description, date_start, date_end)
-pr_logs        (id, athlete_id, exercise_id, kg, date)
+workout_logs      (id, athlete_id, session_id, date, completed)
+set_logs          (id, workout_log_id, exercise_id, set_num, kg, reps, rir, method)
+wellness_logs     (id, athlete_id, date, fatigue, sleep, stress, energy, doms JSONB)
+body_weight       (id, athlete_id, date, weight_kg)
+pr_logs           (id, athlete_id, exercise_id, kg, date)
+injuries          (id, athlete_id, zone, date_start, date_end)
 ```
 
----
+## Rôles
 
-## Fonctionnalités
-
-### MVP (phase 1 — pour usage personnel)
-
-**Vue Athlète**
-- [ ] Accueil : dashboard motivation, bien-être du jour, prochaine séance
-- [ ] Séance : déroulement set par set, méthodes avancées (dropset, myoreps…), RPE/RIR
-- [ ] Stats : courbes de progression, PR, poids corporel
-
-**Vue Coach**
-- [ ] Programmes : création de cycles/blocs d'entraînement (6 semaines + deload)
-- [ ] Exercices : bibliothèque avec groupes musculaires, tier, méthodes
-- [ ] Athlètes : liste, profil, historique
-- [ ] Stats : vue globale de ses athlètes
-- [ ] Paramètres : gestion du compte, méthodes custom
-
-**Transversal**
-- [ ] Authentification (Supabase Auth) — rôles coach / athlète
-- [ ] Génération IA de programme (déjà développé en Edge Function)
-
-### Phase 2 — multi-coachs
-- Inscription libre pour les coachs
-- Invitation d'athlètes par lien
-- Abonnement / plans tarifaires
-- Messagerie coach ↔ athlète
-
-### Phase 3 — mobile natif
-- Migration React Native + Expo
-- Notifications push (rappel séance, feedback coach)
-- Mode hors-ligne (séance sans connexion)
-- Wearables (Apple Watch, Garmin)
-
----
-
-## Rôles utilisateurs
-
-| Action | Coach | Athlète |
-|--------|-------|---------|
-| Créer un programme | ✅ | ❌ |
-| Assigner un athlète | ✅ | ❌ |
-| Suivre une séance | ❌ | ✅ |
-| Saisir wellness | ❌ | ✅ |
-| Voir stats de ses athlètes | ✅ | ❌ |
-| Voir ses propres stats | ❌ | ✅ |
-| Générer programme IA | ✅ | ❌ |
-| Commenter une séance | ✅ | ✅ |
-
----
-
-## Métriques de suivi athlète
-
-- **Charge** : kg × reps × séries
-- **RIR** (Reps In Reserve) : échelle 0 → 5.5
-- **RPE** (Rate of Perceived Exertion)
-- **Bien-être** : fatigue, qualité sommeil, stress, énergie, DOMS (0-10)
-- **Poids corporel** : suivi quotidien + jalons
-- **PR** (records perso) par exercice
-- **Blessures** : zone corporelle, durée, statut
-
-## Méthodes d'entraînement supportées
-
-Dropset, Myoreps, Rest-pause, Superset, AMRAP, Excentrique, Isométrique + méthodes custom coach
-
-## Groupes musculaires
-
-Pecs, Dos-GD, Dos-Trap, Dos-Rhom, Ep-Ant, Ep-Lat, Ep-Post, Quads, Ischios, Fessiers, Adducteurs, Triceps, Biceps, Core, Mollets
-
----
+Coach : créer/assigner programmes, voir stats athlètes, générer IA, commenter.
+Athlète : suivre séances, saisir wellness, voir ses stats, commenter.
 
 ## Conventions de code
 
-- **Langage** : TypeScript (pas de `.jsx`, tout en `.tsx`)
-- **Composants** : un composant = un fichier, PascalCase
-- **Hooks custom** : préfixe `use`, dans `src/hooks/`
-- **Noms de fichiers** : PascalCase pour composants, camelCase pour utils/hooks
-- **Imports** : alias `@/` pour `src/`
-- **Styling** : Tailwind uniquement, pas de CSS inline
-- **Requêtes BDD** : toujours via hooks React Query, jamais directement dans les composants
+- TypeScript uniquement (`.tsx`, pas de `.jsx`)
+- Un composant = un fichier, PascalCase ; hooks : préfixe `use` dans `src/hooks/`
+- Imports : alias `@/` pour `src/` ; Styling : Tailwind uniquement
+- Requêtes BDD : via hooks React Query, jamais directement dans les composants
 
----
+## Git
 
-## Workflow Git (multi-contributeurs)
+- `main` → production (Vercel auto-deploy) — ne jamais pusher directement
+- `dev` → branche de travail partagée
+- `feat/xxx` / `fix/xxx` → créées depuis `dev`, PR vers `dev`
 
-### Branches
-- `main` — production (Vercel déploie automatiquement depuis main)
-- `dev` — branche de développement partagée, base de travail quotidienne
-- `feat/xxx` ou `fix/xxx` — branches individuelles, créées depuis `dev`
+## Fichiers clés
 
-### Démarrer une session de travail
-```bash
-git fetch origin
-git checkout dev
-git pull origin dev
-git checkout -b feat/nom-de-la-feature
-```
+- `src/components/WeightliftingTracker.jsx` — monolithe actuel
+- `supabase/functions/ai-program/index.ts` — Edge Function IA
+- `src/integrations/supabase/types.ts` — types auto-générés
+- `docs/` — ARCHITECTURE.md, DATABASE.md, FEATURES.md, DECISIONS.md
 
-### Sauvegarder et partager
-```bash
-git add fichier-modifie.tsx
-git commit -m "description courte"
-git push origin feat/nom-de-la-feature
-```
-
-### Fusionner vers dev (Pull Request sur GitHub)
-1. Ouvrir une PR : `feat/xxx` → `dev`
-2. Faire reviewer par l'autre
-3. Merger
-
-### Mise en production
-Quand `dev` est stable : PR `dev` → `main` → Vercel redéploie automatiquement.
-
-### Règles importantes
-- **Ne jamais pusher directement sur `main`**
-- **Toujours partir de `dev` à jour** avant de créer une branche
-- Un seul contributeur à la fois sur `WeightliftingTracker.jsx` (fichier monolithique 2500+ lignes)
-
----
-
-## Commandes essentielles
-
-```bash
-# Installer les dépendances
-npm install
-
-# Démarrer en local (ouvre dans le navigateur)
-npm run dev
-
-# Build production
-npm run build
-
-# Tests
-npm run test
-```
-
----
-
-## Variables d'environnement (.env)
+## Env
 
 ```
-VITE_SUPABASE_URL=        # URL de votre projet Supabase
-VITE_SUPABASE_ANON_KEY=   # Clé publique Supabase
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
 ```
-
----
-
-## Fichiers importants
-
-- `src/components/WeightliftingTracker.jsx` — composant monolithique actuel (à refactoriser)
-- `supabase/functions/ai-program/index.ts` — Edge Function génération IA
-- `supabase/migrations/` — historique des migrations BDD
-- `src/integrations/supabase/types.ts` — types auto-générés Supabase
-
-## Documentation (dossier docs/)
-
-Lire ces fichiers avant toute intervention sur le projet :
-
-- `docs/ONBOARDING.md` — setup local, workflow Git, premiers pas
-- `docs/ARCHITECTURE.md` — stack, structure du code, système de données
-- `docs/FEATURES.md` — fonctionnalités (ce qui est fait / prévu / abandonné)
-- `docs/DATABASE.md` — schéma BDD actuel et cible
-- `docs/DECISIONS.md` — journal des décisions techniques importantes
-
----
-
-## Priorités immédiates
-
-1. **Faire tourner l'app en local** (`npm install` + `npm run dev`)
-2. **Connecter Supabase** (configurer les variables d'environnement)
-3. **Ajouter l'authentification** (Supabase Auth avec rôles coach/athlète)
-4. **Refactoriser** WeightliftingTracker.jsx en composants séparés
-5. **Migrer le schéma BDD** vers le modèle relationnel cible
