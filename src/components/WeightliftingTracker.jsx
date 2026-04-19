@@ -10,6 +10,8 @@ import { PDFDocument } from "pdf-lib";
 const C={bg:"#08090C",s1:"#111318",s2:"#181B24",brd:"rgba(255,255,255,0.04)",brdL:"rgba(255,255,255,0.08)",tx:"#F2F2F4",tx2:"#9194A0",tx3:"#555866",ac:"#7B6FFF",acS:"rgba(123,111,255,0.12)",g:"#22C993",gS:"rgba(34,201,147,0.1)",o:"#F5A623",oS:"rgba(245,166,35,0.1)",y:"#E8C93A",yS:"rgba(232,201,58,0.1)",r:"#EF4B4B",rS:"rgba(239,75,75,0.1)",b:"#3B8DF0",bS:"rgba(59,141,240,0.1)",coach:"#D4538E",coachS:"rgba(212,83,142,0.12)"};
 const BT={PERF:{c:"#EF4B4B",l:"Mvt principal"},ESTH:{c:"#7B6FFF",l:"Hypertrophie"},BESOIN:{c:"#F5A623",l:"Besoin indiv."},ASSOC:{c:"#22C993",l:"Muscles assoc."},CORE:{c:"#9194A0",l:"Core"}};
 const BLOC_COLORS=["#EF4B4B","#7B6FFF","#F5A623","#22C993","#9194A0","#3B8DF0","#D4538E","#C060D0","#E06030","#22C9C9"];
+const HABIT_COLORS=['#F5A623','#22C993','#7B6FFF','#3B8DF0','#EF4B4B','#E8C93A','#D4538E','#C060D0'];
+const HABIT_EMOJIS=['💪','🏃','🧘','💧','📖','🛌','🥗','🎯','⚡','🔥','❤️','🎵','✍️','🏋️','🚴','🌅','🍎','💊','🧠','🎾','⛷️','🏊','🚶','🌿','☀️','🌙','🧹','🧴'];
 // Returns the blocs array for a session, with fallback for old data (BT keys)
 const getSessionBlocs=(sess,exList)=>{
   if(sess?.blocs?.length>0)return sess.blocs;
@@ -65,6 +67,11 @@ const getBig3=(exos)=>{
   ].filter(x=>x.name);
 };
 const todayKey=()=>{const d=new Date();return String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");};
+const hISO=d=>(d||new Date()).toISOString().slice(0,10);
+const hAddDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
+const calcHabitStreak=logs=>{const today=new Date();const todayISO=hISO(today);const todayDone=logs.includes(todayISO);const base=todayDone?0:1;let s=0;for(let i=base;i<365;i++){if(logs.includes(hISO(hAddDays(today,-i))))s++;else break;}return s;};
+const streakMsg=s=>{if(s===0)return"🧊 Fais le aujourd'hui au moins";if(s===1)return"1er jour, garde la pêche 🍑";if(s<=2)return`🔥 ${s} jours d'affilée`;if(s<=4)return`🔥🔥 ${s} jours d'affilée`;if(s<=9)return`🔥🔥🔥 ${s} jours d'affilée`;if(s<=29)return`🔥🔥🔥🔥 ${s} jours d'affilée`;if(s<365)return`🔥🔥🔥🔥🔥 ${s} jours d'affilée`;const y=Math.floor(s/365),d=s%365;return`🏆🔥 ${y} an${y>1?'s':''} et ${d} jours d'affilée !`;};
+const getHabitWeekDays=()=>{const today=new Date();const dow=(today.getDay()+6)%7;const mon=new Date(today);mon.setDate(today.getDate()-dow);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});};
 const checkMilestone=(log,baseline)=>{const sorted=Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1);if(sorted.length<3)return null;const last3=sorted.slice(-3);return last3.every(([,kg])=>kg>baseline)?parseFloat((last3.reduce((s,[,kg])=>s+kg,0)/3).toFixed(1)):null;};
 const getWeightChartData=(log,milestones,target)=>Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1).map(([date,kg])=>({d:date.slice(6)+"/"+date.slice(4,6),kg,target,isMilestone:milestones?.some(m=>m.date===date)?1:null}));
 const getWellnessChartData=(wh,period)=>{const DAY=['D','L','M','Me','J','V','S'];const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];const dateEntries=Object.entries(wh).filter(([k,v])=>/^\d{8}$/.test(k)&&v&&typeof v==='object');const byDate=Object.fromEntries(dateEntries);if(period==='week'){return Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const k=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');const e=byDate[k];return{label:DAY[d.getDay()],score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='month'){const sorted=[...dateEntries].sort((a,b)=>a[0]<b[0]?-1:1).slice(-30);return sorted.map(([k,e])=>{const y=+k.slice(0,4),m=+k.slice(4,6)-1,dd=+k.slice(6,8);const d=new Date(y,m,dd);return{label:dd===1?MON[m]:String(dd),score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='year'){const now=new Date();return Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-11+i,1);const pfx=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0');const mes=dateEntries.filter(([k])=>k.startsWith(pfx)).map(([,v])=>v);const sc=mes.filter(v=>v?.score!=null).map(v=>v.score);const sl=mes.filter(v=>v?.sleepDur!=null).map(v=>v.sleepDur);return{label:MON[d.getMonth()],score:sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null,sleep:sl.length?Math.round(sl.reduce((a,b)=>a+b,0)/sl.length*10)/10:null};});}return[];};
@@ -369,7 +376,7 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   </div>);
 }
 
-function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,setAthleteNotes,method,methodParams,allMethods,exosMap,viewOnly=false}){
+function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,setAthleteNotes,method,methodParams,allMethods,exosMap,viewOnly=false,onTimerStart=null,postSession=false}){
   const initRows=()=>generateRows(planned,method,methodParams);
   const rows=(()=>{const stored=sessionSets[storeKey];if(!stored||!stored.length)return initRows();const specialType={cluster:"cluster",myoreps:"activation",restpause:"round",amrap:"amrap",isometrique:"iso",dropset:"drop"}[method||""];if(specialType&&!stored.some(r=>r.type===specialType))return initRows();if(!specialType&&stored.some(r=>r.type!=="set"))return initRows();return stored;})();
   const upd=(i,f,v)=>updateSets(storeKey,rows.map((r,j)=>j===i?{...r,[f]:v}:r));
@@ -385,17 +392,20 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
     {planned?.repsRange&&<div style={{padding:"6px 10px",borderRadius:7,background:C.acS,border:"1px solid "+C.ac+"30",marginBottom:10,fontSize:11,color:C.ac}}>Cible: {planned.repsRange} reps</div>}
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><div style={{flex:1,height:3,background:C.s2,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:(rows.length?(done/rows.length)*100:0)+"%",background:C.g,borderRadius:2,transition:"width 0.3s"}}/></div><span style={{fontSize:10,color:done===rows.length&&rows.length>0?C.g:C.tx3,fontWeight:600}}>{done}/{rows.length}</span></div>
     {rows.map((r,i)=>{const isIso=r.type==="iso";const isAmrap=r.type==="amrap";const isDrop=r.type==="drop";const isMini=r.type==="mini";const isCluster=r.type==="cluster";const showPause=((r.type==="round"||r.type==="mini")&&i<rows.length-1&&rows[i+1]?.type===r.type)||(isCluster&&!r.isLast&&i<rows.length-1&&rows[i+1]?.type==="cluster");
-      return(<div key={i}><div style={{display:"grid",gridTemplateColumns:isIso?"40px 1fr 28px 28px":"40px 1fr 10px 1fr "+((!isAmrap&&!isMini&&!isDrop&&!isCluster)?"44px ":"")+"28px 28px",gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#C060D008":C.s2,border:"1px solid "+(r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#C060D030":C.brd),opacity:r.done||r.skipped?0.5:1,transition:"all 0.2s"}}>
+      const delCol=postSession&&!viewOnly?" 24px":"";
+      return(<div key={i}><div style={{display:"grid",gridTemplateColumns:isIso?"40px 1fr 28px 28px"+delCol:"40px 1fr 10px 1fr "+((!isAmrap&&!isMini&&!isDrop&&!isCluster)?"44px ":"")+"28px 28px"+delCol,gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#C060D008":C.s2,border:"1px solid "+(r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#C060D030":C.brd),opacity:r.skipped?0.5:1,transition:"all 0.2s"}}>
         <span style={{fontSize:9,color:rowC(r),fontWeight:600,textAlign:"center"}}>{rowLabel(r)}</span>
         {!isIso&&<input type="number" step="0.5" value={r.kg||""} onChange={viewOnly?undefined:e=>upd(i,"kg",+e.target.value)} readOnly={viewOnly} placeholder="0" style={iS}/>}
         {isIso&&<div style={{fontSize:11,color:C.tx2,textAlign:"center"}}>{r.holdSec}s</div>}
         {!isIso&&<span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span>}
         {!isIso&&<input type="number" value={r.reps||""} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={isAmrap?"max":"0"} style={iS}/>}
         {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&<RIRPicker value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
-        <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button><button onClick={viewOnly?undefined:()=>updR(i,{done:!r.done,skipped:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
+        <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button>
+        <button onClick={viewOnly?undefined:()=>{const nd=!r.done;updR(i,{done:nd,skipped:false});if(nd&&onTimerStart)onTimerStart();}} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
+        {postSession&&!viewOnly&&<button onClick={()=>updateSets(storeKey,rows.filter((_,j)=>j!==i))} style={{width:22,height:22,borderRadius:6,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>}
       </div>{showPause&&<div style={{textAlign:"center",fontSize:9,color:C.tx3,padding:"2px 0",marginBottom:2}}>{r.pauseSec}s repos</div>}</div>);
     })}
-    {(!method||method==="excentrique")&&!viewOnly&&<button onClick={()=>updateSets(storeKey,[...rows,{type:"set",kg:rows[rows.length-1]?.kg||0,reps:rows[rows.length-1]?.reps||0,rir:2,done:false}])} style={{width:"100%",padding:"7px 0",borderRadius:8,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>+ Serie</button>}
+    {((!method||method==="excentrique")||postSession)&&!viewOnly&&<button onClick={()=>updateSets(storeKey,[...rows,{type:"set",kg:rows[rows.length-1]?.kg||0,reps:rows[rows.length-1]?.reps||0,rir:2,done:false}])} style={{width:"100%",padding:"7px 0",borderRadius:8,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>+ Série</button>}
     <div style={{marginTop:14}}><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Mon ressenti</div><textarea value={note} onChange={viewOnly?undefined:e=>setAthleteNotes&&setAthleteNotes(p=>({...p,[storeKey]:e.target.value}))} readOnly={viewOnly} placeholder="Notes perso, sensations..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/></div>
   </div>);
 }
@@ -1161,7 +1171,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   // Close dropdown on click outside
   useEffect(()=>{if(!showExDropdown)return;const h=e=>{if(dropRef.current&&!dropRef.current.contains(e.target))setShowExDropdown(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[showExDropdown]);
   // Fetch exercises from Supabase DB on mount
-  useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type,secondary').order('name').then(({data})=>{if(data)setSupabaseExos(data);});},[]);
+  useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type,secondary,youtube_id,image_url').order('name').then(({data})=>{if(data)setSupabaseExos(data);});},[]);
   // Inject drag shake keyframe
   useEffect(()=>{const s=document.createElement('style');s.id='exShakeKf';s.textContent='@keyframes exShake{0%,100%{transform:rotate(0deg) translateX(0)}25%{transform:rotate(-0.6deg) translateX(-1.5px)}75%{transform:rotate(0.6deg) translateX(1.5px)}}';if(!document.getElementById('exShakeKf'))document.head.appendChild(s);return()=>{const el=document.getElementById('exShakeKf');if(el)el.remove();};},[]);
   // Build unified exercise DB for picker — deduplicate by normalized name
@@ -1175,6 +1185,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const[undoStack,setUndoStack]=useState([]);
   const[editingSession,setEditingSession]=useState(null);
   const[newSessForm,setNewSessForm]=useState(false);
+  const[videoEx,setVideoEx]=useState(null);
   const[newSess,setNewSess]=useState({name:"",short:""});
   const[editingBlocs,setEditingBlocs]=useState(false);
   const[newBlocForm,setNewBlocForm]=useState(false);
@@ -1529,6 +1540,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           <div style={{padding:bloc?"6px 8px":"0"}}>
           {groupExs.map(ex=>{
             const exIdx=exList.indexOf(ex);const wd=ex.weeks[week]||{};const isOpen=openEx===ex.id;const sk=ex.id+"_"+week;const aNote=athleteNotes[sk]||"";const curM=allMethods[wd.method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";const exTier=getExTier(ex.name,ex);const exTc=tierCfg[exTier]||tierCfg[3];const typeLabels={muscu:"Muscu",plio:"Plio",mobilite:"Mobilité",halterophilie:"Halté."};const typeColors={muscu:C.tx3,plio:C.o,mobilite:C.b,halterophilie:"#8b5cf6"};
+            const bankEx=supabaseExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
+            const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
             return(<div key={ex.id} data-exid={ex.id} draggable={true} onDragStart={e=>{setDragId(ex.id);e.dataTransfer.effectAllowed="move";}} onDragOver={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();setDragOverId(ex.id);if(dragId)setDragOverBloc(ex.bloc||null);}} onDrop={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();if(dragId&&dragId!==ex.id)moveExToBloc(dragId,ex.id,ex.bloc);setDragId(null);setDragOverId(null);setDragOverBloc(null);}} onDragEnd={()=>{setDragId(null);setDragOverId(null);setDragOverBloc(null);}}
               onTouchStart={e=>{const t=e.touches[0];touchStartPosRef.current={x:t.clientX,y:t.clientY};touchTimerRef.current=setTimeout(()=>{setTouchDragId(ex.id);setDragId(ex.id);if(navigator.vibrate)navigator.vibrate(40);},800);}}
               onTouchMove={e=>{if(!touchDragId){const t=e.touches[0];if(Math.abs(t.clientX-(touchStartPosRef.current?.x||0))>8||Math.abs(t.clientY-(touchStartPosRef.current?.y||0))>8)clearTimeout(touchTimerRef.current);return;}e.preventDefault();const t=e.touches[0];const hit=[...document.querySelectorAll('[data-exid]')].find(el=>{const r=el.getBoundingClientRect();return t.clientY>=r.top&&t.clientY<=r.bottom;});if(hit&&hit.dataset.exid!==touchDragId){setDragOverId(hit.dataset.exid);setDragOverBloc(exList.find(x=>x.id===hit.dataset.exid)?.bloc||null);}}}
@@ -1547,6 +1560,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
                   {aNote&&<span style={{fontSize:9,padding:"2px 5px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>retour</span>}
+                  {hasVideo&&<button onClick={e=>{e.stopPropagation();setVideoEx(bankEx);}} style={{background:'none',border:'none',color:C.tx3,fontSize:16,cursor:'pointer',padding:'0',lineHeight:1}} title="Voir la vidéo">📹</button>}
                   <button onClick={e=>{e.stopPropagation();moveExercise(ex.id,-1);}} disabled={exIdx===0} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:exIdx===0?C.tx3+"40":C.tx2,fontSize:10,cursor:exIdx===0?"default":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
                   <button onClick={e=>{e.stopPropagation();moveExercise(ex.id,1);}} disabled={exIdx===exList.length-1} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.brdL,background:"transparent",color:exIdx===exList.length-1?C.tx3+"40":C.tx2,fontSize:10,cursor:exIdx===exList.length-1?"default":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↓</button>
                   <button onClick={e=>{e.stopPropagation();removeExercise(ex.id);}} style={{width:20,height:20,borderRadius:4,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>x</button>
@@ -1673,6 +1687,20 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         </div>
       )}
     </div>
+  {videoEx&&(<div onClick={()=>setVideoEx(null)} style={{position:'fixed',inset:0,zIndex:500,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{width:'100%',maxWidth:480}} onClick={e=>e.stopPropagation()}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{videoEx.name}</div>
+        <button onClick={()=>setVideoEx(null)} style={{background:'none',border:'none',color:C.tx2,fontSize:24,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>×</button>
+      </div>
+      {videoEx.youtube_id?(<div style={{position:'relative',paddingBottom:'56.25%',background:'#000',borderRadius:12,overflow:'hidden'}}>
+        <iframe src={'https://www.youtube.com/embed/'+videoEx.youtube_id+'?autoplay=1'} style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',border:'none'}} allow="autoplay; encrypted-media" allowFullScreen/>
+      </div>):videoEx.image_url?(
+        <img src={videoEx.image_url} style={{width:'100%',borderRadius:12,display:'block'}} alt={videoEx.name}/>
+      ):null}
+      <button onClick={()=>setVideoEx(null)} style={{width:'100%',marginTop:14,padding:'11px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Fermer</button>
+    </div>
+  </div>)}
   </div>);
 }
 
@@ -2189,12 +2217,13 @@ function SessionEndModal({duration,onSave,C}){
   </div></>);
 }
 
-function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions,onAddExercise}){
+function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions,onAddExercise,weekSchedule={}}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const[step,setStep]=useState(initialSess?1:0);const[wk,setWk]=useState(currentWeek);
   const[selectedSess,setSelectedSess]=useState(initialSess||null);const[openEx,setOpenEx]=useState(null);
   const[showEndModal,setShowEndModal]=useState(false);const[endDuration,setEndDuration]=useState(0);
+  const[showSkipWarning,setShowSkipWarning]=useState(false);
   const[selectedFree,setSelectedFree]=useState(null);const[showFreeEndModal,setShowFreeEndModal]=useState(false);const[freeEndDuration,setFreeEndDuration]=useState(0);
   const[sessStartedAt,setSessStartedAt]=useState(null);const[elapsedSecs,setElapsedSecs]=useState(0);
   const[freeStartedAt,setFreeStartedAt]=useState(null);const[freeElapsed,setFreeElapsed]=useState(0);
@@ -2261,7 +2290,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
       const muscles=[...new Set(sessExos.map(e=>e.target))];
       const dayLabel=s.day_of_week!=null?DAY_S[s.day_of_week]:null;
       const sLog=sessionLogs?.[s.id+"_"+wk];
-      return(<button key={s.id} onClick={()=>{if(!done&&hasExos&&!viewOnly){setSelectedSess(s);setStep(1);setOpenEx(null);}}} style={{width:"100%",padding:0,borderRadius:14,border:"1.5px solid "+(done?C.g+"40":C.brd),background:C.s1,cursor:done||!hasExos||viewOnly?"default":"pointer",fontFamily:"inherit",textAlign:"left",display:"block",opacity:hasExos?1:0.35,overflow:"hidden",position:"relative",transition:"all 0.2s",boxSizing:"border-box"}}>
+      return(<button key={s.id} onClick={()=>{if(hasExos&&!viewOnly){setSelectedSess(s);setStep(1);setOpenEx(null);}}} style={{width:"100%",padding:0,borderRadius:14,border:"1.5px solid "+(done?C.g+"40":C.brd),background:C.s1,cursor:!hasExos||viewOnly?"default":"pointer",fontFamily:"inherit",textAlign:"left",display:"block",opacity:hasExos?1:0.35,overflow:"hidden",position:"relative",transition:"all 0.2s",boxSizing:"border-box"}}>
         {done&&<div style={{position:"absolute",top:0,left:0,right:0,height:3,background:C.g,borderRadius:"14px 14px 0 0"}}/>}
         <div style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:44,height:44,borderRadius:12,background:done?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1.5px solid "+(done?C.g+"40":C.ac+"30")}}>
@@ -2284,6 +2313,53 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
       </button>);})}</div>);})()}
     {(()=>{const next=sessions.find(s=>!(completedSessions[wk]||[]).includes(s.id)&&(exos[s.id]||[]).length>0);if(!next)return weekPct>=100?<div style={{padding:"14px",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:13,fontWeight:700,textAlign:"center"}}>Semaine {wk} complete !</div>:null;if(viewOnly)return null;return(<button onClick={()=>{setSelectedSess(next);setStep(1);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",letterSpacing:"-0.3px"}}>Commencer {next.short} - {next.name} ›</button>);})()}
     {!viewOnly&&freeSessions.filter(f=>f.date===new Date().toISOString().slice(0,10)).map(f=>(<button key={f.id} onClick={()=>{setSelectedFree(f);setStep(2);}} style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid "+(f.completed?C.g+"40":C.brdL),background:C.s1,cursor:"pointer",fontFamily:"inherit",textAlign:"left",marginTop:6,display:"flex",alignItems:"center",gap:10}}><div style={{width:38,height:38,borderRadius:10,background:f.completed?C.gS:C.acS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📝</div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:f.completed?C.g:C.tx}}>{f.name}</div><div style={{fontSize:10,color:C.tx3}}>{f.exercises.length} exo{f.completed?" · Terminée":""}</div></div>{f.completed&&<span style={{color:C.g,fontSize:14}}>✓</span>}</button>))}
+    {(()=>{
+      const extras=weekSchedule?.extras||{};
+      // Calculer la plage de dates de la semaine sélectionnée
+      const wkExtras=(()=>{
+        if(blockConfig?.startDate){
+          const s=new Date(blockConfig.startDate);
+          s.setDate(s.getDate()+(wk-1)*7);
+          const e=new Date(s);e.setDate(e.getDate()+6);
+          const fmt=d=>d.toISOString().slice(0,10);
+          const allEntries=[];
+          for(const[dateKey,acts] of Object.entries(extras)){
+            const d=dateKey.slice(0,4)+"-"+dateKey.slice(4,6)+"-"+dateKey.slice(6,8);
+            if(d>=fmt(s)&&d<=fmt(e))acts.forEach(a=>allEntries.push({...a,date:d}));
+          }
+          return allEntries.sort((a,b)=>a.date<b.date?-1:1);
+        }
+        // Sans startDate : afficher les 7 derniers jours
+        const cutoff=new Date();cutoff.setDate(cutoff.getDate()-6);
+        const cutStr=cutoff.toISOString().slice(0,10);
+        const allEntries=[];
+        for(const[dateKey,acts] of Object.entries(extras)){
+          const d=dateKey.slice(0,4)+"-"+dateKey.slice(4,6)+"-"+dateKey.slice(6,8);
+          if(d>=cutStr)acts.forEach(a=>allEntries.push({...a,date:d}));
+        }
+        return allEntries.sort((a,b)=>a.date<b.date?-1:1);
+      })();
+      if(!wkExtras.length)return null;
+      return(<>
+        <div style={{fontSize:10,fontWeight:700,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginTop:16,marginBottom:6}}>Activités libres</div>
+        {wkExtras.map((a,i)=>{
+          const INT_COLORS=["#22c55e","#84cc16","#eab308","#f97316","#ef4444","#dc2626","#b91c1c","#991b1b","#7f1d1d","#450a0a"];
+          const ic=a.intensity?INT_COLORS[a.intensity-1]:C.y;
+          return(<div key={a.id||i} style={{width:"100%",padding:"10px 14px",borderRadius:12,border:"1px solid "+C.y+"40",background:C.y+"08",marginBottom:6,display:"flex",alignItems:"center",gap:10,boxSizing:"border-box"}}>
+            <div style={{width:38,height:38,borderRadius:10,background:C.y+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{a.emoji||"🏅"}</div>
+            <div style={{flex:1,overflow:"hidden",minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.y,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</div>
+              <div style={{fontSize:10,color:C.tx3,marginTop:1,display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                <span>{a.date}</span>
+                {a.duration&&<><span>·</span><span>⏱ {a.duration} min</span></>}
+                {a.intensity&&<><span>·</span><span style={{color:ic,fontWeight:600}}>RPE {a.intensity}/10</span></>}
+              </div>
+              {a.notes&&<div style={{fontSize:9,color:C.tx3,marginTop:2,fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>"{a.notes}"</div>}
+            </div>
+          </div>);
+        })}
+      </>);
+    })()}
     {!viewOnly&&<button onClick={()=>{const id="free_"+Date.now();const fs={id,name:"Séance libre",date:new Date().toISOString().slice(0,10),completed:false,duration:null,note:"",exercises:[]};setFreeSessions(prev=>[...prev,fs]);setSelectedFree(fs);setStep(2);}} style={{width:"100%",padding:"12px 0",borderRadius:12,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginTop:8}}>+ Séance libre</button>}
   </div>
   {lsActiveSess&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
@@ -2346,7 +2422,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
                   <span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span>
                 </div>
               </div>
-              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
             </div>
             {/* Badge SS centré entre les exercices du superset */}
             {inSS&&!isLastInSS&&<div style={{position:"relative",display:"flex",alignItems:"center",height:20,margin:"0 16px"}}>
@@ -2379,8 +2455,43 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         }
       });
     })()}</div>
-    {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={endSess} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
+    {!sessIsDone&&!viewOnly&&sessStartedAt&&<button onClick={()=>{const incomplete=exercisesSorted.filter(ex=>{const rows=sets[ex.id+"_"+wk]||[];return rows.length===0||rows.some(r=>!r.done&&!r.skipped);});if(incomplete.length>0){setShowSkipWarning(true);}else{endSess();}}} style={{width:"100%",marginTop:16,padding:"15px 0",borderRadius:14,border:"none",background:C.g,color:"#fff",fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Terminer la séance</button>}
     {sessIsDone&&<div style={{marginTop:16}}><div style={{padding:"14px 0",borderRadius:14,background:C.gS,border:"1px solid "+C.g+"40",color:C.g,fontSize:14,fontWeight:700,textAlign:"center",marginBottom:8}}>Séance validée !</div>{sessionLogs?.[sid+"_"+wk]?.note&&<div style={{padding:"10px 12px",borderRadius:8,background:C.s2,fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic",marginBottom:6}}>"{sessionLogs[sid+"_"+wk].note}"</div>}{sessionLogs?.[sid+"_"+wk]?.duration&&<div style={{fontSize:11,color:C.tx3,textAlign:"center",marginBottom:8}}>Durée : {fmtTime(sessionLogs[sid+"_"+wk].duration)}</div>}{!viewOnly&&<button onClick={()=>uncompleteSession(sid,wk)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler la validation</button>}</div>}
+    {showSkipWarning&&(()=>{
+      const incomplete=exercisesSorted.filter(ex=>{const rows=sets[ex.id+"_"+wk]||[];return rows.length===0||rows.some(r=>!r.done&&!r.skipped);});
+      const autoSkipAndValidate=()=>{
+        incomplete.forEach(ex=>{
+          const sk=ex.id+"_"+wk;
+          const wd=ex.weeks[wk];
+          const existing=sets[sk]||[];
+          const rows=existing.length>0?existing:generateRows(wd,wd?.method,wd?.methodParams);
+          updSets(sk,rows.map(r=>(!r.done&&!r.skipped)?{...r,skipped:true}:r));
+        });
+        setShowSkipWarning(false);
+        endSess();
+      };
+      return(<div style={{position:'fixed',inset:0,zIndex:400,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',padding:24}} onClick={()=>setShowSkipWarning(false)}>
+        <div style={{background:C.s1,borderRadius:16,padding:24,width:'100%',maxWidth:340,border:'1px solid '+C.brd}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontSize:15,fontWeight:800,color:C.tx,marginBottom:6}}>Séries non renseignées</div>
+          <div style={{fontSize:12,color:C.tx3,marginBottom:12,lineHeight:1.6}}>Les exercices suivants ont des séries non validées :</div>
+          <div style={{marginBottom:16,display:'flex',flexDirection:'column',gap:4,maxHeight:200,overflowY:'auto'}}>
+            {incomplete.map(ex=>{
+              const rows=sets[ex.id+"_"+wk]||[];
+              const untouchedCount=rows.length===0?(ex.weeks[wk]?.sets||0):rows.filter(r=>!r.done&&!r.skipped).length;
+              return(<div key={ex.id} style={{fontSize:12,padding:'7px 10px',borderRadius:8,background:C.o+'12',border:'1px solid '+C.o+'30',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{color:C.tx,fontWeight:600}}>{ex.name}</span>
+                <span style={{color:C.o,fontWeight:700,flexShrink:0,marginLeft:8}}>{untouchedCount} série{untouchedCount>1?'s':''} manquante{untouchedCount>1?'s':''}</span>
+              </div>);
+            })}
+          </div>
+          <div style={{fontSize:11,color:C.tx3,marginBottom:14,padding:'8px 10px',borderRadius:8,background:C.s2}}>En validant, les séries manquantes seront automatiquement marquées comme skippées (—).</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            <button onClick={()=>setShowSkipWarning(false)} style={{width:'100%',padding:'12px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Revenir finir la séance</button>
+            <button onClick={autoSkipAndValidate} style={{width:'100%',padding:'12px 0',borderRadius:10,border:'none',background:C.g,color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Valider et skipper les séries manquantes</button>
+          </div>
+        </div>
+      </div>);
+    })()}
     {showEndModal&&<SessionEndModal duration={endDuration} onSave={onSessValidate} C={C}/>}
     {videoEx&&(<div onClick={()=>setVideoEx(null)} style={{position:'fixed',inset:0,zIndex:500,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:520}}>
@@ -2728,7 +2839,8 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
   const doneSet=new Set(completedSessions[currentWeek]||[]);
   const wk=weekSchedule||{};
   const extras=wk.extras||{};
-  const dayExtras=idx=>extras[idx]||[];
+  const dKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
+  const dayExtras=idx=>extras[dKey(weekDays[idx])]||[];
   const sessionsForDay=dayIdx=>(sessions||[]).filter(s=>s.day_of_week===dayIdx);
   const savedActivities=wk.savedActivities||[];
   const allActivities=[...ACTIVITIES,...savedActivities.filter(s=>!ACTIVITIES.find(a=>a.label===s.label))];
@@ -2741,16 +2853,16 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
     const{dayIdx}=activityModal;
     const{label,emoji,duration,intensity,notes}=activityForm;
     if(!label.trim())return;
+    const dateKey=dKey(weekDays[dayIdx]);
     const cur=dayExtras(dayIdx);
     const newExtra={id:String(Date.now()),label:label.trim(),emoji,duration,intensity,notes:notes.trim()||undefined};
     const isDefault=ACTIVITIES.find(a=>a.label===label.trim());
     const newSaved=isDefault?savedActivities:[...savedActivities.filter(a=>a.label!==label.trim()),{label:label.trim(),emoji}];
-    setWeekSchedule({...wk,extras:{...extras,[dayIdx]:[...cur,newExtra]},savedActivities:newSaved});
+    setWeekSchedule({...wk,extras:{...extras,[dateKey]:[...cur,newExtra]},savedActivities:newSaved});
     setActivityModal(null);
   };
-  const removeExtra=(dayIdx,id)=>{const cur=dayExtras(dayIdx).filter(e=>e.id!==id);setWeekSchedule({...wk,extras:{...extras,[dayIdx]:cur.length?cur:undefined}});};
+  const removeExtra=(dayIdx,id)=>{const dateKey=dKey(weekDays[dayIdx]);const cur=dayExtras(dayIdx).filter(e=>e.id!==id);setWeekSchedule({...wk,extras:{...extras,[dateKey]:cur.length?cur:undefined}});};
   const removeCustomActivity=(label)=>{const newSaved=savedActivities.filter(a=>a.label!==label);setWeekSchedule({...wk,savedActivities:newSaved});};
-  const dKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
   const isoKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   const getWell=d=>wellnessHistory[dKey(d)]||null;
   const getNutr=d=>nutritionLog[isoKey(d)]||nutritionLog[dKey(d)]||null;
@@ -3047,6 +3159,8 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
 
 // ── EXERCISE BANK COMPONENTS ─────────────────────────────────────────────────
 
+const parseYtId=v=>{const m=(v||'').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);return m?m[1]:v.trim();};
+
 function ExerciseCreateModal({coachId,onSave,onClose}){
   const{profile}=useAuth();
   const isAdmin=profile?.is_admin===true;
@@ -3055,7 +3169,6 @@ function ExerciseCreateModal({coachId,onSave,onClose}){
   const TARGETS=['Pecs','Dos-GD','Dos-Trap','Dos-Rhom','Ep-Ant','Ep-Lat','Ep-Post','Quads','Ischios','Fessiers','Adducteurs','Triceps','Biceps','Core','Mollets'];
   const EQUIPS=['Barre','Haltères','Cable','Machine','Poids de corps','Élastique','Kettlebell','Smith'];
   const upd=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const parseYtId=v=>{const m=(v||'').match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);return m?m[1]:v.trim();};
   const fS={padding:'9px 12px',borderRadius:9,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:'inherit',width:'100%',boxSizing:'border-box',outline:'none'};
   const lS={fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:5,display:'block'};
   const save=async()=>{
@@ -3127,12 +3240,25 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
   const isOwner=!ex.created_by||ex.created_by===coachId;
   const[promoting,setPromoting]=useState(false);
   const promote=async()=>{setPromoting(true);await supabase.from('exercises').update({is_verified:true}).eq('id',ex.id);setPromoting(false);onRefresh();onClose();};
+  const[localYtId,setLocalYtId]=useState(ex.youtube_id||'');
+  const[ytInput,setYtInput]=useState(ex.youtube_id||'');
+  const[ytSaving,setYtSaving]=useState(false);
+  const[ytMsg,setYtMsg]=useState('');
+  const saveVideo=async(overrideId)=>{
+    setYtSaving(true);setYtMsg('');
+    const raw=overrideId!==undefined?overrideId:ytInput.trim();
+    const id=raw?parseYtId(raw):null;
+    const{error}=await supabase.from('exercises').update({youtube_id:id??null}).eq('id',ex.id);
+    setYtSaving(false);
+    if(error){setYtMsg('Erreur: '+error.message);}
+    else{setLocalYtId(id||'');setYtInput(id||'');setYtMsg(id?'Vidéo ajoutée !':'Vidéo supprimée');onRefresh();setTimeout(()=>setYtMsg(''),2500);}
+  };
   return(<div style={{position:'fixed',inset:0,zIndex:300,background:'rgba(0,0,0,0.88)',overflowY:'auto'}} onClick={onClose}>
     <div style={{minHeight:'100%',display:'flex',alignItems:'flex-end'}} onClick={e=>e.stopPropagation()}>
       <div style={{width:'100%',background:C.s1,borderRadius:'16px 16px 0 0',maxHeight:'92vh',overflowY:'auto',paddingBottom:40}}>
-        {ex.youtube_id&&<div style={{width:'100%',maxWidth:420,margin:'0 auto',background:'#000',aspectRatio:'16/9'}}><iframe src={`https://www.youtube.com/embed/${ex.youtube_id}?rel=0`} style={{width:'100%',height:'100%',border:'none'}} allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen/></div>}
-        {!ex.youtube_id&&ex.image_url&&<img src={ex.image_url} style={{width:'100%',maxWidth:420,margin:'0 auto',aspectRatio:'16/9',objectFit:'cover',display:'block'}} alt={ex.name}/>}
-        {!ex.youtube_id&&!ex.image_url&&<div style={{width:'100%',aspectRatio:'16/9',background:C.s2,display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>💪</div>}
+        {localYtId&&<div style={{width:'100%',maxWidth:420,margin:'0 auto',background:'#000',aspectRatio:'16/9'}}><iframe src={`https://www.youtube.com/embed/${localYtId}?rel=0`} style={{width:'100%',height:'100%',border:'none'}} allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen/></div>}
+        {!localYtId&&ex.image_url&&<img src={ex.image_url} style={{width:'100%',maxWidth:420,margin:'0 auto',aspectRatio:'16/9',objectFit:'cover',display:'block'}} alt={ex.name}/>}
+        {!localYtId&&!ex.image_url&&<div style={{width:'100%',aspectRatio:'16/9',background:C.s2,display:'flex',alignItems:'center',justifyContent:'center',fontSize:48}}>💪</div>}
         <div style={{padding:'16px 16px 0'}}>
           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:12}}>
             <div style={{flex:1,marginRight:10}}>
@@ -3157,6 +3283,16 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
           {ex.tips&&<div style={{marginBottom:16,padding:'10px 12px',borderRadius:10,background:C.oS,border:'1px solid '+C.o+'30'}}><div style={{fontSize:10,fontWeight:700,color:C.o,marginBottom:4}}>💡 Conseils</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.6}}>{ex.tips}</div></div>}
           <button onClick={onAdd} style={{width:'100%',padding:'12px 0',borderRadius:12,border:'none',background:C.ac,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:8}}>+ Ajouter à mes exercices</button>
           {isAdmin&&!ex.is_verified&&<button onClick={promote} disabled={promoting} style={{width:'100%',padding:'9px 0',borderRadius:10,border:'1px solid '+C.g+'50',background:C.gS,color:C.g,fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:8}}>{promoting?'En cours...':'✓ Promouvoir en Officiel'}</button>}
+          {isAdmin&&<div style={{marginBottom:8}}>
+            {!localYtId?(<div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <input value={ytInput} onChange={e=>setYtInput(e.target.value)} placeholder="Lien YouTube (vidéo, Short, live…)" style={{flex:1,padding:'9px 12px',borderRadius:10,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontFamily:'inherit',outline:'none'}}/>
+              <button onClick={()=>saveVideo()} disabled={ytSaving||!ytInput.trim()} style={{padding:'9px 16px',borderRadius:10,border:'none',background:ytInput.trim()?C.ac:C.s2,color:ytInput.trim()?'#fff':C.tx3,fontSize:13,fontWeight:700,cursor:ytInput.trim()?'pointer':'default',fontFamily:'inherit',flexShrink:0,opacity:ytSaving?0.7:1}}>{ytSaving?'...':'+ Vidéo'}</button>
+            </div>):(<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderRadius:10,background:C.s2,border:'1px solid '+C.brdL}}>
+              <span style={{fontSize:12,color:C.tx2,flex:1,fontFamily:'monospace'}}>{localYtId}</span>
+              <button onClick={()=>saveVideo('')} disabled={ytSaving} style={{padding:'5px 12px',borderRadius:8,border:'1px solid '+C.r+'50',background:C.rS,color:C.r,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit',flexShrink:0}}>{ytSaving?'...':'Supprimer vidéo'}</button>
+            </div>)}
+            {ytMsg&&<div style={{marginTop:5,fontSize:11,color:ytMsg.startsWith('Erreur')?C.r:C.g,fontWeight:600}}>{ytMsg}</div>}
+          </div>}
           {(isOwner||isAdmin)&&<div style={{display:'flex',gap:8}}>
             <button onClick={onMergeClick} style={{flex:1,padding:'9px 0',borderRadius:10,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Fusionner</button>
             <button onClick={onDelete} style={{flex:1,padding:'9px 0',borderRadius:10,border:'1px solid '+C.r+'50',background:C.rS,color:C.r,fontSize:12,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
@@ -3281,7 +3417,229 @@ function ExerciseBank({coachId,onAddToExos}){
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── HABIT TRACKER COMPONENTS ─────────────────────────────────────────────────
+
+function HabitCreateModal({onSave,onClose,initial=null}){
+  const[name,setName]=useState(initial?.name||'');
+  const[emoji,setEmoji]=useState(initial?.emoji||'💪');
+  const[color,setColor]=useState(initial?.color||HABIT_COLORS[0]);
+  return(<div onClick={onClose} style={{position:'fixed',inset:0,zIndex:450,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:480,background:C.s1,borderRadius:'16px 16px 0 0',padding:'24px 24px 48px',boxSizing:'border-box'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}><div style={{fontSize:16,fontWeight:800,color:C.tx}}>{initial?'Modifier':'Nouvelle habitude'}</div><button onClick={onClose} style={{background:'none',border:'none',color:C.tx2,fontSize:22,cursor:'pointer',fontFamily:'inherit'}}>×</button></div>
+      <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:14,background:C.s2,border:`2px solid ${color}40`,marginBottom:20}}>
+        <div style={{width:44,height:44,borderRadius:12,background:color+'20',border:`2px solid ${color}60`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>{emoji}</div>
+        <div style={{fontSize:15,fontWeight:700,color:name?C.tx:C.tx3,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{name||"Nom de l'habitude"}</div>
+      </div>
+      <label style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',display:'block',marginBottom:6}}>Nom</label>
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Ex: Boire 2L d'eau" maxLength={40} style={{width:'100%',padding:'10px 14px',borderRadius:10,border:`1px solid ${C.brdL}`,background:C.s2,color:C.tx,fontSize:14,fontFamily:'inherit',outline:'none',boxSizing:'border-box',marginBottom:18}}/>
+      <label style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',display:'block',marginBottom:8}}>Emoji</label>
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:18}}>{HABIT_EMOJIS.map(e=><button key={e} onClick={()=>setEmoji(e)} style={{width:38,height:38,borderRadius:10,border:`2px solid ${emoji===e?color:C.brdL}`,background:emoji===e?color+'20':C.s2,fontSize:20,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{e}</button>)}</div>
+      <label style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',display:'block',marginBottom:8}}>Couleur</label>
+      <div style={{display:'flex',gap:10,marginBottom:24}}>{HABIT_COLORS.map(hc=><button key={hc} onClick={()=>setColor(hc)} style={{width:34,height:34,borderRadius:'50%',background:hc,border:`3px solid ${color===hc?C.tx:'transparent'}`,cursor:'pointer',flexShrink:0,transform:color===hc?'scale(1.2)':'scale(1)',transition:'transform 0.15s'}}/>)}</div>
+      <button onClick={()=>{if(name.trim())onSave({name:name.trim(),emoji,color});}} disabled={!name.trim()} style={{width:'100%',padding:'14px 0',borderRadius:12,border:'none',background:name.trim()?color:C.s2,color:name.trim()?'#fff':C.tx3,fontSize:15,fontWeight:800,cursor:name.trim()?'pointer':'default',fontFamily:'inherit',transition:'all 0.2s'}}>{initial?'Enregistrer':'Créer l\'habitude'}</button>
+    </div>
+  </div>);
+}
+
+function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}){
+  const[showCreate,setShowCreate]=useState(false);
+  const[menuId,setMenuId]=useState(null);
+  const wdays=getHabitWeekDays();
+  const todayISO=hISO();
+  const yISO=hISO(hAddDays(new Date(),-1));
+  const DL=['L','M','M','J','V','S','D'];
+  const handleCreate=async d=>{
+    const{data:h,error}=await supabase.from('habits').insert({...d,athlete_id:athleteId}).select().single();
+    if(!error&&h)setHabits(p=>[...p,h]);
+    setShowCreate(false);
+  };
+  const handleDelete=async id=>{
+    await supabase.from('habits').update({is_active:false}).eq('id',id);
+    setHabits(p=>p.filter(h=>h.id!==id));
+    setMenuId(null);
+  };
+  return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:`1px solid ${C.brd}`,marginBottom:12}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px'}}>Mes habitudes</div>
+      {!viewOnly&&<button onClick={()=>setShowCreate(true)} style={{fontSize:11,fontWeight:700,padding:'4px 10px',borderRadius:8,border:`1px solid ${C.ac}40`,background:C.acS,color:C.ac,cursor:'pointer',fontFamily:'inherit'}}>+ Habitude</button>}
+    </div>
+    {habits.length===0?(<div style={{textAlign:'center',padding:'18px 0',color:C.tx3,fontSize:12}}>{viewOnly?'Aucune habitude définie':'Ajoute ta première habitude →'}</div>):(
+      <div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,28px)',gap:4,marginBottom:8}}>
+          <div/>
+          {wdays.map((d,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:hISO(d)===todayISO?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[i]}</div>)}
+        </div>
+        {habits.map(h=>{
+          const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
+          return(<div key={h.id} style={{marginBottom:12}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,28px)',gap:4,alignItems:'center'}}>
+              <button onClick={()=>setMenuId(menuId===h.id?null:h.id)} style={{display:'flex',alignItems:'center',gap:6,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',textAlign:'left',padding:'2px 0',minWidth:0}}>
+                <span style={{fontSize:15,flexShrink:0}}>{h.emoji}</span>
+                <span style={{fontSize:12,fontWeight:600,color:C.tx,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{h.name}</span>
+              </button>
+              {wdays.map((d,i)=>{
+                const iso=hISO(d);const done=logs.includes(iso);const canTap=!viewOnly&&(iso===todayISO||iso===yISO);const future=iso>todayISO;
+                return(<button key={i} onClick={canTap?()=>onToggle(h.id,iso):undefined} style={{width:28,height:28,borderRadius:'50%',border:`2px solid ${done?h.color:future?C.brd:C.brdL}`,background:done?h.color+'22':'transparent',cursor:canTap?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.18s'}}>
+                  {done?<div style={{width:10,height:10,borderRadius:'50%',background:h.color}}/>:(!future&&iso===todayISO&&!viewOnly)?<div style={{width:4,height:4,borderRadius:'50%',background:C.ac}}/>:null}
+                </button>);
+              })}
+            </div>
+            <div style={{fontSize:10,color:streak>0?h.color:C.tx3,fontWeight:streak>0?600:400,paddingLeft:2,marginTop:3}}>{streakMsg(streak)}</div>
+            {menuId===h.id&&!viewOnly&&<div style={{marginTop:6,padding:'8px 10px',borderRadius:10,background:C.s2,border:`1px solid ${C.brd}`,display:'flex',gap:8}}>
+              <button onClick={()=>handleDelete(h.id)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.r}40`,background:C.rS,color:C.r,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
+              <button onClick={()=>setMenuId(null)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx3,fontSize:11,cursor:'pointer',fontFamily:'inherit'}}>Annuler</button>
+            </div>}
+          </div>);
+        })}
+      </div>
+    )}
+    {showCreate&&<HabitCreateModal onSave={handleCreate} onClose={()=>setShowCreate(false)}/>}
+  </div>);
+}
+
+function HabitTrackerProfile({habits,habitLogs,onToggle,viewOnly}){
+  const[hTab,setHTab]=useState('week');
+  const[monthDate,setMonthDate]=useState(new Date());
+  const[selHabit,setSelHabit]=useState(null);
+  const wdays=getHabitWeekDays();
+  const todayISO=hISO();
+  const yISO=hISO(hAddDays(new Date(),-1));
+  const DL=['L','M','M','J','V','S','D'];
+  const activeH=(selHabit&&habits.find(h=>h.id===selHabit))||habits[0];
+
+  const renderWeek=()=>(<div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,34px)',gap:4,marginBottom:10}}>
+      <div/>
+      {wdays.map((d,i)=>{const iso=hISO(d);const isT=iso===todayISO;return(<div key={i} style={{textAlign:'center'}}><div style={{fontSize:9,fontWeight:600,color:isT?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[i]}</div><div style={{fontSize:11,color:isT?C.ac:C.tx2,fontWeight:isT?700:400}}>{d.getDate()}</div></div>);})}
+    </div>
+    {habits.map(h=>{
+      const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
+      return(<div key={h.id} style={{marginBottom:18}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
+          <span style={{fontSize:18}}>{h.emoji}</span>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.tx}}>{h.name}</div><div style={{fontSize:10,color:streak>0?h.color:C.tx3,fontWeight:streak>0?600:400}}>{streakMsg(streak)}</div></div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,34px)',gap:4}}>
+          <div/>
+          {wdays.map((d,i)=>{
+            const iso=hISO(d);const done=logs.includes(iso);const canTap=!viewOnly&&(iso===todayISO||iso===yISO);const future=iso>todayISO;
+            return(<button key={i} onClick={canTap?()=>onToggle(h.id,iso):undefined} style={{width:34,height:34,borderRadius:10,border:`2px solid ${done?h.color:future?C.brd:C.brdL}`,background:done?h.color+'20':'transparent',cursor:canTap?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.18s'}}>
+              {done?<div style={{width:13,height:13,borderRadius:'50%',background:h.color}}/>:(!future&&iso===todayISO&&!viewOnly)?<div style={{width:5,height:5,borderRadius:'50%',background:C.ac}}/>:null}
+            </button>);
+          })}
+        </div>
+      </div>);
+    })}
+  </div>);
+
+  const renderMonth=()=>{
+    const yr=monthDate.getFullYear(),mo=monthDate.getMonth();
+    const fd=new Date(yr,mo,1);const ld=new Date(yr,mo+1,0);
+    const startDow=(fd.getDay()+6)%7;const dim=ld.getDate();
+    const now=new Date();const isCurMo=yr===now.getFullYear()&&mo===now.getMonth();
+    const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
+    return(<div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+        <button onClick={()=>setMonthDate(new Date(yr,mo-1,1))} style={{width:32,height:32,borderRadius:8,border:`1px solid ${C.brdL}`,background:C.s2,color:C.tx2,fontSize:18,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+        <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{MON[mo]} {yr}</div>
+        <button onClick={()=>setMonthDate(new Date(yr,mo+1,1))} disabled={isCurMo} style={{width:32,height:32,borderRadius:8,border:`1px solid ${C.brdL}`,background:C.s2,color:C.tx2,fontSize:18,cursor:isCurMo?'default':'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',opacity:isCurMo?0.3:1}}>›</button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:6}}>{DL.map((l,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:C.tx3,textTransform:'uppercase',padding:'2px 0'}}>{l}</div>)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+        {cells.map((day,i)=>{
+          if(!day)return<div key={i}/>;
+          const iso=`${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const isT=iso===todayISO;const future=iso>todayISO;
+          const dots=habits.filter(h=>(habitLogs[h.id]||[]).includes(iso));
+          return(<div key={i} style={{aspectRatio:'1',borderRadius:8,background:isT?C.acS:C.s2,border:`1px solid ${isT?C.ac+'50':C.brd}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:2,opacity:future?0.35:1}}>
+            <div style={{fontSize:10,fontWeight:isT?700:400,color:isT?C.ac:C.tx3,lineHeight:1.2}}>{day}</div>
+            {dots.length>0&&<div style={{display:'flex',gap:2,flexWrap:'wrap',justifyContent:'center',marginTop:2}}>{dots.slice(0,4).map(h=><div key={h.id} style={{width:5,height:5,borderRadius:'50%',background:h.color}}/>)}{dots.length>4&&<div style={{width:5,height:5,borderRadius:'50%',background:C.tx3}}/>}</div>}
+          </div>);
+        })}
+      </div>
+      {habits.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:12}}>{habits.map(h=><div key={h.id} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:C.tx2}}><div style={{width:7,height:7,borderRadius:'50%',background:h.color,flexShrink:0}}/>{h.emoji} {h.name}</div>)}</div>}
+    </div>);
+  };
+
+  const renderYear=()=>{
+    const h=activeH;if(!h)return<div style={{textAlign:'center',padding:'20px 0',color:C.tx3,fontSize:12}}>Aucune habitude</div>;
+    const logs=habitLogs[h.id]||[];const today=new Date();const todayISO=hISO(today);
+    const totalDone=logs.filter(d=>d>=hISO(hAddDays(today,-364))).length;const streak=calcHabitStreak(logs);
+    const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    const DL=['L','M','M','J','V','S','D'];
+    // Build 12 mini-calendars: current month going back 11 months
+    const months=Array.from({length:12},(_,i)=>{
+      const d=new Date(today.getFullYear(),today.getMonth()-11+i,1);
+      return{year:d.getFullYear(),month:d.getMonth()};
+    });
+    return(<div>
+      {/* Dropdown sélecteur d'habitude */}
+      {habits.length>0&&<div style={{position:'relative',marginBottom:16}}>
+        <select value={selHabit||habits[0]?.id||''} onChange={e=>setSelHabit(e.target.value)}
+          style={{width:'100%',padding:'10px 36px 10px 14px',borderRadius:10,border:`2px solid ${h.color}50`,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:'inherit',outline:'none',cursor:'pointer',appearance:'none',WebkitAppearance:'none'}}>
+          {habits.map(hb=><option key={hb.id} value={hb.id}>{hb.emoji} {hb.name}</option>)}
+        </select>
+        <div style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',fontSize:10,color:h.color,pointerEvents:'none'}}>▼</div>
+      </div>}
+      {/* Stats */}
+      <div style={{display:'flex',gap:8,marginBottom:12}}>
+        <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:h.color}}>{totalDone}</div><div style={{fontSize:9,color:C.tx3}}>jours / an</div></div>
+        <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:streak>0?h.color:C.tx3}}>{streak}</div><div style={{fontSize:9,color:C.tx3}}>streak actuel</div></div>
+        <div style={{flex:1,background:C.s2,borderRadius:10,padding:'10px 0',textAlign:'center'}}><div style={{fontSize:22,fontWeight:800,color:C.ac}}>{Math.round(totalDone/365*100)}%</div><div style={{fontSize:9,color:C.tx3}}>complétion</div></div>
+      </div>
+      <div style={{fontSize:11,fontWeight:600,color:streak>0?h.color:C.tx3,textAlign:'center',marginBottom:16}}>{streakMsg(streak)}</div>
+      {/* Grille 12 mini-calendriers */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+        {months.map(({year,month})=>{
+          const fd=new Date(year,month,1);const dim=new Date(year,month+1,0).getDate();
+          const startDow=(fd.getDay()+6)%7;
+          const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
+          const monthDone=logs.filter(iso=>iso.startsWith(`${year}-${String(month+1).padStart(2,'0')}-`)).length;
+          const pct=Math.round(monthDone/dim*100);
+          const isCurMonth=year===today.getFullYear()&&month===today.getMonth();
+          return(<div key={`${year}-${month}`} style={{background:C.s2,borderRadius:10,padding:'8px 6px',border:`1px solid ${isCurMonth?h.color+'50':C.brd}`}}>
+            {/* En-tête mois */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5,paddingLeft:2,paddingRight:2}}>
+              <div style={{fontSize:9,fontWeight:700,color:isCurMonth?h.color:C.tx2,textTransform:'uppercase',letterSpacing:'0.3px'}}>{MON[month]}</div>
+              <div style={{fontSize:8,fontWeight:700,color:pct>0?h.color:C.tx3,padding:'1px 5px',borderRadius:4,background:pct>0?h.color+'18':'transparent'}}>{pct>0?pct+'%':''}</div>
+            </div>
+            {/* Jours header */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1,marginBottom:3}}>
+              {DL.map((l,i)=><div key={i} style={{textAlign:'center',fontSize:6,color:C.tx3,fontWeight:600}}>{l}</div>)}
+            </div>
+            {/* Jours */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:1}}>
+              {cells.map((day,i)=>{
+                if(!day)return<div key={i}/>;
+                const iso=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const done=logs.includes(iso);const future=iso>todayISO;const isToday=iso===todayISO;
+                return(<div key={i} style={{aspectRatio:'1',borderRadius:2,background:future?'transparent':done?h.color:C.bg,border:isToday?`1px solid ${h.color}`:done?'none':'none',opacity:future?0.15:1,transition:'background 0.15s'}}/>);
+              })}
+            </div>
+          </div>);
+        })}
+      </div>
+    </div>);
+  };
+
+  return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:`1px solid ${C.brd}`,marginBottom:12}}>
+    <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:14}}>Tracker d'habitudes</div>
+    {habits.length===0?(<div style={{textAlign:'center',padding:'20px 0',color:C.tx3,fontSize:12}}>Aucune habitude. Ajoute-en depuis l'onglet Accueil.</div>):(
+      <>
+        <div style={{display:'flex',gap:6,marginBottom:16}}>{[{k:'week',l:'Semaine'},{k:'month',l:'Mois'},{k:'year',l:'Année'}].map(t=><button key={t.k} onClick={()=>setHTab(t.k)} style={{flex:1,padding:'7px 0',borderRadius:9,border:'none',background:hTab===t.k?C.acS:C.s2,color:hTab===t.k?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}</div>
+        {hTab==='week'&&renderWeek()}
+        {hTab==='month'&&renderMonth()}
+        {hTab==='year'&&renderYear()}
+      </>
+    )}
+  </div>);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function App({athleteId,defaultMode,canToggleMode=true,userName,athleteProfile,onEditProfile,viewOnly=false}){
+  const{profile:myProfile}=useAuth();
   const load=(k,fb)=>sLoad(k,fb,athleteId);
   const save=(k,v)=>sSave(k,v,athleteId);
   const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");
@@ -3310,6 +3668,9 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[chatHistory,setChatHistory]=useState([]);
   const[aiChatOpen,setAiChatOpen]=useState(false);
   const[initialLogSess,setInitialLogSess]=useState(null);
+  const[habits,setHabits]=useState([]);const[habitLogs,setHabitLogs]=useState({});const[habitEnabled,setHabitEnabled]=useState(false);
+  const[habitToggling,setHabitToggling]=useState(false);const[habitToggleErr,setHabitToggleErr]=useState('');
+  const[profileInfoOpen,setProfileInfoOpen]=useState(false);
   const[timerLeft,setTimerLeft]=useState(120);const[timerDur,setTimerDur]=useState(120);
   const[timerActive,setTimerActive]=useState(false);const[timerFinished,setTimerFinished]=useState(false);
   const timerRef=useRef(null);
@@ -3335,6 +3696,25 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     const tid=setTimeout(()=>{setWellnessState(null);save(SKEYS.wellness,null).catch(()=>{});},midnight-now);
     return()=>clearTimeout(tid);
   },[wellness]);
+
+  useEffect(()=>{
+    if(!athleteId)return;
+    supabase.from('habits').select('*').eq('athlete_id',athleteId).eq('is_active',true).order('created_at').then(({data})=>{if(data)setHabits(data);});
+    const cutoff=hAddDays(new Date(),-365).toISOString().slice(0,10);
+    supabase.from('habit_logs').select('habit_id,date').eq('athlete_id',athleteId).gte('date',cutoff).then(({data})=>{if(data){const l={};data.forEach(r=>{if(!l[r.habit_id])l[r.habit_id]=[];l[r.habit_id].push(r.date);});setHabitLogs(l);}});
+    supabase.from('profiles').select('habit_tracker_enabled').eq('id',athleteId).single().then(({data})=>{if(data)setHabitEnabled(!!data.habit_tracker_enabled);});
+  },[athleteId]);
+
+  const toggleHabitLog=async(habitId,dateISO)=>{
+    const logs=habitLogs[habitId]||[];
+    if(logs.includes(dateISO)){
+      await supabase.from('habit_logs').delete().match({habit_id:habitId,date:dateISO});
+      setHabitLogs(p=>({...p,[habitId]:(p[habitId]||[]).filter(d=>d!==dateISO)}));
+    }else{
+      await supabase.from('habit_logs').insert({habit_id:habitId,athlete_id:athleteId,date:dateISO});
+      setHabitLogs(p=>({...p,[habitId]:[...(p[habitId]||[]),dateISO]}));
+    }
+  };
 
   const flash=ok=>{setSaveStatus(ok?"saved":"error");setTimeout(()=>setSaveStatus(null),2000);};
   const setExos=v=>{const val=typeof v==='function'?v(exos):v;setExosState(val);save(SKEYS.exos,val).then(()=>flash(true)).catch(()=>flash(false));};
@@ -3513,7 +3893,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0}/>}
     {showBlockHistory&&<BlockHistoryViewer blockHistory={blockHistory} onClose={()=>setShowBlockHistory(false)}/>}
     {mode==="coach"&&coachTab==="prog"&&sessions.length>0&&<AIChatBar exos={exos} sessions={sessions} chatHistory={chatHistory} setChatHistory={setChatHistory} onApply={applyAIEdit} onOpenChange={setAiChatOpen} C={C}/>}
-    {mode==="athlete"&&(timerActive||timerFinished)&&tab!=="log"&&(<div style={{position:"fixed",bottom:64,left:"50%",transform:"translateX(-50%)",zIndex:150,background:timerFinished?"rgba(34,201,147,0.15)":C.s1,border:"1px solid "+(timerFinished?C.g:timerActive&&timerLeft<=10?C.r:C.ac)+"70",borderRadius:50,padding:"9px 18px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",backdropFilter:"blur(8px)"}}>
+    {mode==="athlete"&&(timerActive||timerFinished)&&(<div style={{position:"fixed",bottom:64,left:"50%",transform:"translateX(-50%)",zIndex:150,background:timerFinished?"rgba(34,201,147,0.15)":C.s1,border:"1px solid "+(timerFinished?C.g:timerActive&&timerLeft<=10?C.r:C.ac)+"70",borderRadius:50,padding:"9px 18px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",backdropFilter:"blur(8px)"}}>
       {timerFinished?<span style={{fontSize:16}}>🔔</span>:<div style={{width:24,height:24,position:"relative"}}><svg viewBox="0 0 24 24" style={{width:24,height:24,transform:"rotate(-90deg)"}}><circle cx="12" cy="12" r="9" fill="none" stroke={C.s2} strokeWidth="2.5"/><circle cx="12" cy="12" r="9" fill="none" stroke={timerLeft<=10?C.r:C.ac} strokeWidth="2.5" strokeDasharray={String(2*Math.PI*9)} strokeDashoffset={String(2*Math.PI*9*(1-Math.min((timerDur-timerLeft)/timerDur,1)))} strokeLinecap="round"/></svg></div>}
       <span style={{fontSize:13,fontWeight:700,color:timerFinished?C.g:timerLeft<=10?C.r:C.tx,fontFamily:"monospace",minWidth:42}}>{timerFinished?"Repos OK !":Math.floor(timerLeft/60)+":"+String(timerLeft%60).padStart(2,"0")}</span>
       <button onClick={timerStop} style={{width:22,height:22,borderRadius:"50%",border:"none",background:(timerFinished?C.g:C.r)+"25",color:timerFinished?C.g:C.r,fontSize:14,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
@@ -3529,7 +3909,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {canToggleMode&&<div style={{display:"flex",background:C.s1,borderRadius:8,padding:2,border:"1px solid "+C.brdL}}>{[{k:"athlete",l:"Athlete"},{k:"coach",l:"Coach"}].map(({k,l})=>(<button key={k} onClick={()=>switchMode(k)} style={{padding:"5px 10px",borderRadius:6,border:"none",background:mode===k?(k==="coach"?C.coach:C.ac):"transparent",color:mode===k?"#fff":C.tx3,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>))}</div>}
-          {userName&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
+          {userName&&!myProfile?.is_admin&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
           <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/login";}} title="Déconnexion" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⏻</button>
         </div>
       </div>
@@ -3608,6 +3988,12 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {coachTab==="data"&&(<><div style={{padding:"16px 16px 0"}}>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Profil athlète</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>Informations personnelles</div>
+        <div style={{padding:'12px 14px',borderRadius:12,background:C.s1,border:`1px solid ${C.brd}`,marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.tx}}>Tracker d'habitudes</div><div style={{fontSize:11,color:habitToggleErr?C.r:C.tx3,marginTop:2}}>{habitToggleErr||"Activer le suivi d'habitudes pour cet athlète"}</div></div>
+          <button disabled={habitToggling} onClick={async()=>{setHabitToggling(true);setHabitToggleErr('');const ne=!habitEnabled;setHabitEnabled(ne);const{error}=await supabase.from('profiles').update({habit_tracker_enabled:ne}).eq('id',athleteId);if(error){setHabitEnabled(!ne);setHabitToggleErr('Erreur : migration SQL non appliquée ?');console.error('habit toggle:',error);}setHabitToggling(false);}} style={{width:46,height:26,borderRadius:13,background:habitEnabled?C.g:C.s2,border:`2px solid ${habitEnabled?C.g:C.brdL}`,cursor:habitToggling?'default':'pointer',position:'relative',transition:'all 0.2s',flexShrink:0,outline:'none',opacity:habitToggling?0.6:1}}>
+            <div style={{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:habitEnabled?24:2,transition:'left 0.2s',boxShadow:'0 1px 4px rgba(0,0,0,0.3)'}}/>
+          </button>
+        </div>
         {athleteProfile?(
           <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden",marginBottom:16}}>
             <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid "+C.brd}}>
@@ -3796,6 +4182,41 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           return(<button onClick={()=>{setInitialLogSess(nextSess);setTab("log");}} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"none",background:C.acS,color:C.ac,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><div><div style={{fontSize:11,fontWeight:700}}>Prochaine séance</div><div style={{fontSize:10,color:C.tx2}}>{nextSess.short} - {nextSess.name}</div></div><span style={{marginLeft:"auto",fontSize:14}}>&gt;</span></button>);
         })()}
         </div>
+        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectifs</div>{nutritionStrategy&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5,background:(nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b)+"20",color:nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b}}>{nutritionStrategy.strategy==="seche"?"Sèche":nutritionStrategy.strategy==="prise_de_masse"?"Prise de masse":"Maintenance"}</span>}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Seances realisees</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:14,color:C.tx3}}>/{totalTarget}</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>{Math.max(0,totalTarget-totalDone)} restantes</div></div>{(()=>{
+  const lastEntry=Object.keys(weightLog).length>0?Object.entries(weightLog).sort((a,b)=>a[0]>b[0]?-1:1)[0][1]:null;
+  const todayW=weightLog[todayKey()]||lastEntry||bodyWeight.current||null;
+  const start=bodyWeight.current||null;
+  const tgt=nutritionStrategy?.target_weight||bodyWeight.target||null;
+  const isGain=start&&tgt?tgt>=start:true;
+  const delta=tgt&&todayW?+(tgt-todayW).toFixed(1):null;
+  const pct=start&&tgt&&start!==tgt&&todayW?Math.min(100,Math.max(0,isGain?((todayW-start)/(tgt-start))*100:((start-todayW)/(start-tgt))*100)):0;
+  const reached=delta!==null&&Math.abs(delta)<0.3;
+  const wC=reached?C.g:C.ac;
+  const deltaLabel=delta===null?("Objectif: "+(tgt||"--")+" kg"):reached?"Objectif atteint !":(delta>0===isGain?(Math.abs(delta)+" kg restants"):("Hors objectif ("+Math.abs(delta)+" kg)"));
+  return(<div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+      <div style={{fontSize:10,color:C.tx3}}>Poids de corps</div>
+      {start&&tgt&&<span style={{fontSize:9,fontWeight:700,color:isGain?C.g:C.b,padding:"2px 6px",borderRadius:4,background:(isGain?C.g:C.b)+"18"}}>{isGain?"▲ Prise":"▼ Sèche"}</span>}
+    </div>
+    <div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}>
+      <span style={{fontSize:26,fontWeight:800,color:wC,letterSpacing:"-1px"}}>{todayW||"--"}</span>
+      <span style={{fontSize:14,color:C.tx3}}>/{tgt||"--"} kg</span>
+    </div>
+    <div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:wC,borderRadius:3,transition:"width 0.4s"}}/></div>
+    <div style={{fontSize:9,color:reached?C.g:C.tx3,marginTop:5,fontWeight:reached?600:400}}>{deltaLabel}</div>
+  </div>);
+})()}</div></div>
+        {habitEnabled&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
+      </div>)}
+
+      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))} weekSchedule={weekSchedule}/>}
+
+      {tab==="stats"&&(()=>{
+        const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
+        return(<div style={{padding:"16px 16px 40px"}}>
+        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon bilan</div>
+
+        {/* 1RM Exercice */}
         {(()=>{
           const seen=new Set();
           const progExNames=Object.values(exos||{}).flat().map(ex=>ex.name||'').filter(n=>{if(!n||seen.has(n.toLowerCase()))return false;seen.add(n.toLowerCase());return true;}).sort();
@@ -3832,57 +4253,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             )}
           </div>);
         })()}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectifs</div>{nutritionStrategy&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5,background:(nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b)+"20",color:nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b}}>{nutritionStrategy.strategy==="seche"?"Sèche":nutritionStrategy.strategy==="prise_de_masse"?"Prise de masse":"Maintenance"}</span>}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Seances realisees</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:14,color:C.tx3}}>/{totalTarget}</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>{Math.max(0,totalTarget-totalDone)} restantes</div></div>{(()=>{
-  const lastEntry=Object.keys(weightLog).length>0?Object.entries(weightLog).sort((a,b)=>a[0]>b[0]?-1:1)[0][1]:null;
-  const todayW=weightLog[todayKey()]||lastEntry||bodyWeight.current||null;
-  const start=bodyWeight.current||null;
-  const tgt=nutritionStrategy?.target_weight||bodyWeight.target||null;
-  const isGain=start&&tgt?tgt>=start:true;
-  const delta=tgt&&todayW?+(tgt-todayW).toFixed(1):null;
-  const pct=start&&tgt&&start!==tgt&&todayW?Math.min(100,Math.max(0,isGain?((todayW-start)/(tgt-start))*100:((start-todayW)/(start-tgt))*100)):0;
-  const reached=delta!==null&&Math.abs(delta)<0.3;
-  const wC=reached?C.g:C.ac;
-  const deltaLabel=delta===null?("Objectif: "+(tgt||"--")+" kg"):reached?"Objectif atteint !":(delta>0===isGain?(Math.abs(delta)+" kg restants"):("Hors objectif ("+Math.abs(delta)+" kg)"));
-  return(<div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-      <div style={{fontSize:10,color:C.tx3}}>Poids de corps</div>
-      {start&&tgt&&<span style={{fontSize:9,fontWeight:700,color:isGain?C.g:C.b,padding:"2px 6px",borderRadius:4,background:(isGain?C.g:C.b)+"18"}}>{isGain?"▲ Prise":"▼ Sèche"}</span>}
-    </div>
-    <div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}>
-      <span style={{fontSize:26,fontWeight:800,color:wC,letterSpacing:"-1px"}}>{todayW||"--"}</span>
-      <span style={{fontSize:14,color:C.tx3}}>/{tgt||"--"} kg</span>
-    </div>
-    <div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:wC,borderRadius:3,transition:"width 0.4s"}}/></div>
-    <div style={{fontSize:9,color:reached?C.g:C.tx3,marginTop:5,fontWeight:reached?600:400}}>{deltaLabel}</div>
-  </div>);
-})()}</div></div>
-      </div>)}
-
-      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))}/>}
-
-      {tab==="stats"&&(()=>{
-        const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
-        return(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon bilan</div>
-
-        {/* 1RM Progression */}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Progression 1RM</div>
-          {getBig3(exos).map(({label,name,c})=>{const pr=prs[name]||null;const data=get1rmByWeek(exos,name,tw);const filled=data.filter(d=>d.val!=null);const prog=filled.length>=2?filled[filled.length-1].val-filled[0].val:null;return(<div key={name} style={{marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:3,height:18,borderRadius:2,background:c}}/>
-                <span style={{fontSize:13,fontWeight:700}}>{label}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                <span style={{fontSize:20,fontWeight:800,color:c}}>{pr?.est||"--"}</span>
-                <span style={{fontSize:10,color:C.tx3}}>kg</span>
-                {prog!=null&&<span style={{fontSize:12,fontWeight:700,color:prog>0?C.g:prog<0?C.r:C.tx3,padding:"2px 6px",borderRadius:5,background:(prog>0?C.g:prog<0?C.r:C.tx3)+"15"}}>{prog>0?"+":""}{prog}</span>}
-              </div>
-            </div>
-            <MiniChart data={data} color={c} h={44}/>
-          </div>);})}
-        </div>
 
         {/* Volume hebdomadaire */}
         <WeeklyVolumeCard exos={exos} sets={sets} sessions={sessions} weeksArr={weeksArr} tw={tw} C={C}/>
@@ -3938,12 +4308,18 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {tab==="alim"&&<NutritionView athleteId={athleteId} bmr={athleteProfile?.base_metabolism||null} nutritionStrategy={nutritionStrategy} onLogSaved={(date,log)=>{const updated={...nutritionLog,[date]:log};setNutritionLogState(updated);save("asp:nutrition_log",updated).catch(()=>{});}} viewOnly={viewOnly}/>}
 
       {tab==="profil"&&(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:20}}>Mon profil</div>
+        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon profil</div>
+        {/* Section profil déroulante */}
+        <button onClick={()=>setProfileInfoOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,cursor:"pointer",fontFamily:"inherit",marginBottom:profileInfoOpen?0:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Mes informations</div>
+          <span style={{fontSize:14,color:C.tx3,transition:"transform 0.2s",display:"inline-block",transform:profileInfoOpen?"rotate(180deg)":"rotate(0deg)"}}>∨</span>
+        </button>
+        {profileInfoOpen&&(<div style={{marginBottom:12}}>
         {athleteProfile?(()=>{
           const fullName=[athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"";
           const initials=fullName.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)||"?";
           return(<>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24}}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 0 16px"}}>
               <div style={{width:68,height:68,borderRadius:"50%",background:C.acS,border:"3px solid "+C.ac+"50",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,color:C.ac,marginBottom:10}}>{initials}</div>
               <div style={{fontSize:18,fontWeight:800,color:C.tx}}>{fullName}</div>
               <div style={{fontSize:12,color:C.tx3,marginTop:3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":""}</div>
@@ -3975,12 +4351,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             </div>
           </>);
         })():(
-          <div style={{background:C.s1,borderRadius:14,padding:"32px 20px",border:"1px solid "+C.brd,textAlign:"center"}}>
+          <div style={{background:C.s1,borderRadius:14,padding:"32px 20px",border:"1px solid "+C.brd,textAlign:"center",marginTop:8}}>
             <div style={{fontSize:32,marginBottom:12}}>📋</div>
             <div style={{fontSize:15,fontWeight:600,color:C.tx,marginBottom:8}}>Profil non renseigné</div>
             <div style={{fontSize:13,color:C.tx3}}>Ton coach n'a pas encore complété ton profil.</div>
           </div>
         )}
+        </div>)}
+        {/* Tracker d'habitudes */}
+        {habitEnabled&&<HabitTrackerProfile habits={habits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly}/>}
       </div>)}
 
       {tab==="retours"&&<RetoursView/>}

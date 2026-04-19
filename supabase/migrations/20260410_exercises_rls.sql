@@ -35,7 +35,7 @@ CREATE POLICY "exercises_insert_admin" ON public.exercises
     )
   );
 
--- Update : admin peut tout modifier (dont promouvoir is_verified)
+-- Update : admin peut tout modifier (dont promouvoir is_verified et youtube_id)
 DROP POLICY IF EXISTS "exercises_update_admin" ON public.exercises;
 CREATE POLICY "exercises_update_admin" ON public.exercises
   FOR UPDATE USING (
