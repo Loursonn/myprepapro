@@ -4,6 +4,12 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, L
 import { supabase } from "@/integrations/supabase/client";
 import { getNutritionStrategy } from "@/lib/nutrition";
 import NutritionView from "@/components/athlete/NutritionView";
+import EnergySessionLog from "@/components/athlete/EnergySessionLog";
+import PerformanceProfile from "@/components/athlete/PerformanceProfile";
+import TestSessionView from "@/components/TestSessionView";
+import CoachPerfNotification from "@/components/coach/CoachPerfNotification";
+import EnergyExerciseBank from "@/components/coach/EnergyExerciseBank";
+import EnergySessionEditor from "@/components/coach/EnergySessionEditor";
 import * as XLSX from "xlsx";
 import { PDFDocument } from "pdf-lib";
 
@@ -412,6 +418,46 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
 
 const DarkTip=({active,payload,label})=>{if(!active||!payload?.length)return null;return(<div style={{background:C.s2,border:"1px solid "+C.brdL,borderRadius:8,padding:"8px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:4}}>{label}</div>{payload.map((p,i)=>p.value!=null&&<div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}><div style={{width:8,height:8,borderRadius:2,background:p.fill||p.stroke||C.ac}}/><span style={{fontSize:10,color:C.tx2}}>{p.name}:</span><span style={{fontSize:11,fontWeight:700,color:p.fill||p.stroke||C.ac}}>{p.value}</span></div>)}</div>);};
 function MiniChart({data,color,h}){const H=h||52;const pts=data.filter(d=>d.val!=null);if(!pts.length)return null;const vals=pts.map(d=>d.val),mn=Math.min(...vals),mx=Math.max(...vals),rng=mx-mn||1;const W=280,mapped=data.map((d,i)=>({...d,x:(i/(data.length-1||1))*(W-20)+10,y:d.val!=null?H-12-((d.val-mn)/rng)*(H-24):null}));const act=mapped.filter(p=>p.y!=null),line=act.map((p,i)=>(i===0?"M":"L")+p.x+","+p.y).join(" ");const area=act.length>1?line+" L"+act[act.length-1].x+","+H+" L"+act[0].x+","+H+" Z":"";const gId="mc"+color.replace("#","")+(Math.random().toString(36).slice(2,5));return(<svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:H,display:"block"}}><defs><linearGradient id={gId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity="0.2"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>{area&&<path d={area} fill={"url(#"+gId+")"}/>}{act.length>1&&<path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}{mapped.map((p,i)=>p.y!=null?(<g key={i}><circle cx={p.x} cy={p.y} r={3.5} fill={C.bg} stroke={color} strokeWidth="1.5"/><text x={p.x} y={p.y-8} textAnchor="middle" fill={color} fontSize="9" fontWeight="700" fontFamily="system-ui">{p.val}</text><text x={p.x} y={H-1} textAnchor="middle" fill={C.tx3} fontSize="8" fontFamily="system-ui">{p.week}</text></g>):(<text key={i} x={p.x} y={H-1} textAnchor="middle" fill={C.tx3} fontSize="8" fontFamily="system-ui">{p.week}</text>))}</svg>);}
+
+function SleepTunnel({wellnessHistory,C}){
+  const DAY=['D','L','M','Me','J','V','S'];
+  const WIN_START=21*60;const WIN_SPAN=13*60;// 21h→10h next day
+  const toOffset=({h,m})=>{const t=h*60+m;return t<WIN_START?t+24*60-WIN_START:t-WIN_START;};
+  const entries=Object.entries(wellnessHistory).filter(([k,v])=>/^\d{8}$/.test(k)&&v?.coucher&&v?.reveil).sort((a,b)=>a[0]<b[0]?-1:1).slice(-10);
+  if(!entries.length)return(<div style={{textAlign:'center',color:C.tx3,fontSize:11,padding:'16px 0'}}>Aucune donnée de sommeil</div>);
+  const bars=entries.map(([key,v])=>{
+    const y2=+key.slice(0,4),mo=+key.slice(4,6)-1,d=+key.slice(6,8);
+    const dt=new Date(y2,mo,d);
+    const s=toOffset(v.coucher);let e=toOffset(v.reveil);
+    if(e<=s)e+=24*60;
+    const durH=Math.round((e-s)/60*10)/10;
+    const clamp=n=>Math.min(Math.max(n,0),WIN_SPAN);
+    return{label:DAY[dt.getDay()]+'\n'+d,s:clamp(s),e:clamp(Math.min(e,WIN_SPAN)),durH,color:durH>=7.5?C.g:durH>=6.5?C.o:C.r};
+  });
+  const N=bars.length;const W=300;const H=85;
+  const LH=12;// bottom label height
+  const TW=20;// left time axis width
+  const chartW=W-TW-4;const chartH=H-LH-4;
+  const colW=chartW/N;
+  const yOf=o=>4+(o/WIN_SPAN)*chartH;
+  const tLabels=[{l:'22h',o:60},{l:'0h',o:180},{l:'3h',o:360},{l:'6h',o:540},{l:'9h',o:720}];
+  return(<svg viewBox={'0 0 '+W+' '+H} style={{width:'100%',display:'block'}}>
+    {/* Grid lines + time labels (Y axis) */}
+    {tLabels.map(({l,o})=>{const y=yOf(o);return(<g key={l}><line x1={TW} y1={y} x2={W-2} y2={y} stroke={C.brdL} strokeWidth={0.5}/><text x={TW-2} y={y+3} textAnchor='end' fill={C.tx3} fontSize={6}>{l}</text></g>);})}
+    {/* Day columns */}
+    {bars.map((b,i)=>{
+      const x=TW+i*colW;const bw=Math.max(colW-2,2);
+      const y1=yOf(b.s);const y2=yOf(b.e);const bh=Math.max(y2-y1,2);
+      return(<g key={i}>
+        <rect x={x} y={y1} width={bw} height={bh} rx={2} fill={b.color} opacity={0.25}/>
+        <rect x={x} y={y1} width={bw} height={bh} rx={2} fill='none' stroke={b.color} strokeWidth={1} opacity={0.8}/>
+        {bh>14&&<text x={x+bw/2} y={y1+bh/2+3} textAnchor='middle' fill={b.color} fontSize={6} fontWeight='700'>{b.durH}h</text>}
+        {/* Day label bottom */}
+        {b.label.split('\n').map((ln,li)=><text key={li} x={x+bw/2} y={H-LH+10+li*7} textAnchor='middle' fill={C.tx3} fontSize={5.5}>{ln}</text>)}
+      </g>);
+    })}
+  </svg>);
+}
 
 function WeightChart({log,milestones,target,nutritionStrategy}){
   const data=getWeightChartData(log,milestones,target);
@@ -1207,7 +1253,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     return()=>{document.body.style.userSelect=prev.us;document.body.style.webkitUserSelect=prev.wus;document.body.style.overflow=prev.ov;};
   },[touchDragId]);
   const[calWeek,setCalWeek]=useState(currentWeek);
-  const[calDetail,setCalDetail]=useState(null);
+  const[showEditorModal,setShowEditorModal]=useState(false);
 
   const safeSessions=Array.isArray(sessions)?sessions:[];
   const safeSess=sess<safeSessions.length?sess:0;
@@ -1362,8 +1408,6 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   };
 
   return(<div>
-    {/* Modal détail séance */}
-    {calDetail&&<SessionDetailModal sid={calDetail.sid} wk={calDetail.wk} sessions={safeSessions} exos={exos} sets={sets} completedSessions={completedSessions} allMethods={allMethods} blockConfig={blockConfig} currentWeek={currentWeek} onClose={()=>setCalDetail(null)}/>}
 
     {/* ── CALENDRIER SEMAINES ── */}
     {(()=>{
@@ -1391,7 +1435,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
             const exs=exos[s.id]||[];
             const setsDoneQ=exs.reduce((a,ex)=>{const r=sets[ex.id+"_"+calWeek]||[];return a+r.filter(x=>x.done).length;},0);
             const setsPlQ=exs.reduce((a,ex)=>a+(ex.weeks[calWeek]?.sets||0),0);
-            return(<div key={s.id} onClick={()=>hasP&&setCalDetail({sid:s.id,wk:calWeek})} style={{flex:1,minWidth:88,maxWidth:140,padding:"10px 6px 8px",textAlign:"center",cursor:hasP?"pointer":"default",borderRight:"1px solid "+C.brd,background:done?C.g+"08":"transparent",opacity:hasP?1:0.3,transition:"background 0.12s",boxSizing:"border-box"}}
+            return(<div key={s.id} onClick={()=>hasP&&(()=>{setSess(safeSessions.findIndex(x=>x.id===s.id));setWeek(calWeek);setShowEditorModal(true);})()} style={{flex:1,minWidth:88,maxWidth:140,padding:"10px 6px 8px",textAlign:"center",cursor:hasP?"pointer":"default",borderRight:"1px solid "+C.brd,background:done?C.g+"08":"transparent",opacity:hasP?1:0.3,transition:"background 0.12s",boxSizing:"border-box"}}
               onMouseEnter={e=>{if(hasP)e.currentTarget.style.background=done?C.g+"14":C.acS;}}
               onMouseLeave={e=>{e.currentTarget.style.background=done?C.g+"08":"transparent";}}>
               <div style={{width:34,height:34,borderRadius:10,background:sc+"20",border:"1.5px solid "+sc+"50",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 5px",fontSize:done?17:12,fontWeight:800,color:sc}}>{done?"✓":s.short}</div>
@@ -1451,6 +1495,21 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     </div>)}
 
     <div style={{fontSize:10,color:C.tx3,marginBottom:10}}>Double-cliquer sur un onglet pour renommer</div>
+
+    {safeSessions.length>0&&<button onClick={()=>setShowEditorModal(true)} style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>✎ Éditer le contenu des séances</button>}
+
+    {showEditorModal&&(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      <div style={{position:"sticky",top:0,zIndex:5,background:C.bg,borderBottom:"1px solid "+C.brd,padding:"10px 16px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        <button onClick={()=>{setShowEditorModal(false);setOpenEx(null);}} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:800,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{safeSessions[safeSess]?.name||"Séance"}</div>
+          <div style={{fontSize:10,color:C.tx3}}>Semaine {week} / {tw}{week===dw?" · Deload":""}</div>
+        </div>
+        <div style={{display:"flex",gap:3,flexShrink:0,overflowX:"auto",scrollbarWidth:"none",maxWidth:"40%"}}>
+          {safeSessions.map((s,i)=><button key={s.id} onClick={()=>{setSess(i);setOpenEx(null);}} style={{flexShrink:0,padding:"5px 10px",borderRadius:7,border:"1px solid "+(i===safeSess?C.coach:C.brdL),background:i===safeSess?C.coachS:"transparent",color:i===safeSess?C.coach:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{s.short}</button>)}
+        </div>
+      </div>
+      <div style={{padding:"16px",maxWidth:900,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
 
     {/* Bloc management per session */}
     <div style={{marginBottom:12,background:C.s1,borderRadius:10,padding:"10px 12px",border:"1px solid "+C.brdL}}>
@@ -1569,6 +1628,26 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
               </div>
               {isOpen&&(<div onMouseDown={e=>e.stopPropagation()} style={{padding:"0 13px 16px",borderTop:"1px solid "+C.brd}}>
                 {aNote&&<div style={{margin:"12px 0",padding:"10px 12px",borderRadius:8,background:C.b+"12",border:"1px solid "+C.b+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.b,textTransform:"uppercase",marginBottom:4}}>Retour S{week}</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic"}}>"{aNote}"</div></div>}
+                {(()=>{
+                  if(week<=1)return null;
+                  const prevW=week-1;
+                  const prevSets=(sets[ex.id+"_"+prevW]||[]).filter(s=>s.done);
+                  if(!prevSets.length)return null;
+                  const prevWd=ex.weeks[prevW]||{};
+                  const bestPrev=prevSets.reduce((b,s)=>{const est=e1rm(s.kg||0,s.reps||1);return est>b.est?{...s,est}:b;},{est:0});
+                  return(<div style={{margin:"12px 0 0",padding:"10px 12px",borderRadius:8,background:C.g+"0D",border:"1px solid "+C.g+"30"}}>
+                    <div style={{fontSize:9,fontWeight:600,color:C.g,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:6}}>Réalisé S{prevW}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                      {prevSets.map((s,i)=>{const rc=rC(s.rir??2);return(<div key={i} style={{padding:"4px 8px",borderRadius:6,background:C.s1,border:"1px solid "+C.brd,fontSize:10}}>
+                        <span style={{fontWeight:700,color:C.tx}}>{s.kg||prevWd.kg||"?"}kg</span>
+                        <span style={{color:C.tx3}}> × {Array.isArray(s.reps)?s.reps.join("+"):s.reps||"?"}</span>
+                        {s.rir!=null&&<span style={{color:rc,marginLeft:3,fontWeight:600}}>RIR{rL(s.rir)}</span>}
+                      </div>);})}
+                      {bestPrev.est>0&&prevSets.length>1&&<div style={{padding:"4px 8px",borderRadius:6,background:C.g+"15",border:"1px solid "+C.g+"30",fontSize:10,fontWeight:700,color:C.g}}>~{bestPrev.est}kg 1RM</div>}
+                    </div>
+                    {prevWd.kg&&prevSets[0]?.kg&&prevSets[0].kg!==prevWd.kg&&<div style={{fontSize:9,color:C.tx3,marginTop:4}}>Prévu {prevWd.kg}kg · Réalisé {prevSets[0].kg}kg</div>}
+                  </div>);
+                })()}
                 <div style={{paddingTop:12,marginBottom:12,padding:"10px 12px",borderRadius:8,background:C.s2,border:"1px solid "+C.brdL}}>
                   <div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Parametres exercice</div>
                   <div style={{marginBottom:8}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:4}}>Nom</div><input value={ex.name} onChange={e=>updExField(ex.id,"name",e.target.value)} style={{width:"100%",padding:"7px 10px",borderRadius:7,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit",boxSizing:"border-box"}}/></div>
@@ -1687,6 +1766,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         </div>
       )}
     </div>
+      </div>
+    </div>)}
   {videoEx&&(<div onClick={()=>setVideoEx(null)} style={{position:'fixed',inset:0,zIndex:500,background:'rgba(0,0,0,0.92)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
     <div style={{width:'100%',maxWidth:480}} onClick={e=>e.stopPropagation()}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
@@ -1884,7 +1965,7 @@ function DataManager({exos,setExos,sets,setSets,sessions,setSessions,completedSe
   </div>);
 }
 
-function BlockHistoryViewer({blockHistory,onClose}){
+function BlockHistoryViewer({blockHistory,onClose,onDelete}){
   if(!blockHistory?.length)return(<div style={{padding:20,textAlign:"center"}}><div style={{fontSize:14,color:C.tx3,marginBottom:16}}>Aucun bloc archive</div><button onClick={onClose} style={{padding:"8px 20px",borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Fermer</button></div>);
   return(<div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:1}}>
@@ -1893,6 +1974,7 @@ function BlockHistoryViewer({blockHistory,onClose}){
     </div>
     <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
       {blockHistory.slice().reverse().map((block,i)=>{
+        const realIdx=blockHistory.length-1-i;
         const prs=getAllPRs(block.exos||{});const totalDone=Object.values(block.completedSessions||{}).flat().length;
         const tw=block.blockConfig?.totalWeeks||6;const totalTarget=(block.goals?.sessionsPerWeek||6)*tw;
         const adherence=totalTarget?Math.round((totalDone/totalTarget)*100):0;
@@ -1900,11 +1982,14 @@ function BlockHistoryViewer({blockHistory,onClose}){
         const big3=getBig3(block.exos||{});
         return(<div key={block.id||i} style={{background:C.s1,borderRadius:14,padding:16,border:"1px solid "+C.brd}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div>
+            <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:14,fontWeight:700}}>{block.blockConfig?.blockName||"Bloc "+(blockHistory.length-i)}</div>
               <div style={{fontSize:10,color:C.tx3}}>{date} · {tw} sem. · {totalDone}/{totalTarget} seances ({adherence}%)</div>
             </div>
-            <div style={{padding:"4px 10px",borderRadius:8,background:adherence>=80?C.gS:adherence>=50?C.oS:C.rS,color:adherence>=80?C.g:adherence>=50?C.o:C.r,fontSize:11,fontWeight:700}}>{adherence}%</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+              <div style={{padding:"4px 10px",borderRadius:8,background:adherence>=80?C.gS:adherence>=50?C.oS:C.rS,color:adherence>=80?C.g:adherence>=50?C.o:C.r,fontSize:11,fontWeight:700}}>{adherence}%</div>
+              {onDelete&&<button onClick={()=>onDelete(realIdx)} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Suppr.</button>}
+            </div>
           </div>
           {big3.length>0&&<div style={{display:"flex",gap:8,marginBottom:10}}>
             {big3.map(({name,label,c})=>{const pr=prs[name];return(<div key={label} style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid "+c+"20"}}>
@@ -1922,8 +2007,8 @@ function BlockHistoryViewer({blockHistory,onClose}){
   </div>);
 }
 
-function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
-  const[step,setStep]=useState(0);
+function NewBlockModal({onStart,onClose,onResume,hasCurrentData,blockHistory=[],onDelete}){
+  const[step,setStep]=useState(hasCurrentData?0:1);
   const[blockName,setBlockName]=useState("");
   const[objective,setObjective]=useState("");
   const[totalWeeks,setTotalWeeks]=useState(6);
@@ -1932,16 +2017,39 @@ function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
   const[newSessions,setNewSessions]=useState([]);
   const[sessInput,setSessInput]=useState({name:"",short:""});
   const[keep,setKeep]=useState({exos:false,config:true,exMeta:true});
+  const[showHistory,setShowHistory]=useState(false);
+  const[fromHistory,setFromHistory]=useState(false);
+  const[restoredExos,setRestoredExos]=useState(null);
   const toggle=k=>setKeep(p=>({...p,[k]:!p[k]}));
   const addSess=()=>{if(!sessInput.name.trim())return;setNewSessions(p=>[...p,{id:"s_"+Date.now()+"_"+p.length,name:sessInput.name.trim(),short:sessInput.short.trim()||sessInput.name.trim().slice(0,3).toUpperCase()}]);setSessInput({name:"",short:""});};
   const removeSess=i=>setNewSessions(p=>p.filter((_,idx)=>idx!==i));
   const canFinish=blockName.trim();
   const finish=()=>{
     let finalSessions=newSessions;
-    if(finalSessions.length===0){
-      finalSessions=Array.from({length:sessPerWeek},(_,i)=>({id:"s_"+Date.now()+"_"+i,name:"Séance "+(i+1),short:"S"+(i+1)}));
-    }
-    onStart({...keep,blockName:blockName.trim(),objective:objective.trim(),totalWeeks,sessPerWeek,deloadWeek,sessions:finalSessions});
+    if(finalSessions.length===0){finalSessions=Array.from({length:sessPerWeek},(_,i)=>({id:"s_"+Date.now()+"_"+i,name:"Séance "+(i+1),short:"S"+(i+1)}));}
+    onStart({...keep,blockName:blockName.trim(),objective:objective.trim(),totalWeeks,sessPerWeek,deloadWeek,sessions:finalSessions,restoredExos:fromHistory?restoredExos:null});
+  };
+  const loadFromHistory=(block)=>{
+    // Remappe les sessions avec de nouveaux IDs et reconstruit les exos correspondants
+    const idMap={};
+    const mappedSessions=(block.sessions||[]).map(s=>{
+      const newId="s_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+      idMap[s.id]=newId;
+      return{...s,id:newId};
+    });
+    const mappedExos={};
+    Object.entries(block.exos||{}).forEach(([oldId,exList])=>{
+      const newId=idMap[oldId];
+      if(newId)mappedExos[newId]=exList;
+    });
+    setBlockName((block.blockConfig?.blockName||"")+" (reprise)");
+    setObjective(block.blockConfig?.objective||"");
+    setTotalWeeks(block.blockConfig?.totalWeeks||6);
+    setSessPerWeek(block.goals?.sessionsPerWeek||4);
+    setDeloadWeek(block.blockConfig?.deloadWeek||0);
+    setNewSessions(mappedSessions);
+    setRestoredExos(mappedExos);
+    setFromHistory(true);setShowHistory(false);setStep(1);
   };
 
   const rowCtrl=(label,val,onM,onP,fmt)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid "+C.brd}}>
@@ -1955,25 +2063,80 @@ function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
 
   return(<div style={{position:"fixed",inset:0,zIndex:250,background:C.bg,overflowY:"auto"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:1}}>
-      <div style={{fontSize:14,fontWeight:700,color:C.coach}}>Nouveau bloc</div>
+      <div style={{fontSize:14,fontWeight:700,color:C.coach}}>{step===0?"Que faire du bloc actuel ?":"Nouveau bloc"}</div>
       <button onClick={onClose} style={{background:"none",border:"none",color:C.tx3,fontSize:20,cursor:"pointer",fontFamily:"inherit"}}>×</button>
     </div>
     <div style={{padding:16}}>
-      {hasCurrentData&&step===0&&(<>
-        <div style={{fontSize:11,color:C.tx2,marginBottom:12}}>Le bloc actuel sera archivé.</div>
-        <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:8}}>Que garder du bloc précédent ?</div>
-        {[
-          {k:"exos",l:"Exercices (prog)",desc:"Garder les exercices planifiés"},
-          {k:"config",l:"Config (tiers, deload...)",desc:"Garder les réglages de surcharge"},
-          {k:"exMeta",l:"Base Exos (muscles)",desc:"Garder les métadonnées exercices"},
-        ].map(({k,l,desc})=>(<div key={k} onClick={()=>toggle(k)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:keep[k]?C.gS:"transparent",border:"1px solid "+(keep[k]?C.g+"50":C.brdL),marginBottom:6,cursor:"pointer"}}>
-          <div style={{width:18,height:18,borderRadius:5,border:"2px solid "+(keep[k]?C.g:C.tx3),background:keep[k]?C.g:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:800,flexShrink:0}}>{keep[k]?"✓":""}</div>
-          <div><div style={{fontSize:12,fontWeight:600,color:keep[k]?C.g:C.tx2}}>{l}</div><div style={{fontSize:10,color:C.tx3}}>{desc}</div></div>
-        </div>))}
-        <button onClick={()=>setStep(1)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"none",background:C.coach,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:10}}>Suivant</button>
+
+      {/* Étape 0 : choix si bloc actuel existe */}
+      {step===0&&(<>
+        <div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Un bloc est déjà en cours. Que veux-tu faire ?</div>
+        <button onClick={onResume||onClose} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:12,border:"2px solid "+C.g+"50",background:C.gS,marginBottom:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:C.g+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>↩</div>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.g}}>Reprendre le bloc en cours</div><div style={{fontSize:11,color:C.tx3}}>Continuer exactement là où tu en étais</div></div>
+        </button>
+        <button onClick={()=>setShowHistory(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:12,border:"1px solid "+C.b+"50",background:showHistory?C.bS:"transparent",marginBottom:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:C.b+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📂</div>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.b}}>Reprendre depuis l'historique</div><div style={{fontSize:11,color:C.tx3}}>{blockHistory.length} bloc{blockHistory.length!==1?"s":""} archivé{blockHistory.length!==1?"s":""}</div></div>
+        </button>
+        {showHistory&&blockHistory.length>0&&(<div style={{marginBottom:10,borderRadius:10,border:"1px solid "+C.brd,overflow:"hidden"}}>
+          {blockHistory.slice().reverse().map((block,i)=>{
+            const realIdx=blockHistory.length-1-i;
+            const date=block.archivedAt?new Date(block.archivedAt).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"";
+            const totalDone=Object.values(block.completedSessions||{}).flat().length;
+            return(<div key={block.id||i} style={{display:"flex",alignItems:"center",borderBottom:"1px solid "+C.brd}}>
+              <button onClick={()=>loadFromHistory(block)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:C.tx}}>{block.blockConfig?.blockName||"Bloc "+(blockHistory.length-i)}</div>
+                  <div style={{fontSize:10,color:C.tx3}}>{date} · {block.blockConfig?.totalWeeks||6} sem. · {totalDone} séances</div>
+                </div>
+                <span style={{fontSize:11,color:C.b,fontWeight:600,flexShrink:0,marginLeft:8}}>Reprendre →</span>
+              </button>
+              {onDelete&&<button onClick={e=>{e.stopPropagation();onDelete(realIdx);}} style={{padding:"6px 10px",margin:"0 8px",borderRadius:7,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Suppr.</button>}
+            </div>);
+          })}
+          {blockHistory.length===0&&<div style={{padding:"14px",fontSize:11,color:C.tx3,textAlign:"center"}}>Aucun bloc archivé</div>}
+        </div>)}
+        <button onClick={()=>setStep(1)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderRadius:12,border:"1px solid "+C.coach+"50",background:"transparent",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:C.coachS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>➕</div>
+          <div><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Créer un nouveau bloc</div><div style={{fontSize:11,color:C.tx3}}>Archiver le bloc actuel et repartir</div></div>
+        </button>
       </>)}
 
-      {(step===1||(!hasCurrentData))&&(<>
+      {/* Étape 1 : configuration du bloc */}
+      {step===1&&(<>
+        {/* Partir d'un ancien bloc */}
+        {blockHistory.length>0&&(<div style={{marginBottom:16}}>
+          {fromHistory?(
+            <div style={{padding:"10px 14px",borderRadius:10,background:C.bS,border:"1px solid "+C.b+"40",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{fontSize:11,color:C.b,fontWeight:600}}>📂 Basé sur un ancien bloc</div>
+              <button onClick={()=>{setFromHistory(false);setRestoredExos(null);setBlockName("");setObjective("");setNewSessions([]);}} style={{fontSize:10,color:C.r,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Effacer</button>
+            </div>
+          ):(
+            <button onClick={()=>setShowHistory(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:10,border:"1px solid "+C.b+"40",background:showHistory?C.bS:"transparent",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+              <span style={{fontSize:16}}>📂</span>
+              <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.b}}>Partir d'un ancien bloc</div><div style={{fontSize:10,color:C.tx3}}>{blockHistory.length} bloc{blockHistory.length!==1?"s":""} disponible{blockHistory.length!==1?"s":""}</div></div>
+              <span style={{fontSize:11,color:C.tx3,transform:showHistory?"rotate(180deg)":"none",display:"inline-block",transition:"transform 0.2s"}}>∨</span>
+            </button>
+          )}
+          {showHistory&&!fromHistory&&(<div style={{marginTop:6,borderRadius:10,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            {blockHistory.slice().reverse().map((block,i)=>{
+              const realIdx=blockHistory.length-1-i;
+              const date=block.archivedAt?new Date(block.archivedAt).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"";
+              const totalDone=Object.values(block.completedSessions||{}).flat().length;
+              return(<div key={block.id||i} style={{display:"flex",alignItems:"center",borderBottom:"1px solid "+C.brd}}>
+                <button onClick={()=>loadFromHistory(block)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.tx}}>{block.blockConfig?.blockName||"Bloc "+(blockHistory.length-i)}</div>
+                    <div style={{fontSize:10,color:C.tx3}}>{date}{date?" · ":""}{block.blockConfig?.totalWeeks||6} sem. · {totalDone} séances réalisées</div>
+                  </div>
+                  <span style={{fontSize:11,color:C.b,fontWeight:600,flexShrink:0,marginLeft:8}}>Utiliser →</span>
+                </button>
+                {onDelete&&<button onClick={e=>{e.stopPropagation();onDelete(realIdx);}} style={{padding:"6px 10px",margin:"0 8px",borderRadius:7,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Suppr.</button>}
+              </div>);
+            })}
+          </div>)}
+        </div>)}
         <div style={{marginBottom:16}}>
           <div style={{fontSize:11,fontWeight:600,color:C.coach,textTransform:"uppercase",marginBottom:8}}>Identité du bloc</div>
           <input value={blockName} onChange={e=>setBlockName(e.target.value)} placeholder="Nom du bloc (ex: Force S1, Hypertrophie...)" style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:"inherit",boxSizing:"border-box",marginBottom:8}}/>
@@ -2001,9 +2164,15 @@ function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
             <button onClick={addSess} style={{padding:"8px 14px",borderRadius:8,border:"none",background:C.g,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+</button>
           </div>
         </div>
+        {hasCurrentData&&!fromHistory&&(<div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:8}}>Que garder du bloc précédent ?</div>
+          {[{k:"exos",l:"Exercices (prog)",desc:"Garder les exercices planifiés"},{k:"config",l:"Config (tiers, deload...)",desc:"Garder les réglages de surcharge"},{k:"exMeta",l:"Base Exos (muscles)",desc:"Garder les métadonnées exercices"}].map(({k,l,desc})=>(<div key={k} onClick={()=>toggle(k)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:keep[k]?C.gS:"transparent",border:"1px solid "+(keep[k]?C.g+"50":C.brdL),marginBottom:6,cursor:"pointer"}}>
+            <div style={{width:18,height:18,borderRadius:5,border:"2px solid "+(keep[k]?C.g:C.tx3),background:keep[k]?C.g:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:800,flexShrink:0}}>{keep[k]?"✓":""}</div>
+            <div><div style={{fontSize:12,fontWeight:600,color:keep[k]?C.g:C.tx2}}>{l}</div><div style={{fontSize:10,color:C.tx3}}>{desc}</div></div>
+          </div>))}
+        </div>)}
         <div style={{display:"flex",gap:8}}>
-          {hasCurrentData&&<button onClick={()=>setStep(0)} style={{flex:1,padding:"10px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Retour</button>}
-          <button onClick={onClose} style={{flex:1,padding:"10px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+          <button onClick={()=>hasCurrentData?setStep(0):onClose()} style={{flex:1,padding:"10px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{hasCurrentData?"Retour":"Annuler"}</button>
           <button disabled={!canFinish} onClick={finish} style={{flex:2,padding:"10px 0",borderRadius:10,border:"none",background:canFinish?C.coach:C.s2,color:canFinish?"#fff":C.tx3,fontSize:12,fontWeight:700,cursor:canFinish?"pointer":"default",fontFamily:"inherit"}}>Créer le bloc</button>
         </div>
       </>)}
@@ -2011,76 +2180,333 @@ function NewBlockModal({onStart,onClose,hasCurrentData,currentSessions}){
   </div>);
 }
 
-function CoachConfig({goals,setGoals,bodyWeight,setBodyWeight,completedSessions,uncompleteSession,sessions,blockConfig,setBlockConfig,weeksArr,onNewBlock,onShowHistory,blockHistoryCount}){
-  const tw=blockConfig?.totalWeeks||6;
-  const totalTarget=goals.sessionsPerWeek*tw;
-  const row=(label,desc,val,onM,onP,fmt)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid "+C.brd}}><div><div style={{fontSize:13,fontWeight:600}}>{label}</div><div style={{fontSize:10,color:C.tx3}}>{desc}</div></div><div style={{display:"flex",alignItems:"center",gap:10}}><button onClick={onM} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:16,cursor:"pointer",fontFamily:"inherit"}}>-</button><span style={{fontSize:16,fontWeight:800,color:C.coach,minWidth:44,textAlign:"center"}}>{fmt?fmt(val):val}</span><button onClick={onP} style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:16,cursor:"pointer",fontFamily:"inherit"}}>+</button></div></div>);
+function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energySessions,setEnergySessions,energySessionsLoaded,setEnergySessionsLoaded,C,blockConfig,currentWeek=1}){
+  const[creating,setCreating]=useState(false);const[newLabel,setNewLabel]=useState("");const[loading,setLoading]=useState(false);
+  const[weekPlan,setWeekPlan]=useState({});const[weekPlanLoaded,setWeekPlanLoaded]=useState(false);
+  const[selWeek,setSelWeek]=useState(currentWeek||1);const[showAssign,setShowAssign]=useState(false);
+  const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;
+  const weeksArr=Array.from({length:tw},(_,i)=>i+1);
+
+  const loadSessions=async()=>{
+    setLoading(true);
+    const{data}=await supabase.from("energy_session_config").select("id,session_key,session_label,appareil_types,updated_at").eq("athlete_id",athleteId).order("updated_at",{ascending:false});
+    setEnergySessions(data||[]);setEnergySessionsLoaded(true);setLoading(false);
+  };
+  useEffect(()=>{if(!energySessionsLoaded)loadSessions();},[athleteId,energySessionsLoaded]);
+  useEffect(()=>{
+    if(weekPlanLoaded)return;
+    supabase.from('app_data').select('value').eq('athlete_id',athleteId).eq('key','asp:energy_week_plan').maybeSingle().then(({data})=>{if(data?.value)setWeekPlan(data.value);setWeekPlanLoaded(true);});
+  },[athleteId,weekPlanLoaded]);
+
+  const saveWeekPlan=async(plan)=>{await supabase.from('app_data').upsert({athlete_id:athleteId,key:'asp:energy_week_plan',value:plan,updated_at:new Date().toISOString()},{onConflict:'athlete_id,key'});};
+  const toggleSessionInWeek=(w,key)=>{const cur=weekPlan[w]||[];const next=cur.includes(key)?cur.filter(k=>k!==key):[...cur,key];const plan={...weekPlan,[w]:next};setWeekPlan(plan);saveWeekPlan(plan);};
+
+  const handleCreate=async()=>{
+    if(!newLabel.trim())return;
+    const key="energy_"+Date.now();
+    const{data,error}=await supabase.from("energy_session_config").insert({athlete_id:athleteId,session_key:key,session_label:newLabel.trim(),appareil_types:[],custom_appareils:[],blocks:[],created_by:athleteId}).select("id,session_key,session_label").single();
+    if(!error&&data){setEnergySessionsLoaded(false);setEnergyEditorKey({key:data.session_key,label:data.session_label});}
+    setCreating(false);setNewLabel("");
+  };
+  const handleDelete=async(sessionKey,e)=>{
+    e.stopPropagation();
+    if(!window.confirm("Supprimer cette séance énergétique ?"))return;
+    await supabase.from("energy_session_config").delete().eq("athlete_id",athleteId).eq("session_key",sessionKey);
+    const newPlan={};Object.entries(weekPlan).forEach(([w,keys])=>{newPlan[w]=keys.filter(k=>k!==sessionKey);});setWeekPlan(newPlan);saveWeekPlan(newPlan);
+    setEnergySessionsLoaded(false);
+  };
+  if(energyEditorKey){
+    return(<EnergySessionEditor athleteId={athleteId} sessionKey={energyEditorKey.key} sessionLabel={energyEditorKey.label} onClose={()=>{setEnergyEditorKey(null);setEnergySessionsLoaded(false);}} C={C}/>);
+  }
+
+  const weekKeys=weekPlan[selWeek]||[];
+  const weekSessions=weekKeys.map(k=>energySessions.find(s=>s.session_key===k)).filter(Boolean);
+
   return(<div>
-    <div style={{background:C.s1,borderRadius:14,padding:"4px 16px",border:"1px solid "+C.b+"30",marginBottom:14}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.b,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 0 4px"}}>Bloc d entrainement</div>
-      <div style={{padding:"8px 0 4px",borderBottom:"1px solid "+C.brd}}>
-        <div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Nom du bloc</div>
-        <input value={blockConfig?.blockName||""} onChange={e=>setBlockConfig(c=>({...c,blockName:e.target.value}))} placeholder="Ex: Prepa competition, Hypertrophie S1..." style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:"inherit",boxSizing:"border-box"}}/>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+      <div style={{fontSize:16,fontWeight:700}}>Énergétique{blockConfig?.blockName&&<span style={{fontSize:11,color:C.coach,fontWeight:600,marginLeft:8}}>{blockConfig.blockName} · {tw} sem.</span>}</div>
+      <button onClick={()=>setCreating(true)} style={{padding:"7px 14px",borderRadius:9,border:"none",background:C.coach,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+ Séance</button>
+    </div>
+
+    {/* Create form */}
+    {creating&&(<div style={{background:C.s1,borderRadius:12,padding:"14px 16px",border:"1px solid "+C.coach+"40",marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.tx3,marginBottom:8}}>Nom de la séance</div>
+      <div style={{display:"flex",gap:8}}>
+        <input autoFocus value={newLabel} onChange={e=>setNewLabel(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handleCreate();if(e.key==="Escape"){setCreating(false);setNewLabel("");}}} placeholder="ex: Fractionné 30/30" style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+        <button onClick={handleCreate} style={{padding:"8px 16px",borderRadius:8,border:"none",background:C.coach,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer</button>
+        <button onClick={()=>{setCreating(false);setNewLabel("");}} style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
       </div>
-      <div style={{padding:"8px 0 4px",borderBottom:"1px solid "+C.brd}}>
-        <div style={{fontSize:10,color:C.tx3,marginBottom:4}}>Date de début du bloc</div>
-        <input type="date" value={blockConfig?.startDate||""} onChange={e=>setBlockConfig(c=>({...c,startDate:e.target.value||null}))} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+(blockConfig?.startDate?C.brdL:C.o+"60"),background:C.s2,color:blockConfig?.startDate?C.tx:C.o,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}/>
-        {!blockConfig?.startDate&&<div style={{fontSize:10,color:C.o,marginTop:4}}>A definir — la semaine courante sera calculee depuis cette date</div>}
-        {blockConfig?.startDate&&(()=>{const days=Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000);if(days<0)return<div style={{fontSize:10,color:C.b,marginTop:4}}>S1 démarre dans {-days} jour{-days>1?"s":""}</div>;const wk=Math.min(Math.max(1,Math.floor(days/7)+1),tw);return<div style={{fontSize:10,color:C.tx3,marginTop:4}}>Semaine en cours : S{wk} · Jour {days+1} du bloc</div>;})()}
+    </div>)}
+
+    {loading?(<div style={{textAlign:"center",padding:"40px 0",color:C.tx3,fontSize:12}}>Chargement…</div>):(<>
+      {/* ── CALENDRIER BLOC SEMAINES ── */}
+      <div style={{marginBottom:18,background:C.s1,borderRadius:14,overflow:"hidden",border:"1px solid "+C.brd}}>
+        {/* Nav semaine */}
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:"1px solid "+C.brd,background:C.s2}}>
+          <button onClick={()=>setSelWeek(w=>Math.max(1,w-1))} disabled={selWeek<=1} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:selWeek<=1?C.tx3+"40":C.tx2,cursor:selWeek<=1?"default":"pointer",fontSize:16,fontFamily:"inherit",flexShrink:0}}>‹</button>
+          <div style={{flex:1,textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:800,color:selWeek===currentWeek?C.g:C.tx}}>Semaine {selWeek} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/ {tw}</span></div>
+            <div style={{fontSize:10,fontWeight:600,color:selWeek===dw?C.b:selWeek===currentWeek?C.g:C.tx3}}>{selWeek===dw?"Deload":selWeek===currentWeek?"En cours":selWeek<currentWeek?"Passée":"À venir"}</div>
+          </div>
+          <button onClick={()=>setSelWeek(w=>Math.min(tw,w+1))} disabled={selWeek>=tw} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:selWeek>=tw?C.tx3+"40":C.tx2,cursor:selWeek>=tw?"default":"pointer",fontSize:16,fontFamily:"inherit",flexShrink:0}}>›</button>
+        </div>
+        {/* Séances assignées à cette semaine */}
+        <div style={{padding:12,minHeight:70}}>
+          {energySessions.length===0?(<div style={{textAlign:"center",padding:"16px 0",color:C.tx3,fontSize:12}}>Crée d'abord des séances énergétiques ci-dessous</div>)
+          :weekSessions.length===0?(<div style={{textAlign:"center",padding:"16px 0",color:C.tx3,fontSize:12}}>Aucune séance assignée à S{selWeek} — <span style={{color:C.coach,cursor:"pointer",textDecoration:"underline"}} onClick={()=>setShowAssign(true)}>assigner</span></div>)
+          :(<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
+            {weekSessions.map(s=>{const appareilStr=(s.appareil_types||[]).join(", ")||"";return(<div key={s.session_key} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+C.coach+"30"}}>
+              <div style={{width:32,height:32,borderRadius:8,background:C.coach+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⚡</div>
+              <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>setEnergyEditorKey({key:s.session_key,label:s.session_label||s.session_key})}>
+                <div style={{fontSize:12,fontWeight:700,color:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.session_label||s.session_key}</div>
+                {appareilStr&&<div style={{fontSize:9,color:C.tx3}}>{appareilStr}</div>}
+              </div>
+              <button onClick={()=>toggleSessionInWeek(selWeek,s.session_key)} title="Retirer de cette semaine" style={{width:22,height:22,borderRadius:5,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
+            </div>);})}
+          </div>)}
+          <button onClick={()=>setShowAssign(true)} style={{width:"100%",padding:"8px 0",borderRadius:8,border:"1px dashed "+C.coach+"60",background:"transparent",color:C.coach,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginTop:weekSessions.length>0?4:0}}>+ Assigner une séance à S{selWeek}</button>
+        </div>
+        {/* Dots nav semaines */}
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:3,padding:"7px 10px",borderTop:"1px solid "+C.brd}}>
+          {weeksArr.map(w=>{const hasSess=(weekPlan[w]||[]).length>0;const isDL=w===dw;return(<button key={w} onClick={()=>setSelWeek(w)} title={"S"+w} style={{width:w===selWeek?18:6,height:6,borderRadius:3,border:"none",background:w===selWeek?C.coach:isDL?C.b+"70":hasSess?C.coach+"60":C.brdL,cursor:"pointer",transition:"all 0.2s",padding:0,flexShrink:0}}/>);})}
+        </div>
       </div>
-      {row("Nb semaines","Duree du bloc",tw,()=>setBlockConfig(c=>({...c,totalWeeks:Math.max(3,c.totalWeeks-1)})),()=>setBlockConfig(c=>({...c,totalWeeks:Math.min(16,c.totalWeeks+1)})),v=>v+" sem.")}
-      {row("Semaine deload","0 = pas de deload",blockConfig?.deloadWeek||0,()=>setBlockConfig(c=>({...c,deloadWeek:Math.max(0,(c.deloadWeek||0)-1)})),()=>setBlockConfig(c=>({...c,deloadWeek:Math.min(tw,(c.deloadWeek||0)+1)})),v=>v===0?"Aucune":"S"+v)}
-      <div style={{padding:"10px 0"}}><div style={{fontSize:10,color:C.tx3,lineHeight:1.5}}>La semaine deload reduit charges et volume pour la recuperation.</div></div>
-    </div>
-    {/* Tier config */}
-    <div style={{background:C.s1,borderRadius:14,padding:"4px 16px",border:"1px solid "+C.o+"30",marginBottom:14}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.o,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 0 8px"}}>Surcharge progressive (3 categories)</div>
-      {[1,2,3].map(t=>{const tc=(blockConfig?.tierConfig||DEF_TIER_CONFIG)[t];const updTier=(f,v)=>setBlockConfig(c=>{const tc2={...(c.tierConfig||DEF_TIER_CONFIG)};tc2[t]={...tc2[t],[f]:v};return{...c,tierConfig:tc2};});
-        return(<div key={t} style={{marginBottom:12,padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+tc.c+"30"}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><span style={{fontSize:10,fontWeight:800,color:tc.c}}>T{t}</span><span style={{fontSize:12,fontWeight:700,color:tc.c}}>{tc.label}</span><span style={{fontSize:10,color:C.tx3}}>{tc.desc}</span></div>
-          <div style={{fontSize:9,color:C.tx3,marginBottom:6}}>Strategie : {tc.mode==="rir"?"+"+( tc.kgStep??2.5)+"kg/sem, RIR "+tc.rirStart+"→"+tc.rirEnd:tc.mode==="reps"?"Reps "+tc.repsStart+"→"+tc.repsEnd+" puis +"+( tc.kgStep??2.5)+"kg":"Reps "+tc.repsStart+"→"+tc.repsEnd+" à l'échec puis +"+( tc.kgStep??1.25)+"kg"}</div>
-          {tc.mode==="rir"&&(<div>
-            {row("RIR depart","",tc.rirStart,()=>updTier("rirStart",Math.max(1,tc.rirStart-0.5)),()=>updTier("rirStart",Math.min(5,tc.rirStart+0.5)))}
-            {row("RIR fin","",tc.rirEnd,()=>updTier("rirEnd",Math.max(0,tc.rirEnd-0.5)),()=>updTier("rirEnd",Math.min(tc.rirStart-0.5,tc.rirEnd+0.5)))}
-            {row("kg/semaine","incrément fixe",tc.kgStep??2.5,()=>updTier("kgStep",Math.max(0.5,(tc.kgStep??2.5)-0.5)),()=>updTier("kgStep",Math.min(20,(tc.kgStep??2.5)+0.5)),v=>"+"+v+"kg")}
-          </div>)}
-          {tc.mode==="reps"&&(<div>
-            {row("Reps debut","",tc.repsStart,()=>updTier("repsStart",Math.max(6,tc.repsStart-1)),()=>updTier("repsStart",Math.min(tc.repsEnd-1,tc.repsStart+1)))}
-            {row("Reps fin","",tc.repsEnd,()=>updTier("repsEnd",Math.max(tc.repsStart+1,tc.repsEnd-1)),()=>updTier("repsEnd",Math.min(20,tc.repsEnd+1)))}
-            {row("kg/cycle","incrément au reset",tc.kgStep??2.5,()=>updTier("kgStep",Math.max(0.5,(tc.kgStep??2.5)-0.5)),()=>updTier("kgStep",Math.min(20,(tc.kgStep??2.5)+0.5)),v=>"+"+v+"kg")}
-          </div>)}
-          {tc.mode==="failure"&&(<div>
-            {row("Reps debut","",tc.repsStart,()=>updTier("repsStart",Math.max(8,tc.repsStart-1)),()=>updTier("repsStart",Math.min(tc.repsEnd-1,tc.repsStart+1)))}
-            {row("Reps max","",tc.repsEnd,()=>updTier("repsEnd",Math.max(tc.repsStart+1,tc.repsEnd-1)),()=>updTier("repsEnd",Math.min(25,tc.repsEnd+1)))}
-            {row("kg/cycle","incrément au reset",tc.kgStep??1.25,()=>updTier("kgStep",Math.max(0.25,(tc.kgStep??1.25)-0.25)),()=>updTier("kgStep",Math.min(10,(tc.kgStep??1.25)+0.25)),v=>"+"+v+"kg")}
-          </div>)}
-          {(blockConfig?.deloadWeek||0)>0&&<div style={{marginTop:6}}>{row("Deload","% reduction",tc.deloadPct,()=>updTier("deloadPct",Math.max(10,tc.deloadPct-5)),()=>updTier("deloadPct",Math.min(60,tc.deloadPct+5)),v=>"-"+v+"%")}</div>}
-        </div>);
-      })}
-    </div>
-    <div style={{background:C.s1,borderRadius:14,padding:"4px 16px",border:"1px solid "+C.brd,marginBottom:14}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 0 4px"}}>Programme</div>
-      {row("Seances / semaine","Nb a valider",goals.sessionsPerWeek,()=>setGoals(g=>({...g,sessionsPerWeek:Math.max(1,g.sessionsPerWeek-1)})),()=>setGoals(g=>({...g,sessionsPerWeek:Math.min(12,g.sessionsPerWeek+1)})))}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:"1px solid "+C.brd}}><div><div style={{fontSize:13,fontWeight:600}}>Objectif total</div><div style={{fontSize:10,color:C.tx3}}>Auto ({goals.sessionsPerWeek} x {tw} sem.)</div></div><div style={{fontSize:16,fontWeight:800,color:C.tx2}}>{totalTarget}</div></div>
-    </div>
-    <div style={{background:C.s1,borderRadius:14,padding:"4px 16px",border:"1px solid "+C.brd,marginBottom:14}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 0 4px"}}>Sommeil</div>
-      {row("Objectif sommeil","Heures par nuit",goals.sleepTarget||8,()=>setGoals(g=>({...g,sleepTarget:Math.max(5,+((g.sleepTarget||8)-0.5).toFixed(1))})),()=>setGoals(g=>({...g,sleepTarget:Math.min(12,+((g.sleepTarget||8)+0.5).toFixed(1))})),v=>v+"h")}
-    </div>
-    <div style={{background:C.s1,borderRadius:14,padding:"4px 16px",border:"1px solid "+C.brd,marginBottom:14}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 0 4px"}}>Poids de corps</div>
-      {row("Poids actuel","kg",bodyWeight.current,()=>setBodyWeight(b=>({...b,current:Math.max(40,+(b.current-0.5).toFixed(1))})),()=>setBodyWeight(b=>({...b,current:+(b.current+0.5).toFixed(1)})),v=>v+" kg")}
-      {row("Objectif","kg",bodyWeight.target,()=>setBodyWeight(b=>({...b,target:Math.max(40,+(b.target-0.5).toFixed(1))})),()=>setBodyWeight(b=>({...b,target:+(b.target+0.5).toFixed(1)})),v=>v+" kg")}
-    </div>
-    <div style={{background:C.s1,borderRadius:14,padding:"12px 16px",border:"1px solid "+C.brd}}>
-      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Annuler seances</div>
+
+      {/* ── LISTE DES TEMPLATES ── */}
+      {energySessions.length>0&&(<>
+        <div style={{fontSize:10,fontWeight:700,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Templates de séances</div>
+        {energySessions.map(s=>{
+          const usedInWeeks=weeksArr.filter(w=>(weekPlan[w]||[]).includes(s.session_key));
+          return(<div key={s.session_key} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,marginBottom:8}}>
+            <div onClick={()=>setEnergyEditorKey({key:s.session_key,label:s.session_label||s.session_key})} style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0,cursor:"pointer"}}>
+              <div style={{width:34,height:34,borderRadius:9,background:C.coach+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>⚡</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.session_label||s.session_key}</div>
+                <div style={{fontSize:9,color:C.tx3,marginTop:1}}>
+                  {(s.appareil_types||[]).join(", ")||"—"}
+                  {usedInWeeks.length>0&&<span style={{color:C.coach,marginLeft:6}}>S{usedInWeeks.join(", S")}</span>}
+                </div>
+              </div>
+            </div>
+            <button onClick={e=>handleDelete(s.session_key,e)} style={{padding:"4px 8px",borderRadius:7,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Suppr.</button>
+            <div onClick={()=>setEnergyEditorKey({key:s.session_key,label:s.session_label||s.session_key})} style={{color:C.tx3,fontSize:14,cursor:"pointer",flexShrink:0}}>›</div>
+          </div>);
+        })}
+      </>)}
+
+      {energySessions.length===0&&(<div style={{textAlign:"center",padding:"32px 20px"}}><div style={{fontSize:36,marginBottom:12}}>⚡</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucune séance énergétique</div><div style={{fontSize:12,color:C.tx3}}>Crée une séance pour configurer le cardio de l'athlète.</div></div>)}
+    </>)}
+
+    {/* Modal assignation */}
+    {showAssign&&(<div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setShowAssign(false)}>
+      <div style={{width:"100%",maxWidth:640,background:C.s1,borderRadius:"16px 16px 0 0",padding:"20px 20px 32px",overflowY:"auto",maxHeight:"70vh"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+          <div style={{fontSize:14,fontWeight:700,color:C.tx}}>Séances — Semaine {selWeek}</div>
+          <button onClick={()=>setShowAssign(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        {energySessions.map(s=>{const assigned=(weekPlan[selWeek]||[]).includes(s.session_key);return(<div key={s.session_key} onClick={()=>toggleSessionInWeek(selWeek,s.session_key)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:"1px solid "+(assigned?C.coach+"60":C.brdL),background:assigned?C.coach+"12":C.s2,marginBottom:8,cursor:"pointer"}}>
+          <div style={{width:22,height:22,borderRadius:6,border:"2px solid "+(assigned?C.coach:C.tx3),background:assigned?C.coach:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:800,flexShrink:0}}>{assigned?"✓":""}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600,color:assigned?C.coach:C.tx}}>{s.session_label||s.session_key}</div>
+            {(s.appareil_types||[]).length>0&&<div style={{fontSize:10,color:C.tx3}}>{(s.appareil_types||[]).join(", ")}</div>}
+          </div>
+        </div>);})}</div>
+    </div>)}
+  </div>);
+}
+
+function CoachConfig({completedSessions,uncompleteSession,sessions,weeksArr,onNewBlock,onShowHistory,blockHistoryCount}){
+  return(<div>
+    <div style={{background:C.s1,borderRadius:14,padding:"12px 16px",border:"1px solid "+C.brd,marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Annuler séances</div>
       {weeksArr.map(w=>{const done=completedSessions[w]||[];if(!done.length)return null;return(<div key={w} style={{marginBottom:10}}><div style={{fontSize:11,fontWeight:600,color:C.tx2,marginBottom:6}}>S{w}</div><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{done.map(sid=>{const s=sessions.find(x=>x.id===sid);return(<button key={sid} onClick={()=>uncompleteSession(sid,w)} style={{padding:"5px 10px",borderRadius:8,border:"1px solid "+C.r+"40",background:C.rS+"80",color:C.r,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{s?.short||sid} x</button>);})}</div></div>);})}
-      {Object.values(completedSessions).every(a=>!a?.length)&&<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"8px 0"}}>Aucune seance validee</div>}
+      {Object.values(completedSessions).every(a=>!a?.length)&&<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"8px 0"}}>Aucune séance validée</div>}
     </div>
     <div style={{display:"flex",gap:8,marginTop:14}}>
       <button onClick={onNewBlock} style={{flex:2,padding:"12px 0",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button>
       <button onClick={onShowHistory} style={{flex:1,padding:"12px 0",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,color:C.tx2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>Historique{blockHistoryCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.ac,color:"#fff",fontSize:9,fontWeight:800,width:16,height:16,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center"}}>{blockHistoryCount}</span>}</button>
     </div>
+  </div>);
+}
+
+function TierConfigModal({blockConfig,setBlockConfig,onClose}){
+  const tw=blockConfig?.totalWeeks||6;
+  const row=(label,desc,val,onM,onP,fmt)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid "+C.brd}}><div><div style={{fontSize:13,fontWeight:600}}>{label}</div>{desc&&<div style={{fontSize:10,color:C.tx3}}>{desc}</div>}</div><div style={{display:"flex",alignItems:"center",gap:10}}><button onClick={onM} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>-</button><span style={{fontSize:15,fontWeight:800,color:C.o,minWidth:40,textAlign:"center"}}>{fmt?fmt(val):val}</span><button onClick={onP} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>+</button></div></div>);
+  return(<div style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div style={{width:"100%",maxWidth:640,background:C.s1,borderRadius:"16px 16px 0 0",padding:24,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <div><div style={{fontSize:15,fontWeight:700}}>Surcharge progressive</div><div style={{fontSize:11,color:C.tx3,marginTop:2}}>Paramètres de progression par catégorie d'exercice</div></div>
+        <button onClick={onClose} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+      </div>
+      {[1,2,3].map(t=>{const tc=(blockConfig?.tierConfig||DEF_TIER_CONFIG)[t];const updTier=(f,v)=>setBlockConfig(c=>{const tc2={...(c.tierConfig||DEF_TIER_CONFIG)};tc2[t]={...tc2[t],[f]:v};return{...c,tierConfig:tc2};});
+        return(<div key={t} style={{marginBottom:12,padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+tc.c+"30"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><span style={{fontSize:10,fontWeight:800,color:tc.c}}>T{t}</span><span style={{fontSize:12,fontWeight:700,color:tc.c}}>{tc.label}</span><span style={{fontSize:10,color:C.tx3}}>{tc.desc}</span></div>
+          <div style={{fontSize:9,color:C.tx3,marginBottom:6}}>Stratégie : {tc.mode==="rir"?"+"+( tc.kgStep??2.5)+"kg/sem, RIR "+tc.rirStart+"→"+tc.rirEnd:tc.mode==="reps"?"Reps "+tc.repsStart+"→"+tc.repsEnd+" puis +"+( tc.kgStep??2.5)+"kg":"Reps "+tc.repsStart+"→"+tc.repsEnd+" à l'échec puis +"+( tc.kgStep??1.25)+"kg"}</div>
+          {tc.mode==="rir"&&(<div>{row("RIR départ","",tc.rirStart,()=>updTier("rirStart",Math.max(1,tc.rirStart-0.5)),()=>updTier("rirStart",Math.min(5,tc.rirStart+0.5)))}{row("RIR fin","",tc.rirEnd,()=>updTier("rirEnd",Math.max(0,tc.rirEnd-0.5)),()=>updTier("rirEnd",Math.min(tc.rirStart-0.5,tc.rirEnd+0.5)))}{row("kg/semaine","incrément fixe",tc.kgStep??2.5,()=>updTier("kgStep",Math.max(0.5,(tc.kgStep??2.5)-0.5)),()=>updTier("kgStep",Math.min(20,(tc.kgStep??2.5)+0.5)),v=>"+"+v+"kg")}</div>)}
+          {tc.mode==="reps"&&(<div>{row("Reps début","",tc.repsStart,()=>updTier("repsStart",Math.max(6,tc.repsStart-1)),()=>updTier("repsStart",Math.min(tc.repsEnd-1,tc.repsStart+1)))}{row("Reps fin","",tc.repsEnd,()=>updTier("repsEnd",Math.max(tc.repsStart+1,tc.repsEnd-1)),()=>updTier("repsEnd",Math.min(20,tc.repsEnd+1)))}{row("kg/cycle","incrément au reset",tc.kgStep??2.5,()=>updTier("kgStep",Math.max(0.5,(tc.kgStep??2.5)-0.5)),()=>updTier("kgStep",Math.min(20,(tc.kgStep??2.5)+0.5)),v=>"+"+v+"kg")}</div>)}
+          {tc.mode==="failure"&&(<div>{row("Reps début","",tc.repsStart,()=>updTier("repsStart",Math.max(8,tc.repsStart-1)),()=>updTier("repsStart",Math.min(tc.repsEnd-1,tc.repsStart+1)))}{row("Reps max","",tc.repsEnd,()=>updTier("repsEnd",Math.max(tc.repsStart+1,tc.repsEnd-1)),()=>updTier("repsEnd",Math.min(25,tc.repsEnd+1)))}{row("kg/cycle","incrément au reset",tc.kgStep??1.25,()=>updTier("kgStep",Math.max(0.25,(tc.kgStep??1.25)-0.25)),()=>updTier("kgStep",Math.min(10,(tc.kgStep??1.25)+0.25)),v=>"+"+v+"kg")}</div>)}
+          {(blockConfig?.deloadWeek||0)>0&&<div style={{marginTop:6}}>{row("Deload","% réduction",tc.deloadPct,()=>updTier("deloadPct",Math.max(10,tc.deloadPct-5)),()=>updTier("deloadPct",Math.min(60,tc.deloadPct+5)),v=>"-"+v+"%")}</div>}
+        </div>);
+      })}
+      <button onClick={onClose} style={{width:"100%",marginTop:8,padding:"13px 0",borderRadius:12,border:"none",background:C.o,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
+    </div>
+  </div>);
+}
+
+function CoachWeeklyFeedback({athleteId,sessions,completedSessions,energySessions,currentWeek,blockConfig,exos,sets,wellnessHistory={},C}){
+  const tw=blockConfig?.totalWeeks||6;
+  const weeksArr=Array.from({length:tw},(_,i)=>i+1);
+  const[selWeek,setSelWeek]=useState(currentWeek);
+  const[feedbacks,setFeedbacks]=useState({});
+  const[draft,setDraft]=useState("");
+  const[saving,setSaving]=useState(false);
+  const[saved,setSaved]=useState(false);
+  const[expandedSess,setExpandedSess]=useState(null);
+
+  useEffect(()=>{(async()=>{const{data}=await supabase.from('app_data').select('value').eq('athlete_id',athleteId).eq('key','asp:coach_feedback').maybeSingle();if(data?.value)setFeedbacks(data.value);})();},[athleteId]);
+  useEffect(()=>{setDraft(feedbacks[selWeek]?.note||"");},[selWeek,feedbacks]);
+
+  const saveFeedback=async()=>{
+    setSaving(true);
+    const updated={...feedbacks,[selWeek]:{note:draft,date:new Date().toISOString(),week:selWeek}};
+    await supabase.from('app_data').upsert({athlete_id:athleteId,key:'asp:coach_feedback',value:updated,updated_at:new Date().toISOString()},{onConflict:'athlete_id,key'});
+    setFeedbacks(updated);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
+  };
+  const deleteFeedback=async(wk)=>{
+    const updated={...feedbacks};delete updated[wk];
+    await supabase.from('app_data').upsert({athlete_id:athleteId,key:'asp:coach_feedback',value:updated,updated_at:new Date().toISOString()},{onConflict:'athlete_id,key'});
+    setFeedbacks(updated);if(+wk===selWeek)setDraft("");
+  };
+
+  const doneIds=completedSessions[selWeek]||[];
+  const doneSessions=sessions.filter(s=>doneIds.includes(s.id));
+  const missedSessions=sessions.filter(s=>!doneIds.includes(s.id));
+  const energyDone=(energySessions||[]).filter(s=>{const logs=s._logs||[];return logs.some(l=>l.week===selWeek);});
+
+  // Données wellness de la semaine
+  const weekScore=typeof wellnessHistory[selWeek]==="number"?wellnessHistory[selWeek]:null;
+  const weekEntries=(()=>{
+    if(!blockConfig?.startDate)return[];
+    const start=new Date(blockConfig.startDate);
+    const wkStart=new Date(start.getTime()+(selWeek-1)*7*86400000);
+    const wkEnd=new Date(wkStart.getTime()+7*86400000);
+    return Object.entries(wellnessHistory).filter(([k,v])=>/^\d{8}$/.test(k)&&v?.score!=null).map(([k,v])=>{
+      const y=+k.slice(0,4),mo=+k.slice(4,6)-1,d=+k.slice(6,8);
+      return{date:new Date(y,mo,d),data:v,key:k};
+    }).filter(e=>e.date>=wkStart&&e.date<wkEnd).sort((a,b)=>a.date-b.date);
+  })();
+  const avgScore=weekEntries.length?Math.round(weekEntries.reduce((s,e)=>s+(e.data.score||0),0)/weekEntries.length):weekScore;
+  const sleepEntries=weekEntries.filter(e=>e.data.sleepDur!=null);
+  const avgSleep=sleepEntries.length?Math.round(sleepEntries.reduce((s,e)=>s+e.data.sleepDur,0)/sleepEntries.length*10)/10:null;
+  const scColor=sc=>sc>=80?C.g:sc>=65?C.o:sc>=50?"#f5a623":C.r;
+  const fmtReps=r=>Array.isArray(r)?r.join("+"):r;
+
+  return(<div style={{padding:"16px 16px 80px"}}>
+    <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:4}}>Retour de la semaine</div>
+    <div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Bilan hebdomadaire pour l'athlète</div>
+
+    {/* Sélecteur semaine */}
+    <div style={{display:"flex",gap:4,marginBottom:16,overflowX:"auto",scrollbarWidth:"none",paddingBottom:2}}>{weeksArr.map(w=>{const hasFb=!!feedbacks[w]?.note;const isDone=(completedSessions[w]||[]).length>0;return(<button key={w} onClick={()=>setSelWeek(w)} style={{flexShrink:0,minWidth:44,padding:"8px 10px",borderRadius:10,border:selWeek===w?"2px solid "+C.coach:"1px solid "+(hasFb?C.g+"40":isDone?C.brdL:C.brd),background:selWeek===w?C.coachS:"transparent",cursor:"pointer",fontFamily:"inherit",textAlign:"center",position:"relative"}}>{hasFb&&<div style={{position:"absolute",top:2,right:2,width:5,height:5,borderRadius:"50%",background:C.g}}/>}<div style={{fontSize:10,fontWeight:selWeek===w?800:600,color:selWeek===w?C.coach:C.tx3}}>S{w}</div>{isDone&&<div style={{fontSize:7,color:(completedSessions[w]||[]).length>=sessions.filter(s=>(exos[s.id]||[]).length>0).length?C.g:C.o}}>●</div>}</button>);})}</div>
+
+    {/* Résumé forme + sommeil */}
+    {(avgScore!=null||avgSleep!=null)&&<div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brdL,padding:"12px 14px",marginBottom:16,display:"flex",gap:12,alignItems:"center"}}>
+      {avgScore!=null&&<div style={{textAlign:"center",minWidth:52}}>
+        <div style={{fontSize:8,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>Forme</div>
+        <div style={{fontSize:28,fontWeight:900,color:scColor(avgScore),lineHeight:1}}>{avgScore}</div>
+        <div style={{fontSize:8,color:C.tx3}}>/100</div>
+      </div>}
+      {avgScore!=null&&avgSleep!=null&&<div style={{width:1,alignSelf:"stretch",background:C.brd}}/>}
+      {avgSleep!=null&&<div style={{textAlign:"center",minWidth:52}}>
+        <div style={{fontSize:8,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>Sommeil</div>
+        <div style={{fontSize:28,fontWeight:900,color:avgSleep>=7.5?C.g:avgSleep>=6?C.o:C.r,lineHeight:1}}>{avgSleep}</div>
+        <div style={{fontSize:8,color:C.tx3}}>h moy.</div>
+      </div>}
+      {weekEntries.length>0&&<div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:8,color:C.tx3,marginBottom:4}}>{weekEntries.length} bilan(s) cette semaine</div>
+        <div style={{display:"flex",gap:3}}>{weekEntries.map(e=>{const sc=e.data.score||0;return(<div key={e.key} style={{flex:1,textAlign:"center"}}>
+          <div style={{fontSize:7,color:C.tx3}}>{String(e.date.getDate()).padStart(2,"0")}/{String(e.date.getMonth()+1).padStart(2,"0")}</div>
+          <div style={{height:22,borderRadius:3,background:scColor(sc)+"40",display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}><span style={{fontSize:8,fontWeight:700,color:scColor(sc)}}>{sc}</span></div>
+          {e.data.sleepDur!=null&&<div style={{fontSize:7,color:C.b,marginTop:1}}>💤{e.data.sleepDur}h</div>}
+        </div>);})}
+        </div>
+      </div>}
+    </div>}
+
+    {/* Séances */}
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Séances — S{selWeek}</div>
+      {doneSessions.length===0&&energyDone.length===0&&missedSessions.length===0&&<div style={{fontSize:12,color:C.tx3,padding:"8px 0"}}>Aucune séance programmée</div>}
+
+      {/* Faites */}
+      {doneSessions.map(s=>{
+        const sessExos=exos[s.id]||[];const isExp=expandedSess===s.id;
+        return(<div key={s.id} style={{background:C.s1,borderRadius:12,border:"1px solid "+C.g+"40",marginBottom:6,overflow:"hidden"}}>
+          <button onClick={()=>setExpandedSess(isExp?null:s.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+            <div style={{width:28,height:28,borderRadius:8,background:C.g+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>✅</div>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.g}}>{s.name}</div><div style={{fontSize:10,color:C.tx3}}>{sessExos.length} exercices</div></div>
+            <span style={{fontSize:11,color:C.tx3,transform:isExp?"rotate(180deg)":"none",transition:"transform 0.2s"}}>∨</span>
+          </button>
+          {isExp&&<div style={{borderTop:"1px solid "+C.brd,padding:"8px 14px 12px"}}>
+            {sessExos.map(ex=>{
+              const sk=ex.id+"_"+selWeek;const rows=(sets[sk]||[]).filter(r=>r.done);
+              const planned=ex.weeks?.[selWeek];
+              return(<div key={ex.id} style={{padding:"6px 0",borderBottom:"1px solid "+C.brd+"50"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:rows.length?4:0}}>
+                  <div style={{fontSize:12,fontWeight:600,color:C.tx}}>{ex.name}</div>
+                  {planned?.sets&&planned?.repsRange&&<div style={{fontSize:10,color:C.tx3,background:C.s2,padding:"1px 6px",borderRadius:5}}>{planned.sets}×{planned.repsRange}</div>}
+                </div>
+                {rows.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{rows.map((r,i)=>{const rc=r.rir!=null?(r.rir<=0?C.r:r.rir<=1?C.o:C.g):C.tx3;return(<span key={i} style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:C.g+"15",color:C.g,fontWeight:600}}>{r.kg}kg×{fmtReps(r.reps)}{r.rir!=null&&<span style={{color:rc,fontWeight:400}}> R{r.rir}</span>}</span>);})}</div>}
+                {rows.length===0&&<div style={{fontSize:9,color:C.tx3}}>Pas de séries enregistrées</div>}
+              </div>);
+            })}
+          </div>}
+        </div>);
+      })}
+
+      {/* Énergie faites */}
+      {energyDone.map(s=><div key={s.session_key} style={{background:C.s1,borderRadius:12,border:"1px solid "+C.coach+"40",padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:28,height:28,borderRadius:8,background:C.coach+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>⚡</div>
+        <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.coach}}>{s.session_label||s.session_key}</div></div>
+        <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:C.coach+"20",color:C.coach}}>Énergie</span>
+      </div>)}
+
+      {/* Non réalisées */}
+      {missedSessions.length>0&&<div style={{marginTop:doneSessions.length||energyDone.length?10:0}}>
+        <div style={{fontSize:9,color:C.tx3,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:6}}>Non réalisées</div>
+        {missedSessions.map(s=>{const sessExos=exos[s.id]||[];return(<div key={s.id} style={{background:C.s1,borderRadius:12,border:"1px solid "+C.r+"25",marginBottom:5,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,opacity:0.7}}>
+          <div style={{width:28,height:28,borderRadius:8,background:C.r+"12",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>❌</div>
+          <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600,color:C.tx2}}>{s.name}</div><div style={{fontSize:10,color:C.tx3}}>{sessExos.length} exercices programmés</div></div>
+        </div>);})}
+      </div>}
+    </div>
+
+    {/* Note hebdomadaire */}
+    <div style={{background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.coach+"40",marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:600,color:C.coach,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Bilan coach — S{selWeek}</div>
+      <textarea value={draft} onChange={e=>setDraft(e.target.value)} placeholder={"Retour sur la semaine "+selWeek+" : progression, points forts, axes d'amélioration..."} rows={5} style={{width:"100%",padding:"12px 14px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box",marginBottom:12,lineHeight:1.6}}/>
+      {feedbacks[selWeek]?.date&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:10,color:C.tx3}}>Dernière modif. : {new Date(feedbacks[selWeek].date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"})}</div><button onClick={()=>deleteFeedback(selWeek)} style={{padding:"3px 9px",borderRadius:6,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Supprimer</button></div>}
+      <button onClick={saveFeedback} disabled={saving||!draft.trim()} style={{width:"100%",padding:"12px 0",borderRadius:10,border:"none",background:saved?C.g:draft.trim()?C.coach:"#333",color:saved||draft.trim()?"#fff":C.tx3,fontSize:13,fontWeight:700,cursor:draft.trim()&&!saving?"pointer":"default",fontFamily:"inherit"}}>
+        {saving?"Enregistrement…":saved?"✓ Retour enregistré":"Enregistrer le retour"}
+      </button>
+    </div>
+
+    {/* Historique retours */}
+    {Object.entries(feedbacks).filter(([,f])=>f?.note).sort((a,b)=>+b[0]-+a[0]).slice(0,5).length>0&&(<div>
+      <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Retours précédents</div>
+      {Object.entries(feedbacks).filter(([,f])=>f?.note).sort((a,b)=>+b[0]-+a[0]).slice(0,5).map(([wk,f])=>(
+        <div key={wk} style={{background:C.s1,borderRadius:10,padding:"10px 14px",border:"1px solid "+C.brd,marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+            <span style={{fontSize:11,fontWeight:700,color:C.coach}}>S{wk}</span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:9,color:C.tx3}}>{f.date?new Date(f.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"}):""}</span>
+              <button onClick={()=>deleteFeedback(wk)} style={{padding:"2px 8px",borderRadius:5,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+            </div>
+          </div>
+          <div style={{fontSize:12,color:C.tx2,lineHeight:1.55}}>{f.note}</div>
+        </div>
+      ))}
+    </div>)}
   </div>);
 }
 
@@ -2814,7 +3240,7 @@ function AIChatBar({exos,sessions,chatHistory,setChatHistory,onApply,onOpenChang
   </>);
 }
 
-function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={}}){
+function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={},exos={}}){
   const[selectDay,setSelectDay]=useState(null);
   const[customLabel,setCustomLabel]=useState('');
   const[weekOffset,setWeekOffset]=useState(0);
@@ -2822,6 +3248,7 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
   const[detailType,setDetailType]=useState(null);
   const[activityModal,setActivityModal]=useState(null);// {dayIdx} | null
   const[activityForm,setActivityForm]=useState({label:'',emoji:'🏅',duration:30,intensity:3,notes:''});
+  const[previewSess,setPreviewSess]=useState(null);// session to preview
   const DAYS=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   const DAYS_FULL=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
   const MONTHS=["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
@@ -2982,9 +3409,10 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
           <div style={{width:24,height:24,borderRadius:"50%",background:wc,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px "+wc+"60"}}><span style={{fontSize:9,fontWeight:800,color:"#fff"}}>{ws2}</span></div>
           <div><div style={{fontSize:11,fontWeight:700,color:wc}}>{ws2>=80?"Optimal":ws2>=65?"Bon":ws2>=50?"Modéré":ws2>=35?"Fatigué":"Surmenage"}</div><div style={{fontSize:9,color:C.tx3}}>forme</div></div>
         </div>);})()}
-        {selData.sessList.map(s=>{const done=doneSet.has(s.id);const isPD=selData.date<new Date(new Date().setHours(0,0,0,0));const missed=isPD&&!done;const dc=done?C.g:missed?C.r:C.b;const log=sessionLogs[s.id+"_"+currentWeek];return(<div key={s.id} onClick={()=>setDetailType("session")} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:dc+"12",border:"1px solid "+dc+"30",cursor:"pointer"}}>
+        {selData.sessList.map(s=>{const done=doneSet.has(s.id);const isPD=selData.date<new Date(new Date().setHours(0,0,0,0));const missed=isPD&&!done;const dc=done?C.g:missed?C.r:C.b;const log=sessionLogs[s.id+"_"+currentWeek];return(<div key={s.id} onClick={()=>setPreviewSess(s)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:dc+"12",border:"1px solid "+dc+"30",cursor:"pointer"}}>
           <span style={{fontSize:14}}>{done?"✅":missed?"❌":"🏋"}</span>
           <div><div style={{fontSize:11,fontWeight:700,color:dc}}>{s.name}</div>{log?.duration&&<div style={{fontSize:9,color:C.tx3}}>{fmtTime(log.duration)}</div>}</div>
+          <span style={{fontSize:9,color:C.tx3,marginLeft:"auto"}}>↗</span>
         </div>);})}
         {selData.nutr&&<div onClick={()=>setDetailType("nutrition")} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:C.o+"12",border:"1px solid "+C.o+"30",cursor:"pointer"}}>
           <span style={{fontSize:14}}>🍽</span>
@@ -3010,7 +3438,7 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
               <div style={{fontSize:15,fontWeight:800,color:ic}}>{item.v||"—"}<span style={{fontSize:8,color:C.tx3}}>/5</span></div>
               <div style={{fontSize:8,color:C.tx3,marginTop:1}}>{item.l}</div>
             </div>);})}</div>
-        {w.sleepDuration!=null&&<div style={{padding:"7px 12px",borderRadius:10,background:C.s1,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><span style={{fontSize:10,color:C.tx3}}>🕐 Durée sommeil</span><span style={{fontSize:13,fontWeight:700,color:C.tx}}>{typeof w.sleepDuration==="number"?w.sleepDuration.toFixed(1):w.sleepDuration}h</span></div>}
+        {(w.sleepDur!=null||w.coucher||w.reveil)&&<div style={{padding:"7px 12px",borderRadius:10,background:C.s1,marginBottom:4}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5}}>Sommeil</div><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{w.coucher&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>🌙</span><span style={{fontSize:11,fontWeight:600,color:C.tx}}>{String(w.coucher.h).padStart(2,"0")}:{String(w.coucher.m).padStart(2,"0")}</span></div>}{w.reveil&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>☀️</span><span style={{fontSize:11,fontWeight:600,color:C.tx}}>{String(w.reveil.h).padStart(2,"0")}:{String(w.reveil.m).padStart(2,"0")}</span></div>}{w.sleepDur!=null&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.b+"18"}}><span style={{fontSize:10}}>💤</span><span style={{fontSize:11,fontWeight:700,color:C.b}}>{typeof w.sleepDur==="number"?w.sleepDur.toFixed(1):w.sleepDur}h</span></div>}</div></div>}
         {w.domsZones?.length>0&&<div style={{padding:"7px 12px",borderRadius:10,background:C.s1,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:4}}><span style={{fontSize:10,color:C.tx3}}>Zones DOMS :</span>{w.domsZones.map(z=><span key={z} style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.o+"20",color:C.o}}>{z}</span>)}</div>}
         {w.injComment&&<div style={{padding:"7px 12px",borderRadius:10,background:C.r+"10",border:"1px solid "+C.r+"30",fontSize:10,color:C.r}}>⚠ {w.injComment}</div>}
       </div>);})()}
@@ -3087,6 +3515,52 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
             </div>
           );})}
         </div>}
+      </div>
+    </div>)}
+
+    {/* Modal prévisualisation séance */}
+    {previewSess&&(<div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPreviewSess(null)}>
+      <div style={{width:"100%",maxWidth:500,background:C.s1,borderRadius:"20px 20px 0 0",padding:"20px 20px 32px",overflowY:"auto",maxHeight:"80vh"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:C.tx}}>{previewSess.name}</div>
+            {previewSess.short&&<div style={{fontSize:10,color:C.tx3,marginTop:1}}>{previewSess.short}</div>}
+          </div>
+          <button onClick={()=>setPreviewSess(null)} style={{background:"none",border:"none",color:C.tx3,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        {/* Exercices de la séance pour la semaine en cours */}
+        {(()=>{
+          const exList=exos[previewSess.id]||[];
+          const weekExos=exList.filter(ex=>ex.weeks&&ex.weeks[currentWeek]);
+          if(!weekExos.length&&!exList.length)return(<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"20px 0"}}>Aucun exercice configuré</div>);
+          const displayList=weekExos.length?weekExos:exList;
+          return(<div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {displayList.map((ex,idx)=>{
+              const wData=ex.weeks?.[currentWeek]||{};
+              const method=wData.method;
+              const mInfo=method?DEF_METHODS[method]:null;
+              const blocColor=ex.bloc&&BT[ex.bloc]?BT[ex.bloc].c:C.ac;
+              return(<div key={ex.id||idx} style={{padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+C.brd}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:wData.kg||wData.sets?4:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                    {ex.bloc&&<span style={{fontSize:8,padding:"2px 5px",borderRadius:4,background:blocColor+"20",color:blocColor,fontWeight:700,flexShrink:0}}>{ex.bloc}</span>}
+                    <span style={{fontSize:12,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
+                  </div>
+                  {mInfo&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:mInfo.c+"20",color:mInfo.c,fontWeight:700,flexShrink:0,marginLeft:6}}>{mInfo.e}</span>}
+                </div>
+                {(wData.kg||wData.sets||wData.repsRange)&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+                  {wData.sets&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.ac+"15",color:C.ac,fontWeight:600}}>{fmtMR(method,wData.methodParams,wData.sets,wData.repsRange)}</span>}
+                  {wData.kg&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.s1,color:C.tx,fontWeight:600}}>{wData.kg} kg</span>}
+                  {wData.rir!=null&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:rC(wData.rir)+"15",color:rC(wData.rir),fontWeight:600}}>RIR {rL(wData.rir)}</span>}
+                  {wData.tempo&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:5,background:C.s1,color:C.tx3}}>{wData.tempo}</span>}
+                </div>}
+              </div>);
+            })}
+          </div>);
+        })()}
+        <div style={{marginTop:16,fontSize:10,color:C.tx3,textAlign:"center"}}>
+          Semaine {currentWeek} · {(exos[previewSess.id]||[]).filter(ex=>ex.weeks&&ex.weeks[currentWeek]).length} exercice{(exos[previewSess.id]||[]).filter(ex=>ex.weeks&&ex.weeks[currentWeek]).length!==1?"s":""}
+        </div>
       </div>
     </div>)}
 
@@ -3642,7 +4116,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const{profile:myProfile}=useAuth();
   const load=(k,fb)=>sLoad(k,fb,athleteId);
   const save=(k,v)=>sSave(k,v,athleteId);
-  const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");
+  const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");const[logSubTab,setLogSubTab]=useState("muscu");const[testSubTab,setTestSubTab]=useState("musculation");const[banqueSubTab,setBanqueSubTab]=useState("muscu");const[progSubTab,setProgSubTab]=useState("muscu");const[energyEditorKey,setEnergyEditorKey]=useState(null);const[energySessions,setEnergySessions]=useState([]);const[energySessionsLoaded,setEnergySessionsLoaded]=useState(false);const[drawerPrOpen,setDrawerPrOpen]=useState(false);const[drawerInjOpen,setDrawerInjOpen]=useState(false);
   const[exos,setExosState]=useState({});const[exMeta,setExMetaState]=useState({});
   const[aW,setAW]=useState(1);const[sets,setSetsState]=useState({});const[anaTab,setAnaTab]=useState("combined");const[weightRange,setWeightRange]=useState("bloc");
   const[wellness,setWellnessState]=useState(null);const[wellnessHistory,setWellnessHistoryState]=useState({});const[wellnessPeriod,setWellnessPeriod]=useState("month");
@@ -3670,7 +4144,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[initialLogSess,setInitialLogSess]=useState(null);
   const[habits,setHabits]=useState([]);const[habitLogs,setHabitLogs]=useState({});const[habitEnabled,setHabitEnabled]=useState(false);
   const[habitToggling,setHabitToggling]=useState(false);const[habitToggleErr,setHabitToggleErr]=useState('');
-  const[profileInfoOpen,setProfileInfoOpen]=useState(false);
+  const[drawerOpen,setDrawerOpen]=useState(false);const[drawerSportOpen,setDrawerSportOpen]=useState(false);const[drawerZoom,setDrawerZoom]=useState(null);
   const[timerLeft,setTimerLeft]=useState(120);const[timerDur,setTimerDur]=useState(120);
   const[timerActive,setTimerActive]=useState(false);const[timerFinished,setTimerFinished]=useState(false);
   const timerRef=useRef(null);
@@ -3703,6 +4177,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     const cutoff=hAddDays(new Date(),-365).toISOString().slice(0,10);
     supabase.from('habit_logs').select('habit_id,date').eq('athlete_id',athleteId).gte('date',cutoff).then(({data})=>{if(data){const l={};data.forEach(r=>{if(!l[r.habit_id])l[r.habit_id]=[];l[r.habit_id].push(r.date);});setHabitLogs(l);}});
     supabase.from('profiles').select('habit_tracker_enabled').eq('id',athleteId).single().then(({data})=>{if(data)setHabitEnabled(!!data.habit_tracker_enabled);});
+  },[athleteId]);
+
+  useEffect(()=>{
+    if(!athleteId||mode!=="athlete")return;
+    supabase.from('app_data').select('value').eq('athlete_id',athleteId).eq('key','asp:coach_feedback').maybeSingle().then(({data})=>{if(data?.value)setCoachFeedbacks(data.value);});
+  },[athleteId,mode]);
+  useEffect(()=>{
+    if(!athleteId)return;
+    supabase.from('app_data').select('value').eq('athlete_id',athleteId).eq('key','app:user_feedback').maybeSingle().then(({data})=>{if(data?.value?.entries)setAppFeedbacks(data.value.entries);});
   },[athleteId]);
 
   const toggleHabitLog=async(habitId,dateISO)=>{
@@ -3744,9 +4227,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     }
     // Set new sessions from wizard
     setSessions(opts.sessions||[]);
-    // Reset or keep exos
-    if(!opts.exos){const newExos={};(opts.sessions||[]).forEach(s=>{newExos[s.id]=[];});setExos(newExos);}
-    else{const newExos={...exos};(opts.sessions||[]).forEach(s=>{if(!newExos[s.id])newExos[s.id]=[];});setExos(newExos);}
+    // Exos : reprise historique > garder actuels > reset
+    if(opts.restoredExos){
+      // Restauration depuis l'historique : exos déjà remappés aux nouveaux IDs
+      setExos(opts.restoredExos);
+    }else if(!opts.exos){
+      const newExos={};(opts.sessions||[]).forEach(s=>{newExos[s.id]=[];});setExos(newExos);
+    }else{
+      const newExos={...exos};(opts.sessions||[]).forEach(s=>{if(!newExos[s.id])newExos[s.id]=[];});setExos(newExos);
+    }
     // Block config
     const newBc=opts.config?{...blockConfig}:{...DEF_BLOCK_CONFIG};
     newBc.blockName=opts.blockName||"";newBc.objective=opts.objective||"";newBc.totalWeeks=opts.totalWeeks||6;newBc.deloadWeek=opts.deloadWeek||0;newBc.startDate=new Date().toISOString().slice(0,10);
@@ -3775,9 +4264,10 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
   const allMethods=useMemo(()=>({...DEF_METHODS,...Object.fromEntries(customMethods.map(m=>[m.key,m]))}),[customMethods]);
   const tw=blockConfig.totalWeeks||6;
+  const dw=blockConfig.deloadWeek||0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const isDeload=w=>blockConfig.deloadWeek&&w===blockConfig.deloadWeek;
-  const weeklyTarget=useMemo(()=>{const t={};for(let w=1;w<=tw;w++){const n=sessions.filter(s=>(exos[s.id]||[]).some(ex=>ex.weeks?.[w]?.sets)).length;t[w]=n>0?n:goals.sessionsPerWeek;}return t;},[sessions,exos,tw,goals.sessionsPerWeek]);
+  const weeklyTarget=useMemo(()=>{const t={};for(let w=1;w<=tw;w++){const n=sessions.filter(s=>(exos[s.id]||[]).some(ex=>ex.weeks?.[w]?.sets)).length;t[w]=n>0?n:sessions.length||1;}return t;},[sessions,exos,tw]);
   const currentWeek=useMemo(()=>{
     if(blockConfig?.startDate){
       const days=Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000);
@@ -3876,8 +4366,13 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     if(sessions.length===1){const sid=sessions[0].id;setExos(prev=>({...prev,[sid]:[...(prev[sid]||[]),makeEx(sid)]}));setCoachTab("prog");setBankAddMsg('Ajouté à '+sessions[0].name+' !');setTimeout(()=>setBankAddMsg(''),2500);}
     else setBankAddEx(ex);
   };
-  const coachTabs=[{k:"prog",l:"Prog"},{k:"exos",l:"Exos"},{k:"banque",l:"Banque"},{k:"config",l:"Config"},{k:"stats",l:"Stats"},{k:"data",l:"Données"},{k:"retours",l:"Retours"}];
-  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"stats",l:"Stats"},{k:"alim",l:"Alim"},{k:"profil",l:"Profil"},{k:"retours",l:"Retours"}];
+  const[showTierModal,setShowTierModal]=useState(false);
+  const[showExoParams,setShowExoParams]=useState(false);
+  const[coachFeedbacks,setCoachFeedbacks]=useState({});
+  const[showAppFeedback,setShowAppFeedback]=useState(false);
+  const[appFeedbacks,setAppFeedbacks]=useState([]);
+  const coachTabs=[{k:"prog",l:"Prog"},{k:"banque",l:"Banque"},{k:"stats",l:"Stats"},{k:"data",l:"Données"},{k:"test",l:"Test"},{k:"retours",l:"Retours"}];
+  const athTabs=[{k:"dash",l:"Accueil"},{k:"log",l:"Seance"},{k:"alim",l:"Alim"},{k:"test",l:"Test"}];
   const activeTabs=mode==="coach"?coachTabs:athTabs;const activeTab=mode==="coach"?coachTab:tab;const setActiveTab=mode==="coach"?setCoachTab:setTab;
   const tabS=t=>({flex:1,padding:"10px 0",border:"none",borderBottom:"2px solid "+(activeTab===t?(mode==="coach"?C.coach:C.ac):"transparent"),background:"transparent",color:activeTab===t?(mode==="coach"?C.coach:C.ac):C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"});
 
@@ -3885,13 +4380,240 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
   return(<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",color:C.tx,maxWidth:mode==="athlete"?480:"100%",margin:mode==="athlete"?"0 auto":0}}>
 
+    {drawerOpen&&mode==="athlete"&&(<>
+      <div onClick={()=>setDrawerOpen(false)} style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(2px)"}}/>
+      {drawerZoom&&(<div style={{position:"fixed",inset:0,zIndex:103,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:2}}>
+          <button onClick={()=>setDrawerZoom(null)} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
+          <div style={{fontSize:14,fontWeight:700}}>{drawerZoom==="weight"?"Poids de corps":drawerZoom==="wellness"?"Forme du jour":"Score de santé"}</div>
+        </div>
+        <div style={{padding:"16px"}}>
+          {drawerZoom==="weight"&&(<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><div style={{fontSize:13,fontWeight:700}}>Évolution du poids</div><div style={{fontSize:13,fontWeight:800,color:C.ac}}>{bodyWeight.current||"—"}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> / {bodyWeight.target||"—"} kg</span></div></div>{Object.keys(weightLog).length>0?<WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"24px 0"}}>Aucune mesure enregistrée</div>}</div>)}
+          {drawerZoom==="wellness"&&(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {/* Aujourd'hui */}
+            <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Forme du jour</div>
+              {wellness?(<>
+                <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
+                  <div style={{position:"relative",width:72,height:72,flexShrink:0}}><svg viewBox="0 0 64 64" style={{width:72,height:72,transform:"rotate(-90deg)"}}><circle cx="32" cy="32" r="26" fill="none" stroke={C.s2} strokeWidth="5"/><circle cx="32" cy="32" r="26" fill="none" stroke={wReco.c} strokeWidth="5" strokeDasharray={String(2*Math.PI*26)} strokeDashoffset={String(2*Math.PI*26*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:wReco.c}}>{wScore}</div></div>
+                  <div><div style={{fontSize:16,fontWeight:700,color:wReco.c}}>{wReco.label}</div><div style={{fontSize:12,color:C.tx2,marginTop:4}}>{wReco.desc}</div>{wellness.sleepDur&&<div style={{fontSize:11,color:C.b,fontWeight:600,marginTop:4}}>💤 {wellness.sleepDur}h de sommeil</div>}</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>{[{l:"Récupération",v:wellness.fatigue,e:"😴"},{l:"Sommeil",v:wellness.sommeil,e:"💤"},{l:"Sérénité",v:wellness.stress,e:"🧠"},{l:"Énergie",v:wellness.energie,e:"⚡"},{l:"Fraîcheur",v:wellness.doms,e:"💪"}].map(m=>{const mv=m.v||0;const mc=mv>=4?C.g:mv>=3?C.o:C.r;return(<div key={m.l} style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:C.tx3,width:84,flexShrink:0}}>{m.e} {m.l}</span><div style={{flex:1,height:6,background:C.s2,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(mv/5*100)+"%",background:mc,borderRadius:3}}/></div><span style={{fontSize:11,fontWeight:700,color:mc,width:16,textAlign:"right"}}>{mv||"?"}</span></div>);})}</div>
+              </>):<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune donnée de forme aujourd'hui</div>}
+            </div>
+            {/* Historique score */}
+            <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Score de santé</div>
+                <div style={{display:"flex",gap:3}}>{[{k:"week",l:"7j"},{k:"month",l:"30j"},{k:"year",l:"12m"}].map(t=>(<button key={t.k} onClick={()=>setWellnessPeriod(t.k)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:wellnessPeriod===t.k?C.acS:"transparent",color:wellnessPeriod===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div>
+              </div>
+              {(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const has=wData.some(d=>d.score!==null);return has?(<><div style={{display:"flex",gap:10,marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:3,borderRadius:2,background:C.g}}/><span style={{fontSize:9,color:C.tx3}}>Forme /100</span></div><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.b,opacity:0.5}}/><span style={{fontSize:9,color:C.tx3}}>Sommeil (h)</span></div></div><ResponsiveContainer width="100%" height={130}><ComposedChart data={wData} margin={{top:4,right:4,bottom:0,left:-28}}><XAxis dataKey="label" tick={{fontSize:9,fill:C.tx3}} tickLine={false} axisLine={false}/><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const sc=payload.find(p=>p.dataKey==='score');const sl=payload.find(p=>p.dataKey==='sleep');return(<div style={{background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,padding:"6px 10px",fontSize:10}}><div style={{color:C.tx3,marginBottom:4}}>{label}</div>{sc?.value!=null&&<div style={{color:getReco(sc.value).c,fontWeight:700}}>Forme : {sc.value}</div>}{sl?.value!=null&&<div style={{color:C.b}}>Sommeil : {sl.value}h</div>}</div>);}}/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[3,3,0,0]} maxBarSize={20}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={2} dot={(props)=>{if(props.value==null)return<g/>;const rc=getReco(props.value);return<circle cx={props.cx} cy={props.cy} r={3.5} fill={rc.c} stroke={C.bg} strokeWidth={1}/>;}} connectNulls={false}/></ComposedChart></ResponsiveContainer></>):(<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"20px 0"}}>Aucune donnée wellness</div>);})()}
+            </div>
+            {/* Tunnel sommeil */}
+            <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Tunnel de sommeil — 14 jours</div>
+              <div style={{display:"flex",gap:10,marginBottom:10}}>{[{c:C.g,l:"≥ 7.5h"},{c:C.o,l:"6.5–7.5h"},{c:C.r,l:"< 6.5h"}].map(({c,l})=><div key={l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:c,opacity:0.7}}/><span style={{fontSize:9,color:C.tx3}}>{l}</span></div>)}</div>
+              <SleepTunnel wellnessHistory={wellnessHistory} C={C}/>
+            </div>
+          </div>)}
+          {drawerZoom==="health"&&(<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>{(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const hasSomeData=wData.some(d=>d.score!==null);return(<><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:13,fontWeight:700}}>Score de santé</div><div style={{display:"flex",gap:3}}>{[{k:"week",l:"7j"},{k:"month",l:"30j"},{k:"year",l:"12m"}].map(t=>(<button key={t.k} onClick={()=>setWellnessPeriod(t.k)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:wellnessPeriod===t.k?C.acS:"transparent",color:wellnessPeriod===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div></div>{hasSomeData?<ResponsiveContainer width="100%" height={200}><ComposedChart data={wData} margin={{top:4,right:4,bottom:0,left:-28}}><XAxis dataKey="label" tick={{fontSize:9,fill:C.tx3}} tickLine={false} axisLine={false}/><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const sc=payload.find(p=>p.dataKey==='score');const sl=payload.find(p=>p.dataKey==='sleep');return(<div style={{background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,padding:"6px 10px",fontSize:10}}><div style={{color:C.tx3,marginBottom:4}}>{label}</div>{sc?.value!=null&&<div style={{color:getReco(sc.value).c,fontWeight:700}}>Forme : {sc.value}</div>}{sl?.value!=null&&<div style={{color:C.b}}>Sommeil : {sl.value}h</div>}</div>);}}/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[3,3,0,0]} maxBarSize={20}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={2} dot={(props)=>{if(props.value==null)return<g/>;const rc=getReco(props.value);return<circle cx={props.cx} cy={props.cy} r={3.5} fill={rc.c} stroke={C.bg} strokeWidth={1}/>;}} connectNulls={false}/></ComposedChart></ResponsiveContainer>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"30px 0"}}>Aucune donnée wellness</div>}</>);})()}</div>)}
+        </div>
+      </div>)}
+      <div style={{position:"fixed",top:0,right:0,bottom:0,width:"min(360px,92vw)",zIndex:102,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column",boxShadow:"-4px 0 32px rgba(0,0,0,0.6)",borderLeft:"1px solid "+C.brd}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:2}}>
+          <div style={{fontSize:15,fontWeight:700}}>Mon profil</div>
+          <button onClick={()=>setDrawerOpen(false)} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+        <div style={{padding:"16px",flex:1,display:"flex",flexDirection:"column",gap:12}}>
+          {/* Profile card */}
+          <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:C.acS,border:"2px solid "+C.ac+"40",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:C.ac}}>
+                {athleteProfile?([athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"?").split(" ").filter(n=>n).map(n=>n[0]).join("").toUpperCase().slice(0,2):"?"}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.tx}}>{athleteProfile?([athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"Athlète"):"Athlète"}</div>
+                {athleteProfile?.gender&&<div style={{fontSize:11,color:C.tx3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":""}</div>}
+              </div>
+            </div>
+            {athleteProfile&&(<>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:1,background:C.brd,borderTop:"1px solid "+C.brd}}>
+                {[{l:"Âge",v:athleteProfile.age?athleteProfile.age+" ans":null},{l:"Taille",v:athleteProfile.height_cm?athleteProfile.height_cm+" cm":null},{l:"MB",v:athleteProfile.base_metabolism?Math.round(athleteProfile.base_metabolism).toLocaleString("fr-FR")+" kcal":null}].map(s=>(<div key={s.l} style={{background:C.s2,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:10,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>{s.l}</div><div style={{fontSize:13,fontWeight:700,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div></div>))}
+              </div>
+              {(athleteProfile.weight_kg||athleteProfile.body_fat_pct)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:1,background:C.brd,borderTop:"1px solid "+C.brd}}>
+                {[{l:"Poids réf.",v:athleteProfile.weight_kg?athleteProfile.weight_kg+" kg":null},{l:"Masse grasse",v:athleteProfile.body_fat_pct?athleteProfile.body_fat_pct+" %":null}].map(s=>(<div key={s.l} style={{background:C.s2,padding:"10px 8px",textAlign:"center"}}><div style={{fontSize:10,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:3}}>{s.l}</div><div style={{fontSize:13,fontWeight:700,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div></div>))}
+              </div>}
+            </>)}
+            {!athleteProfile&&<div style={{padding:"12px 16px",fontSize:12,color:C.tx3,textAlign:"center"}}>Profil non renseigné</div>}
+          </div>
+          {/* Données sportives */}
+          <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            <button onClick={()=>setDrawerSportOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit"}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Données sportives</div>
+              <span style={{fontSize:12,color:C.tx3,display:"inline-block",transition:"transform 0.2s",transform:drawerSportOpen?"rotate(180deg)":"none"}}>∨</span>
+            </button>
+            {drawerSportOpen&&<div style={{borderTop:"1px solid "+C.brd,padding:"0 0 8px"}}><PerformanceProfile athleteId={athleteId} viewOnly={viewOnly} C={C}/></div>}
+          </div>
+          {/* Poids de corps */}
+          <button onClick={()=>setDrawerZoom("weight")} style={{width:"100%",background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.brd,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Poids de corps</div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:13,fontWeight:800,color:C.ac}}>{(()=>{const e=Object.entries(weightLog).sort((a,b)=>b[0]>a[0]?1:-1)[0];return weightLog[todayKey()]||e?.[1]||bodyWeight.current||"—";})()}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> kg</span></span><span style={{fontSize:11,color:C.tx3}}>→</span></div>
+            </div>
+            {Object.keys(weightLog).length>0?<WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{fontSize:11,color:C.tx3,textAlign:"center",padding:"8px 0"}}>Aucune mesure</div>}
+          </button>
+          {/* Forme du jour */}
+          <button onClick={()=>setDrawerZoom("wellness")} style={{width:"100%",background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+(wellness?wReco.c+30:C.brd),textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:wellness?10:0}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Forme du jour</div>
+              {wellness&&<div style={{display:"flex",alignItems:"center",gap:6}}><div style={{position:"relative",width:36,height:36}}><svg viewBox="0 0 32 32" style={{width:36,height:36,transform:"rotate(-90deg)"}}><circle cx="16" cy="16" r="12" fill="none" stroke={C.s2} strokeWidth="3"/><circle cx="16" cy="16" r="12" fill="none" stroke={wReco.c} strokeWidth="3" strokeDasharray={String(2*Math.PI*12)} strokeDashoffset={String(2*Math.PI*12*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:wReco.c}}>{wScore}</div></div><span style={{fontSize:11,color:C.tx3}}>→</span></div>}
+            </div>
+            {wellness?<><div style={{fontSize:12,fontWeight:600,color:wReco.c}}>{wReco.label}</div>
+            {(wellness.coucher||wellness.reveil||wellness.sleepDur)&&<div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+              {wellness.coucher&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>🌙</span><span style={{fontSize:10,color:C.tx2,fontWeight:600}}>{String(wellness.coucher.h).padStart(2,"0")}:{String(wellness.coucher.m).padStart(2,"0")}</span></div>}
+              {wellness.reveil&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>☀️</span><span style={{fontSize:10,color:C.tx2,fontWeight:600}}>{String(wellness.reveil.h).padStart(2,"0")}:{String(wellness.reveil.m).padStart(2,"0")}</span></div>}
+              {wellness.sleepDur&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.b+"18"}}><span style={{fontSize:10}}>💤</span><span style={{fontSize:10,color:C.b,fontWeight:700}}>{wellness.sleepDur}h</span></div>}
+            </div>}</>:<div style={{fontSize:11,color:C.tx3}}>Aucun bilan aujourd'hui</div>}
+          </button>
+          {/* Score de santé */}
+          <button onClick={()=>setDrawerZoom("health")} style={{width:"100%",background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.brd,textAlign:"left",cursor:"pointer",fontFamily:"inherit"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Score de santé</div>
+              <span style={{fontSize:11,color:C.tx3}}>→</span>
+            </div>
+            {(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const hasSomeData=wData.some(d=>d.score!==null);return hasSomeData?<ResponsiveContainer width="100%" height={72}><ComposedChart data={wData} margin={{top:2,right:2,bottom:0,left:-28}}><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[2,2,0,0]} maxBarSize={10}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={1.5} dot={false} connectNulls={false}/></ComposedChart></ResponsiveContainer>:<div style={{fontSize:11,color:C.tx3,textAlign:"center",padding:"8px 0"}}>Aucune donnée</div>;})()}
+          </button>
+          {/* 1RM Record */}
+          <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
+            <button onClick={()=>setDrawerPrOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit"}}>
+              <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>1RM Record</div>
+              <span style={{fontSize:12,color:C.tx3,display:"inline-block",transition:"transform 0.2s",transform:drawerPrOpen?"rotate(180deg)":"none"}}>∨</span>
+            </button>
+            {drawerPrOpen&&(<div style={{borderTop:"1px solid "+C.brd,padding:"12px 16px"}}>
+              {(()=>{
+                const seen=new Set();
+                const progExNames=Object.values(exos||{}).flat().map(ex=>ex.name||'').filter(n=>{if(!n||seen.has(n.toLowerCase()))return false;seen.add(n.toLowerCase());return true;}).sort();
+                const filtered=prSearch?progExNames.filter(n=>n.toLowerCase().includes(prSearch.toLowerCase())):progExNames;
+                const getActual1rm=(exName,w)=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===exName.toLowerCase()).map(ex=>ex.id);let best=null;exIds.forEach(id=>{(sets[id+"_"+w]||[]).filter(r=>r.done&&r.kg>0).forEach(r=>{const est=e1rm(r.kg,r.reps||1);if(!best||est>best)best=est;});});return best;};
+                const actual1rmByWeek=prExName?Array.from({length:tw},(_,i)=>({w:i+1,week:"S"+(i+1),val:getActual1rm(prExName,i+1)})):[];
+                const bestActual=actual1rmByWeek.reduce((mx,d)=>d.val&&d.val>mx.val?d:mx,{val:0,w:null});
+                const showDropdown=prSearch&&filtered.length>0&&!progExNames.find(n=>n.toLowerCase()===prSearch.toLowerCase());
+                return(<>
+                  <div style={{position:"relative",marginBottom:10}}>
+                    <input value={prSearch} onChange={e=>{setPrSearch(e.target.value);setPrExName(null);}} placeholder={progExNames.length?"Rechercher un exercice...":"Aucun exercice"} style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                    {showDropdown&&(<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,zIndex:50,maxHeight:140,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                      {filtered.slice(0,6).map(n=>(<div key={n} onClick={()=>{setPrExName(n);setPrSearch(n);}} style={{padding:"8px 12px",fontSize:12,cursor:"pointer",color:C.tx,borderBottom:"1px solid "+C.brd}}>{n}</div>))}
+                    </div>)}
+                  </div>
+                  {prExName?(
+                    <>
+                      <div style={{display:"flex",gap:5,marginBottom:10}}>
+                        {[{k:"est",l:"1RM Estimé"},{k:"evo",l:"Évolution"}].map(t=>(<button key={t.k} onClick={()=>setPrTab(t.k)} style={{padding:"4px 12px",borderRadius:7,border:"none",background:prTab===t.k?C.acS:C.s2,color:prTab===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}
+                      </div>
+                      {prTab==="est"&&<div style={{textAlign:"center"}}><div style={{fontSize:44,fontWeight:900,color:C.ac,letterSpacing:"-2px",lineHeight:1}}>{bestActual.val||"--"}</div><div style={{fontSize:10,color:C.tx3,marginTop:3}}>kg estimé 1RM</div>{bestActual.w&&<div style={{marginTop:6,fontSize:10,color:C.tx3,padding:"2px 8px",borderRadius:5,background:C.s2,display:"inline-block"}}>Meilleure perf. S{bestActual.w}</div>}</div>}
+                      {prTab==="evo"&&(actual1rmByWeek.some(d=>d.val)?<MiniChart data={actual1rmByWeek} color={C.ac} h={70}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Aucune série effectuée</div>)}
+                    </>
+                  ):(
+                    <div style={{fontSize:11,color:C.tx3,textAlign:"center",padding:"10px 0"}}>{progExNames.length?"Recherche et sélectionne un exercice":"Aucun exercice dans la programmation"}</div>
+                  )}
+                </>);
+              })()}
+            </div>)}
+          </div>
+          {/* Blessures */}
+          {activeInjuries.length>0&&(<div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.r+"30",overflow:"hidden"}}>
+            <button onClick={()=>setDrawerInjOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:6,height:6,borderRadius:"50%",background:C.r}}/><div style={{fontSize:12,fontWeight:600,color:C.r,textTransform:"uppercase",letterSpacing:"0.5px"}}>Blessures actives ({activeInjuries.length})</div></div>
+              <span style={{fontSize:12,color:C.tx3,display:"inline-block",transition:"transform 0.2s",transform:drawerInjOpen?"rotate(180deg)":"none"}}>∨</span>
+            </button>
+            {drawerInjOpen&&(<div style={{borderTop:"1px solid "+C.r+"30",padding:"8px 16px"}}>
+              {activeInjuries.map(inj=>{const sc=stC(inj.status);const zn=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non précisée";return(<div key={inj.id} style={{padding:"8px 10px",borderRadius:8,background:C.s2,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:12,fontWeight:600,color:C.tx}}>{zn}</div><div style={{fontSize:10,color:C.tx3}}>Intensité {inj.intensity}/10</div></div><span style={{fontSize:10,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:5,background:sc+"15"}}>{inj.status}</span></div>);})}
+            </div>)}
+          </div>)}
+          {/* Retour du coach */}
+          {(()=>{
+            const weeks=Object.keys(coachFeedbacks).map(Number).filter(Boolean).sort((a,b)=>b-a);
+            const latestWeek=weeks[0];
+            const latestFb=latestWeek?coachFeedbacks[latestWeek]:null;
+            if(!latestFb?.note)return null;
+            return(<div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.coach+"40",overflow:"hidden"}}>
+              <button onClick={()=>{setTab("retours");setDrawerOpen(false);}} style={{width:"100%",padding:"12px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:13}}>💬</span>
+                    <span style={{fontSize:11,fontWeight:700,color:C.coach}}>Retour du coach</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:9,color:C.tx3}}>S{latestWeek}</span>
+                    <span style={{fontSize:11,color:C.coach}}>›</span>
+                  </div>
+                </div>
+                <div style={{fontSize:11,color:C.tx2,lineHeight:1.55,fontStyle:"italic",overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>"{latestFb.note}"</div>
+              </button>
+            </div>);
+          })()}
+          {/* Retours button */}
+          <div style={{marginTop:"auto",paddingTop:8,display:"flex",flexDirection:"column",gap:8}}>
+            <button onClick={()=>{setShowAppFeedback(true);setDrawerOpen(false);}} style={{width:"100%",padding:"10px 0",borderRadius:12,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              <span>💬</span><span>Donner un avis sur l'app</span>
+            </button>
+            <button onClick={()=>{setTab("retours");setDrawerOpen(false);}} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 20px "+C.ac+"50"}}>Retours & Feedback</button>
+          </div>
+        </div>
+      </div>
+    </>)}
     {showWellness&&(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd}}><div style={{fontSize:14,fontWeight:700}}>Wellness du jour</div><button onClick={()=>setShowWellness(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:20,cursor:"pointer",fontFamily:"inherit"}}>x</button></div><WellnessFlow existing={wellness} onSave={saveWellness} sleepTarget={goals.sleepTarget} onAddInjury={addInjury} weightLog={weightLog}/></div>)}
+    {showAppFeedback&&(()=>{
+      let fbRating=null,fbText="",fbSending=false;
+      const AppFbForm=()=>{
+        const[rating,setRating]=React.useState(null);
+        const[text,setText]=React.useState("");
+        const[sending,setSending]=React.useState(false);
+        const[done,setDone]=React.useState(false);
+        const submit=async()=>{
+          if(!rating||sending)return;
+          setSending(true);
+          const entry={id:"fb_"+Date.now(),date:new Date().toISOString(),rating,text:text.trim()};
+          const newList=[...appFeedbacks,entry];
+          await supabase.from('app_data').upsert({athlete_id:athleteId,key:'app:user_feedback',value:{entries:newList},updated_at:new Date().toISOString()},{onConflict:'athlete_id,key'});
+          setAppFeedbacks(newList);
+          setSending(false);setDone(true);
+          setTimeout(()=>setShowAppFeedback(false),1500);
+        };
+        if(done)return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flex:1,gap:12,padding:32}}><div style={{fontSize:40}}>🙏</div><div style={{fontSize:18,fontWeight:800,color:C.g}}>Merci !</div><div style={{fontSize:13,color:C.tx2}}>Ton avis nous aide à améliorer l'app.</div></div>);
+        return(<div style={{padding:"24px 20px",display:"flex",flexDirection:"column",gap:20}}>
+          <div><div style={{fontSize:22,fontWeight:900,letterSpacing:"-0.5px",marginBottom:6}}>Donne ton avis</div><div style={{fontSize:13,color:C.tx2}}>Ton retour nous aide à améliorer l'expérience. Ça prend 30 secondes.</div></div>
+          <div>
+            <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Note globale</div>
+            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+              {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{fontSize:32,background:"none",border:"none",cursor:"pointer",opacity:rating&&n<=rating?1:0.3,transform:rating===n?"scale(1.2)":"scale(1)",transition:"all 0.15s",padding:"4px 6px"}}>⭐</button>)}
+            </div>
+            <div style={{textAlign:"center",fontSize:12,color:C.tx3,marginTop:6}}>{rating===1?"À améliorer":rating===2?"Moyen":rating===3?"Correct":rating===4?"Bien":"Excellent !"}</div>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Commentaire (optionnel)</div>
+            <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Ce que tu aimes, ce qui manque, un bug rencontré..." rows={4} style={{width:"100%",padding:"12px 14px",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:13,fontFamily:"inherit",resize:"none",outline:"none",boxSizing:"border-box",lineHeight:1.6}}/>
+          </div>
+          <button onClick={submit} disabled={!rating||sending} style={{padding:"14px 0",borderRadius:12,border:"none",background:rating?C.ac:"#333",color:rating?"#fff":C.tx3,fontSize:14,fontWeight:700,cursor:rating?"pointer":"default",fontFamily:"inherit",opacity:sending?0.7:1}}>
+            {sending?"Envoi…":"Envoyer mon avis"}
+          </button>
+        </div>);
+      };
+      return(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd,flexShrink:0}}>
+          <div style={{fontSize:14,fontWeight:700}}>Avis sur l'app</div>
+          <button onClick={()=>setShowAppFeedback(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:20,cursor:"pointer",fontFamily:"inherit"}}>×</button>
+        </div>
+        <AppFbForm/>
+      </div>);
+    })()}
     {milestoneNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:250,background:C.s1,border:"1px solid "+C.g+"50",borderRadius:14,padding:"12px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><div><div style={{fontSize:13,fontWeight:700,color:C.g}}>Nouveau palier valide !</div><div style={{fontSize:11,color:C.tx2}}>Poids mis a jour : {milestoneNotif} kg</div></div></div>)}
     {autoProgNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:251,background:C.s1,border:"1px solid "+C.coach+"50",borderRadius:14,padding:"10px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><span style={{fontSize:18}}>↗</span><div><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Surcharge progressive mise à jour</div><div style={{fontSize:11,color:C.tx2}}>{autoProgNotif}</div></div></div>)}
     {weekJustCompleted&&(<div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.9)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}><div style={{fontSize:26,fontWeight:800,color:C.g}}>Semaine {weekJustCompleted} validee !</div><div style={{fontSize:14,color:C.tx2}}>{weekJustCompleted<tw?"En route pour S"+(weekJustCompleted+1):"Bloc termine !"}</div><div style={{display:"flex",gap:6,marginTop:8}}>{[...Array(tw)].map((_,i)=><div key={i} style={{width:10,height:10,borderRadius:"50%",background:i<weekJustCompleted?C.g:C.s2}}/>)}</div></div>)}
     {showBilan&&(<div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}><div style={{padding:"40px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:20}}><div style={{fontSize:28,fontWeight:800,textAlign:"center"}}>Bloc termine !</div><div style={{fontSize:14,color:C.tx2}}>{totalDone} seances realisees</div><div style={{display:"flex",gap:12,width:"100%"}}>{getBig3(exos).map(({name,label,c})=>{const pr=prs[name];return(<div key={label} style={{flex:1,background:C.s1,borderRadius:14,padding:"14px 10px",textAlign:"center",border:"1px solid "+c+"30"}}><div style={{fontSize:11,color:C.tx3,marginBottom:4}}>{label}</div><div style={{fontSize:22,fontWeight:800,color:c}}>{pr?.est||"--"}</div><div style={{fontSize:9,color:C.tx3}}>kg est.</div></div>);})}</div><div style={{width:"100%",background:C.s1,borderRadius:14,padding:16,border:"1px solid "+C.brd}}><CombinedStatsChart data={combinedData}/></div><button onClick={()=>{setShowBilan(false);setShowNewBlock(true);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.coach,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button><button onClick={()=>setShowBilan(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Fermer</button></div></div>)}
-    {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0}/>}
-    {showBlockHistory&&<BlockHistoryViewer blockHistory={blockHistory} onClose={()=>setShowBlockHistory(false)}/>}
+    {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} onResume={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0} blockHistory={blockHistory} onDelete={idx=>setBlockHistory(blockHistory.filter((_,i)=>i!==idx))}/>}
+    {showBlockHistory&&<BlockHistoryViewer blockHistory={blockHistory} onClose={()=>setShowBlockHistory(false)} onDelete={idx=>setBlockHistory(blockHistory.filter((_,i)=>i!==idx))}/>}
+    {showTierModal&&<TierConfigModal blockConfig={blockConfig} setBlockConfig={setBlockConfig} onClose={()=>setShowTierModal(false)}/>}
     {mode==="coach"&&coachTab==="prog"&&sessions.length>0&&<AIChatBar exos={exos} sessions={sessions} chatHistory={chatHistory} setChatHistory={setChatHistory} onApply={applyAIEdit} onOpenChange={setAiChatOpen} C={C}/>}
     {mode==="athlete"&&(timerActive||timerFinished)&&(<div style={{position:"fixed",bottom:64,left:"50%",transform:"translateX(-50%)",zIndex:150,background:timerFinished?"rgba(34,201,147,0.15)":C.s1,border:"1px solid "+(timerFinished?C.g:timerActive&&timerLeft<=10?C.r:C.ac)+"70",borderRadius:50,padding:"9px 18px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",backdropFilter:"blur(8px)"}}>
       {timerFinished?<span style={{fontSize:16}}>🔔</span>:<div style={{width:24,height:24,position:"relative"}}><svg viewBox="0 0 24 24" style={{width:24,height:24,transform:"rotate(-90deg)"}}><circle cx="12" cy="12" r="9" fill="none" stroke={C.s2} strokeWidth="2.5"/><circle cx="12" cy="12" r="9" fill="none" stroke={timerLeft<=10?C.r:C.ac} strokeWidth="2.5" strokeDasharray={String(2*Math.PI*9)} strokeDashoffset={String(2*Math.PI*9*(1-Math.min((timerDur-timerLeft)/timerDur,1)))} strokeLinecap="round"/></svg></div>}
@@ -3909,6 +4631,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {canToggleMode&&<div style={{display:"flex",background:C.s1,borderRadius:8,padding:2,border:"1px solid "+C.brdL}}>{[{k:"athlete",l:"Athlete"},{k:"coach",l:"Coach"}].map(({k,l})=>(<button key={k} onClick={()=>switchMode(k)} style={{padding:"5px 10px",borderRadius:6,border:"none",background:mode===k?(k==="coach"?C.coach:C.ac):"transparent",color:mode===k?"#fff":C.tx3,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>))}</div>}
+          {mode==="athlete"&&<button onClick={()=>setDrawerOpen(true)} title="Mon profil" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>☰</button>}
           {userName&&!myProfile?.is_admin&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
           <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/login";}} title="Déconnexion" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⏻</button>
         </div>
@@ -3918,17 +4641,82 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
     {mode==="coach"&&(<div style={{padding:"20px 40px "+(aiChatOpen?"calc(60vh + 40px)":"60px"),maxWidth:1400,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:C.coachS,border:"1px solid "+C.coach+"30",marginBottom:20}}><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Mode Coach</div><div style={{fontSize:11,color:C.tx3}}>- Planification</div></div>
-      {coachTab==="prog"&&<><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><div style={{fontSize:16,fontWeight:700}}>Programme</div>{blockConfig?.blockName&&<div style={{fontSize:11,color:C.b,fontWeight:600,marginTop:2}}>{blockConfig.blockName}{blockConfig?.objective?" · "+blockConfig.objective:""} · {tw} sem.</div>}</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+C.coach+"40",background:C.coachS,color:C.coach,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button></div>{sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions}/>}</>}
-      {coachTab==="exos"&&<><div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Exercices</div><div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Muscles, hierarchie &amp; categorie</div><CoachExoParams exMeta={exMeta} setExMeta={setExMeta} exos={exos} setExos={setExos} blockConfig={blockConfig}/></>}
-      {coachTab==="banque"&&<><ExerciseBank coachId={athleteId} onAddToExos={handleBankAdd}/>{bankAddMsg&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:250,background:C.g,color:"#fff",borderRadius:12,padding:"10px 20px",fontSize:13,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{bankAddMsg}</div>}</>}
+      {coachTab==="prog"&&(<>
+        {/* Paramètres de bloc au-dessus des sous-onglets */}
+        <div style={{background:C.s1,borderRadius:14,padding:"12px 16px",border:"1px solid "+C.b+"30",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:600,color:C.b,textTransform:"uppercase",letterSpacing:"0.5px"}}>Bloc d'entraînement</div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>setShowNewBlock(true)} style={{padding:"4px 10px",borderRadius:7,border:"1px solid "+C.coach+"40",background:C.coachS,color:C.coach,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button>
+              <button onClick={()=>setShowBlockHistory(true)} style={{padding:"4px 10px",borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>Historique{blockHistory.length>0&&<span style={{position:"absolute",top:-3,right:-3,background:C.ac,color:"#fff",fontSize:8,fontWeight:800,width:13,height:13,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center"}}>{blockHistory.length}</span>}</button>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
+            <input value={blockConfig?.blockName||""} onChange={e=>setBlockConfig(c=>({...c,blockName:e.target.value}))} placeholder="Nom du bloc..." style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:13,fontWeight:600,fontFamily:"inherit"}}/>
+          </div>
+          {/* Dates + durée */}
+          <div style={{display:"flex",gap:8,marginBottom:8,alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:10,color:C.tx3,flexShrink:0}}>Début</span>
+              <input type="date" value={blockConfig?.startDate||""} onChange={e=>setBlockConfig(c=>({...c,startDate:e.target.value||null}))} style={{padding:"6px 8px",borderRadius:8,border:"1px solid "+(blockConfig?.startDate?C.brdL:C.o+"60"),background:C.s2,color:blockConfig?.startDate?C.tx:C.o,fontSize:12,fontFamily:"inherit"}}/>
+            </div>
+            {blockConfig?.startDate&&(()=>{const end=new Date(new Date(blockConfig.startDate).getTime()+tw*7*86400000);const fmtDate=d=>d.toLocaleDateString("fr-FR",{day:"2-digit",month:"short"});return(<div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:8,background:C.s2}}><span style={{fontSize:10,color:C.tx3}}>Fin</span><span style={{fontSize:11,fontWeight:700,color:C.b}}>{fmtDate(end)}</span></div>);})()}
+            <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:8,background:C.s2,border:"1px solid "+C.brd}}>
+              <span style={{fontSize:10,color:C.tx3}}>Durée</span>
+              <button onClick={()=>setBlockConfig(c=>({...c,totalWeeks:Math.max(3,c.totalWeeks-1)}))} style={{width:22,height:22,borderRadius:5,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:14,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}>-</button>
+              <span style={{fontSize:13,fontWeight:800,color:C.b,minWidth:36,textAlign:"center"}}>{tw}sem</span>
+              <button onClick={()=>setBlockConfig(c=>({...c,totalWeeks:Math.min(16,c.totalWeeks+1)}))} style={{width:22,height:22,borderRadius:5,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:14,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}>+</button>
+            </div>
+            {blockConfig?.startDate&&(()=>{const days=Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000);const wk=Math.min(Math.max(1,Math.floor(days/7)+1),tw);return<span style={{fontSize:10,color:C.g,padding:"5px 8px",borderRadius:7,background:C.gS,fontWeight:600}}>S{wk} · J{days+1}</span>;})()}
+          </div>
+          {/* Deload : sélection par semaine */}
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,color:C.tx3,flexShrink:0}}>Deload :</span>
+            {weeksArr.map(w=>{const isDL=dw===w;return(<button key={w} onClick={()=>setBlockConfig(c=>({...c,deloadWeek:c.deloadWeek===w?0:w}))} style={{padding:"4px 9px",borderRadius:6,border:"1px solid "+(isDL?C.b+"60":C.brdL),background:isDL?C.bS:"transparent",color:isDL?C.b:C.tx3,fontSize:10,fontWeight:isDL?700:400,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>S{w}</button>);})}
+            {dw>0&&<button onClick={()=>setBlockConfig(c=>({...c,deloadWeek:0}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
+          </div>
+        </div>
+        {/* Sous-onglets prog */}
+        <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
+          {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
+            <button key={t.k} onClick={()=>{setProgSubTab(t.k);setEnergyEditorKey(null);}} style={{padding:"9px 18px",border:"none",borderBottom:"2px solid "+(progSubTab===t.k?C.coach:"transparent"),background:"transparent",color:progSubTab===t.k?C.coach:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px",flexShrink:0}}>{t.l}</button>
+          ))}
+        </div>
+        {progSubTab==="muscu"&&(<>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <div style={{fontSize:16,fontWeight:700}}>Musculation{blockConfig?.blockName&&<span style={{fontSize:11,color:C.b,fontWeight:600,marginLeft:8}}>{blockConfig.blockName} · {tw} sem.</span>}</div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>setShowTierModal(true)} style={{padding:"6px 10px",borderRadius:8,border:"1px solid "+C.o+"40",background:C.o+"12",color:C.o,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>⚙ Surcharge</button>
+            </div>
+          </div>
+          {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions}/>}
+          {sessions.length>0&&<div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+C.brd}}>
+            <button onClick={()=>setShowExoParams(p=>!p)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"1px solid "+C.brdL,background:showExoParams?C.acS:"transparent",color:showExoParams?C.ac:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:showExoParams?12:0}}>
+              ⚙ Paramètres exercices{showExoParams?" ∧":" ∨"}
+            </button>
+            {showExoParams&&<CoachExoParams exMeta={exMeta} setExMeta={setExMeta} exos={exos} setExos={setExos} blockConfig={blockConfig}/>}
+          </div>}
+        </>)}
+        {progSubTab==="energie"&&(<CoachEnergyProgram athleteId={athleteId} energyEditorKey={energyEditorKey} setEnergyEditorKey={setEnergyEditorKey} energySessions={energySessions} setEnergySessions={setEnergySessions} energySessionsLoaded={energySessionsLoaded} setEnergySessionsLoaded={setEnergySessionsLoaded} C={C} blockConfig={blockConfig} currentWeek={currentWeek}/>)}
+        {progSubTab==="specifique"&&(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>🎯</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Séances Spécifiques</div><div style={{fontSize:12,color:C.tx3}}>Planification des séances spécifiques à venir prochainement.</div></div>)}
+      </>)}
+      {coachTab==="banque"&&(<>
+        {/* Sous-onglets banque */}
+        <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
+          {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"}].map(t=>(
+            <button key={t.k} onClick={()=>setBanqueSubTab(t.k)} style={{padding:"9px 18px",border:"none",borderBottom:"2px solid "+(banqueSubTab===t.k?C.coach:"transparent"),background:"transparent",color:banqueSubTab===t.k?C.coach:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px"}}>{t.l}</button>
+          ))}
+        </div>
+        {banqueSubTab==="muscu"&&<><ExerciseBank coachId={athleteId} onAddToExos={handleBankAdd}/>{bankAddMsg&&<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:250,background:C.g,color:"#fff",borderRadius:12,padding:"10px 20px",fontSize:13,fontWeight:700,whiteSpace:"nowrap",boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>{bankAddMsg}</div>}</>}
+        {banqueSubTab==="energie"&&<EnergyExerciseBank coachId={athleteId} C={C}/>}
+      </>)}
       {bankAddEx&&sessions.length>1&&(<div style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setBankAddEx(null)}><div style={{width:"100%",maxWidth:640,background:C.s1,borderRadius:"16px 16px 0 0",padding:24}} onClick={e=>e.stopPropagation()}><div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Ajouter à quelle séance ?</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>{bankAddEx.name}</div>{sessions.map(s=>(<button key={s.id} onClick={()=>{const newEx={id:"g_"+Date.now(),name:bankAddEx.name,bloc:bankAddEx.bloc||"ESTH",target:bankAddEx.target||"Pecs",exType:bankAddEx.ex_type||"muscu",exercise_id:bankAddEx.id,weeks:{1:{kg:0,sets:3,repsRange:"10",rir:2}}};setExos(prev=>({...prev,[s.id]:[...(prev[s.id]||[]),newEx]}));setBankAddEx(null);setCoachTab("prog");}} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:"1px solid "+C.brdL,background:C.s2,marginBottom:8,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}><div style={{width:32,height:32,borderRadius:8,background:C.acS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.ac}}>{s.short||s.name.charAt(0)}</div><div style={{fontSize:13,fontWeight:600,color:C.tx}}>{s.name}</div></button>))}<button onClick={()=>setBankAddEx(null)} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"none",background:"transparent",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>Annuler</button></div></div>)}
-      {coachTab==="config"&&<><div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Configuration</div><div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Objectifs athlete</div><CoachConfig goals={goals} setGoals={setGoals} bodyWeight={bodyWeight} setBodyWeight={setBodyWeight} completedSessions={completedSessions} uncompleteSession={uncompleteSession} sessions={sessions} blockConfig={blockConfig} setBlockConfig={setBlockConfig} weeksArr={weeksArr} onNewBlock={()=>setShowNewBlock(true)} onShowHistory={()=>setShowBlockHistory(true)} blockHistoryCount={blockHistory.length}/></>}
       {coachTab==="stats"&&(<>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Suivi athlete</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
 
         {/* Calendrier hebdomadaire — en premier */}
-        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog}/>
+        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog} exos={exos}/>
 
         {/* 1RM Progression */}
         <div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
@@ -4095,6 +4883,40 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             {onEditProfile&&<button onClick={onEditProfile} style={{padding:"6px 14px",borderRadius:8,border:"1px solid "+C.coach+"50",background:C.coachS,color:C.coach,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Définir</button>}
           </div>
         )}
+        {/* Performances sportives de l'athlète */}
+        <div style={{marginBottom:20}}>
+          <PerformanceProfile athleteId={athleteId} viewOnly={false} isCoach={true} C={C}/>
+        </div>
+        {/* Notifications de validation des performances */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Validations de performances</div>
+          <CoachPerfNotification coachId={athleteId} C={C}/>
+        </div>
+        {/* Gestion du bloc */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Gestion du bloc</div>
+          <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>Annulation de séances et historique</div>
+          <CoachConfig completedSessions={completedSessions} uncompleteSession={uncompleteSession} sessions={sessions} weeksArr={weeksArr} onNewBlock={()=>setShowNewBlock(true)} onShowHistory={()=>setShowBlockHistory(true)} blockHistoryCount={blockHistory.length}/>
+        </div>
+        {/* Avis sur l'app */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Avis sur l'app</div>
+          <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>Retours de cet athlète sur l'application</div>
+          {appFeedbacks.length===0?(<div style={{background:C.s1,borderRadius:12,padding:"14px 16px",border:"1px solid "+C.brd,fontSize:12,color:C.tx3}}>Aucun avis envoyé pour l'instant</div>):(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[...appFeedbacks].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(fb=>{
+                const sc=fb.rating>=4?C.g:fb.rating>=3?C.o:C.r;
+                return(<div key={fb.id} style={{background:C.s1,borderRadius:12,padding:"12px 14px",border:"1px solid "+C.brd}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:fb.text?8:0}}>
+                    <div style={{display:"flex",gap:2}}>{[1,2,3,4,5].map(n=><span key={n} style={{fontSize:14,opacity:n<=fb.rating?1:0.2}}>⭐</span>)}</div>
+                    <span style={{fontSize:10,color:C.tx3}}>{new Date(fb.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})}</span>
+                  </div>
+                  {fb.text&&<div style={{fontSize:12,color:C.tx2,lineHeight:1.55,fontStyle:"italic"}}>"{fb.text}"</div>}
+                </div>);
+              })}
+            </div>
+          )}
+        </div>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Gestion des données</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:16}}>Supprimer sélectivement des données</div>
       </div>
@@ -4110,7 +4932,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         injuries={injuries} setInjuries={setInjuries}
         weeksArr={weeksArr}
       /></>)}
-      {coachTab==="retours"&&<RetoursView/>}
+      {coachTab==="test"&&<TestSessionView athleteId={athleteId} viewOnly={viewOnly} C={C} testSubTab={testSubTab} setTestSubTab={setTestSubTab} isCoach={true}/>}
+      {coachTab==="retours"&&<CoachWeeklyFeedback athleteId={athleteId} sessions={sessions} completedSessions={completedSessions} energySessions={energySessions} currentWeek={currentWeek} blockConfig={blockConfig} exos={exos} sets={sets} wellnessHistory={wellnessHistory} C={C}/>}
     </div>)}
 
     {mode==="athlete"&&tab!=="log"&&(()=>{const lsA=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:sess_start')||'null');if(d?.sid&&d?.wk){const s=sessions.find(x=>x.id===d.sid);return s?{...d,name:s.name}:null;}return null;}catch{return null;}})();const lsF=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:free_start')||'null');if(d?.id){const f=(freeSessions||[]).find(x=>x.id===d.id);return f&&!f.completed?{...d,name:f.name}:null;}return null;}catch{return null;}})();if(!lsA&&!lsF)return null;const active=lsA||lsF;return(<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
@@ -4132,7 +4955,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             </div>
           </div>):<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"10px 0"}}>Appuyez pour remplir le bilan</div>}
         </button>
-        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog}/>
+        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog} exos={exos}/>
         {nutritionStrategy&&(()=>{const todayISO=new Date().toISOString().slice(0,10);const todayNL=nutritionLog[todayISO]||null;const strat=nutritionStrategy;const consumed=todayNL?.total_calories_consumed||null;const bmrV=athleteProfile?.base_metabolism||0;const targetCal=strat.can_track_calories?(bmrV+(todayNL?.active_calories||0)):strat.total_calories_coach||null;const stratC=strat.strategy==="seche"?C.r:strat.strategy==="prise_de_masse"?C.g:C.b;const stratL=strat.strategy==="seche"?"Sèche":strat.strategy==="prise_de_masse"?"Prise":"Maintenance";
           const surplusPct=(consumed&&targetCal&&targetCal>0)?((consumed-targetCal)/targetCal)*100:null;
           const inRange=surplusPct!==null&&strat.surplus_deficit_min!=null&&strat.surplus_deficit_max!=null&&surplusPct>=strat.surplus_deficit_min&&surplusPct<=strat.surplus_deficit_max;
@@ -4209,158 +5032,22 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         {habitEnabled&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
       </div>)}
 
-      {tab==="log"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))} weekSchedule={weekSchedule}/>}
-
-      {tab==="stats"&&(()=>{
-        const filteredLog=(()=>{if(weightRange==="all")return weightLog;const entries=Object.entries(weightLog).sort((a,b)=>a[0]<b[0]?-1:1);if(weightRange==="3m"){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-3);const key=String(cutoff.getFullYear())+String(cutoff.getMonth()+1).padStart(2,"0")+String(cutoff.getDate()).padStart(2,"0");return Object.fromEntries(entries.filter(([k])=>k>=key));}return Object.fromEntries(entries.slice(-tw*2));})();
-        return(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon bilan</div>
-
-        {/* 1RM Exercice */}
-        {(()=>{
-          const seen=new Set();
-          const progExNames=Object.values(exos||{}).flat().map(ex=>ex.name||'').filter(n=>{if(!n||seen.has(n.toLowerCase()))return false;seen.add(n.toLowerCase());return true;}).sort();
-          const filtered=prSearch?progExNames.filter(n=>n.toLowerCase().includes(prSearch.toLowerCase())):progExNames;
-          const getActual1rm=(exName,w)=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===exName.toLowerCase()).map(ex=>ex.id);let best=null;exIds.forEach(id=>{(sets[id+"_"+w]||[]).filter(r=>r.done&&r.kg>0).forEach(r=>{const est=e1rm(r.kg,r.reps||1);if(!best||est>best)best=est;});});return best;};
-          const actual1rmByWeek=prExName?Array.from({length:tw},(_,i)=>({w:i+1,week:"S"+(i+1),val:getActual1rm(prExName,i+1)})):[];
-          const bestActual=actual1rmByWeek.reduce((mx,d)=>d.val&&d.val>mx.val?d:mx,{val:0,w:null});
-          const showDropdown=prSearch&&filtered.length>0&&!progExNames.find(n=>n.toLowerCase()===prSearch.toLowerCase());
-          return(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>1RM Exercice</div>
-            <div style={{position:"relative",marginBottom:12}}>
-              <input value={prSearch} onChange={e=>{setPrSearch(e.target.value);setPrExName(null);}} placeholder={progExNames.length?"Rechercher un exercice...":"Aucun exercice dans le programme"} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-              {showDropdown&&(<div style={{position:"absolute",top:"100%",left:0,right:0,background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,zIndex:50,maxHeight:160,overflowY:"auto",marginTop:4,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
-                {filtered.slice(0,8).map(n=>(<div key={n} onClick={()=>{setPrExName(n);setPrSearch(n);}} style={{padding:"9px 12px",fontSize:12,cursor:"pointer",color:C.tx,borderBottom:"1px solid "+C.brd}}>{n}</div>))}
-              </div>)}
-            </div>
-            {prExName?(
-              <>
-                <div style={{display:"flex",gap:6,marginBottom:14}}>
-                  {[{k:"est",l:"1RM Estimé"},{k:"evo",l:"Évolution"}].map(t=>(<button key={t.k} onClick={()=>setPrTab(t.k)} style={{padding:"5px 14px",borderRadius:8,border:"none",background:prTab===t.k?C.acS:C.s2,color:prTab===t.k?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}
-                </div>
-                {prTab==="est"&&(<div style={{textAlign:"center"}}>
-                  <div style={{fontSize:48,fontWeight:900,color:C.ac,letterSpacing:"-3px",lineHeight:1}}>{bestActual.val||"--"}</div>
-                  <div style={{fontSize:11,color:C.tx3,marginTop:4}}>kg estimé 1RM</div>
-                  {bestActual.w&&<div style={{marginTop:8,fontSize:11,color:C.tx3,padding:"2px 10px",borderRadius:5,background:C.s2,display:"inline-block"}}>Meilleure perf. S{bestActual.w}</div>}
-                  {(()=>{const exIds=Object.values(exos||{}).flat().filter(ex=>(ex.name||'').toLowerCase()===prExName.toLowerCase()).map(ex=>ex.id);let wkSets=[];exIds.forEach(id=>{wkSets=[...wkSets,...(sets[id+"_"+currentWeek]||[]).filter(r=>r.done&&r.kg>0)];});if(!wkSets.length)return null;return(<div style={{marginTop:12,background:C.s2,borderRadius:10,padding:"10px 12px",textAlign:"left"}}><div style={{fontSize:9,color:C.tx3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.5px"}}>Séries S{currentWeek}</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{wkSets.slice(0,8).map((r,i)=>(<span key={i} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:C.acS,color:C.ac,fontWeight:600}}>{r.kg}kg × {r.reps}</span>))}</div></div>);})()}
-                </div>)}
-                {prTab==="evo"&&(<>
-                  {actual1rmByWeek.some(d=>d.val)?<MiniChart data={actual1rmByWeek} color={C.ac} h={80}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune série effectuée pour cet exercice</div>}
-                </>)}
-              </>
-            ):(
-              <div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"16px 0"}}>{progExNames.length?"Recherche et sélectionne un exercice ci-dessus":"Aucun exercice dans la programmation"}</div>
-            )}
-          </div>);
-        })()}
-
-        {/* Volume hebdomadaire */}
-        <WeeklyVolumeCard exos={exos} sets={sets} sessions={sessions} weeksArr={weeksArr} tw={tw} C={C}/>
-
-        {/* Poids de corps avec filtre */}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Poids de corps</div>
-            <div style={{fontSize:13,fontWeight:800,color:C.ac}}>{bodyWeight.current} <span style={{fontSize:10,fontWeight:400,color:C.tx3}}>/ {bodyWeight.target} kg</span></div>
-          </div>
-          <div style={{display:"flex",gap:4,marginBottom:10}}>{[{k:"bloc",l:"Ce bloc"},{k:"3m",l:"3 mois"},{k:"all",l:"Tout"}].map(t=><button key={t.k} onClick={()=>setWeightRange(t.k)} style={{padding:"4px 10px",borderRadius:6,border:"none",background:weightRange===t.k?C.acS:"transparent",color:weightRange===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>)}</div>
-          {Object.keys(filteredLog).length>0?<WeightChart log={filteredLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Remplis le wellness pour suivre ton poids</div>}
+      {tab==="log"&&(<>
+        {/* Sous-onglets Séance */}
+        <div style={{display:"flex",borderBottom:"1px solid "+C.brd,background:C.bg,paddingLeft:16,paddingRight:16,gap:0}}>
+          {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
+            <button key={t.k} onClick={()=>setLogSubTab(t.k)} style={{padding:"10px 14px",border:"none",borderBottom:"2px solid "+(logSubTab===t.k?C.ac:"transparent"),background:"transparent",color:logSubTab===t.k?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px",flexShrink:0}}>{t.l}</button>
+          ))}
         </div>
+        {logSubTab==="muscu"&&<LogView exos={exos} sets={sets} updSets={updSets} completedSessions={completedSessions} completeSession={completeSession} uncompleteSession={uncompleteSession} goals={goals} weeklyTarget={weeklyTarget} currentWeek={currentWeek} allMethods={allMethods} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} sessions={sessions} blockConfig={blockConfig} initialSess={initialLogSess} timerLeft={timerLeft} timerDur={timerDur} timerActive={timerActive} timerFinished={timerFinished} onTimerSetDur={timerSetDur} onTimerStart={timerStart} onTimerStop={timerStop} viewOnly={viewOnly} sessionLogs={sessionLogs} setSessionLogs={setSessionLogs} freeSessions={freeSessions} setFreeSessions={setFreeSessions} onAddExercise={(sessId,ex)=>setExos(prev=>({...prev,[sessId]:[...(prev[sessId]||[]),ex]}))} weekSchedule={weekSchedule}/>}
+        {logSubTab==="energie"&&<EnergySessionLog athleteId={athleteId} viewOnly={viewOnly} C={C}/>}
+        {logSubTab==="specifique"&&(<div style={{padding:"40px 20px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>⚡</div><div style={{fontSize:15,fontWeight:700,color:C.tx,marginBottom:6}}>Séances Spécifiques</div><div style={{fontSize:13,color:C.tx3}}>Cette fonctionnalité sera disponible prochainement.</div></div>)}
+      </>)}
 
-        {/* Forme du jour */}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+(wReco.c||C.brd)+"30",marginBottom:12}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Forme du jour</div>
-            {!viewOnly&&<button onClick={()=>setShowWellness(true)} style={{fontSize:10,color:C.ac,padding:"3px 10px",borderRadius:6,border:"1px solid "+C.ac+"40",background:"transparent",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{wellness?"Modifier":"Remplir"}</button>}
-          </div>
-          {wellness?(<div>
-            <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
-              <div style={{position:"relative",width:60,height:60,flexShrink:0}}><svg viewBox="0 0 56 56" style={{width:60,height:60,transform:"rotate(-90deg)"}}><circle cx="28" cy="28" r="22" fill="none" stroke={C.s2} strokeWidth="4"/><circle cx="28" cy="28" r="22" fill="none" stroke={wReco.c} strokeWidth="4" strokeDasharray={String(2*Math.PI*22)} strokeDashoffset={String(2*Math.PI*22*(1-wScore/100))} strokeLinecap="round"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:wReco.c}}>{wScore}</div></div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:14,fontWeight:700,color:wReco.c,marginBottom:2}}>{wReco.label}</div>
-                <div style={{fontSize:11,color:C.tx2,marginBottom:4}}>{wReco.desc}</div>
-                {wellness.sleepDur&&<div style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,color:C.b,fontWeight:600,padding:"2px 8px",borderRadius:5,background:C.b+"15"}}><span>💤</span>{wellness.sleepDur}h de sommeil</div>}
-              </div>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:7}}>
-              {[{l:"Récupération",v:wellness.fatigue,e:"😴"},{l:"Sommeil",v:wellness.sommeil,e:"💤"},{l:"Sérénité",v:wellness.stress,e:"🧠"},{l:"Énergie",v:wellness.energie,e:"⚡"},{l:"Fraîcheur",v:wellness.doms,e:"💪"}].map(m=>{
-                const mv=m.v||0;const mc=mv>=4?C.g:mv>=3?C.o:C.r;
-                return(<div key={m.l} style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:9,color:C.tx3,width:72,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.e} {m.l}</span>
-                  <div style={{flex:1,height:5,background:C.s2,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(mv/5*100)+"%",background:mc,borderRadius:3,transition:"width 0.5s"}}/></div>
-                  <span style={{fontSize:10,fontWeight:700,color:mc,width:14,textAlign:"right",flexShrink:0}}>{mv||"?"}</span>
-                </div>);
-              })}
-            </div>
-          </div>):(<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"10px 0"}}>Pas encore rempli aujourd'hui</div>)}
-        </div>
-
-        {/* Historique sante */}
-        {(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const hasSomeData=wData.some(d=>d.score!==null);return(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Score de santé</div><div style={{display:"flex",gap:3}}>{[{k:"week",l:"7j"},{k:"month",l:"30j"},{k:"year",l:"12m"}].map(t=>(<button key={t.k} onClick={()=>setWellnessPeriod(t.k)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:wellnessPeriod===t.k?C.acS:"transparent",color:wellnessPeriod===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div></div>{hasSomeData?(<div><div style={{display:"flex",gap:12,marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:3,borderRadius:2,background:C.g}}/><span style={{fontSize:9,color:C.tx3}}>Forme /100</span></div><div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.b,opacity:0.5}}/><span style={{fontSize:9,color:C.tx3}}>Sommeil (h)</span></div></div><ResponsiveContainer width="100%" height={110}><ComposedChart data={wData} margin={{top:4,right:4,bottom:0,left:-28}}><XAxis dataKey="label" tick={{fontSize:9,fill:C.tx3}} tickLine={false} axisLine={false}/><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const sc=payload.find(p=>p.dataKey==='score');const sl=payload.find(p=>p.dataKey==='sleep');return(<div style={{background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,padding:"6px 10px",fontSize:10}}><div style={{color:C.tx3,marginBottom:4}}>{label}</div>{sc?.value!=null&&<div style={{color:getReco(sc.value).c,fontWeight:700}}>Forme : {sc.value}</div>}{sl?.value!=null&&<div style={{color:C.b}}>Sommeil : {sl.value}h</div>}</div>);}}/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[3,3,0,0]} maxBarSize={20}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={2} dot={(props)=>{if(props.value==null)return<g/>;const rc=getReco(props.value);return<circle cx={props.cx} cy={props.cy} r={3.5} fill={rc.c} stroke={C.bg} strokeWidth={1}/>;}} connectNulls={false}/></ComposedChart></ResponsiveContainer></div>):(<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"16px 0"}}>Aucune donnée wellness pour cette période</div>)}</div>);})()}
-
-        {/* Blessures actives */}
-        {activeInjuries.length>0&&(<div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.r+"30",marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.r,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Blessures actives ({activeInjuries.length})</div>
-          {activeInjuries.map(inj=>{const sc=stC(inj.status);const zn=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non precisee";return(<div key={inj.id} style={{padding:"8px 12px",borderRadius:8,background:C.s2,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"space-between"}}><div><div style={{fontSize:12,fontWeight:600,color:C.tx}}>{zn}</div><div style={{fontSize:10,color:C.tx3}}>Intensite {inj.intensity}/10</div></div><span style={{fontSize:10,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:5,background:sc+"15"}}>{inj.status}</span></div>);})}
-        </div>)}
-      </div>);})()}
 
       {tab==="alim"&&<NutritionView athleteId={athleteId} bmr={athleteProfile?.base_metabolism||null} nutritionStrategy={nutritionStrategy} onLogSaved={(date,log)=>{const updated={...nutritionLog,[date]:log};setNutritionLogState(updated);save("asp:nutrition_log",updated).catch(()=>{});}} viewOnly={viewOnly}/>}
 
-      {tab==="profil"&&(<div style={{padding:"16px 16px 40px"}}>
-        <div style={{fontSize:20,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Mon profil</div>
-        {/* Section profil déroulante */}
-        <button onClick={()=>setProfileInfoOpen(o=>!o)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",borderRadius:12,border:"1px solid "+C.brdL,background:C.s1,cursor:"pointer",fontFamily:"inherit",marginBottom:profileInfoOpen?0:12}}>
-          <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Mes informations</div>
-          <span style={{fontSize:14,color:C.tx3,transition:"transform 0.2s",display:"inline-block",transform:profileInfoOpen?"rotate(180deg)":"rotate(0deg)"}}>∨</span>
-        </button>
-        {profileInfoOpen&&(<div style={{marginBottom:12}}>
-        {athleteProfile?(()=>{
-          const fullName=[athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"";
-          const initials=fullName.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)||"?";
-          return(<>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"20px 0 16px"}}>
-              <div style={{width:68,height:68,borderRadius:"50%",background:C.acS,border:"3px solid "+C.ac+"50",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,color:C.ac,marginBottom:10}}>{initials}</div>
-              <div style={{fontSize:18,fontWeight:800,color:C.tx}}>{fullName}</div>
-              <div style={{fontSize:12,color:C.tx3,marginTop:3}}>{athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":""}</div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:12}}>
-              {[{l:"Âge",v:athleteProfile.age,u:"ans"},{l:"Taille",v:athleteProfile.height_cm,u:"cm"},{l:"Poids réf.",v:athleteProfile.weight_kg,u:"kg"}].map(s=>(
-                <div key={s.l} style={{background:C.s1,borderRadius:12,padding:"14px 10px",border:"1px solid "+C.brd,textAlign:"center"}}>
-                  <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>{s.l}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:s.v?C.tx:C.tx3}}>{s.v||"—"}</div>
-                  {s.v&&<div style={{fontSize:11,color:C.tx3,marginTop:2}}>{s.u}</div>}
-                </div>
-              ))}
-            </div>
-            {athleteProfile.base_metabolism&&(<div style={{background:C.s1,borderRadius:14,padding:"16px 18px",border:"1px solid "+C.brd,marginBottom:12}}>
-              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Métabolisme de base</div>
-              <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                <div style={{fontSize:30,fontWeight:900,color:C.ac}}>{athleteProfile.base_metabolism.toLocaleString("fr-FR")}</div>
-                <div style={{fontSize:14,color:C.tx3}}>kcal / jour</div>
-              </div>
-            </div>)}
-            <div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.brd,overflow:"hidden"}}>
-              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",padding:"12px 16px",borderBottom:"1px solid "+C.brd}}>Informations complètes</div>
-              {[{l:"Prénom",v:athleteProfile.first_name},{l:"Nom",v:athleteProfile.last_name},{l:"Âge",v:athleteProfile.age?athleteProfile.age+" ans":null},{l:"Taille",v:athleteProfile.height_cm?athleteProfile.height_cm+" cm":null},{l:"Genre",v:athleteProfile.gender==="male"?"Homme":athleteProfile.gender==="female"?"Femme":null},{l:"Poids réf.",v:athleteProfile.weight_kg?athleteProfile.weight_kg+" kg":null},{l:"Masse grasse",v:athleteProfile.body_fat_pct?athleteProfile.body_fat_pct+" %":null},{l:"Métabolisme de base",v:athleteProfile.base_metabolism?athleteProfile.base_metabolism.toLocaleString("fr-FR")+" kcal/j":null}].map((row,i,arr)=>(
-                <div key={row.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:i<arr.length-1?"1px solid "+C.brd:"none"}}>
-                  <div style={{fontSize:13,color:C.tx3}}>{row.l}</div>
-                  <div style={{fontSize:13,fontWeight:600,color:row.v?C.tx:C.tx3}}>{row.v||"—"}</div>
-                </div>
-              ))}
-            </div>
-          </>);
-        })():(
-          <div style={{background:C.s1,borderRadius:14,padding:"32px 20px",border:"1px solid "+C.brd,textAlign:"center",marginTop:8}}>
-            <div style={{fontSize:32,marginBottom:12}}>📋</div>
-            <div style={{fontSize:15,fontWeight:600,color:C.tx,marginBottom:8}}>Profil non renseigné</div>
-            <div style={{fontSize:13,color:C.tx3}}>Ton coach n'a pas encore complété ton profil.</div>
-          </div>
-        )}
-        </div>)}
-        {/* Tracker d'habitudes */}
-        {habitEnabled&&<HabitTrackerProfile habits={habits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly}/>}
-      </div>)}
+      {tab==="test"&&<TestSessionView athleteId={athleteId} viewOnly={viewOnly} C={C} testSubTab={testSubTab} setTestSubTab={setTestSubTab}/>}
 
       {tab==="retours"&&<RetoursView/>}
 
