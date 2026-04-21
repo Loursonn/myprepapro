@@ -77,7 +77,7 @@ const hISO=d=>(d||new Date()).toISOString().slice(0,10);
 const hAddDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
 const calcHabitStreak=logs=>{const today=new Date();const todayISO=hISO(today);const todayDone=logs.includes(todayISO);const base=todayDone?0:1;let s=0;for(let i=base;i<365;i++){if(logs.includes(hISO(hAddDays(today,-i))))s++;else break;}return s;};
 const streakMsg=s=>{if(s===0)return"🧊 Fais le aujourd'hui au moins";if(s===1)return"1er jour, garde la pêche 🍑";if(s<=2)return`🔥 ${s} jours d'affilée`;if(s<=4)return`🔥🔥 ${s} jours d'affilée`;if(s<=9)return`🔥🔥🔥 ${s} jours d'affilée`;if(s<=29)return`🔥🔥🔥🔥 ${s} jours d'affilée`;if(s<365)return`🔥🔥🔥🔥🔥 ${s} jours d'affilée`;const y=Math.floor(s/365),d=s%365;return`🏆🔥 ${y} an${y>1?'s':''} et ${d} jours d'affilée !`;};
-const getHabitWeekDays=()=>{const today=new Date();const dow=(today.getDay()+6)%7;const mon=new Date(today);mon.setDate(today.getDate()-dow);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});};
+const getHabitWeekDays=()=>{const today=new Date();return Array.from({length:7},(_,i)=>hAddDays(today,i-6));};
 const checkMilestone=(log,baseline)=>{const sorted=Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1);if(sorted.length<3)return null;const last3=sorted.slice(-3);return last3.every(([,kg])=>kg>baseline)?parseFloat((last3.reduce((s,[,kg])=>s+kg,0)/3).toFixed(1)):null;};
 const getWeightChartData=(log,milestones,target)=>Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1).map(([date,kg])=>({d:date.slice(6)+"/"+date.slice(4,6),kg,target,isMilestone:milestones?.some(m=>m.date===date)?1:null}));
 const getWellnessChartData=(wh,period)=>{const DAY=['D','L','M','Me','J','V','S'];const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];const dateEntries=Object.entries(wh).filter(([k,v])=>/^\d{8}$/.test(k)&&v&&typeof v==='object');const byDate=Object.fromEntries(dateEntries);if(period==='week'){return Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const k=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');const e=byDate[k];return{label:DAY[d.getDay()],score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='month'){const sorted=[...dateEntries].sort((a,b)=>a[0]<b[0]?-1:1).slice(-30);return sorted.map(([k,e])=>{const y=+k.slice(0,4),m=+k.slice(4,6)-1,dd=+k.slice(6,8);const d=new Date(y,m,dd);return{label:dd===1?MON[m]:String(dd),score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='year'){const now=new Date();return Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-11+i,1);const pfx=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0');const mes=dateEntries.filter(([k])=>k.startsWith(pfx)).map(([,v])=>v);const sc=mes.filter(v=>v?.score!=null).map(v=>v.score);const sl=mes.filter(v=>v?.sleepDur!=null).map(v=>v.sleepDur);return{label:MON[d.getMonth()],score:sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null,sleep:sl.length?Math.round(sl.reduce((a,b)=>a+b,0)/sl.length*10)/10:null};});}return[];};
@@ -1212,7 +1212,7 @@ function SessionDetailModal({sid,wk,sessions,exos,sets,completedSessions,allMeth
   );
 }
 
-function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={}}){
+function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={},weekSchedule={},setWeekSchedule}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;const progPct=blockConfig?.progressionPct||2.5;const deloadPct=blockConfig?.deloadPct||40;
   const blockStarted=!blockConfig?.startDate||Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000)>=0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
@@ -1284,6 +1284,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         const tc=tierCfg[tier]||tierCfg[3];
         const newWeeks={...ex.weeks};
         const trainWeeks=weeksArr.filter(w=>w!==dw&&w>1);
+        const allTrainWeeks=weeksArr.filter(w=>w!==dw);
         const totalTrainWeeks=trainWeeks.length;
         const defSets=w1.sets||3;
         const defReps=w1.repsRange||(tc.repsStart?String(tc.repsStart):"10");
@@ -1300,12 +1301,15 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
             const dlPct=tc.deloadPct||40;
             newWeeks[w]={...prevW,...(w1.kg?{kg:Math.round(w1.kg*(1-dlPct/100)/2.5)*2.5}:{}),sets:Math.max(2,Math.round((prevW.sets||defSets)*0.6)),rir:(tc.rirStart||2)+2,repsRange:prevW.repsRange};
           }else{
-            const weekIdx=trainWeeks.indexOf(w);const progress=totalTrainWeeks>1?weekIdx/(totalTrainWeeks-1):0;
+            const weekIdx=trainWeeks.indexOf(w);
+            const allWeekIdx=allTrainWeeks.indexOf(w);
+            const totalAll=allTrainWeeks.length;
+            const progress=totalAll>1?allWeekIdx/(totalAll-1):0;
             if(tc.mode==="rir"){
               const rirRange=tc.rirStart-tc.rirEnd;
               const newRir=Math.round((tc.rirStart-rirRange*progress)*2)/2;
               const kgStep=tc.kgStep??2.5;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*weekIdx)}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*allWeekIdx)}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
             }else if(tc.mode==="reps"){
               const repRange=tc.repsEnd-tc.repsStart;
               const cycleLen=Math.max(2,repRange+1);
@@ -1569,6 +1573,19 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
 
     <div style={{display:"flex",gap:3,marginBottom:6,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWeek(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===week?"2px solid "+C.coach:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===week?C.coachS:(w===dw?C.bS:"transparent"),color:w===week?C.coach:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>
     {dw>0&&<div style={{fontSize:10,color:C.b,marginBottom:6,display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:"50%",background:C.b,display:"inline-block"}}/> S{dw} = Deload (-{deloadPct}% charge, volume reduit)</div>}
+
+    {safeSessions.length>0&&setWeekSchedule&&<div style={{marginBottom:10,background:C.s1,borderRadius:9,padding:"8px 10px",border:"1px solid "+C.brdL}}>
+      <div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:6}}>Jours séances — S{week}</div>
+      {safeSessions.map(s=>{
+        const curDay=weekSchedule?.sessions?.[week]?.[s.id]??s.day_of_week??null;
+        const setDay=(i)=>{const prev=weekSchedule||{};const prevSess=prev.sessions||{};const wMap={...(prevSess[week]||{})};if(curDay===i){delete wMap[s.id];}else{wMap[s.id]=i;}setWeekSchedule({...prev,sessions:{...prevSess,[week]:wMap}});};
+        return(<div key={s.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.coach,minWidth:46,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.short}</span>
+          <div style={{display:"flex",gap:2}}>
+            {["L","Ma","Me","J","V","S","D"].map((d,i)=>{const sel=curDay===i;return(<button key={i} onClick={()=>setDay(i)} style={{padding:"3px 5px",borderRadius:5,border:"1px solid "+(sel?C.coach:C.brdL),background:sel?C.coachS:"transparent",color:sel?C.coach:C.tx3,fontSize:9,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{d}</button>);})}
+          </div>
+        </div>);})}
+    </div>}
 
     <button onClick={autoFillProgression} style={{width:"100%",padding:"9px 0",borderRadius:8,border:"1px solid "+C.o+"50",background:C.oS,color:C.o,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
       ↗ Surcharge progressive — tout le bloc (S1→S{tw})
@@ -2848,6 +2865,14 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;
         const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];
         const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
+        // Surcharge basée sur le réel S-1 plutôt que la planif initiale
+        const prevDoneRows=(!wd?.pdc&&!isFlex&&wk>1)?(sets[ex.id+"_"+(wk-1)]||[]).filter(r=>r.done&&(r.kg||0)>0):[];
+        const prevMedianKg=prevDoneRows.length?prevDoneRows.map(r=>r.kg).sort((a,b)=>a-b)[Math.floor(prevDoneRows.length/2)]:null;
+        const exTierCfg=(blockConfig?.tierConfig||DEF_TIER_CONFIG)[getExTier(ex.name,ex)]||(blockConfig?.tierConfig||DEF_TIER_CONFIG)[3];
+        const exKgStep=exTierCfg?.kgStep??2.5;
+        const effectiveKg=prevMedianKg!==null?roundHalf(prevMedianKg+exKgStep):(wd?.kg??null);
+        const effectivePlanned=wd&&prevMedianKg!==null&&!wd.pdc?{...wd,kg:effectiveKg}:wd;
+        const kgFromActual=!!(wd&&!wd.pdc&&!isFlex&&prevMedianKg!==null&&effectiveKg!==wd?.kg);
         const bankEx=bankExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
         const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
         return(
@@ -2855,14 +2880,14 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
             <div style={inSS?{background:"transparent",overflow:"hidden"}:{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}>
               <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
                 <div style={{width:3,height:32,borderRadius:2,background:allDone?C.g:bt.c,flexShrink:0}}/>
-                <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&method!=="superset"&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&method!=="superset"&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
+                <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&method!=="superset"&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":(effectiveKg??wd.kg)+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="excentrique"||method==="superset"||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}{kgFromActual&&<span style={{fontSize:9,color:C.g,marginLeft:6,fontWeight:600}}>↑ S{wk-1}+{exKgStep}kg</span>}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&method!=="superset"&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="excentrique"&&"Neg: "+(mp.eccentric_sec||4)+"s"}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
                   {hasVideo&&<button onClick={e=>{e.stopPropagation();setVideoEx(bankEx);}} style={{background:'none',border:'none',color:C.tx3,fontSize:16,cursor:'pointer',padding:'0',lineHeight:1,pointerEvents:'all'}} title="Voir la vidéo">📹</button>}
                   {rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}
                   <span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span>
                 </div>
               </div>
-              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm((effectivePlanned||wd)?.kg||0,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}{kgFromActual&&<div style={{marginBottom:10,padding:"6px 10px",borderRadius:8,background:C.g+"10",border:"1px solid "+C.g+"30",fontSize:10,color:C.g,display:"flex",alignItems:"center",gap:6}}><span>Basé sur S{wk-1} réel :</span><span style={{fontWeight:700}}>{prevMedianKg}kg → {effectiveKg}kg (+{exKgStep}kg)</span></div>}<SmartSetEditor planned={effectivePlanned||wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
             </div>
             {/* Badge SS centré entre les exercices du superset */}
             {inSS&&!isLastInSS&&<div style={{position:"relative",display:"flex",alignItems:"center",height:20,margin:"0 16px"}}>
@@ -3254,6 +3279,147 @@ function AIChatBar({exos,sessions,chatHistory,setChatHistory,onApply,onOpenChang
   </>);
 }
 
+function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setWeekSchedule,exos={},sets={},energySessions=[],energyWeekPlan={},energyDayPlan={},allMethods={},C}){
+  const[vm,setVm]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
+  const[selDk,setSelDk]=useState(null);
+  const[addEv,setAddEv]=useState(null);
+  const[sessDetail,setSessDetail]=useState(null);
+  const MONTHS_FR=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const DAYS_S=["L","Ma","Me","J","V","S","D"];
+  const EV_TYPES=[{k:'match',l:'Match',e:'⚔️'},{k:'compet',l:'Compétition',e:'🏆'},{k:'stage',l:'Stage',e:'🏕️'},{k:'autre',l:'Autre',e:'📅'}];
+  const toKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  const todKey=toKey(new Date());
+  const calEvs=weekSchedule?.calendarEvents||{};
+  const dayEvs=dk=>calEvs[dk]||[];
+  const tw=blockConfig?.totalWeeks||6;
+  const weeksArr=Array.from({length:tw},(_,i)=>i+1);
+  const sessMap=useMemo(()=>{
+    const map={};
+    if(!blockConfig?.startDate)return map;
+    const start=new Date(blockConfig.startDate);
+    weeksArr.forEach(week=>{
+      (sessions||[]).forEach(sess=>{
+        const dayIdx=weekSchedule?.sessions?.[week]?.[sess.id]??sess.day_of_week??null;
+        if(dayIdx==null)return;
+        const d=new Date(start);d.setDate(start.getDate()+(week-1)*7+dayIdx);
+        const dk=toKey(d);if(!map[dk])map[dk]=[];
+        const done=(completedSessions[week]||[]).includes(sess.id);
+        map[dk].push({type:'muscu',sessId:sess.id,week,done,sess});
+      });
+      const wkKeys=energyWeekPlan[week]||[];
+      (energySessions||[]).forEach(sess=>{
+        if(!wkKeys.includes(sess.session_key))return;
+        const dayIdx=energyDayPlan[week]?.[sess.session_key]??null;
+        if(dayIdx==null)return;
+        const d=new Date(start);d.setDate(start.getDate()+(week-1)*7+dayIdx);
+        const dk=toKey(d);if(!map[dk])map[dk]=[];
+        map[dk].push({type:'energy',sessId:sess.session_key,week,done:false,sess});
+      });
+    });
+    return map;
+  },[sessions,completedSessions,blockConfig,weekSchedule,energySessions,energyWeekPlan,energyDayPlan]);
+  const firstDay=new Date(vm.y,vm.m,1);const lastDay=new Date(vm.y,vm.m+1,0);
+  const startOffset=(firstDay.getDay()+6)%7;
+  const cells=[];
+  for(let i=0;i<startOffset;i++)cells.push(null);
+  for(let d=1;d<=lastDay.getDate();d++)cells.push(new Date(vm.y,vm.m,d));
+  while(cells.length%7!==0)cells.push(null);
+  const prevM=()=>setVm(v=>{const nm=v.m===0?11:v.m-1;const ny=v.m===0?v.y-1:v.y;return{y:ny,m:nm};});
+  const nextM=()=>setVm(v=>{const nm=v.m===11?0:v.m+1;const ny=v.m===11?v.y+1:v.y;return{y:ny,m:nm};});
+  const toggleDayOff=dk=>{
+    const cur=calEvs[dk]||[];const has=cur.some(e=>e.type==='dayoff');
+    const next=has?cur.filter(e=>e.type!=='dayoff'):[...cur,{type:'dayoff',id:String(Date.now())}];
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:next.length?next:undefined}});
+  };
+  const saveEvent=(dk,ev)=>{
+    const cur=calEvs[dk]||[];
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:[...cur,{...ev,id:String(Date.now())}]}});
+  };
+  const removeEvent=(dk,id)=>{
+    const cur=(calEvs[dk]||[]).filter(e=>e.id!==id);
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:cur.length?cur:undefined}});
+  };
+  const selEvs=selDk?dayEvs(selDk):[];
+  const selSess=selDk?sessMap[selDk]||[]:[];
+  const hasDayOff=selEvs.some(e=>e.type==='dayoff');
+  const sportEvs=selEvs.filter(e=>e.type!=='dayoff');
+  return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:'1px solid '+C.brd,marginBottom:14}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.tx}}>{MONTHS_FR[vm.m]} {vm.y}</div>
+      <div style={{display:'flex',gap:4,alignItems:'center'}}>
+        <div style={{display:'flex',gap:6,marginRight:8}}>
+          {[{c:C.g,l:'Faite'},{c:C.coach+'aa',l:'Planif.'},{c:C.o,l:'Énerg.'},{c:C.b,l:'Événement'},{c:C.r,l:'OFF'}].map(({c,l})=><div key={l} style={{display:'flex',alignItems:'center',gap:2}}><div style={{width:6,height:6,borderRadius:'50%',background:c}}/><span style={{fontSize:7,color:C.tx3}}>{l}</span></div>)}
+        </div>
+        <button onClick={prevM} style={{width:24,height:24,borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>‹</button>
+        <button onClick={()=>setVm({y:new Date().getFullYear(),m:new Date().getMonth()})} style={{padding:'3px 7px',borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Auj.</button>
+        <button onClick={nextM} style={{width:24,height:24,borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>›</button>
+      </div>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:3}}>
+      {DAYS_S.map(d=><div key={d} style={{textAlign:'center',fontSize:8,fontWeight:700,color:C.tx3,textTransform:'uppercase'}}>{d}</div>)}
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:selDk?10:0}}>
+      {cells.map((date,i)=>{
+        if(!date)return<div key={'e'+i}/>;
+        const dk=toKey(date);const isToday=dk===todKey;const isSel=selDk===dk;
+        const sessList=sessMap[dk]||[];const evs=dayEvs(dk);
+        const isDayOff=evs.some(e=>e.type==='dayoff');const sports=evs.filter(e=>e.type!=='dayoff');
+        return(<div key={dk} onClick={()=>setSelDk(isSel?null:dk)} style={{
+          minHeight:54,borderRadius:6,border:'1px solid '+(isSel?C.coach:isToday?C.ac+'60':isDayOff?C.r+'50':C.brd),
+          background:isSel?C.coachS:isDayOff?C.r+'0a':isToday?C.acS:'transparent',
+          padding:'3px 4px',cursor:'pointer',transition:'all 0.12s'
+        }}>
+          <div style={{fontSize:10,fontWeight:isToday?800:500,color:isToday?C.ac:isDayOff?C.r:C.tx2,marginBottom:1}}>
+            {date.getDate()}{isDayOff&&<span style={{fontSize:6,color:C.r,marginLeft:2,fontWeight:700,verticalAlign:'top'}}>off</span>}
+          </div>
+          {sessList.slice(0,2).map((s,j)=>{const col=s.type==='energy'?C.o:s.done?C.g:C.coach+'bb';return<div key={j} style={{fontSize:7,fontWeight:700,color:col,background:col+'18',borderRadius:2,padding:'1px 3px',marginBottom:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.done?'✓ ':''}{s.sess?.short||s.sessId}</div>;})}
+          {sessList.length>2&&<div style={{fontSize:6,color:C.tx3}}>+{sessList.length-2}</div>}
+          {sports.slice(0,1).map((ev,j)=><div key={j} style={{fontSize:7,color:C.b,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.emoji} {ev.label}</div>)}
+        </div>);
+      })}
+    </div>
+    {selDk&&(()=>{
+      const[sy,sm,sd]=[+selDk.slice(0,4),+selDk.slice(4,6)-1,+selDk.slice(6,8)];
+      const dateLabel=new Date(sy,sm,sd).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+      return(<div style={{borderTop:'1px solid '+C.brd,paddingTop:10}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.tx,textTransform:'capitalize'}}>{dateLabel}</div>
+          <button onClick={()=>setSelDk(null)} style={{background:'none',border:'none',color:C.tx3,cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
+        </div>
+        {selSess.length>0&&<div style={{marginBottom:8}}>
+          <div style={{fontSize:8,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:4}}>Séances</div>
+          {selSess.map((item,i)=>{const col=item.type==='energy'?C.o:item.done?C.g:C.coach;return<button key={i} onClick={()=>item.done&&setSessDetail({sessId:item.sessId,week:item.week})} style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid '+col+'40',background:col+'12',cursor:item.done?'pointer':'default',fontFamily:'inherit',marginBottom:3,textAlign:'left'}}>
+            <span style={{fontSize:12,color:col}}>{item.done?'✓':'○'}</span>
+            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:700,color:col}}>{item.sess?.name||item.sessId}</div><div style={{fontSize:9,color:C.tx3}}>S{item.week} · {item.type==='energy'?'Énergétique':'Musculation'}{item.done?'':' — planifié'}</div></div>
+            {item.done&&<span style={{fontSize:9,color:C.tx3}}>Voir ›</span>}
+          </button>;})}
+        </div>}
+        {sportEvs.length>0&&<div style={{marginBottom:8}}>
+          <div style={{fontSize:8,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:4}}>Événements</div>
+          {sportEvs.map(ev=><div key={ev.id} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:8,background:C.bS,border:'1px solid '+C.b+'30',marginBottom:3}}>
+            <span style={{fontSize:13}}>{ev.emoji}</span>
+            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:C.b}}>{ev.label}</div>{ev.eventType&&<div style={{fontSize:9,color:C.tx3}}>{EV_TYPES.find(t=>t.k===ev.eventType)?.l}</div>}</div>
+            <button onClick={()=>removeEvent(selDk,ev.id)} style={{background:'none',border:'none',color:C.r,cursor:'pointer',fontSize:15,padding:'0 3px',lineHeight:1}}>×</button>
+          </div>)}
+        </div>}
+        <div style={{display:'flex',gap:5,marginBottom:addEv?8:0}}>
+          <button onClick={()=>toggleDayOff(selDk)} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid '+(hasDayOff?C.r+'60':C.brdL),background:hasDayOff?C.rS:'transparent',color:hasDayOff?C.r:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{hasDayOff?'✕ Retirer OFF':'+ Jour OFF'}</button>
+          <button onClick={()=>setAddEv(addEv?null:{label:'',eventType:'match',emoji:'⚔️'})} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid '+C.b+'40',background:C.bS,color:C.b,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{addEv?'Annuler':'+ Événement'}</button>
+        </div>
+        {addEv&&<div style={{padding:'10px',borderRadius:10,background:C.s2,border:'1px solid '+C.brd}}>
+          <input value={addEv.label} onChange={e=>setAddEv(f=>({...f,label:e.target.value}))} placeholder="Nom de l'événement..." style={{width:'100%',padding:'7px 10px',borderRadius:7,border:'1px solid '+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:'inherit',marginBottom:7,boxSizing:'border-box'}}/>
+          <div style={{display:'flex',gap:3,marginBottom:7,flexWrap:'wrap'}}>
+            {EV_TYPES.map(t=><button key={t.k} onClick={()=>setAddEv(f=>({...f,eventType:t.k,emoji:t.e}))} style={{padding:'4px 9px',borderRadius:6,border:'1px solid '+(addEv.eventType===t.k?C.b+'60':C.brdL),background:addEv.eventType===t.k?C.bS:'transparent',color:addEv.eventType===t.k?C.b:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{t.e} {t.l}</button>)}
+          </div>
+          <button onClick={()=>{if(addEv.label.trim()){saveEvent(selDk,{...addEv,type:'sport_event'});setAddEv(null);}}} style={{width:'100%',padding:'7px 0',borderRadius:8,border:'none',background:C.b,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Ajouter</button>
+        </div>}
+        {!blockConfig?.startDate&&<div style={{marginTop:8,padding:'8px 10px',borderRadius:8,background:C.o+'10',border:'1px solid '+C.o+'30',fontSize:10,color:C.o}}>Définis une date de début de bloc pour voir les séances planifiées sur le calendrier.</div>}
+      </div>);
+    })()}
+    {sessDetail&&<SessionDetailModal sid={sessDetail.sessId} wk={sessDetail.week} sessions={sessions} exos={exos} sets={sets} completedSessions={completedSessions} allMethods={allMethods} blockConfig={blockConfig} currentWeek={sessDetail.week} onClose={()=>setSessDetail(null)}/>}
+  </div>);
+}
+
 function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={},exos={},energySessions=[],energyWeekPlan={},energyDayPlan={}}){
   const[selectDay,setSelectDay]=useState(null);
   const[weekOffset,setWeekOffset]=useState(0);
@@ -3281,7 +3447,7 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
   const extras=wk.extras||{};
   const dKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
   const dayExtras=idx=>extras[dKey(weekDays[idx])]||[];
-  const sessionsForDay=dayIdx=>(sessions||[]).filter(s=>s.day_of_week===dayIdx);
+  const sessionsForDay=dayIdx=>(sessions||[]).filter(s=>{const d=wk.sessions?.[currentWeek]?.[s.id]??s.day_of_week??null;return d===dayIdx;});
   const energySessionsForDay=dayIdx=>{const wkSessKeys=energyWeekPlan[currentWeek]||[];return(energySessions||[]).filter(s=>wkSessKeys.includes(s.session_key)&&energyDayPlan[currentWeek]?.[s.session_key]===dayIdx);};
   const savedActivities=wk.savedActivities||[];
   const allActivities=[...ACTIVITIES,...savedActivities.filter(s=>!ACTIVITIES.find(a=>a.label===s.label))];
@@ -3891,19 +4057,36 @@ function HabitCreateModal({onSave,onClose,initial=null}){
 function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}){
   const[showCreate,setShowCreate]=useState(false);
   const[menuId,setMenuId]=useState(null);
+  const[editHabit,setEditHabit]=useState(null);
   const wdays=getHabitWeekDays();
   const todayISO=hISO();
   const yISO=hISO(hAddDays(new Date(),-1));
   const DL=['L','M','M','J','V','S','D'];
   const handleCreate=async d=>{
-    const{data:h,error}=await supabase.from('habits').insert({...d,athlete_id:athleteId}).select().single();
+    const{data:h,error}=await supabase.from('habits').insert({...d,athlete_id:athleteId,sort_order:habits.length}).select().single();
     if(!error&&h)setHabits(p=>[...p,h]);
     setShowCreate(false);
+  };
+  const handleEdit=async(id,d)=>{
+    const{error}=await supabase.from('habits').update({name:d.name,emoji:d.emoji,color:d.color}).eq('id',id);
+    if(!error)setHabits(p=>p.map(h=>h.id===id?{...h,...d}:h));
+    setEditHabit(null);
   };
   const handleDelete=async id=>{
     await supabase.from('habits').update({is_active:false}).eq('id',id);
     setHabits(p=>p.filter(h=>h.id!==id));
     setMenuId(null);
+  };
+  const handleMove=async(idx,dir)=>{
+    const ni=idx+dir;
+    if(ni<0||ni>=habits.length)return;
+    const next=[...habits];[next[idx],next[ni]]=[next[ni],next[idx]];
+    setHabits(next);
+    setMenuId(null);
+    await Promise.all([
+      supabase.from('habits').update({sort_order:idx}).eq('id',next[idx].id),
+      supabase.from('habits').update({sort_order:ni}).eq('id',next[ni].id),
+    ]);
   };
   return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:`1px solid ${C.brd}`,marginBottom:12}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
@@ -3914,9 +4097,9 @@ function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}
       <div>
         <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,28px)',gap:4,marginBottom:8}}>
           <div/>
-          {wdays.map((d,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:hISO(d)===todayISO?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[i]}</div>)}
+          {wdays.map((d,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:hISO(d)===todayISO?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[(d.getDay()+6)%7]}</div>)}
         </div>
-        {habits.map(h=>{
+        {habits.map((h,idx)=>{
           const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
           return(<div key={h.id} style={{marginBottom:12}}>
             <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,28px)',gap:4,alignItems:'center'}}>
@@ -3932,15 +4115,19 @@ function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}
               })}
             </div>
             <div style={{fontSize:10,color:streak>0?h.color:C.tx3,fontWeight:streak>0?600:400,paddingLeft:2,marginTop:3}}>{streakMsg(streak)}</div>
-            {menuId===h.id&&!viewOnly&&<div style={{marginTop:6,padding:'8px 10px',borderRadius:10,background:C.s2,border:`1px solid ${C.brd}`,display:'flex',gap:8}}>
-              <button onClick={()=>handleDelete(h.id)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.r}40`,background:C.rS,color:C.r,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
-              <button onClick={()=>setMenuId(null)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx3,fontSize:11,cursor:'pointer',fontFamily:'inherit'}}>Annuler</button>
+            {menuId===h.id&&!viewOnly&&<div style={{marginTop:6,padding:'8px 10px',borderRadius:10,background:C.s2,border:`1px solid ${C.brd}`,display:'flex',flexWrap:'wrap',gap:6}}>
+              <button onClick={()=>{setEditHabit(h);setMenuId(null);}} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.ac}40`,background:C.acS,color:C.ac,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',minWidth:70}}>Modifier</button>
+              {idx>0&&<button onClick={()=>handleMove(idx,-1)} style={{width:34,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx2,fontSize:14,cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}>↑</button>}
+              {idx<habits.length-1&&<button onClick={()=>handleMove(idx,1)} style={{width:34,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx2,fontSize:14,cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}>↓</button>}
+              <button onClick={()=>handleDelete(h.id)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.r}40`,background:C.rS,color:C.r,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',minWidth:70}}>Supprimer</button>
+              <button onClick={()=>setMenuId(null)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx3,fontSize:11,cursor:'pointer',fontFamily:'inherit',minWidth:70}}>Annuler</button>
             </div>}
           </div>);
         })}
       </div>
     )}
     {showCreate&&<HabitCreateModal onSave={handleCreate} onClose={()=>setShowCreate(false)}/>}
+    {editHabit&&<HabitCreateModal initial={editHabit} onSave={d=>handleEdit(editHabit.id,d)} onClose={()=>setEditHabit(null)}/>}
   </div>);
 }
 
@@ -3957,7 +4144,7 @@ function HabitTrackerProfile({habits,habitLogs,onToggle,viewOnly}){
   const renderWeek=()=>(<div>
     <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,34px)',gap:4,marginBottom:10}}>
       <div/>
-      {wdays.map((d,i)=>{const iso=hISO(d);const isT=iso===todayISO;return(<div key={i} style={{textAlign:'center'}}><div style={{fontSize:9,fontWeight:600,color:isT?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[i]}</div><div style={{fontSize:11,color:isT?C.ac:C.tx2,fontWeight:isT?700:400}}>{d.getDate()}</div></div>);})}
+      {wdays.map((d,i)=>{const iso=hISO(d);const isT=iso===todayISO;return(<div key={i} style={{textAlign:'center'}}><div style={{fontSize:9,fontWeight:600,color:isT?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[(d.getDay()+6)%7]}</div><div style={{fontSize:11,color:isT?C.ac:C.tx2,fontWeight:isT?700:400}}>{d.getDate()}</div></div>);})}
     </div>
     {habits.map(h=>{
       const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
@@ -4160,7 +4347,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
   useEffect(()=>{
     if(!athleteId)return;
-    supabase.from('habits').select('*').eq('athlete_id',athleteId).eq('is_active',true).order('created_at').then(({data})=>{if(data)setHabits(data);});
+    supabase.from('habits').select('*').eq('athlete_id',athleteId).eq('is_active',true).order('sort_order',{ascending:true,nullsFirst:false}).then(({data})=>{if(data)setHabits(data);});
     const cutoff=hAddDays(new Date(),-365).toISOString().slice(0,10);
     supabase.from('habit_logs').select('habit_id,date').eq('athlete_id',athleteId).gte('date',cutoff).then(({data})=>{if(data){const l={};data.forEach(r=>{if(!l[r.habit_id])l[r.habit_id]=[];l[r.habit_id].push(r.date);});setHabitLogs(l);}});
     supabase.from('profiles').select('habit_tracker_enabled').eq('id',athleteId).single().then(({data})=>{if(data)setHabitEnabled(!!data.habit_tracker_enabled);});
@@ -4275,14 +4462,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const activeInjuries=injuries.filter(i=>i.status!=="Guerie");
 
   const switchMode=m=>{setMode(m);if(m==="coach")setCoachTab("prog");else setTab("dash");};
-  const autoProgressOnComplete=(sessId,completedWeek,currentExos)=>{
-    const sessExos=(currentExos||exos)[sessId]||[];
-    if(!sessExos.length)return;
+  // Calcule la surcharge depuis le réel — fonction pure, ne modifie pas l'état
+  const computeAutoProgress=(sessId,completedWeek,srcExos)=>{
+    const sessExos=(srcExos||exos)[sessId]||[];
+    if(!sessExos.length)return null;
     const tierCfgL=blockConfig?.tierConfig||DEF_TIER_CONFIG;
     const dwL=blockConfig?.deloadWeek||tw;
     const futureWeeks=weeksArr.filter(w=>w>completedWeek);
     const futureTrainWeeks=futureWeeks.filter(w=>w!==dwL);
-    if(!futureWeeks.length)return;
+    if(!futureWeeks.length)return null;
     let changed=false;
     const newSessExos=sessExos.map(ex=>{
       const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");
@@ -4292,7 +4480,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       const tier=getExTier(ex.name,ex);
       const tc=tierCfgL[tier]||tierCfgL[3];
       const plannedWd=ex.weeks[completedWeek]||{};
-      // Compute effective performance from done rows
       const mainRows=doneRows.filter(r=>!r.type||r.type==="set");
       const refRows=mainRows.length?mainRows:doneRows;
       const kgVals=refRows.map(r=>r.kg||0).filter(v=>v>0);
@@ -4305,7 +4492,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       const baseSets=mainRows.length||plannedWd.sets||3;
       const newWeeks={...ex.weeks};
       futureWeeks.forEach(w=>{
-        if((completedSessions[w]||[]).includes(sessId))return;// skip already-done weeks
+        if((completedSessions[w]||[]).includes(sessId))return;
         const existingWd=newWeeks[w]||{};
         const preserve={coachNote:existingWd.coachNote,tempo:existingWd.tempo,method:existingWd.method,methodParams:existingWd.methodParams};
         const kgBase=basePdc?undefined:baseKg;
@@ -4313,7 +4500,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           const dlPct=tc.deloadPct||40;
           newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:Math.round(kgBase*(1-dlPct/100)/2.5)*2.5}:{})),sets:Math.max(2,Math.round(baseSets*0.6)),rir:(tc.rirStart||2)+2,repsRange:String(baseReps)};
         }else{
-          const wIdx=futureTrainWeeks.indexOf(w);// 0-based among future training weeks
+          const wIdx=futureTrainWeeks.indexOf(w);
           const total=futureTrainWeeks.length;
           const kgStep=tc.kgStep??2.5;
           if(tc.mode==="rir"){
@@ -4337,13 +4524,31 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       });
       return{...ex,weeks:newWeeks};
     });
-    if(changed){
-      const newExos={...(currentExos||exos),[sessId]:newSessExos};
+    if(!changed)return null;
+    return{...(srcExos||exos),[sessId]:newSessExos};
+  };
+  const autoProgressOnComplete=(sessId,completedWeek,currentExos)=>{
+    const newExos=computeAutoProgress(sessId,completedWeek,currentExos||exos);
+    if(newExos){
       setExos(newExos);
       setAutoProgNotif(`Progression S${completedWeek+1}→S${tw} mise à jour`);
       setTimeout(()=>setAutoProgNotif(null),3500);
     }
   };
+  // Synchronisation au chargement : applique la surcharge réelle sur toutes les semaines avec des données réelles
+  useEffect(()=>{
+    if(!loaded)return;
+    let current=exos;let anyChanged=false;
+    weeksArr.forEach(week=>{
+      sessions.forEach(s=>{
+        const hasActual=(current[s.id]||[]).some(ex=>(sets[ex.id+"_"+week]||[]).some(r=>r.done&&(r.kg||0)>0));
+        if(!hasActual)return;
+        const result=computeAutoProgress(s.id,week,current);
+        if(result){current=result;anyChanged=true;}
+      });
+    });
+    if(anyChanged){setExos(current);setAutoProgNotif('Progression synchronisée depuis le réel');setTimeout(()=>setAutoProgNotif(null),3500);}
+  },[loaded]);// eslint-disable-line react-hooks/exhaustive-deps
   const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);autoProgressOnComplete(sessId,week);if(newW.length>=(weeklyTarget[week]||goals.sessionsPerWeek)){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
   const uncompleteSession=(sessId,week)=>setCompletedSessions({...completedSessions,[week]:(completedSessions[week]||[]).filter(s=>s!==sessId)});
   const[bankAddEx,setBankAddEx]=useState(null);const[bankAddMsg,setBankAddMsg]=useState('');
@@ -4724,6 +4929,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             {dw>0&&<button onClick={()=>setBlockConfig(c=>({...c,deloadWeek:0}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
           </div>
         </div>
+        {/* Calendrier mensuel */}
+        <MonthCalendar sessions={sessions} completedSessions={completedSessions} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} sets={sets} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} allMethods={allMethods} C={C}/>
         {/* Sous-onglets prog */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
           {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
@@ -4737,7 +4944,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
               <button onClick={()=>setShowTierModal(true)} style={{padding:"6px 10px",borderRadius:8,border:"1px solid "+C.o+"40",background:C.o+"12",color:C.o,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>⚙ Surcharge</button>
             </div>
           </div>
-          {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions}/>}
+          {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule}/>}
           {sessions.length>0&&<div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+C.brd}}>
             <button onClick={()=>setShowExoParams(p=>!p)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"1px solid "+C.brdL,background:showExoParams?C.acS:"transparent",color:showExoParams?C.ac:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:showExoParams?12:0}}>
               ⚙ Paramètres exercices{showExoParams?" ∧":" ∨"}
