@@ -261,6 +261,8 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   const[coucher,setCoucher]=useState(existing?.coucher||{h:23,m:0});
   const[reveil,setReveil]=useState(existing?.reveil||{h:7,m:0});
   const[poids,setPoids]=useState(existing?.poids||"");
+  const[sleepInterrupt,setSleepInterrupt]=useState(existing?.sleepInterrupt??null);
+  const[sleepInterruptNote,setSleepInterruptNote]=useState(existing?.sleepInterruptNote||"");
   const prevPoids=(()=>{if(!weightLog)return null;const d=new Date();d.setDate(d.getDate()-1);const k=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");return weightLog[k]||null;})();
   const[injOui,setInjOui]=useState(null);
   const[injComment,setInjComment]=useState(existing?.injComment||"");
@@ -317,8 +319,8 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   if(step===S_INJURY){
     return(<div style={{padding:"20px 20px 40px"}}>{progBar}
       <div style={{fontSize:13,fontWeight:600,color:C.tx2,textTransform:"uppercase",marginBottom:8}}>Blessure</div>
-      <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.5px",marginBottom:4}}>Es-tu blessé ?</div>
-      <div style={{fontSize:12,color:C.tx3,marginBottom:20}}>Douleur différente des courbatures habituelles</div>
+      <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.5px",marginBottom:4}}>Es-tu blessé/malade ?</div>
+      <div style={{fontSize:12,color:C.tx3,marginBottom:20}}>Douleur, maladie ou gêne différente des courbatures</div>
       <div style={{display:"flex",gap:10,marginBottom:injOui===true?16:0}}>
         <button onClick={()=>setInjOui(true)} style={{flex:1,padding:"16px 0",borderRadius:12,border:"2px solid "+(injOui===true?C.r:C.brdL),background:injOui===true?C.rS:"transparent",color:injOui===true?C.r:C.tx2,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Oui</button>
         <button onClick={()=>{setInjOui(false);setStep(S_SLEEP);}} style={{flex:1,padding:"16px 0",borderRadius:12,border:"2px solid "+(injOui===false?C.g:C.brdL),background:injOui===false?C.gS:"transparent",color:injOui===false?C.g:C.tx2,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Non</button>
@@ -342,7 +344,15 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
           <div style={{textAlign:"right"}}><div style={{fontSize:28,fontWeight:800,color:sleepC}}>{dur}h</div><div style={{fontSize:11,color:sleepC,fontWeight:600}}>{diff>0?"+":""}{diff}h</div></div>
         </div>
       </div>
-      <button onClick={()=>setStep(S_WEIGHT)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Suivant</button>
+      <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+C.brd}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.tx2,marginBottom:10}}>Avez-vous été réveillé cette nuit ?</div>
+        <div style={{display:"flex",gap:10,marginBottom:sleepInterrupt===true?12:0}}>
+          <button onClick={()=>setSleepInterrupt(true)} style={{flex:1,padding:"12px 0",borderRadius:10,border:"2px solid "+(sleepInterrupt===true?C.o:C.brdL),background:sleepInterrupt===true?C.oS:"transparent",color:sleepInterrupt===true?C.o:C.tx2,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Oui</button>
+          <button onClick={()=>{setSleepInterrupt(false);setSleepInterruptNote("");}} style={{flex:1,padding:"12px 0",borderRadius:10,border:"2px solid "+(sleepInterrupt===false?C.g:C.brdL),background:sleepInterrupt===false?C.gS:"transparent",color:sleepInterrupt===false?C.g:C.tx2,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Non</button>
+        </div>
+        {sleepInterrupt===true&&(<textarea value={sleepInterruptNote} onChange={e=>setSleepInterruptNote(e.target.value)} placeholder="Durée, raison... (ex: bruit, bébé — ~45 min)" rows={2} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid "+C.o+"50",background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",outline:"none",boxSizing:"border-box",marginTop:8}}/>)}
+      </div>
+      <button onClick={()=>setStep(S_WEIGHT)} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginTop:16}}>Suivant</button>
     </div>);
   }
 
@@ -378,7 +388,8 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
     {domsZones.length>0&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:4}}>DOMS</div><div style={{display:"flex",flexWrap:"wrap",gap:3}}>{domsZones.map(id=>{const z=ALL_BZ.find(z=>z.id===id);return z?<span key={id} style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.o+"20",color:C.o}}>{z.label}</span>:null;})}</div></div>)}
     {injOui&&injComment&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.r+"10",border:"1px solid "+C.r+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.r,textTransform:"uppercase",marginBottom:4}}>Blessure signalée</div><div style={{fontSize:11,color:C.r,lineHeight:1.5}}>{injComment}</div></div>)}
     {alerts.length>0&&<div style={{marginBottom:12}}>{alerts.map((a,i)=><div key={i} style={{padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30",fontSize:11,color:C.o,marginBottom:5}}>{a}</div>)}</div>}
-    <button onClick={()=>onSave({...vals,domsZones,coucher,reveil,sleepDur:dur,poids:+poids||null,score,injComment:injOui?injComment:null})} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.g,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Sauvegarder</button>
+    {sleepInterrupt===true&&sleepInterruptNote&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:4}}>Réveil nocturne</div><div style={{fontSize:11,color:C.o,lineHeight:1.5}}>{sleepInterruptNote}</div></div>)}
+    <button onClick={()=>onSave({...vals,domsZones,coucher,reveil,sleepDur:dur,poids:+poids||null,score,injComment:injOui?injComment:null,sleepInterrupt:sleepInterrupt??null,sleepInterruptNote:sleepInterrupt?sleepInterruptNote||null:null})} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.g,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Sauvegarder</button>
   </div>);
 }
 
@@ -2180,9 +2191,9 @@ function NewBlockModal({onStart,onClose,onResume,hasCurrentData,blockHistory=[],
   </div>);
 }
 
-function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energySessions,setEnergySessions,energySessionsLoaded,setEnergySessionsLoaded,C,blockConfig,currentWeek=1}){
+function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energySessions,setEnergySessions,energySessionsLoaded,setEnergySessionsLoaded,C,blockConfig,currentWeek=1,weekPlan,setWeekPlan,dayPlan,setDayPlan}){
   const[creating,setCreating]=useState(false);const[newLabel,setNewLabel]=useState("");const[loading,setLoading]=useState(false);
-  const[weekPlan,setWeekPlan]=useState({});const[weekPlanLoaded,setWeekPlanLoaded]=useState(false);
+  const[weekPlanLoaded,setWeekPlanLoaded]=useState(false);
   const[selWeek,setSelWeek]=useState(currentWeek||1);const[showAssign,setShowAssign]=useState(false);
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
@@ -2193,13 +2204,10 @@ function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energy
     setEnergySessions(data||[]);setEnergySessionsLoaded(true);setLoading(false);
   };
   useEffect(()=>{if(!energySessionsLoaded)loadSessions();},[athleteId,energySessionsLoaded]);
-  useEffect(()=>{
-    if(weekPlanLoaded)return;
-    supabase.from('app_data').select('value').eq('athlete_id',athleteId).eq('key','asp:energy_week_plan').maybeSingle().then(({data})=>{if(data?.value)setWeekPlan(data.value);setWeekPlanLoaded(true);});
-  },[athleteId,weekPlanLoaded]);
-
   const saveWeekPlan=async(plan)=>{await supabase.from('app_data').upsert({athlete_id:athleteId,key:'asp:energy_week_plan',value:plan,updated_at:new Date().toISOString()},{onConflict:'athlete_id,key'});};
+  const saveDayPlan=async(plan)=>{await supabase.from('app_data').upsert({athlete_id:athleteId,key:'asp:energy_day_plan',value:plan,updated_at:new Date().toISOString()},{onConflict:'athlete_id,key'});};
   const toggleSessionInWeek=(w,key)=>{const cur=weekPlan[w]||[];const next=cur.includes(key)?cur.filter(k=>k!==key):[...cur,key];const plan={...weekPlan,[w]:next};setWeekPlan(plan);saveWeekPlan(plan);};
+  const setSessionDay=(w,key,day)=>{const wDays={...(dayPlan[w]||{}),[key]:day};const plan={...dayPlan,[w]:wDays};setDayPlan(plan);saveDayPlan(plan);};
 
   const handleCreate=async()=>{
     if(!newLabel.trim())return;
@@ -2212,7 +2220,7 @@ function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energy
     e.stopPropagation();
     if(!window.confirm("Supprimer cette séance énergétique ?"))return;
     await supabase.from("energy_session_config").delete().eq("athlete_id",athleteId).eq("session_key",sessionKey);
-    const newPlan={};Object.entries(weekPlan).forEach(([w,keys])=>{newPlan[w]=keys.filter(k=>k!==sessionKey);});setWeekPlan(newPlan);saveWeekPlan(newPlan);
+    const newPlan={};Object.entries(weekPlan).forEach(([w,keys])=>{newPlan[w]=keys.filter(k=>k!==sessionKey);});setWeekPlan(newPlan);saveWeekPlan(newPlan);const newDayPlan={};Object.entries(dayPlan).forEach(([w,d])=>{const nd={...d};delete nd[sessionKey];newDayPlan[w]=nd;});setDayPlan(newDayPlan);saveDayPlan(newDayPlan);
     setEnergySessionsLoaded(false);
   };
   if(energyEditorKey){
@@ -2305,12 +2313,18 @@ function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energy
           <div style={{fontSize:14,fontWeight:700,color:C.tx}}>Séances — Semaine {selWeek}</div>
           <button onClick={()=>setShowAssign(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
         </div>
-        {energySessions.map(s=>{const assigned=(weekPlan[selWeek]||[]).includes(s.session_key);return(<div key={s.session_key} onClick={()=>toggleSessionInWeek(selWeek,s.session_key)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:10,border:"1px solid "+(assigned?C.coach+"60":C.brdL),background:assigned?C.coach+"12":C.s2,marginBottom:8,cursor:"pointer"}}>
-          <div style={{width:22,height:22,borderRadius:6,border:"2px solid "+(assigned?C.coach:C.tx3),background:assigned?C.coach:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:800,flexShrink:0}}>{assigned?"✓":""}</div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:600,color:assigned?C.coach:C.tx}}>{s.session_label||s.session_key}</div>
-            {(s.appareil_types||[]).length>0&&<div style={{fontSize:10,color:C.tx3}}>{(s.appareil_types||[]).join(", ")}</div>}
+        {energySessions.map(s=>{const assigned=(weekPlan[selWeek]||[]).includes(s.session_key);const sessDay=dayPlan[selWeek]?.[s.session_key]??null;const DAY_S=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];return(<div key={s.session_key} style={{marginBottom:8,borderRadius:10,border:"1px solid "+(assigned?C.coach+"60":C.brdL),background:assigned?C.coach+"12":C.s2,overflow:"hidden"}}>
+          <div onClick={()=>toggleSessionInWeek(selWeek,s.session_key)} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",cursor:"pointer"}}>
+            <div style={{width:22,height:22,borderRadius:6,border:"2px solid "+(assigned?C.coach:C.tx3),background:assigned?C.coach:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#fff",fontWeight:800,flexShrink:0}}>{assigned?"✓":""}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:600,color:assigned?C.coach:C.tx}}>{s.session_label||s.session_key}</div>
+              {(s.appareil_types||[]).length>0&&<div style={{fontSize:10,color:C.tx3}}>{(s.appareil_types||[]).join(", ")}</div>}
+            </div>
           </div>
+          {assigned&&(<div style={{padding:"0 14px 12px",display:"flex",gap:5,flexWrap:"wrap"}}>
+            <div style={{fontSize:9,color:C.tx3,width:"100%",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.3px"}}>Jour :</div>
+            {DAY_S.map((d,i)=>(<button key={i} onClick={e=>{e.stopPropagation();setSessionDay(selWeek,s.session_key,sessDay===i?null:i);}} style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+(sessDay===i?C.coach:C.brdL),background:sessDay===i?C.coach:"transparent",color:sessDay===i?"#fff":C.tx3,fontSize:10,fontWeight:sessDay===i?700:400,cursor:"pointer",fontFamily:"inherit"}}>{d}</button>))}
+          </div>)}
         </div>);})}</div>
     </div>)}
   </div>);
@@ -3240,15 +3254,14 @@ function AIChatBar({exos,sessions,chatHistory,setChatHistory,onApply,onOpenChang
   </>);
 }
 
-function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={},exos={}}){
+function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={},exos={},energySessions=[],energyWeekPlan={},energyDayPlan={}}){
   const[selectDay,setSelectDay]=useState(null);
-  const[customLabel,setCustomLabel]=useState('');
   const[weekOffset,setWeekOffset]=useState(0);
-  const[filters,setFilters]=useState({sessions:true,wellness:true,nutrition:true,activities:true});
-  const[detailType,setDetailType]=useState(null);
   const[activityModal,setActivityModal]=useState(null);// {dayIdx} | null
   const[activityForm,setActivityForm]=useState({label:'',emoji:'🏅',duration:30,intensity:3,notes:''});
   const[previewSess,setPreviewSess]=useState(null);// session to preview
+  const[previewWell,setPreviewWell]=useState(null);// wellness to preview
+  const[previewNutr,setPreviewNutr]=useState(null);// nutrition to preview
   const DAYS=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
   const DAYS_FULL=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
   const MONTHS=["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
@@ -3269,6 +3282,7 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
   const dKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
   const dayExtras=idx=>extras[dKey(weekDays[idx])]||[];
   const sessionsForDay=dayIdx=>(sessions||[]).filter(s=>s.day_of_week===dayIdx);
+  const energySessionsForDay=dayIdx=>{const wkSessKeys=energyWeekPlan[currentWeek]||[];return(energySessions||[]).filter(s=>wkSessKeys.includes(s.session_key)&&energyDayPlan[currentWeek]?.[s.session_key]===dayIdx);};
   const savedActivities=wk.savedActivities||[];
   const allActivities=[...ACTIVITIES,...savedActivities.filter(s=>!ACTIVITIES.find(a=>a.label===s.label))];
   const INT_LABELS=['Récup','Très facile','Facile','Modéré','Modéré+','Soutenu','Dur','Très dur','Maximal','Limite'];
@@ -3295,7 +3309,6 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
   const getNutr=d=>nutritionLog[isoKey(d)]||nutritionLog[dKey(d)]||null;
   const wScore=w=>w?Math.round(((w.fatigue||3)+(w.sommeil||3)+(w.stress||3)+(w.energie||3)+(w.doms||3))/25*100):null;
   const wColor=s=>s>=80?C.g:s>=65?"#6FCF97":s>=50?C.o:s>=35?"#E8956D":C.r;
-  const toggleFilter=k=>{setFilters(p=>({...p,[k]:!p[k]}));};
   const isThisWeek=weekOffset===0;
   const sameMonth=monday.getMonth()===sunday.getMonth();
   const weekLabel=isThisWeek?"Cette semaine":sameMonth?(monday.getDate()+" – "+sunday.getDate()+" "+MONTHS[monday.getMonth()]):(monday.getDate()+" "+MONTHS[monday.getMonth()]+" – "+sunday.getDate()+" "+MONTHS[sunday.getMonth()]);
@@ -3304,7 +3317,7 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
   const weekDone=weekSessions.filter(s=>doneSet.has(s.id)).length;
   const weekWellDays=weekDays.filter(d=>getWell(d)!==null).length;
   const weekAvgWell=(()=>{const sc=weekDays.map(d=>{const w=getWell(d);return w?wScore(w):null}).filter(v=>v!==null);return sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null;})();
-  const selData=selectDay!==null?{date:weekDays[selectDay],well:getWell(weekDays[selectDay]),nutr:getNutr(weekDays[selectDay]),sessList:sessionsForDay(selectDay),exs:dayExtras(selectDay)}:null;
+  const selData=selectDay!==null?{date:weekDays[selectDay],well:getWell(weekDays[selectDay]),nutr:getNutr(weekDays[selectDay]),sessList:sessionsForDay(selectDay),energyList:energySessionsForDay(selectDay),exs:dayExtras(selectDay)}:null;
 
   return(<div style={{background:C.s1,borderRadius:18,border:"1px solid "+C.brd,overflow:"hidden",marginBottom:14}}>
     {/* Header */}
@@ -3335,14 +3348,6 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
           </div>}
         </div>
       </div>
-      {/* Filtres */}
-      <div style={{display:"flex",gap:4}}>
-        {[{k:"sessions",l:"Séances",e:"🏋",c:C.b},{k:"wellness",l:"Forme",e:"💚",c:C.g},{k:"nutrition",l:"Nutrition",e:"🍽",c:C.o},{k:"activities",l:"Activités",e:"⚡",c:C.y}].map(f=>(
-          <button key={f.k} onClick={()=>toggleFilter(f.k)} style={{display:"flex",alignItems:"center",gap:3,padding:"4px 8px",borderRadius:20,border:"1px solid "+(filters[f.k]?f.c+"50":C.brd+"60"),background:filters[f.k]?f.c+"12":"transparent",color:filters[f.k]?f.c:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>
-            <span style={{fontSize:9}}>{f.e}</span>{f.l}
-          </button>
-        ))}
-      </div>
     </div>
 
     {/* Grille jours */}
@@ -3351,19 +3356,20 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
         const isToday=dKey(date)===todStr;
         const isPast=date<new Date(new Date().setHours(0,0,0,0))&&!isToday;
         const isFuture=!isPast&&!isToday;
-        const sessList=filters.sessions?sessionsForDay(i):[];
-        const exs=filters.activities?dayExtras(i):[];
+        const sessList=sessionsForDay(i);
+        const exs=dayExtras(i);
         const isSel=selectDay===i;
         const allDone=sessList.length>0&&sessList.every(s=>doneSet.has(s.id));
         const anyDone=sessList.some(s=>doneSet.has(s.id));
         const hasMissed=isPast&&sessList.some(s=>!doneSet.has(s.id));
-        const well=filters.wellness?getWell(date):null;
+        const well=getWell(date);
         const ws=well?wScore(well):null;
-        const nutr=filters.nutrition?getNutr(date):null;
+        const nutr=getNutr(date);
         // Couleur de fond
         const bgTop=allDone?C.g+"12":hasMissed&&!anyDone?C.r+"08":isToday?C.ac+"10":isSel?C.ac+"08":"transparent";
+        const energyList=energySessionsForDay(i);
         const accentLeft=allDone?C.g:hasMissed&&!anyDone?C.r:sessList.length>0&&isFuture?C.b:isToday?C.ac:isSel?C.ac+"80":"transparent";
-        return(<div key={i} onClick={()=>{setSelectDay(isSel?null:i);setDetailType(null);}}
+        return(<div key={i} onClick={()=>setSelectDay(isSel?null:i)}
           style={{position:"relative",padding:"10px 4px 8px",textAlign:"center",cursor:"pointer",background:bgTop,borderRight:i<6?"1px solid "+C.brd+"40":"none",borderBottom:isSel?"2px solid "+C.ac:"2px solid transparent",transition:"all 0.15s",minHeight:80}}>
           {/* Accent ligne gauche pour aujourd'hui */}
           {isToday&&<div style={{position:"absolute",top:6,left:0,width:2,height:"calc(100% - 12px)",borderRadius:2,background:C.ac}}/>}
@@ -3371,9 +3377,13 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
           <div style={{fontSize:8,fontWeight:isToday?700:500,color:isToday?C.ac:C.tx3,marginBottom:3,letterSpacing:"0.3px",textTransform:"uppercase"}}>{DAYS[i]}</div>
           {/* Numéro */}
           <div style={{fontSize:isToday?16:14,fontWeight:isToday?800:500,color:isToday?C.ac:isPast?C.tx3:C.tx,marginBottom:4,lineHeight:1}}>{date.getDate()}</div>
-          {/* Sessions */}
+          {/* Sessions muscu */}
           {sessList.length>0&&<div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:3,padding:"0 2px"}}>
             {sessList.map(s=>{const done=doneSet.has(s.id);const missed=isPast&&!done;const dc=done?C.g:missed?C.r:C.b;return(<div key={s.id} style={{fontSize:7,fontWeight:700,padding:"2px 3px",borderRadius:4,background:dc+"20",color:dc,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",justifyContent:"center",gap:1}}><span>{done?"✓":missed?"✗":"·"}</span><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{s.short||s.name.slice(0,3)}</span></div>);})}
+          </div>}
+          {/* Sessions énergie */}
+          {energyList.length>0&&<div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:3,padding:"0 2px"}}>
+            {energyList.map(s=><div key={s.session_key} style={{fontSize:7,fontWeight:700,padding:"2px 3px",borderRadius:4,background:C.coach+"20",color:C.coach,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",justifyContent:"center",gap:1}}><span>⚡</span><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{(s.session_label||"Énergie").slice(0,5)}</span></div>)}
           </div>}
           {/* Wellness dot */}
           {ws!==null&&<div title={"Forme "+ws+"/100"} style={{width:18,height:18,borderRadius:"50%",background:wColor(ws),margin:"2px auto",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px "+wColor(ws)+"50"}}><span style={{fontSize:7,fontWeight:800,color:"#fff",lineHeight:1}}>{ws}</span></div>}
@@ -3383,7 +3393,7 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
             {exs.slice(0,2).map(e=>(<span key={e.id} style={{fontSize:9}}>{e.emoji}</span>))}
           </div>
           {/* Jour vide */}
-          {sessList.length===0&&exs.length===0&&ws===null&&!nutr&&<div style={{width:3,height:3,borderRadius:"50%",background:C.brd,margin:"4px auto 0"}}/>}
+          {sessList.length===0&&energyList.length===0&&exs.length===0&&ws===null&&!nutr&&<div style={{width:3,height:3,borderRadius:"50%",background:C.brd,margin:"4px auto 0"}}/>}
         </div>);
       })}
     </div>
@@ -3391,112 +3401,42 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
     {/* Panel détail jour */}
     {selectDay!==null&&selData&&(<div style={{borderTop:"1px solid "+C.brd+"80",background:C.s2}}>
       {/* Header du jour */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px 8px"}}>
-        <div>
-          <div style={{fontSize:13,fontWeight:700,color:C.tx}}>{DAYS_FULL[selectDay]}</div>
-          <div style={{fontSize:10,color:C.tx3}}>{selData.date.getDate()} {MONTHS[selData.date.getMonth()]} {selData.date.getFullYear()}</div>
-        </div>
-        {/* Tabs détail */}
-        <div style={{display:"flex",gap:4}}>
-          {selData.well&&<button onClick={()=>setDetailType(detailType==="wellness"?null:"wellness")} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+(detailType==="wellness"?C.g:C.brd),background:detailType==="wellness"?C.g+"20":"transparent",color:detailType==="wellness"?C.g:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>💚 Forme</button>}
-          {selData.sessList.length>0&&<button onClick={()=>setDetailType(detailType==="session"?null:"session")} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+(detailType==="session"?C.b:C.brd),background:detailType==="session"?C.b+"20":"transparent",color:detailType==="session"?C.b:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>🏋 Séance</button>}
-          {selData.nutr&&<button onClick={()=>setDetailType(detailType==="nutrition"?null:"nutrition")} style={{padding:"4px 10px",borderRadius:8,border:"1px solid "+(detailType==="nutrition"?C.o:C.brd),background:detailType==="nutrition"?C.o+"20":"transparent",color:detailType==="nutrition"?C.o:C.tx3,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s"}}>🍽 Alim.</button>}
-        </div>
+      <div style={{padding:"10px 14px 8px"}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.tx}}>{DAYS_FULL[selectDay]}</div>
+        <div style={{fontSize:10,color:C.tx3}}>{selData.date.getDate()} {MONTHS[selData.date.getMonth()]} {selData.date.getFullYear()}</div>
       </div>
-      {/* Vue résumé (sans onglet actif) */}
-      {!detailType&&(<div style={{padding:"0 14px 10px",display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        {selData.well&&(()=>{const ws2=wScore(selData.well);const wc=wColor(ws2);return(<div onClick={()=>setDetailType("wellness")} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:wc+"15",border:"1px solid "+wc+"30",cursor:"pointer"}}>
+      {/* Vue résumé — tout toujours visible */}
+      <div style={{padding:"0 14px 10px",display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        {selData.well&&(()=>{const ws2=wScore(selData.well);const wc=wColor(ws2);return(<div onClick={()=>setPreviewWell(selData.well)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:wc+"15",border:"1px solid "+wc+"30",cursor:"pointer"}}>
           <div style={{width:24,height:24,borderRadius:"50%",background:wc,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px "+wc+"60"}}><span style={{fontSize:9,fontWeight:800,color:"#fff"}}>{ws2}</span></div>
-          <div><div style={{fontSize:11,fontWeight:700,color:wc}}>{ws2>=80?"Optimal":ws2>=65?"Bon":ws2>=50?"Modéré":ws2>=35?"Fatigué":"Surmenage"}</div><div style={{fontSize:9,color:C.tx3}}>forme</div></div>
+          <div><div style={{fontSize:11,fontWeight:700,color:wc}}>{ws2>=80?"Optimal":ws2>=65?"Bon":ws2>=50?"Modéré":ws2>=35?"Fatigué":"Surmenage"}</div><div style={{fontSize:9,color:C.tx3}}>forme ↗</div></div>
         </div>);})()}
         {selData.sessList.map(s=>{const done=doneSet.has(s.id);const isPD=selData.date<new Date(new Date().setHours(0,0,0,0));const missed=isPD&&!done;const dc=done?C.g:missed?C.r:C.b;const log=sessionLogs[s.id+"_"+currentWeek];return(<div key={s.id} onClick={()=>setPreviewSess(s)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:dc+"12",border:"1px solid "+dc+"30",cursor:"pointer"}}>
           <span style={{fontSize:14}}>{done?"✅":missed?"❌":"🏋"}</span>
           <div><div style={{fontSize:11,fontWeight:700,color:dc}}>{s.name}</div>{log?.duration&&<div style={{fontSize:9,color:C.tx3}}>{fmtTime(log.duration)}</div>}</div>
           <span style={{fontSize:9,color:C.tx3,marginLeft:"auto"}}>↗</span>
         </div>);})}
-        {selData.nutr&&<div onClick={()=>setDetailType("nutrition")} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:C.o+"12",border:"1px solid "+C.o+"30",cursor:"pointer"}}>
+        {(selData.energyList||[]).map(s=><div key={s.session_key} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:C.coach+"12",border:"1px solid "+C.coach+"30"}}>
+          <span style={{fontSize:14}}>⚡</span>
+          <div><div style={{fontSize:11,fontWeight:700,color:C.coach}}>{s.session_label||"Séance énergie"}</div><div style={{fontSize:9,color:C.tx3}}>{(s.appareil_types||[]).join(", ")||"Énergétique"}</div></div>
+        </div>)}
+        {selData.nutr&&<div onClick={()=>setPreviewNutr(selData.nutr)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:10,background:C.o+"12",border:"1px solid "+C.o+"30",cursor:"pointer"}}>
           <span style={{fontSize:14}}>🍽</span>
-          <div><div style={{fontSize:11,fontWeight:700,color:C.o}}>{selData.nutr.total_calories_consumed!=null?selData.nutr.total_calories_consumed+" kcal":"Nutrition"}</div><div style={{fontSize:9,color:C.tx3}}>consommées</div></div>
+          <div><div style={{fontSize:11,fontWeight:700,color:C.o}}>{selData.nutr.total_calories_consumed!=null?selData.nutr.total_calories_consumed+" kcal":"Nutrition"}</div><div style={{fontSize:9,color:C.tx3}}>consommées ↗</div></div>
         </div>}
         {selData.exs.length>0&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",borderRadius:10,background:C.y+"12",border:"1px solid "+C.y+"30"}}>
           <span style={{fontSize:12}}>{selData.exs.map(e=>e.emoji).join(" ")}</span>
           <div style={{fontSize:10,fontWeight:600,color:C.y}}>{selData.exs.map(e=>e.label).join(", ")}</div>
         </div>}
-        {!selData.well&&!selData.sessList.length&&!selData.nutr&&!selData.exs.length&&<span style={{fontSize:11,color:C.tx3}}>Aucune donnée pour ce jour</span>}
-      </div>)}
-      {/* Détail Wellness */}
-      {detailType==="wellness"&&selData.well&&(()=>{const w=selData.well;const ws2=wScore(w);const wc=wColor(w);return(<div style={{padding:"0 14px 12px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-          <div style={{width:44,height:44,borderRadius:"50%",background:wc,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px "+wc+"50"}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{ws2}</span></div>
-          <div><div style={{fontSize:14,fontWeight:700,color:wc}}>{ws2>=80?"Optimal":ws2>=65?"Bon":ws2>=50?"Modéré":ws2>=35?"Fatigué":"Surmenage"}</div><div style={{fontSize:10,color:C.tx3}}>Score de forme global</div></div>
-          {w.weight&&<div style={{marginLeft:"auto",textAlign:"right",padding:"6px 10px",borderRadius:8,background:C.s1}}><div style={{fontSize:15,fontWeight:800,color:C.tx}}>{w.weight}<span style={{fontSize:9,color:C.tx3}}> kg</span></div><div style={{fontSize:9,color:C.tx3}}>Poids</div></div>}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:8}}>
-          {[{l:"Récup.",v:w.fatigue,e:"😴"},{l:"Sommeil",v:w.sommeil,e:"💤"},{l:"Stress",v:w.stress,e:"🧠"},{l:"Énergie",v:w.energie,e:"⚡"},{l:"DOMS",v:w.doms,e:"💪"}].map(item=>{const iv=item.v||0;const ic=iv>=4?C.g:iv>=3?C.o:C.r;return(
-            <div key={item.l} style={{background:C.s1,borderRadius:10,padding:"8px 4px",textAlign:"center",border:"1px solid "+ic+"20"}}>
-              <div style={{fontSize:13,marginBottom:2}}>{item.e}</div>
-              <div style={{fontSize:15,fontWeight:800,color:ic}}>{item.v||"—"}<span style={{fontSize:8,color:C.tx3}}>/5</span></div>
-              <div style={{fontSize:8,color:C.tx3,marginTop:1}}>{item.l}</div>
-            </div>);})}</div>
-        {(w.sleepDur!=null||w.coucher||w.reveil)&&<div style={{padding:"7px 12px",borderRadius:10,background:C.s1,marginBottom:4}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5}}>Sommeil</div><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{w.coucher&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>🌙</span><span style={{fontSize:11,fontWeight:600,color:C.tx}}>{String(w.coucher.h).padStart(2,"0")}:{String(w.coucher.m).padStart(2,"0")}</span></div>}{w.reveil&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>☀️</span><span style={{fontSize:11,fontWeight:600,color:C.tx}}>{String(w.reveil.h).padStart(2,"0")}:{String(w.reveil.m).padStart(2,"0")}</span></div>}{w.sleepDur!=null&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.b+"18"}}><span style={{fontSize:10}}>💤</span><span style={{fontSize:11,fontWeight:700,color:C.b}}>{typeof w.sleepDur==="number"?w.sleepDur.toFixed(1):w.sleepDur}h</span></div>}</div></div>}
-        {w.domsZones?.length>0&&<div style={{padding:"7px 12px",borderRadius:10,background:C.s1,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:4}}><span style={{fontSize:10,color:C.tx3}}>Zones DOMS :</span>{w.domsZones.map(z=><span key={z} style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.o+"20",color:C.o}}>{z}</span>)}</div>}
-        {w.injComment&&<div style={{padding:"7px 12px",borderRadius:10,background:C.r+"10",border:"1px solid "+C.r+"30",fontSize:10,color:C.r}}>⚠ {w.injComment}</div>}
-      </div>);})()}
-      {/* Détail Séance */}
-      {detailType==="session"&&selData.sessList.length>0&&(
-        <div style={{padding:"0 14px 12px"}}>
-          {selData.sessList.map(s=>{
-            const done=doneSet.has(s.id);const isPD=selData.date<new Date(new Date().setHours(0,0,0,0));const missed=isPD&&!done;const dc=done?C.g:missed?C.r:C.b;
-            const log=sessionLogs[s.id+"_"+currentWeek];
-            return(<div key={s.id} style={{marginBottom:6,padding:"10px 12px",borderRadius:10,background:C.s1,border:"1px solid "+dc+"25"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:log?.note?6:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:16}}>{done?"✅":missed?"❌":"🏋"}</span>
-                  <span style={{fontSize:12,fontWeight:700,color:dc}}>{s.name}</span>
-                </div>
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  {log?.forme&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:(log.forme>=4?C.g:log.forme>=3?C.o:C.r)+"20",color:log.forme>=4?C.g:log.forme>=3?C.o:C.r,fontWeight:600}}>Forme {log.forme}/5</span>}
-                  {log?.duration&&<span style={{fontSize:10,color:C.tx3}}>{fmtTime(log.duration)}</span>}
-                </div>
-              </div>
-              {log?.note&&<div style={{fontSize:11,color:C.tx2,lineHeight:1.55,fontStyle:"italic",padding:"6px 8px",borderRadius:6,background:C.s2}}>"{log.note}"</div>}
-              {!log&&done&&<div style={{fontSize:10,color:C.tx3}}>Séance validée sans note</div>}
-            </div>);
-          })}
-        </div>
-      )}
-      {/* Détail Nutrition */}
-      {detailType==="nutrition"&&selData.nutr&&(()=>{const n=selData.nutr;return(<div style={{padding:"0 14px 12px"}}>
-        {n.total_calories_consumed!=null&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:10,background:C.o+"12",border:"1px solid "+C.o+"25",marginBottom:8}}><span style={{fontSize:10,color:C.tx3}}>Total consommé</span><span style={{fontSize:16,fontWeight:800,color:C.o}}>{n.total_calories_consumed}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> kcal</span></span></div>}
-        {(n.glucides_consumed!=null||n.lipides_consumed!=null||n.proteines_consumed!=null)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-          {[{l:"Glucides",v:n.glucides_consumed,c:C.b,e:"🍞"},{l:"Lipides",v:n.lipides_consumed,c:C.o,e:"🥑"},{l:"Protéines",v:n.proteines_consumed,c:C.g,e:"🥩"}].map(m=>(
-            <div key={m.l} style={{background:C.s1,borderRadius:10,padding:"10px 6px",textAlign:"center",border:"1px solid "+m.c+"20"}}>
-              <div style={{fontSize:12,marginBottom:3}}>{m.e}</div>
-              <div style={{fontSize:15,fontWeight:800,color:m.c}}>{m.v!=null?m.v:"-"}<span style={{fontSize:9,color:C.tx3}}>g</span></div>
-              <div style={{fontSize:9,color:C.tx3,marginTop:2}}>{m.l}</div>
-            </div>
-          ))}
-        </div>}
-      </div>);})()}
+        {!selData.well&&!selData.sessList.length&&!(selData.energyList||[]).length&&!selData.nutr&&!selData.exs.length&&<span style={{fontSize:11,color:C.tx3}}>Aucune donnée pour ce jour</span>}
+      </div>
       {/* Activités libres + ajout */}
       <div style={{borderTop:"1px solid "+C.brd+"60",padding:"10px 14px 12px"}}>
-        <div style={{fontSize:9,fontWeight:700,color:C.y,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>+ Activité libre</div>
-        {/* Activités enregistrées (défaut + custom) */}
-        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8}}>
-          {allActivities.map(a=>{const isCustom=!ACTIVITIES.find(d=>d.label===a.label);return(
-            <div key={a.label} style={{display:"flex",alignItems:"center",gap:0}}>
-              <button onClick={()=>openActivityModal(selectDay,a.label,a.emoji)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:isCustom?"20px 0 0 20px":20,border:"1px solid "+C.y+"50",borderRight:isCustom?"none":"1px solid "+C.y+"50",background:C.y+"10",color:C.y,fontSize:9,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}><span>{a.emoji}</span>{a.label}</button>
-              {isCustom&&<button onClick={ev=>{ev.stopPropagation();removeCustomActivity(a.label);}} title="Supprimer de la liste" style={{padding:"4px 6px",borderRadius:"0 20px 20px 0",border:"1px solid "+C.y+"50",background:C.y+"10",color:C.y+"80",fontSize:9,cursor:"pointer",fontFamily:"inherit",lineHeight:1}}>×</button>}
-            </div>
-          );})}
-        </div>
-        {/* Saisie activité custom */}
-        <div style={{display:"flex",gap:4}}>
-          <input value={customLabel} onChange={e=>setCustomLabel(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&customLabel.trim()){openActivityModal(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} placeholder="Autre activité..." style={{flex:1,padding:"6px 10px",borderRadius:8,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:10,fontFamily:"inherit",outline:"none"}}/>
-          <button onClick={()=>{if(customLabel.trim()){openActivityModal(selectDay,customLabel.trim(),'🏅');setCustomLabel('');}}} style={{padding:"6px 12px",borderRadius:8,border:"none",background:C.y,color:"#000",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>+</button>
-        </div>
+        <button onClick={()=>openActivityModal(selectDay,'','🏅')} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:20,border:"1px solid "+C.y+"50",background:C.y+"10",color:C.y,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:dayExtras(selectDay).length>0?8:0}}>
+          <span style={{fontSize:10}}>+</span> Ajouter une activité
+        </button>
         {/* Activités du jour */}
-        {dayExtras(selectDay).length>0&&<div style={{display:"flex",flexDirection:"column",gap:5,marginTop:8}}>
+        {dayExtras(selectDay).length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
           {dayExtras(selectDay).map(e=>{const charge=chargeScore(e.duration,e.intensity);const ic=e.intensity?INT_COLORS[e.intensity-1]:C.y;return(
             <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",borderRadius:9,background:C.y+"0C",border:"1px solid "+C.y+"30"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -3528,39 +3468,72 @@ function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWe
           </div>
           <button onClick={()=>setPreviewSess(null)} style={{background:"none",border:"none",color:C.tx3,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
         </div>
-        {/* Exercices de la séance pour la semaine en cours */}
+        {/* Exercices de la séance groupés par bloc */}
         {(()=>{
           const exList=exos[previewSess.id]||[];
           const weekExos=exList.filter(ex=>ex.weeks&&ex.weeks[currentWeek]);
           if(!weekExos.length&&!exList.length)return(<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"20px 0"}}>Aucun exercice configuré</div>);
           const displayList=weekExos.length?weekExos:exList;
-          return(<div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {displayList.map((ex,idx)=>{
-              const wData=ex.weeks?.[currentWeek]||{};
-              const method=wData.method;
-              const mInfo=method?DEF_METHODS[method]:null;
-              const blocColor=ex.bloc&&BT[ex.bloc]?BT[ex.bloc].c:C.ac;
-              return(<div key={ex.id||idx} style={{padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+C.brd}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:wData.kg||wData.sets?4:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
-                    {ex.bloc&&<span style={{fontSize:8,padding:"2px 5px",borderRadius:4,background:blocColor+"20",color:blocColor,fontWeight:700,flexShrink:0}}>{ex.bloc}</span>}
-                    <span style={{fontSize:12,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ex.name}</span>
-                  </div>
-                  {mInfo&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:mInfo.c+"20",color:mInfo.c,fontWeight:700,flexShrink:0,marginLeft:6}}>{mInfo.e}</span>}
-                </div>
-                {(wData.kg||wData.sets||wData.repsRange)&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
-                  {wData.sets&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.ac+"15",color:C.ac,fontWeight:600}}>{fmtMR(method,wData.methodParams,wData.sets,wData.repsRange)}</span>}
-                  {wData.kg&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.s1,color:C.tx,fontWeight:600}}>{wData.kg} kg</span>}
-                  {wData.rir!=null&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:rC(wData.rir)+"15",color:rC(wData.rir),fontWeight:600}}>RIR {rL(wData.rir)}</span>}
-                  {wData.tempo&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:5,background:C.s1,color:C.tx3}}>{wData.tempo}</span>}
-                </div>}
-              </div>);
-            })}
+          // Group by bloc
+          const blocs=getSessionBlocs(previewSess,displayList);
+          const byBloc={};const noBloc=[];
+          displayList.forEach(ex=>{if(ex.bloc&&blocs.find(b=>b.id===ex.bloc))byBloc[ex.bloc]=[...(byBloc[ex.bloc]||[]),ex];else noBloc.push(ex);});
+          const renderEx=(ex,idx)=>{const wData=ex.weeks?.[currentWeek]||{};const method=wData.method;const mInfo=method?DEF_METHODS[method]:null;const blocColor=ex.bloc&&BT[ex.bloc]?BT[ex.bloc].c:(blocs.find(b=>b.id===ex.bloc)?.color||C.ac);return(<div key={ex.id||idx} style={{padding:"9px 12px",borderRadius:9,background:C.bg,border:"1px solid "+C.brdL,marginBottom:4}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:wData.kg||wData.sets?3:0}}>
+              <span style={{fontSize:12,fontWeight:600,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{ex.name}</span>
+              {mInfo&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:mInfo.c+"20",color:mInfo.c,fontWeight:700,flexShrink:0,marginLeft:6}}>{mInfo.e}</span>}
+            </div>
+            {(wData.kg||wData.sets||wData.repsRange)&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:3}}>
+              {wData.sets&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.ac+"15",color:C.ac,fontWeight:600}}>{fmtMR(method,wData.methodParams,wData.sets,wData.repsRange)}</span>}
+              {wData.kg&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.s2,color:C.tx,fontWeight:600}}>{wData.kg} kg</span>}
+              {wData.rir!=null&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:rC(wData.rir)+"15",color:rC(wData.rir),fontWeight:600}}>RIR {rL(wData.rir)}</span>}
+              {wData.tempo&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:5,background:C.s2,color:C.tx3}}>{wData.tempo}</span>}
+            </div>}
+          </div>);};
+          return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {blocs.map(bloc=>{const exs=byBloc[bloc.id]||[];if(!exs.length)return null;return(<div key={bloc.id}><div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:8,background:bloc.color+"18",border:"1px solid "+bloc.color+"40",marginBottom:6}}><div style={{width:8,height:8,borderRadius:2,background:bloc.color,flexShrink:0}}/><span style={{fontSize:10,fontWeight:700,color:bloc.color,textTransform:"uppercase",letterSpacing:"0.3px"}}>{bloc.label}</span><span style={{fontSize:9,color:C.tx3,marginLeft:"auto"}}>{exs.length} ex.</span></div>{exs.map(renderEx)}</div>);})}
+            {noBloc.length>0&&<div>{noBloc.map(renderEx)}</div>}
           </div>);
         })()}
         <div style={{marginTop:16,fontSize:10,color:C.tx3,textAlign:"center"}}>
           Semaine {currentWeek} · {(exos[previewSess.id]||[]).filter(ex=>ex.weeks&&ex.weeks[currentWeek]).length} exercice{(exos[previewSess.id]||[]).filter(ex=>ex.weeks&&ex.weeks[currentWeek]).length!==1?"s":""}
         </div>
+      </div>
+    </div>)}
+
+    {/* Modal forme du jour */}
+    {previewWell&&(<div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPreviewWell(null)}>
+      <div style={{width:"100%",maxWidth:500,background:C.s1,borderRadius:"20px 20px 0 0",padding:"20px 20px 32px",overflowY:"auto",maxHeight:"80vh"}} onClick={e=>e.stopPropagation()}>
+        {(()=>{const w=previewWell;const ws2=wScore(w);const wc=wColor(ws2);return(<>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:wc,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:15,fontWeight:800,color:"#fff"}}>{ws2}</span></div>
+              <div><div style={{fontSize:15,fontWeight:700,color:wc}}>{ws2>=80?"Optimal":ws2>=65?"Bon":ws2>=50?"Modéré":ws2>=35?"Fatigué":"Surmenage"}</div><div style={{fontSize:10,color:C.tx3}}>Forme du jour</div></div>
+            </div>
+            <button onClick={()=>setPreviewWell(null)} style={{background:"none",border:"none",color:C.tx3,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginBottom:14}}>
+            {[{l:"Récup.",v:w.fatigue,e:"😴"},{l:"Sommeil",v:w.sommeil,e:"💤"},{l:"Stress",v:w.stress,e:"🧠"},{l:"Énergie",v:w.energie,e:"⚡"},{l:"DOMS",v:w.doms,e:"💪"}].map(item=>{const iv=item.v||0;const ic=iv>=4?C.g:iv>=3?C.o:C.r;return(<div key={item.l} style={{background:C.s2,borderRadius:10,padding:"8px 4px",textAlign:"center",border:"1px solid "+ic+"20"}}><div style={{fontSize:13,marginBottom:2}}>{item.e}</div><div style={{fontSize:15,fontWeight:800,color:ic}}>{item.v||"—"}<span style={{fontSize:8,color:C.tx3}}>/5</span></div><div style={{fontSize:8,color:C.tx3,marginTop:1}}>{item.l}</div></div>);})}
+          </div>
+          {(w.coucher||w.reveil||w.sleepDur!=null)&&<div style={{padding:"10px 14px",borderRadius:10,background:C.s2,marginBottom:10}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Sommeil</div><div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{w.coucher&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.bg}}><span style={{fontSize:11}}>🌙</span><span style={{fontSize:12,fontWeight:600,color:C.tx}}>{String(w.coucher.h).padStart(2,"0")}:{String(w.coucher.m).padStart(2,"0")}</span></div>}{w.reveil&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.bg}}><span style={{fontSize:11}}>☀️</span><span style={{fontSize:12,fontWeight:600,color:C.tx}}>{String(w.reveil.h).padStart(2,"0")}:{String(w.reveil.m).padStart(2,"0")}</span></div>}{w.sleepDur!=null&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.b+"18"}}><span style={{fontSize:11}}>💤</span><span style={{fontSize:12,fontWeight:700,color:C.b}}>{typeof w.sleepDur==="number"?w.sleepDur.toFixed(1):w.sleepDur}h</span></div>}</div>{w.sleepInterrupt===true&&<div style={{marginTop:6,fontSize:11,color:C.o,padding:"4px 8px",borderRadius:6,background:C.o+"12"}}>⚠ Réveil nocturne{w.sleepInterruptNote?" — "+w.sleepInterruptNote:""}</div>}</div>}
+          {w.poids&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:10,background:C.s2,marginBottom:10}}><span style={{fontSize:12}}>⚖️</span><div><div style={{fontSize:12,fontWeight:700,color:C.tx}}>{w.poids} kg</div><div style={{fontSize:9,color:C.tx3}}>Poids ce matin</div></div></div>}
+          {w.domsZones?.length>0&&<div style={{padding:"10px 14px",borderRadius:10,background:C.o+"10",border:"1px solid "+C.o+"30",marginBottom:10}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:6}}>Zones DOMS</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{w.domsZones.map(id=>{const z=ALL_BZ.find(z=>z.id===id);return z?<span key={id} style={{fontSize:10,padding:"3px 8px",borderRadius:6,background:C.o+"20",color:C.o}}>{z.label}</span>:null;})}</div></div>}
+          {w.injComment&&<div style={{padding:"10px 14px",borderRadius:10,background:C.r+"10",border:"1px solid "+C.r+"30",fontSize:11,color:C.r}}>🩺 {w.injComment}</div>}
+        </>);})()}
+      </div>
+    </div>)}
+
+    {/* Modal nutrition */}
+    {previewNutr&&(<div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setPreviewNutr(null)}>
+      <div style={{width:"100%",maxWidth:500,background:C.s1,borderRadius:"20px 20px 0 0",padding:"20px 20px 32px",overflowY:"auto",maxHeight:"80vh"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.tx}}>Alimentation</div>
+          <button onClick={()=>setPreviewNutr(null)} style={{background:"none",border:"none",color:C.tx3,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        {(()=>{const n=previewNutr;return(<>
+          {n.total_calories_consumed!=null&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderRadius:10,background:C.o+"12",border:"1px solid "+C.o+"25",marginBottom:12}}><span style={{fontSize:11,color:C.tx3}}>Total consommé</span><span style={{fontSize:20,fontWeight:800,color:C.o}}>{n.total_calories_consumed}<span style={{fontSize:11,fontWeight:400,color:C.tx3}}> kcal</span></span></div>}
+          {(n.glucides_consumed!=null||n.lipides_consumed!=null||n.proteines_consumed!=null)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>{[{l:"Glucides",v:n.glucides_consumed,c:C.b,e:"🍞"},{l:"Lipides",v:n.lipides_consumed,c:C.o,e:"🥑"},{l:"Protéines",v:n.proteines_consumed,c:C.g,e:"🥩"}].map(m=>(<div key={m.l} style={{background:C.s2,borderRadius:10,padding:"12px 6px",textAlign:"center",border:"1px solid "+m.c+"20"}}><div style={{fontSize:14,marginBottom:4}}>{m.e}</div><div style={{fontSize:16,fontWeight:800,color:m.c}}>{m.v!=null?m.v:"-"}<span style={{fontSize:9,color:C.tx3}}>g</span></div><div style={{fontSize:10,color:C.tx3,marginTop:2}}>{m.l}</div></div>))}</div>}
+        </>);})()}
       </div>
     </div>)}
 
@@ -4116,7 +4089,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const{profile:myProfile}=useAuth();
   const load=(k,fb)=>sLoad(k,fb,athleteId);
   const save=(k,v)=>sSave(k,v,athleteId);
-  const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");const[logSubTab,setLogSubTab]=useState("muscu");const[testSubTab,setTestSubTab]=useState("musculation");const[banqueSubTab,setBanqueSubTab]=useState("muscu");const[progSubTab,setProgSubTab]=useState("muscu");const[energyEditorKey,setEnergyEditorKey]=useState(null);const[energySessions,setEnergySessions]=useState([]);const[energySessionsLoaded,setEnergySessionsLoaded]=useState(false);const[drawerPrOpen,setDrawerPrOpen]=useState(false);const[drawerInjOpen,setDrawerInjOpen]=useState(false);
+  const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");const[logSubTab,setLogSubTab]=useState("muscu");const[testSubTab,setTestSubTab]=useState("musculation");const[banqueSubTab,setBanqueSubTab]=useState("muscu");const[progSubTab,setProgSubTab]=useState("muscu");const[energyEditorKey,setEnergyEditorKey]=useState(null);const[energySessions,setEnergySessions]=useState([]);const[energySessionsLoaded,setEnergySessionsLoaded]=useState(false);const[energyWeekPlan,setEnergyWeekPlan]=useState({});const[energyDayPlan,setEnergyDayPlan]=useState({});const[energyPlanLoaded,setEnergyPlanLoaded]=useState(false);const[drawerPrOpen,setDrawerPrOpen]=useState(false);const[drawerInjOpen,setDrawerInjOpen]=useState(false);
   const[exos,setExosState]=useState({});const[exMeta,setExMetaState]=useState({});
   const[aW,setAW]=useState(1);const[sets,setSetsState]=useState({});const[anaTab,setAnaTab]=useState("combined");const[weightRange,setWeightRange]=useState("bloc");
   const[wellness,setWellnessState]=useState(null);const[wellnessHistory,setWellnessHistoryState]=useState({});const[wellnessPeriod,setWellnessPeriod]=useState("month");
@@ -4144,7 +4117,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[initialLogSess,setInitialLogSess]=useState(null);
   const[habits,setHabits]=useState([]);const[habitLogs,setHabitLogs]=useState({});const[habitEnabled,setHabitEnabled]=useState(false);
   const[habitToggling,setHabitToggling]=useState(false);const[habitToggleErr,setHabitToggleErr]=useState('');
-  const[drawerOpen,setDrawerOpen]=useState(false);const[drawerSportOpen,setDrawerSportOpen]=useState(false);const[drawerZoom,setDrawerZoom]=useState(null);
+  const[drawerOpen,setDrawerOpen]=useState(false);const[drawerSportOpen,setDrawerSportOpen]=useState(false);const[drawerZoom,setDrawerZoom]=useState(null);const[showLogoutConfirm,setShowLogoutConfirm]=useState(false);
   const[timerLeft,setTimerLeft]=useState(120);const[timerDur,setTimerDur]=useState(120);
   const[timerActive,setTimerActive]=useState(false);const[timerFinished,setTimerFinished]=useState(false);
   const timerRef=useRef(null);
@@ -4163,6 +4136,20 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       setExosState(e);setExMetaState(m);setSetsState(s);setWellnessState(todayW);setWellnessHistoryState(wh);setBodyWeightState(bw);setCompletedSessionsState(cs);setGoalsState(g);setAthleteNotesState(an);setCustomMethodsState(cm);setWeightLogState(wl);setWeightMilestonesState(wmil);setInjuriesState(inj);setSessionsState(sess);setBlockConfigState(bc);setBlockHistoryState(bh||[]);setWeekScheduleState(ws||{});setNutritionStrategy(ns);setNutritionLogState(nl||{});setSessionLogsState(sl);setFreeSessionsState(fs);setLoaded(true);
     })();
   },[]);
+
+  useEffect(()=>{
+    if(energyPlanLoaded)return;
+    Promise.all([
+      supabase.from('app_data').select('value').eq('athlete_id',athleteId).eq('key','asp:energy_week_plan').maybeSingle(),
+      supabase.from('app_data').select('value').eq('athlete_id',athleteId).eq('key','asp:energy_day_plan').maybeSingle(),
+      supabase.from('energy_session_config').select('id,session_key,session_label,appareil_types').eq('athlete_id',athleteId)
+    ]).then(([wp,dp,es])=>{
+      if(wp.data?.value)setEnergyWeekPlan(wp.data.value);
+      if(dp.data?.value)setEnergyDayPlan(dp.data.value);
+      if(es.data)setEnergySessions(es.data);
+      setEnergyPlanLoaded(true);
+    });
+  },[athleteId,energyPlanLoaded]);
 
   useEffect(()=>{
     if(!wellness)return;
@@ -4385,7 +4372,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {drawerZoom&&(<div style={{position:"fixed",inset:0,zIndex:103,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
         <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:"1px solid "+C.brd,position:"sticky",top:0,background:C.bg,zIndex:2}}>
           <button onClick={()=>setDrawerZoom(null)} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
-          <div style={{fontSize:14,fontWeight:700}}>{drawerZoom==="weight"?"Poids de corps":drawerZoom==="wellness"?"Forme du jour":"Score de santé"}</div>
+          <div style={{fontSize:14,fontWeight:700}}>{drawerZoom==="weight"?"Poids de corps":drawerZoom==="wellness"?"Forme du jour":drawerZoom==="goals"?"Objectifs":"Score de santé"}</div>
         </div>
         <div style={{padding:"16px"}}>
           {drawerZoom==="weight"&&(<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}><div style={{fontSize:13,fontWeight:700}}>Évolution du poids</div><div style={{fontSize:13,fontWeight:800,color:C.ac}}>{bodyWeight.current||"—"}<span style={{fontSize:10,fontWeight:400,color:C.tx3}}> / {bodyWeight.target||"—"} kg</span></div></div>{Object.keys(weightLog).length>0?<WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy}/>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"24px 0"}}>Aucune mesure enregistrée</div>}</div>)}
@@ -4399,6 +4386,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
                   <div><div style={{fontSize:16,fontWeight:700,color:wReco.c}}>{wReco.label}</div><div style={{fontSize:12,color:C.tx2,marginTop:4}}>{wReco.desc}</div>{wellness.sleepDur&&<div style={{fontSize:11,color:C.b,fontWeight:600,marginTop:4}}>💤 {wellness.sleepDur}h de sommeil</div>}</div>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>{[{l:"Récupération",v:wellness.fatigue,e:"😴"},{l:"Sommeil",v:wellness.sommeil,e:"💤"},{l:"Sérénité",v:wellness.stress,e:"🧠"},{l:"Énergie",v:wellness.energie,e:"⚡"},{l:"Fraîcheur",v:wellness.doms,e:"💪"}].map(m=>{const mv=m.v||0;const mc=mv>=4?C.g:mv>=3?C.o:C.r;return(<div key={m.l} style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:C.tx3,width:84,flexShrink:0}}>{m.e} {m.l}</span><div style={{flex:1,height:6,background:C.s2,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:(mv/5*100)+"%",background:mc,borderRadius:3}}/></div><span style={{fontSize:11,fontWeight:700,color:mc,width:16,textAlign:"right"}}>{mv||"?"}</span></div>);})}</div>
+                {(wellness.coucher||wellness.reveil||wellness.sleepDur)&&<div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
+                  {wellness.coucher&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>🌙</span><span style={{fontSize:10,color:C.tx2,fontWeight:600}}>{String(wellness.coucher.h).padStart(2,"0")}:{String(wellness.coucher.m).padStart(2,"0")}</span></div>}
+                  {wellness.reveil&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>☀️</span><span style={{fontSize:10,color:C.tx2,fontWeight:600}}>{String(wellness.reveil.h).padStart(2,"0")}:{String(wellness.reveil.m).padStart(2,"0")}</span></div>}
+                  {wellness.sleepDur!=null&&<div style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:8,background:C.b+"18"}}><span style={{fontSize:10}}>💤</span><span style={{fontSize:10,color:C.b,fontWeight:700}}>{wellness.sleepDur}h</span></div>}
+                </div>}
+                {wellness.sleepInterrupt===true&&<div style={{marginTop:8,padding:"6px 10px",borderRadius:8,background:C.o+"12",border:"1px solid "+C.o+"30",fontSize:11,color:C.o}}>⚠ Réveil nocturne{wellness.sleepInterruptNote?" — "+wellness.sleepInterruptNote:""}</div>}
+                {wellness.poids&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:8,background:C.s2}}><span style={{fontSize:10}}>⚖️</span><span style={{fontSize:11,fontWeight:700,color:C.tx}}>{wellness.poids} kg</span><span style={{fontSize:9,color:C.tx3}}>ce matin</span></div>}
+                {wellness.domsZones?.length>0&&<div style={{marginTop:8,padding:"6px 10px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:4}}>Zones DOMS</div><div style={{display:"flex",flexWrap:"wrap",gap:3}}>{wellness.domsZones.map(id=>{const z=ALL_BZ.find(z=>z.id===id);return z?<span key={id} style={{fontSize:10,padding:"2px 6px",borderRadius:4,background:C.o+"20",color:C.o}}>{z.label}</span>:null;})}</div></div>}
+                {wellness.injComment&&<div style={{marginTop:8,padding:"6px 10px",borderRadius:8,background:C.r+"10",border:"1px solid "+C.r+"30",fontSize:11,color:C.r}}>🩺 {wellness.injComment}</div>}
               </>):<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune donnée de forme aujourd'hui</div>}
             </div>
             {/* Historique score */}
@@ -4415,6 +4411,45 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
               <div style={{display:"flex",gap:10,marginBottom:10}}>{[{c:C.g,l:"≥ 7.5h"},{c:C.o,l:"6.5–7.5h"},{c:C.r,l:"< 6.5h"}].map(({c,l})=><div key={l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:c,opacity:0.7}}/><span style={{fontSize:9,color:C.tx3}}>{l}</span></div>)}</div>
               <SleepTunnel wellnessHistory={wellnessHistory} C={C}/>
             </div>
+          </div>)}
+          {drawerZoom==="goals"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:12}}>Séances — Bloc en cours</div>
+              <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:10}}><span style={{fontSize:36,fontWeight:900,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:16,color:C.tx3}}>/ {totalTarget}</span></div>
+              <div style={{height:6,background:C.s2,borderRadius:3,overflow:"hidden",marginBottom:6}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div>
+              <div style={{fontSize:11,color:C.tx3}}>{Math.max(0,totalTarget-totalDone)} séance(s) restante(s)</div>
+            </div>
+            {(()=>{
+              const lastEntry=Object.keys(weightLog).length>0?Object.entries(weightLog).sort((a,b)=>a[0]>b[0]?-1:1)[0][1]:null;
+              const todayW=weightLog[todayKey()]||lastEntry||bodyWeight.current||null;
+              const start=bodyWeight.current||null;
+              const tgt=nutritionStrategy?.target_weight||bodyWeight.target||null;
+              if(!tgt)return null;
+              const isGain=start&&tgt?tgt>=start:true;
+              const delta=tgt&&todayW?+(tgt-todayW).toFixed(1):null;
+              const pct=start&&tgt&&start!==tgt&&todayW?Math.min(100,Math.max(0,isGain?((todayW-start)/(tgt-start))*100:((start-todayW)/(start-tgt))*100)):0;
+              const reached=delta!==null&&Math.abs(delta)<0.3;
+              const wC=reached?C.g:C.ac;
+              return(<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectif poids</div>
+                  {start&&tgt&&<span style={{fontSize:10,fontWeight:700,color:isGain?C.g:C.b,padding:"2px 8px",borderRadius:5,background:(isGain?C.g:C.b)+"18"}}>{isGain?"▲ Prise":"▼ Sèche"}</span>}
+                </div>
+                <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:10}}>
+                  <span style={{fontSize:36,fontWeight:900,color:wC,letterSpacing:"-1px"}}>{todayW||"--"}</span>
+                  <span style={{fontSize:16,color:C.tx3}}>/ {tgt} kg</span>
+                </div>
+                <div style={{height:6,background:C.s2,borderRadius:3,overflow:"hidden",marginBottom:6}}><div style={{height:"100%",width:pct+"%",background:wC,borderRadius:3,transition:"width 0.4s"}}/></div>
+                <div style={{fontSize:11,color:reached?C.g:C.tx3,fontWeight:reached?600:400}}>{reached?"Objectif atteint !":delta!==null?(Math.abs(delta)+" kg restants"):"—"}</div>
+              </div>);
+            })()}
+            {nutritionStrategy&&<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>
+              <div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:10}}>Stratégie nutritionnelle</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <span style={{fontSize:13,fontWeight:800,color:nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b}}>{nutritionStrategy.strategy==="seche"?"Sèche":nutritionStrategy.strategy==="prise_de_masse"?"Prise de masse":"Maintenance"}</span>
+              </div>
+              {nutritionStrategy.surplus_deficit_min!=null&&<div style={{fontSize:11,color:C.tx2}}>Fourchette : {nutritionStrategy.surplus_deficit_min}% à {nutritionStrategy.surplus_deficit_max}%</div>}
+            </div>}
           </div>)}
           {drawerZoom==="health"&&(<div style={{background:C.s1,borderRadius:14,padding:"16px",border:"1px solid "+C.brd}}>{(()=>{const wData=getWellnessChartData(wellnessHistory,wellnessPeriod);const hasSomeData=wData.some(d=>d.score!==null);return(<><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:13,fontWeight:700}}>Score de santé</div><div style={{display:"flex",gap:3}}>{[{k:"week",l:"7j"},{k:"month",l:"30j"},{k:"year",l:"12m"}].map(t=>(<button key={t.k} onClick={()=>setWellnessPeriod(t.k)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:wellnessPeriod===t.k?C.acS:"transparent",color:wellnessPeriod===t.k?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div></div>{hasSomeData?<ResponsiveContainer width="100%" height={200}><ComposedChart data={wData} margin={{top:4,right:4,bottom:0,left:-28}}><XAxis dataKey="label" tick={{fontSize:9,fill:C.tx3}} tickLine={false} axisLine={false}/><YAxis yAxisId="score" domain={[0,100]} hide/><YAxis yAxisId="sleep" orientation="right" domain={[0,12]} hide/><Tooltip content={({active,payload,label})=>{if(!active||!payload?.length)return null;const sc=payload.find(p=>p.dataKey==='score');const sl=payload.find(p=>p.dataKey==='sleep');return(<div style={{background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,padding:"6px 10px",fontSize:10}}><div style={{color:C.tx3,marginBottom:4}}>{label}</div>{sc?.value!=null&&<div style={{color:getReco(sc.value).c,fontWeight:700}}>Forme : {sc.value}</div>}{sl?.value!=null&&<div style={{color:C.b}}>Sommeil : {sl.value}h</div>}</div>);}}/><Bar yAxisId="sleep" dataKey="sleep" fill={C.b} opacity={0.3} radius={[3,3,0,0]} maxBarSize={20}/><Line yAxisId="score" dataKey="score" stroke={C.g} strokeWidth={2} dot={(props)=>{if(props.value==null)return<g/>;const rc=getReco(props.value);return<circle cx={props.cx} cy={props.cy} r={3.5} fill={rc.c} stroke={C.bg} strokeWidth={1}/>;}} connectNulls={false}/></ComposedChart></ResponsiveContainer>:<div style={{textAlign:"center",color:C.tx3,fontSize:11,padding:"30px 0"}}>Aucune donnée wellness</div>}</>);})()}</div>)}
         </div>
@@ -4537,7 +4572,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             const latestFb=latestWeek?coachFeedbacks[latestWeek]:null;
             if(!latestFb?.note)return null;
             return(<div style={{background:C.s1,borderRadius:14,border:"1px solid "+C.coach+"40",overflow:"hidden"}}>
-              <button onClick={()=>{setTab("retours");setDrawerOpen(false);}} style={{width:"100%",padding:"12px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+              <button onClick={()=>{setTab("coachfeedback");setDrawerOpen(false);}} style={{width:"100%",padding:"12px 14px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:13}}>💬</span>
@@ -4552,16 +4587,30 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
               </button>
             </div>);
           })()}
-          {/* Retours button */}
-          <div style={{marginTop:"auto",paddingTop:8,display:"flex",flexDirection:"column",gap:8}}>
-            <button onClick={()=>{setShowAppFeedback(true);setDrawerOpen(false);}} style={{width:"100%",padding:"10px 0",borderRadius:12,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              <span>💬</span><span>Donner un avis sur l'app</span>
+          {/* Objectifs */}
+          <button onClick={()=>{setDrawerZoom("goals");}} style={{width:"100%",background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.brd,textAlign:"left",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:12,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectifs</div>
+            <span style={{fontSize:11,color:C.tx3}}>→</span>
+          </button>
+          {/* Déconnexion */}
+          <div style={{marginTop:"auto",paddingTop:8}}>
+            <button onClick={()=>{setShowLogoutConfirm(true);}} style={{width:"100%",padding:"12px 0",borderRadius:12,border:"1px solid "+C.r+"30",background:C.rS,color:C.r,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              <span>⏻</span><span>Déconnexion</span>
             </button>
-            <button onClick={()=>{setTab("retours");setDrawerOpen(false);}} style={{width:"100%",padding:"14px 0",borderRadius:12,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 20px "+C.ac+"50"}}>Retours & Feedback</button>
           </div>
         </div>
       </div>
     </>)}
+    {showLogoutConfirm&&(<div style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:24}} onClick={()=>setShowLogoutConfirm(false)}>
+      <div style={{background:C.s1,borderRadius:16,padding:24,maxWidth:320,width:"100%",border:"1px solid "+C.brd}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:15,fontWeight:700,color:C.tx,marginBottom:8}}>Se déconnecter ?</div>
+        <div style={{fontSize:13,color:C.tx3,marginBottom:20}}>Êtes-vous sûr de vouloir vous déconnecter ?</div>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={()=>setShowLogoutConfirm(false)} style={{flex:1,padding:"12px 0",borderRadius:10,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+          <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/login";}} style={{flex:1,padding:"12px 0",borderRadius:10,border:"none",background:C.r,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Déconnecter</button>
+        </div>
+      </div>
+    </div>)}
     {showWellness&&(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto"}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:"1px solid "+C.brd}}><div style={{fontSize:14,fontWeight:700}}>Wellness du jour</div><button onClick={()=>setShowWellness(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:20,cursor:"pointer",fontFamily:"inherit"}}>x</button></div><WellnessFlow existing={wellness} onSave={saveWellness} sleepTarget={goals.sleepTarget} onAddInjury={addInjury} weightLog={weightLog}/></div>)}
     {showAppFeedback&&(()=>{
       let fbRating=null,fbText="",fbSending=false;
@@ -4633,7 +4682,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           {canToggleMode&&<div style={{display:"flex",background:C.s1,borderRadius:8,padding:2,border:"1px solid "+C.brdL}}>{[{k:"athlete",l:"Athlete"},{k:"coach",l:"Coach"}].map(({k,l})=>(<button key={k} onClick={()=>switchMode(k)} style={{padding:"5px 10px",borderRadius:6,border:"none",background:mode===k?(k==="coach"?C.coach:C.ac):"transparent",color:mode===k?"#fff":C.tx3,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>))}</div>}
           {mode==="athlete"&&<button onClick={()=>setDrawerOpen(true)} title="Mon profil" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>☰</button>}
           {userName&&!myProfile?.is_admin&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
-          <button onClick={async()=>{await supabase.auth.signOut();window.location.href="/login";}} title="Déconnexion" style={{width:30,height:30,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>⏻</button>
         </div>
       </div>
       <div style={{display:"flex",marginTop:4,maxWidth:mode==="coach"?1400:"none",margin:mode==="coach"?"0 auto":"unset",paddingLeft:mode==="coach"?40:0}}>{activeTabs.map(t=><button key={t.k} onClick={()=>setActiveTab(t.k)} style={tabS(t.k)}>{t.l}</button>)}</div>
@@ -4697,7 +4745,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             {showExoParams&&<CoachExoParams exMeta={exMeta} setExMeta={setExMeta} exos={exos} setExos={setExos} blockConfig={blockConfig}/>}
           </div>}
         </>)}
-        {progSubTab==="energie"&&(<CoachEnergyProgram athleteId={athleteId} energyEditorKey={energyEditorKey} setEnergyEditorKey={setEnergyEditorKey} energySessions={energySessions} setEnergySessions={setEnergySessions} energySessionsLoaded={energySessionsLoaded} setEnergySessionsLoaded={setEnergySessionsLoaded} C={C} blockConfig={blockConfig} currentWeek={currentWeek}/>)}
+        {progSubTab==="energie"&&(<CoachEnergyProgram athleteId={athleteId} energyEditorKey={energyEditorKey} setEnergyEditorKey={setEnergyEditorKey} energySessions={energySessions} setEnergySessions={setEnergySessions} energySessionsLoaded={energySessionsLoaded} setEnergySessionsLoaded={setEnergySessionsLoaded} C={C} blockConfig={blockConfig} currentWeek={currentWeek} weekPlan={energyWeekPlan} setWeekPlan={setEnergyWeekPlan} dayPlan={energyDayPlan} setDayPlan={setEnergyDayPlan}/>)}
         {progSubTab==="specifique"&&(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>🎯</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Séances Spécifiques</div><div style={{fontSize:12,color:C.tx3}}>Planification des séances spécifiques à venir prochainement.</div></div>)}
       </>)}
       {coachTab==="banque"&&(<>
@@ -4716,7 +4764,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
 
         {/* Calendrier hebdomadaire — en premier */}
-        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog} exos={exos}/>
+        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog} exos={exos} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan}/>
 
         {/* 1RM Progression */}
         <div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
@@ -4955,7 +5003,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             </div>
           </div>):<div style={{fontSize:12,color:C.tx3,textAlign:"center",padding:"10px 0"}}>Appuyez pour remplir le bilan</div>}
         </button>
-        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog} exos={exos}/>
+        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog} exos={exos} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan}/>
         {nutritionStrategy&&(()=>{const todayISO=new Date().toISOString().slice(0,10);const todayNL=nutritionLog[todayISO]||null;const strat=nutritionStrategy;const consumed=todayNL?.total_calories_consumed||null;const bmrV=athleteProfile?.base_metabolism||0;const targetCal=strat.can_track_calories?(bmrV+(todayNL?.active_calories||0)):strat.total_calories_coach||null;const stratC=strat.strategy==="seche"?C.r:strat.strategy==="prise_de_masse"?C.g:C.b;const stratL=strat.strategy==="seche"?"Sèche":strat.strategy==="prise_de_masse"?"Prise":"Maintenance";
           const surplusPct=(consumed&&targetCal&&targetCal>0)?((consumed-targetCal)/targetCal)*100:null;
           const inRange=surplusPct!==null&&strat.surplus_deficit_min!=null&&strat.surplus_deficit_max!=null&&surplusPct>=strat.surplus_deficit_min&&surplusPct<=strat.surplus_deficit_max;
@@ -4979,7 +5027,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
               </>
             )}
           </div>);})()}
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1.5px solid "+msg.c+"30",marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Motivation</div><div style={{padding:"4px 10px",borderRadius:8,background:msg.c+"18",color:msg.c,fontSize:11,fontWeight:700}}>{msg.t}</div></div><div style={{display:"flex",gap:8,marginBottom:12}}><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Streak</div><div style={{fontSize:24,fontWeight:800,color:streak>0?C.o:C.tx3}}>{streak}</div><div style={{fontSize:8,color:C.tx3}}>sem.</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>S{currentWeek}</div><div style={{fontSize:24,fontWeight:800,color:weekAdherence>=100?C.g:C.ac}}>{(completedSessions[currentWeek]||[]).length}/{weeklyTarget[currentWeek]||goals.sessionsPerWeek}</div><div style={{fontSize:8,color:C.tx3}}>seances</div></div><div style={{flex:1,background:C.s2,borderRadius:10,padding:"10px 0",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,marginBottom:4}}>Bloc</div><div style={{fontSize:24,fontWeight:800,color:C.b}}>{Math.round((totalDone/totalTarget)*100)}%</div><div style={{fontSize:8,color:C.tx3}}>complete</div></div></div>
+        <div style={{marginBottom:12}}>
         {(()=>{
           const todayDow=(new Date().getDay()+6)%7;
           const doneNow=completedSessions[currentWeek]||[];
@@ -5005,30 +5053,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           return(<button onClick={()=>{setInitialLogSess(nextSess);setTab("log");}} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"none",background:C.acS,color:C.ac,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><div><div style={{fontSize:11,fontWeight:700}}>Prochaine séance</div><div style={{fontSize:10,color:C.tx2}}>{nextSess.short} - {nextSess.name}</div></div><span style={{marginLeft:"auto",fontSize:14}}>&gt;</span></button>);
         })()}
         </div>
-        <div style={{background:C.s1,borderRadius:16,padding:"14px 16px",border:"1px solid "+C.brd,marginBottom:12}}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}><div style={{fontSize:11,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Objectifs</div>{nutritionStrategy&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5,background:(nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b)+"20",color:nutritionStrategy.strategy==="seche"?C.r:nutritionStrategy.strategy==="prise_de_masse"?C.g:C.b}}>{nutritionStrategy.strategy==="seche"?"Sèche":nutritionStrategy.strategy==="prise_de_masse"?"Prise de masse":"Maintenance"}</span>}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}><div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}><div style={{fontSize:10,color:C.tx3,marginBottom:8}}>Seances realisees</div><div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}><span style={{fontSize:26,fontWeight:800,color:C.g,letterSpacing:"-1px"}}>{totalDone}</span><span style={{fontSize:14,color:C.tx3}}>/{totalTarget}</span></div><div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:Math.min((totalDone/totalTarget)*100,100)+"%",background:C.g,borderRadius:3}}/></div><div style={{fontSize:9,color:C.tx3,marginTop:5}}>{Math.max(0,totalTarget-totalDone)} restantes</div></div>{(()=>{
-  const lastEntry=Object.keys(weightLog).length>0?Object.entries(weightLog).sort((a,b)=>a[0]>b[0]?-1:1)[0][1]:null;
-  const todayW=weightLog[todayKey()]||lastEntry||bodyWeight.current||null;
-  const start=bodyWeight.current||null;
-  const tgt=nutritionStrategy?.target_weight||bodyWeight.target||null;
-  const isGain=start&&tgt?tgt>=start:true;
-  const delta=tgt&&todayW?+(tgt-todayW).toFixed(1):null;
-  const pct=start&&tgt&&start!==tgt&&todayW?Math.min(100,Math.max(0,isGain?((todayW-start)/(tgt-start))*100:((start-todayW)/(start-tgt))*100)):0;
-  const reached=delta!==null&&Math.abs(delta)<0.3;
-  const wC=reached?C.g:C.ac;
-  const deltaLabel=delta===null?("Objectif: "+(tgt||"--")+" kg"):reached?"Objectif atteint !":(delta>0===isGain?(Math.abs(delta)+" kg restants"):("Hors objectif ("+Math.abs(delta)+" kg)"));
-  return(<div style={{background:C.s2,borderRadius:12,padding:"14px 12px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-      <div style={{fontSize:10,color:C.tx3}}>Poids de corps</div>
-      {start&&tgt&&<span style={{fontSize:9,fontWeight:700,color:isGain?C.g:C.b,padding:"2px 6px",borderRadius:4,background:(isGain?C.g:C.b)+"18"}}>{isGain?"▲ Prise":"▼ Sèche"}</span>}
-    </div>
-    <div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:8}}>
-      <span style={{fontSize:26,fontWeight:800,color:wC,letterSpacing:"-1px"}}>{todayW||"--"}</span>
-      <span style={{fontSize:14,color:C.tx3}}>/{tgt||"--"} kg</span>
-    </div>
-    <div style={{height:5,background:C.s1,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:pct+"%",background:wC,borderRadius:3,transition:"width 0.4s"}}/></div>
-    <div style={{fontSize:9,color:reached?C.g:C.tx3,marginTop:5,fontWeight:reached?600:400}}>{deltaLabel}</div>
-  </div>);
-})()}</div></div>
         {habitEnabled&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
       </div>)}
 
@@ -5050,6 +5074,31 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {tab==="test"&&<TestSessionView athleteId={athleteId} viewOnly={viewOnly} C={C} testSubTab={testSubTab} setTestSubTab={setTestSubTab}/>}
 
       {tab==="retours"&&<RetoursView/>}
+
+      {tab==="coachfeedback"&&(<div style={{padding:"16px 16px 40px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <button onClick={()=>setTab("dash")} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
+          <div style={{fontSize:16,fontWeight:700}}>Retours du coach</div>
+        </div>
+        {(()=>{
+          const weeks=Object.keys(coachFeedbacks).map(Number).filter(Boolean).sort((a,b)=>b-a);
+          if(weeks.length===0)return(<div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:32,marginBottom:12}}>💬</div><div style={{fontSize:14,color:C.tx3}}>Aucun retour du coach pour l'instant.</div></div>);
+          return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {weeks.map(wk=>{
+              const fb=coachFeedbacks[wk];
+              if(!fb?.note)return null;
+              return(<div key={wk} style={{background:C.s1,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.coach+"30"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                  <div style={{fontSize:11,fontWeight:600,color:C.coach,textTransform:"uppercase",letterSpacing:"0.5px"}}>Semaine {wk}</div>
+                  {fb.date&&<div style={{fontSize:10,color:C.tx3}}>{new Date(fb.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})}</div>}
+                </div>
+                <div style={{fontSize:13,color:C.tx,lineHeight:1.6,fontStyle:"italic"}}>"{fb.note}"</div>
+                {fb.rating&&<div style={{marginTop:8,display:"flex",gap:2}}>{[1,2,3,4,5].map(n=><span key={n} style={{fontSize:14,opacity:n<=fb.rating?1:0.2}}>⭐</span>)}</div>}
+              </div>);
+            })}
+          </div>);
+        })()}
+      </div>)}
 
     </>)}
 

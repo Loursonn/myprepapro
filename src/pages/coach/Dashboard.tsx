@@ -21,6 +21,7 @@ export default function CoachDashboard() {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const [editingAthlete, setEditingAthlete] = useState<Profile | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   async function handleRemoveAthlete(athleteId: string) {
     if (removing) return;
@@ -218,6 +219,11 @@ export default function CoachDashboard() {
               style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid " + C.brdL, background: C.s1, color: C.tx2, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
               🔗 Générer un lien d'invitation
             </button>
+            {/* Déconnexion */}
+            <button onClick={() => setShowLogoutConfirm(true)}
+              style={{ width: "100%", marginTop: 8, padding: "12px", borderRadius: 12, border: "1px solid rgba(239,75,75,0.3)", background: "rgba(239,75,75,0.1)", color: "#EF4B4B", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <span>⏻</span><span>Déconnexion</span>
+            </button>
             {inviteLink && (
               <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, fontSize: 11, color: C.tx3, wordBreak: "break-all" }}>{inviteLink}</div>
@@ -229,6 +235,28 @@ export default function CoachDashboard() {
             )}
           </div>
     </div>
+
+    {/* Confirmation déconnexion */}
+    {showLogoutConfirm && (
+      <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        onClick={() => setShowLogoutConfirm(false)}>
+        <div style={{ background: C.s1, borderRadius: 16, padding: 24, maxWidth: 320, width: "100%", border: "1px solid " + C.brd }}
+          onClick={e => e.stopPropagation()}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 8 }}>Se déconnecter ?</div>
+          <div style={{ fontSize: 13, color: C.tx3, marginBottom: 20 }}>Êtes-vous sûr de vouloir vous déconnecter ?</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setShowLogoutConfirm(false)}
+              style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              Annuler
+            </button>
+            <button onClick={async () => { await supabase.auth.signOut(); window.location.href = "/login"; }}
+              style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none", background: C.r, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Déconnecter
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Confirmation retrait athlète */}
     {confirmRemove && (() => {
