@@ -3279,13 +3279,18 @@ function AIChatBar({exos,sessions,chatHistory,setChatHistory,onApply,onOpenChang
   </>);
 }
 
-function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setWeekSchedule,exos={},sets={},energySessions=[],energyWeekPlan={},energyDayPlan={},allMethods={},C}){
+function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setWeekSchedule,exos={},sets={},energySessions=[],energyWeekPlan={},energyDayPlan={},allMethods={},wellnessHistory={},nutritionLog={},sessionLogs={},currentWeek=1,C}){
   const[vm,setVm]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
   const[selDk,setSelDk]=useState(null);
   const[addEv,setAddEv]=useState(null);
+  const[dragging,setDragging]=useState(null);
+  const[dragOverDk,setDragOverDk]=useState(null);
   const[sessDetail,setSessDetail]=useState(null);
+  const[previewWell,setPreviewWell]=useState(null);
+  const[previewNutr,setPreviewNutr]=useState(null);
   const MONTHS_FR=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
   const DAYS_S=["L","Ma","Me","J","V","S","D"];
+  const DAYS_FULL=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
   const EV_TYPES=[{k:'match',l:'Match',e:'⚔️'},{k:'compet',l:'Compétition',e:'🏆'},{k:'stage',l:'Stage',e:'🏕️'},{k:'autre',l:'Autre',e:'📅'}];
   const toKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
   const todKey=toKey(new Date());
@@ -3293,6 +3298,12 @@ function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setW
   const dayEvs=dk=>calEvs[dk]||[];
   const tw=blockConfig?.totalWeeks||6;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
+  const getWell=dk=>wellnessHistory[dk]||null;
+  const calcScore=w=>w?Math.round(((w.fatigue||3)+(w.sommeil||3)+(w.stress||3)+(w.energie||3)+(w.doms||3))/25*100):null;
+  const wColor=s=>s>=80?C.g:s>=65?'#6FCF97':s>=50?C.o:s>=35?'#E8956D':C.r;
+  const wLabel=s=>s>=80?'Optimal':s>=65?'Bon':s>=50?'Modéré':s>=35?'Fatigué':'Surmenage';
+  const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return(h>0?h+'h ':'')+m+'min';};
+  const getNutr=dk=>{const y=dk.slice(0,4),mo=dk.slice(4,6),d2=dk.slice(6,8);return nutritionLog[dk]||nutritionLog[`${y}-${mo}-${d2}`]||null;};
   const sessMap=useMemo(()=>{
     const map={};
     if(!blockConfig?.startDate)return map;
@@ -3324,8 +3335,8 @@ function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setW
   for(let i=0;i<startOffset;i++)cells.push(null);
   for(let d=1;d<=lastDay.getDate();d++)cells.push(new Date(vm.y,vm.m,d));
   while(cells.length%7!==0)cells.push(null);
-  const prevM=()=>setVm(v=>{const nm=v.m===0?11:v.m-1;const ny=v.m===0?v.y-1:v.y;return{y:ny,m:nm};});
-  const nextM=()=>setVm(v=>{const nm=v.m===11?0:v.m+1;const ny=v.m===11?v.y+1:v.y;return{y:ny,m:nm};});
+  const prevM=()=>{setSelDk(null);setVm(v=>{const nm=v.m===0?11:v.m-1;const ny=v.m===0?v.y-1:v.y;return{y:ny,m:nm};});};
+  const nextM=()=>{setSelDk(null);setVm(v=>{const nm=v.m===11?0:v.m+1;const ny=v.m===11?v.y+1:v.y;return{y:ny,m:nm};});};
   const toggleDayOff=dk=>{
     const cur=calEvs[dk]||[];const has=cur.some(e=>e.type==='dayoff');
     const next=has?cur.filter(e=>e.type!=='dayoff'):[...cur,{type:'dayoff',id:String(Date.now())}];
@@ -3339,83 +3350,255 @@ function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setW
     const cur=(calEvs[dk]||[]).filter(e=>e.id!==id);
     setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:cur.length?cur:undefined}});
   };
+  const getWeekForDate=date=>{
+    if(!blockConfig?.startDate)return null;
+    const start=new Date(blockConfig.startDate);
+    const diff=Math.floor((date-start)/86400000);
+    if(diff<0||diff>=tw*7)return null;
+    return Math.floor(diff/7)+1;
+  };
+  const handleDragStart=(e,item)=>{setDragging(item);e.dataTransfer.effectAllowed='move';e.stopPropagation();};
+  const handleDragEnd=()=>{setDragging(null);setDragOverDk(null);};
+  const handleDragOver=(e,date)=>{
+    if(!dragging||!date||dragging.type!=='muscu')return;
+    const tw2=getWeekForDate(date);
+    if(tw2===null||tw2!==dragging.week)return;
+    e.preventDefault();e.dataTransfer.dropEffect='move';
+    setDragOverDk(toKey(date));
+  };
+  const handleDrop=(e,date)=>{
+    e.preventDefault();
+    if(!dragging||!date||dragging.type!=='muscu')return;
+    const tw2=getWeekForDate(date);
+    if(tw2===null||tw2!==dragging.week)return;
+    const dayIdx=(date.getDay()+6)%7;
+    const prev=weekSchedule||{};const prevSess=prev.sessions||{};
+    const wMap={...(prevSess[dragging.week]||{}),[dragging.sessId]:dayIdx};
+    setWeekSchedule({...prev,sessions:{...prevSess,[dragging.week]:wMap}});
+    setDragging(null);setDragOverDk(null);
+  };
+
+  // Données du jour sélectionné
   const selEvs=selDk?dayEvs(selDk):[];
   const selSess=selDk?sessMap[selDk]||[]:[];
   const hasDayOff=selEvs.some(e=>e.type==='dayoff');
   const sportEvs=selEvs.filter(e=>e.type!=='dayoff');
-  return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:'1px solid '+C.brd,marginBottom:14}}>
-    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.tx}}>{MONTHS_FR[vm.m]} {vm.y}</div>
-      <div style={{display:'flex',gap:4,alignItems:'center'}}>
-        <div style={{display:'flex',gap:6,marginRight:8}}>
-          {[{c:C.g,l:'Faite'},{c:C.coach+'aa',l:'Planif.'},{c:C.o,l:'Énerg.'},{c:C.b,l:'Événement'},{c:C.r,l:'OFF'}].map(({c,l})=><div key={l} style={{display:'flex',alignItems:'center',gap:2}}><div style={{width:6,height:6,borderRadius:'50%',background:c}}/><span style={{fontSize:7,color:C.tx3}}>{l}</span></div>)}
+  const selWell=selDk?getWell(selDk):null;
+  const selScore=calcScore(selWell);
+  const selNutr=selDk?getNutr(selDk):null;
+  const selDateLabel=selDk?(()=>{const[sy,sm,sd]=[+selDk.slice(0,4),+selDk.slice(4,6)-1,+selDk.slice(6,8)];return new Date(sy,sm,sd).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});})():null;
+
+  return(<div style={{background:C.s1,borderRadius:18,border:'1px solid '+C.brd,overflow:'hidden',marginBottom:14}}>
+    {/* En-tête */}
+    <div style={{padding:'14px 16px 12px',borderBottom:'1px solid '+C.brd+'80'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{fontSize:15,fontWeight:800,color:C.tx,letterSpacing:'-0.2px'}}>{MONTHS_FR[vm.m]} <span style={{color:C.tx3,fontWeight:500}}>{vm.y}</span></div>
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <button onClick={prevM} style={{width:28,height:28,borderRadius:8,border:'1px solid '+C.brdL,background:C.s2,color:C.tx2,fontSize:15,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+          <button onClick={()=>{setSelDk(null);setVm({y:new Date().getFullYear(),m:new Date().getMonth()});}} style={{padding:'4px 10px',borderRadius:7,border:'1px solid '+C.brdL,background:C.s2,color:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Auj.</button>
+          <button onClick={nextM} style={{width:28,height:28,borderRadius:8,border:'1px solid '+C.brdL,background:C.s2,color:C.tx2,fontSize:15,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
         </div>
-        <button onClick={prevM} style={{width:24,height:24,borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>‹</button>
-        <button onClick={()=>setVm({y:new Date().getFullYear(),m:new Date().getMonth()})} style={{padding:'3px 7px',borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Auj.</button>
-        <button onClick={nextM} style={{width:24,height:24,borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>›</button>
       </div>
     </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:3}}>
-      {DAYS_S.map(d=><div key={d} style={{textAlign:'center',fontSize:8,fontWeight:700,color:C.tx3,textTransform:'uppercase'}}>{d}</div>)}
+    {/* Jours de semaine */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:0,borderBottom:'1px solid '+C.brd+'60',padding:'0 2px'}}>
+      {DAYS_S.map(d=><div key={d} style={{textAlign:'center',fontSize:9,fontWeight:700,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',padding:'6px 0'}}>{d}</div>)}
     </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:selDk?10:0}}>
+    {/* Grille mensuelle */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:0}}>
       {cells.map((date,i)=>{
-        if(!date)return<div key={'e'+i}/>;
-        const dk=toKey(date);const isToday=dk===todKey;const isSel=selDk===dk;
-        const sessList=sessMap[dk]||[];const evs=dayEvs(dk);
-        const isDayOff=evs.some(e=>e.type==='dayoff');const sports=evs.filter(e=>e.type!=='dayoff');
-        return(<div key={dk} onClick={()=>setSelDk(isSel?null:dk)} style={{
-          minHeight:54,borderRadius:6,border:'1px solid '+(isSel?C.coach:isToday?C.ac+'60':isDayOff?C.r+'50':C.brd),
-          background:isSel?C.coachS:isDayOff?C.r+'0a':isToday?C.acS:'transparent',
-          padding:'3px 4px',cursor:'pointer',transition:'all 0.12s'
-        }}>
-          <div style={{fontSize:10,fontWeight:isToday?800:500,color:isToday?C.ac:isDayOff?C.r:C.tx2,marginBottom:1}}>
-            {date.getDate()}{isDayOff&&<span style={{fontSize:6,color:C.r,marginLeft:2,fontWeight:700,verticalAlign:'top'}}>off</span>}
+        if(!date)return<div key={'e'+i} style={{minHeight:88,borderRight:i%7<6?'1px solid '+C.brd+'30':'none',borderBottom:'1px solid '+C.brd+'30'}}/>;
+        const dk=toKey(date);
+        const isToday=dk===todKey;
+        const isSel=selDk===dk;
+        const isDragOver=dragOverDk===dk;
+        const isPast=date<new Date(new Date().setHours(0,0,0,0))&&!isToday;
+        const sessList=sessMap[dk]||[];
+        const evs=dayEvs(dk);
+        const isDayOff=evs.some(e=>e.type==='dayoff');
+        const sports=evs.filter(e=>e.type!=='dayoff');
+        const well=getWell(dk);
+        const ws=calcScore(well);
+        const nutr=getNutr(dk);
+        const canDrop=dragging&&getWeekForDate(date)===dragging?.week;
+        const allDone=sessList.length>0&&sessList.filter(s=>s.type==='muscu').every(s=>s.done);
+        const hasMissed=isPast&&sessList.filter(s=>s.type==='muscu').some(s=>!s.done);
+        const bgCell=isDayOff?C.rS+'55':isToday?C.acS+'60':isSel?C.acS+'40':allDone&&sessList.length>0?C.g+'08':hasMissed?C.r+'08':'transparent';
+        return(<div key={dk}
+          onClick={()=>!dragging&&setSelDk(isSel?null:dk)}
+          onDragOver={e=>handleDragOver(e,date)}
+          onDrop={e=>handleDrop(e,date)}
+          onDragLeave={()=>setDragOverDk(null)}
+          style={{
+            minHeight:88,position:'relative',
+            background:bgCell,
+            borderRight:i%7<6?'1px solid '+C.brd+'30':'none',
+            borderBottom:'2px solid '+(isSel?C.ac:isToday?C.ac+'80':'transparent'),
+            padding:'5px 4px 4px',cursor:dragging?'crosshair':'pointer',
+            transition:'background 0.1s',userSelect:'none',overflow:'hidden',
+          }}>
+          {/* Overlay drag — filtre coloré sur le survol */}
+          {isDragOver&&canDrop&&<div style={{position:'absolute',inset:0,background:C.acS,border:'2px solid '+C.ac,borderRadius:0,zIndex:2,pointerEvents:'none',boxShadow:'inset 0 0 0 1px '+C.ac+'60'}}/>}
+          {/* Trait aujourd'hui à gauche */}
+          {isToday&&<div style={{position:'absolute',top:4,left:0,width:2,height:'calc(100% - 8px)',borderRadius:2,background:C.ac}}/>}
+          {/* Numéro */}
+          <div style={{fontSize:isToday?15:12,fontWeight:isToday?800:400,color:isToday?C.ac:isDayOff?C.r:isPast?C.tx3:C.tx,textAlign:'center',lineHeight:1,marginBottom:3}}>
+            {date.getDate()}
+            {isDayOff&&<span style={{fontSize:7,color:C.r,marginLeft:2,fontWeight:700,verticalAlign:'top'}}>off</span>}
           </div>
-          {sessList.slice(0,2).map((s,j)=>{const col=s.type==='energy'?C.o:s.done?C.g:C.coach+'bb';return<div key={j} style={{fontSize:7,fontWeight:700,color:col,background:col+'18',borderRadius:2,padding:'1px 3px',marginBottom:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.done?'✓ ':''}{s.sess?.short||s.sessId}</div>;})}
-          {sessList.length>2&&<div style={{fontSize:6,color:C.tx3}}>+{sessList.length-2}</div>}
-          {sports.slice(0,1).map((ev,j)=><div key={j} style={{fontSize:7,color:C.b,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.emoji} {ev.label}</div>)}
+          {/* Séances */}
+          <div style={{display:'flex',flexDirection:'column',gap:2,marginBottom:2,padding:'0 1px'}}>
+            {sessList.slice(0,3).map((s,j)=>{
+              const missed=isPast&&!s.done&&s.type==='muscu';
+              const col=s.type==='energy'?C.coach:s.done?C.g:missed?C.r:C.b;
+              const indicator=s.type==='energy'?'⚡':s.done?'✓':missed?'✗':'·';
+              const isDraggingThis=dragging?.sessId===s.sessId&&dragging?.week===s.week;
+              return(<div key={j}
+                draggable={s.type==='muscu'}
+                onDragStart={e=>handleDragStart(e,s)}
+                onDragEnd={handleDragEnd}
+                onClick={e=>{e.stopPropagation();if(s.type==='muscu')setSessDetail({sessId:s.sessId,week:s.week});}}
+                style={{fontSize:8,fontWeight:700,color:col,background:col+'22',borderRadius:4,padding:'2px 4px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:s.type==='muscu'?'grab':'default',opacity:isDraggingThis?0.25:1,display:'flex',alignItems:'center',gap:2,lineHeight:1.5}}>
+                <span style={{flexShrink:0}}>{indicator}</span>
+                <span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{s.sess?.short||s.sessId}</span>
+              </div>);
+            })}
+            {sessList.length>3&&<div style={{fontSize:7,color:C.tx3,textAlign:'center'}}>+{sessList.length-3}</div>}
+          </div>
+          {/* Événements sport — violet, avec label tronqué */}
+          {sports.slice(0,2).map((ev,j)=><div key={j} style={{display:'flex',alignItems:'center',gap:2,background:C.acS,border:'1px solid '+C.ac+'40',borderRadius:4,padding:'2px 4px',marginBottom:1,overflow:'hidden'}}>
+            <span style={{fontSize:8,flexShrink:0}}>{ev.emoji}</span>
+            <span style={{fontSize:7,fontWeight:700,color:C.ac,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.label}</span>
+          </div>)}
+          {/* Wellness dot */}
+          {ws!==null&&<div style={{width:16,height:16,borderRadius:'50%',background:wColor(ws),margin:'2px auto 0',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 1px 3px '+wColor(ws)+'50'}}>
+            <span style={{fontSize:6,fontWeight:800,color:'#fff',lineHeight:1}}>{ws}</span>
+          </div>}
+          {/* Nutrition */}
+          {nutr&&<div style={{textAlign:'center',fontSize:8,marginTop:1}}>🍽</div>}
         </div>);
       })}
     </div>
-    {selDk&&(()=>{
-      const[sy,sm,sd]=[+selDk.slice(0,4),+selDk.slice(4,6)-1,+selDk.slice(6,8)];
-      const dateLabel=new Date(sy,sm,sd).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-      return(<div style={{borderTop:'1px solid '+C.brd,paddingTop:10}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.tx,textTransform:'capitalize'}}>{dateLabel}</div>
-          <button onClick={()=>setSelDk(null)} style={{background:'none',border:'none',color:C.tx3,cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
+
+    {/* Panneau jour sélectionné */}
+    {selDk&&<div style={{borderTop:'1px solid '+C.brd+'80',background:C.s2}}>
+      {/* Header */}
+      <div style={{padding:'10px 14px 8px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:C.tx,textTransform:'capitalize'}}>{selDateLabel}</div>
+          {!blockConfig?.startDate&&<div style={{fontSize:9,color:C.o,marginTop:2}}>Définis une date de début de bloc pour voir les séances.</div>}
         </div>
-        {selSess.length>0&&<div style={{marginBottom:8}}>
-          <div style={{fontSize:8,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:4}}>Séances</div>
-          {selSess.map((item,i)=>{const col=item.type==='energy'?C.o:item.done?C.g:C.coach;return<button key={i} onClick={()=>item.done&&setSessDetail({sessId:item.sessId,week:item.week})} style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid '+col+'40',background:col+'12',cursor:item.done?'pointer':'default',fontFamily:'inherit',marginBottom:3,textAlign:'left'}}>
-            <span style={{fontSize:12,color:col}}>{item.done?'✓':'○'}</span>
-            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:700,color:col}}>{item.sess?.name||item.sessId}</div><div style={{fontSize:9,color:C.tx3}}>S{item.week} · {item.type==='energy'?'Énergétique':'Musculation'}{item.done?'':' — planifié'}</div></div>
-            {item.done&&<span style={{fontSize:9,color:C.tx3}}>Voir ›</span>}
-          </button>;})}
+        <button onClick={()=>setSelDk(null)} style={{background:'none',border:'none',color:C.tx3,cursor:'pointer',fontSize:22,lineHeight:1,padding:'0 4px'}}>×</button>
+      </div>
+      {/* Cartes résumé — cliquables */}
+      <div style={{padding:'0 14px 10px',display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+        {/* Wellness */}
+        {selWell&&selScore!==null&&<div onClick={()=>setPreviewWell(selWell)} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:wColor(selScore)+'15',border:'1px solid '+wColor(selScore)+'30',cursor:'pointer'}}>
+          <div style={{width:24,height:24,borderRadius:'50%',background:wColor(selScore),display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 1px 4px '+wColor(selScore)+'60'}}>
+            <span style={{fontSize:9,fontWeight:800,color:'#fff'}}>{selScore}</span>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:wColor(selScore)}}>{wLabel(selScore)}</div>
+            <div style={{fontSize:9,color:C.tx3}}>forme ↗</div>
+          </div>
         </div>}
-        {sportEvs.length>0&&<div style={{marginBottom:8}}>
-          <div style={{fontSize:8,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:4}}>Événements</div>
-          {sportEvs.map(ev=><div key={ev.id} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:8,background:C.bS,border:'1px solid '+C.b+'30',marginBottom:3}}>
-            <span style={{fontSize:13}}>{ev.emoji}</span>
-            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:C.b}}>{ev.label}</div>{ev.eventType&&<div style={{fontSize:9,color:C.tx3}}>{EV_TYPES.find(t=>t.k===ev.eventType)?.l}</div>}</div>
-            <button onClick={()=>removeEvent(selDk,ev.id)} style={{background:'none',border:'none',color:C.r,cursor:'pointer',fontSize:15,padding:'0 3px',lineHeight:1}}>×</button>
+        {/* Séances muscu */}
+        {selSess.filter(s=>s.type==='muscu').map((item,i)=>{
+          const missed=item.sess&&!item.done;
+          const dc=item.done?C.g:missed?C.r:C.b;
+          const log=sessionLogs[item.sessId+'_'+item.week];
+          return(<div key={i} onClick={()=>setSessDetail({sessId:item.sessId,week:item.week})} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:dc+'12',border:'1px solid '+dc+'30',cursor:'pointer'}}>
+            <span style={{fontSize:14}}>{item.done?'✅':missed?'❌':'🏋'}</span>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:dc}}>{item.sess?.name||item.sessId}</div>
+              {log?.duration?<div style={{fontSize:9,color:C.tx3}}>{fmtDur(log.duration)}</div>:<div style={{fontSize:9,color:C.tx3}}>S{item.week}</div>}
+            </div>
+            <span style={{fontSize:9,color:C.tx3,marginLeft:'auto'}}>↗</span>
+          </div>);
+        })}
+        {/* Séances énergie */}
+        {selSess.filter(s=>s.type==='energy').map((item,i)=><div key={'e'+i} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:C.coach+'12',border:'1px solid '+C.coach+'30'}}>
+          <span style={{fontSize:14}}>⚡</span>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.coach}}>{item.sess?.session_label||'Séance énergie'}</div>
+            <div style={{fontSize:9,color:C.tx3}}>S{item.week}</div>
+          </div>
+        </div>)}
+        {/* Nutrition */}
+        {selNutr&&<div onClick={()=>setPreviewNutr(selNutr)} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:C.o+'12',border:'1px solid '+C.o+'30',cursor:'pointer'}}>
+          <span style={{fontSize:14}}>🍽</span>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.o}}>{selNutr.total_calories_consumed!=null?selNutr.total_calories_consumed+' kcal':'Nutrition'}</div>
+            <div style={{fontSize:9,color:C.tx3}}>consommées ↗</div>
+          </div>
+        </div>}
+        {/* Événements */}
+        {sportEvs.length>0&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'5px 10px',borderRadius:10,background:C.bS,border:'1px solid '+C.b+'30',flexWrap:'wrap'}}>
+          {sportEvs.map(ev=><div key={ev.id} style={{display:'flex',alignItems:'center',gap:4}}>
+            <span style={{fontSize:12}}>{ev.emoji}</span>
+            <span style={{fontSize:10,fontWeight:600,color:C.b}}>{ev.label}</span>
+            <button onClick={e=>{e.stopPropagation();removeEvent(selDk,ev.id);}} style={{background:'none',border:'none',color:C.r,cursor:'pointer',fontSize:13,padding:'0 2px',lineHeight:1}}>×</button>
           </div>)}
         </div>}
-        <div style={{display:'flex',gap:5,marginBottom:addEv?8:0}}>
-          <button onClick={()=>toggleDayOff(selDk)} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid '+(hasDayOff?C.r+'60':C.brdL),background:hasDayOff?C.rS:'transparent',color:hasDayOff?C.r:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{hasDayOff?'✕ Retirer OFF':'+ Jour OFF'}</button>
-          <button onClick={()=>setAddEv(addEv?null:{label:'',eventType:'match',emoji:'⚔️'})} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid '+C.b+'40',background:C.bS,color:C.b,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{addEv?'Annuler':'+ Événement'}</button>
-        </div>
-        {addEv&&<div style={{padding:'10px',borderRadius:10,background:C.s2,border:'1px solid '+C.brd}}>
-          <input value={addEv.label} onChange={e=>setAddEv(f=>({...f,label:e.target.value}))} placeholder="Nom de l'événement..." style={{width:'100%',padding:'7px 10px',borderRadius:7,border:'1px solid '+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:'inherit',marginBottom:7,boxSizing:'border-box'}}/>
-          <div style={{display:'flex',gap:3,marginBottom:7,flexWrap:'wrap'}}>
-            {EV_TYPES.map(t=><button key={t.k} onClick={()=>setAddEv(f=>({...f,eventType:t.k,emoji:t.e}))} style={{padding:'4px 9px',borderRadius:6,border:'1px solid '+(addEv.eventType===t.k?C.b+'60':C.brdL),background:addEv.eventType===t.k?C.bS:'transparent',color:addEv.eventType===t.k?C.b:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{t.e} {t.l}</button>)}
+        {!selWell&&!selSess.length&&!selNutr&&!sportEvs.length&&<span style={{fontSize:11,color:C.tx3}}>Aucune donnée pour ce jour</span>}
+      </div>
+      {/* Actions */}
+      <div style={{borderTop:'1px solid '+C.brd+'60',padding:'10px 14px 12px',display:'flex',gap:6,flexWrap:'wrap'}}>
+        <button onClick={()=>toggleDayOff(selDk)} style={{padding:'6px 12px',borderRadius:20,border:'1px solid '+(hasDayOff?C.r+'60':C.brdL),background:hasDayOff?C.rS:'transparent',color:hasDayOff?C.r:C.tx3,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+          {hasDayOff?'✕ Retirer OFF':'+ Jour OFF'}
+        </button>
+        <button onClick={()=>setAddEv(addEv?null:{label:'',eventType:'match',emoji:'⚔️'})} style={{padding:'6px 12px',borderRadius:20,border:'1px solid '+C.b+'40',background:addEv?C.bS:'transparent',color:C.b,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+          {addEv?'Annuler':'+ Événement'}
+        </button>
+      </div>
+      {addEv&&<div style={{padding:'0 14px 14px'}}>
+        <div style={{padding:'12px',borderRadius:10,background:C.s1,border:'1px solid '+C.brd}}>
+          <input value={addEv.label} onChange={e=>setAddEv(f=>({...f,label:e.target.value}))} placeholder="Nom de l'événement..." style={{width:'100%',padding:'8px 10px',borderRadius:7,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:'inherit',marginBottom:8,boxSizing:'border-box'}}/>
+          <div style={{display:'flex',gap:4,marginBottom:8,flexWrap:'wrap'}}>
+            {EV_TYPES.map(t=><button key={t.k} onClick={()=>setAddEv(f=>({...f,eventType:t.k,emoji:t.e}))} style={{padding:'5px 10px',borderRadius:7,border:'1px solid '+(addEv.eventType===t.k?C.b+'60':C.brdL),background:addEv.eventType===t.k?C.bS:'transparent',color:addEv.eventType===t.k?C.b:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{t.e} {t.l}</button>)}
           </div>
-          <button onClick={()=>{if(addEv.label.trim()){saveEvent(selDk,{...addEv,type:'sport_event'});setAddEv(null);}}} style={{width:'100%',padding:'7px 0',borderRadius:8,border:'none',background:C.b,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Ajouter</button>
-        </div>}
-        {!blockConfig?.startDate&&<div style={{marginTop:8,padding:'8px 10px',borderRadius:8,background:C.o+'10',border:'1px solid '+C.o+'30',fontSize:10,color:C.o}}>Définis une date de début de bloc pour voir les séances planifiées sur le calendrier.</div>}
-      </div>);
-    })()}
+          <button onClick={()=>{if(addEv.label.trim()){saveEvent(selDk,{...addEv,type:'sport_event'});setAddEv(null);}}} style={{width:'100%',padding:'8px 0',borderRadius:9,border:'none',background:C.b,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Ajouter</button>
+        </div>
+      </div>}
+    </div>}
+
+    {/* Modal wellness (bottom sheet) */}
+    {previewWell&&<div style={{position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setPreviewWell(null)}>
+      <div style={{width:'100%',maxWidth:500,background:C.s1,borderRadius:'20px 20px 0 0',padding:'20px 20px 32px',overflowY:'auto',maxHeight:'80vh'}} onClick={e=>e.stopPropagation()}>
+        {(()=>{const w=previewWell;const ws2=calcScore(w);const wc=wColor(ws2);return(<>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <div style={{width:44,height:44,borderRadius:'50%',background:wc,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><span style={{fontSize:15,fontWeight:800,color:'#fff'}}>{ws2}</span></div>
+              <div><div style={{fontSize:15,fontWeight:700,color:wc}}>{wLabel(ws2)}</div><div style={{fontSize:10,color:C.tx3}}>Forme du jour</div></div>
+            </div>
+            <button onClick={()=>setPreviewWell(null)} style={{background:'none',border:'none',color:C.tx3,fontSize:24,cursor:'pointer',lineHeight:1}}>×</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:5,marginBottom:14}}>
+            {[{l:'Récup.',v:w.fatigue,e:'😴'},{l:'Sommeil',v:w.sommeil,e:'💤'},{l:'Stress',v:w.stress,e:'🧠'},{l:'Énergie',v:w.energie,e:'⚡'},{l:'DOMS',v:w.doms,e:'💪'}].map(item=>{const iv=item.v||0;const ic=iv>=4?C.g:iv>=3?C.o:C.r;return(<div key={item.l} style={{background:C.s2,borderRadius:10,padding:'8px 4px',textAlign:'center',border:'1px solid '+ic+'20'}}><div style={{fontSize:13,marginBottom:2}}>{item.e}</div><div style={{fontSize:15,fontWeight:800,color:ic}}>{item.v||'—'}<span style={{fontSize:8,color:C.tx3}}>/5</span></div><div style={{fontSize:8,color:C.tx3,marginTop:1}}>{item.l}</div></div>);})}
+          </div>
+          {(w.coucher||w.reveil||w.sleepDur!=null)&&<div style={{padding:'10px 14px',borderRadius:10,background:C.s2,marginBottom:10}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:8}}>Sommeil</div><div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>{w.coucher&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',borderRadius:8,background:C.bg}}><span style={{fontSize:11}}>🌙</span><span style={{fontSize:12,fontWeight:600,color:C.tx}}>{String(w.coucher.h).padStart(2,'0')}:{String(w.coucher.m).padStart(2,'0')}</span></div>}{w.reveil&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',borderRadius:8,background:C.bg}}><span style={{fontSize:11}}>☀️</span><span style={{fontSize:12,fontWeight:600,color:C.tx}}>{String(w.reveil.h).padStart(2,'0')}:{String(w.reveil.m).padStart(2,'0')}</span></div>}{w.sleepDur!=null&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',borderRadius:8,background:C.b+'18'}}><span style={{fontSize:11}}>💤</span><span style={{fontSize:12,fontWeight:700,color:C.b}}>{typeof w.sleepDur==='number'?w.sleepDur.toFixed(1):w.sleepDur}h</span></div>}</div>{w.sleepInterrupt===true&&<div style={{marginTop:6,fontSize:11,color:C.o,padding:'4px 8px',borderRadius:6,background:C.o+'12'}}>⚠ Réveil nocturne{w.sleepInterruptNote?' — '+w.sleepInterruptNote:''}</div>}</div>}
+          {w.poids&&<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',borderRadius:10,background:C.s2,marginBottom:10}}><span style={{fontSize:12}}>⚖️</span><div><div style={{fontSize:12,fontWeight:700,color:C.tx}}>{w.poids} kg</div><div style={{fontSize:9,color:C.tx3}}>Poids ce matin</div></div></div>}
+          {w.domsZones?.length>0&&<div style={{padding:'10px 14px',borderRadius:10,background:C.o+'10',border:'1px solid '+C.o+'30',marginBottom:10}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:'uppercase',marginBottom:6}}>Zones DOMS</div><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{w.domsZones.map(id=>{const z=ALL_BZ.find(z=>z.id===id);return z?<span key={id} style={{fontSize:10,padding:'3px 8px',borderRadius:6,background:C.o+'20',color:C.o}}>{z.label}</span>:null;})}</div></div>}
+          {w.injComment&&<div style={{padding:'10px 14px',borderRadius:10,background:C.r+'10',border:'1px solid '+C.r+'30',fontSize:11,color:C.r}}>🩺 {w.injComment}</div>}
+        </>);})()}
+      </div>
+    </div>}
+
+    {/* Modal nutrition (bottom sheet) */}
+    {previewNutr&&<div style={{position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setPreviewNutr(null)}>
+      <div style={{width:'100%',maxWidth:500,background:C.s1,borderRadius:'20px 20px 0 0',padding:'20px 20px 32px',overflowY:'auto',maxHeight:'80vh'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.tx}}>Alimentation</div>
+          <button onClick={()=>setPreviewNutr(null)} style={{background:'none',border:'none',color:C.tx3,fontSize:24,cursor:'pointer',lineHeight:1}}>×</button>
+        </div>
+        {(()=>{const n=previewNutr;return(<>
+          {n.total_calories_consumed!=null&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',borderRadius:10,background:C.o+'12',border:'1px solid '+C.o+'25',marginBottom:12}}><span style={{fontSize:11,color:C.tx3}}>Total consommé</span><span style={{fontSize:20,fontWeight:800,color:C.o}}>{n.total_calories_consumed}<span style={{fontSize:11,fontWeight:400,color:C.tx3}}> kcal</span></span></div>}
+          {(n.glucides_consumed!=null||n.lipides_consumed!=null||n.proteines_consumed!=null)&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>{[{l:'Glucides',v:n.glucides_consumed,c:C.b,e:'🍞'},{l:'Lipides',v:n.lipides_consumed,c:C.o,e:'🥑'},{l:'Protéines',v:n.proteines_consumed,c:C.g,e:'🥩'}].map(m=><div key={m.l} style={{background:C.s2,borderRadius:10,padding:'12px 6px',textAlign:'center',border:'1px solid '+m.c+'20'}}><div style={{fontSize:14,marginBottom:4}}>{m.e}</div><div style={{fontSize:16,fontWeight:800,color:m.c}}>{m.v!=null?Math.round(m.v):'-'}<span style={{fontSize:9,color:C.tx3}}>g</span></div><div style={{fontSize:10,color:C.tx3,marginTop:2}}>{m.l}</div></div>)}</div>}
+        </>);})()}
+      </div>
+    </div>}
+
+    {/* SessionDetailModal — toutes séances (faites ou planifiées) */}
     {sessDetail&&<SessionDetailModal sid={sessDetail.sessId} wk={sessDetail.week} sessions={sessions} exos={exos} sets={sets} completedSessions={completedSessions} allMethods={allMethods} blockConfig={blockConfig} currentWeek={sessDetail.week} onClose={()=>setSessDetail(null)}/>}
   </div>);
 }
@@ -4930,7 +5113,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           </div>
         </div>
         {/* Calendrier mensuel */}
-        <MonthCalendar sessions={sessions} completedSessions={completedSessions} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} sets={sets} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} allMethods={allMethods} C={C}/>
+        <MonthCalendar sessions={sessions} completedSessions={completedSessions} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} sets={sets} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} allMethods={allMethods} wellnessHistory={wellnessHistory} nutritionLog={nutritionLog} sessionLogs={sessionLogs} currentWeek={currentWeek} C={C}/>
         {/* Sous-onglets prog */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
           {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
@@ -4969,9 +5152,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {coachTab==="stats"&&(<>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Suivi athlete</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
-
-        {/* Calendrier hebdomadaire — en premier */}
-        <WeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} C={C} wellnessHistory={wellnessHistory} weightLog={weightLog} sessionLogs={sessionLogs} nutritionLog={nutritionLog} exos={exos} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan}/>
 
         {/* 1RM Progression */}
         <div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
