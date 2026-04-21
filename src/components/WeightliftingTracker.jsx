@@ -3279,6 +3279,147 @@ function AIChatBar({exos,sessions,chatHistory,setChatHistory,onApply,onOpenChang
   </>);
 }
 
+function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setWeekSchedule,exos={},sets={},energySessions=[],energyWeekPlan={},energyDayPlan={},allMethods={},C}){
+  const[vm,setVm]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
+  const[selDk,setSelDk]=useState(null);
+  const[addEv,setAddEv]=useState(null);
+  const[sessDetail,setSessDetail]=useState(null);
+  const MONTHS_FR=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const DAYS_S=["L","Ma","Me","J","V","S","D"];
+  const EV_TYPES=[{k:'match',l:'Match',e:'⚔️'},{k:'compet',l:'Compétition',e:'🏆'},{k:'stage',l:'Stage',e:'🏕️'},{k:'autre',l:'Autre',e:'📅'}];
+  const toKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  const todKey=toKey(new Date());
+  const calEvs=weekSchedule?.calendarEvents||{};
+  const dayEvs=dk=>calEvs[dk]||[];
+  const tw=blockConfig?.totalWeeks||6;
+  const weeksArr=Array.from({length:tw},(_,i)=>i+1);
+  const sessMap=useMemo(()=>{
+    const map={};
+    if(!blockConfig?.startDate)return map;
+    const start=new Date(blockConfig.startDate);
+    weeksArr.forEach(week=>{
+      (sessions||[]).forEach(sess=>{
+        const dayIdx=weekSchedule?.sessions?.[week]?.[sess.id]??sess.day_of_week??null;
+        if(dayIdx==null)return;
+        const d=new Date(start);d.setDate(start.getDate()+(week-1)*7+dayIdx);
+        const dk=toKey(d);if(!map[dk])map[dk]=[];
+        const done=(completedSessions[week]||[]).includes(sess.id);
+        map[dk].push({type:'muscu',sessId:sess.id,week,done,sess});
+      });
+      const wkKeys=energyWeekPlan[week]||[];
+      (energySessions||[]).forEach(sess=>{
+        if(!wkKeys.includes(sess.session_key))return;
+        const dayIdx=energyDayPlan[week]?.[sess.session_key]??null;
+        if(dayIdx==null)return;
+        const d=new Date(start);d.setDate(start.getDate()+(week-1)*7+dayIdx);
+        const dk=toKey(d);if(!map[dk])map[dk]=[];
+        map[dk].push({type:'energy',sessId:sess.session_key,week,done:false,sess});
+      });
+    });
+    return map;
+  },[sessions,completedSessions,blockConfig,weekSchedule,energySessions,energyWeekPlan,energyDayPlan]);
+  const firstDay=new Date(vm.y,vm.m,1);const lastDay=new Date(vm.y,vm.m+1,0);
+  const startOffset=(firstDay.getDay()+6)%7;
+  const cells=[];
+  for(let i=0;i<startOffset;i++)cells.push(null);
+  for(let d=1;d<=lastDay.getDate();d++)cells.push(new Date(vm.y,vm.m,d));
+  while(cells.length%7!==0)cells.push(null);
+  const prevM=()=>setVm(v=>{const nm=v.m===0?11:v.m-1;const ny=v.m===0?v.y-1:v.y;return{y:ny,m:nm};});
+  const nextM=()=>setVm(v=>{const nm=v.m===11?0:v.m+1;const ny=v.m===11?v.y+1:v.y;return{y:ny,m:nm};});
+  const toggleDayOff=dk=>{
+    const cur=calEvs[dk]||[];const has=cur.some(e=>e.type==='dayoff');
+    const next=has?cur.filter(e=>e.type!=='dayoff'):[...cur,{type:'dayoff',id:String(Date.now())}];
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:next.length?next:undefined}});
+  };
+  const saveEvent=(dk,ev)=>{
+    const cur=calEvs[dk]||[];
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:[...cur,{...ev,id:String(Date.now())}]}});
+  };
+  const removeEvent=(dk,id)=>{
+    const cur=(calEvs[dk]||[]).filter(e=>e.id!==id);
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:cur.length?cur:undefined}});
+  };
+  const selEvs=selDk?dayEvs(selDk):[];
+  const selSess=selDk?sessMap[selDk]||[]:[];
+  const hasDayOff=selEvs.some(e=>e.type==='dayoff');
+  const sportEvs=selEvs.filter(e=>e.type!=='dayoff');
+  return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:'1px solid '+C.brd,marginBottom:14}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.tx}}>{MONTHS_FR[vm.m]} {vm.y}</div>
+      <div style={{display:'flex',gap:4,alignItems:'center'}}>
+        <div style={{display:'flex',gap:6,marginRight:8}}>
+          {[{c:C.g,l:'Faite'},{c:C.coach+'aa',l:'Planif.'},{c:C.o,l:'Énerg.'},{c:C.b,l:'Événement'},{c:C.r,l:'OFF'}].map(({c,l})=><div key={l} style={{display:'flex',alignItems:'center',gap:2}}><div style={{width:6,height:6,borderRadius:'50%',background:c}}/><span style={{fontSize:7,color:C.tx3}}>{l}</span></div>)}
+        </div>
+        <button onClick={prevM} style={{width:24,height:24,borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>‹</button>
+        <button onClick={()=>setVm({y:new Date().getFullYear(),m:new Date().getMonth()})} style={{padding:'3px 7px',borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx3,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Auj.</button>
+        <button onClick={nextM} style={{width:24,height:24,borderRadius:6,border:'1px solid '+C.brdL,background:'transparent',color:C.tx2,fontSize:13,cursor:'pointer',fontFamily:'inherit',lineHeight:1}}>›</button>
+      </div>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:3}}>
+      {DAYS_S.map(d=><div key={d} style={{textAlign:'center',fontSize:8,fontWeight:700,color:C.tx3,textTransform:'uppercase'}}>{d}</div>)}
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:selDk?10:0}}>
+      {cells.map((date,i)=>{
+        if(!date)return<div key={'e'+i}/>;
+        const dk=toKey(date);const isToday=dk===todKey;const isSel=selDk===dk;
+        const sessList=sessMap[dk]||[];const evs=dayEvs(dk);
+        const isDayOff=evs.some(e=>e.type==='dayoff');const sports=evs.filter(e=>e.type!=='dayoff');
+        return(<div key={dk} onClick={()=>setSelDk(isSel?null:dk)} style={{
+          minHeight:54,borderRadius:6,border:'1px solid '+(isSel?C.coach:isToday?C.ac+'60':isDayOff?C.r+'50':C.brd),
+          background:isSel?C.coachS:isDayOff?C.r+'0a':isToday?C.acS:'transparent',
+          padding:'3px 4px',cursor:'pointer',transition:'all 0.12s'
+        }}>
+          <div style={{fontSize:10,fontWeight:isToday?800:500,color:isToday?C.ac:isDayOff?C.r:C.tx2,marginBottom:1}}>
+            {date.getDate()}{isDayOff&&<span style={{fontSize:6,color:C.r,marginLeft:2,fontWeight:700,verticalAlign:'top'}}>off</span>}
+          </div>
+          {sessList.slice(0,2).map((s,j)=>{const col=s.type==='energy'?C.o:s.done?C.g:C.coach+'bb';return<div key={j} style={{fontSize:7,fontWeight:700,color:col,background:col+'18',borderRadius:2,padding:'1px 3px',marginBottom:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.done?'✓ ':''}{s.sess?.short||s.sessId}</div>;})}
+          {sessList.length>2&&<div style={{fontSize:6,color:C.tx3}}>+{sessList.length-2}</div>}
+          {sports.slice(0,1).map((ev,j)=><div key={j} style={{fontSize:7,color:C.b,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.emoji} {ev.label}</div>)}
+        </div>);
+      })}
+    </div>
+    {selDk&&(()=>{
+      const[sy,sm,sd]=[+selDk.slice(0,4),+selDk.slice(4,6)-1,+selDk.slice(6,8)];
+      const dateLabel=new Date(sy,sm,sd).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+      return(<div style={{borderTop:'1px solid '+C.brd,paddingTop:10}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.tx,textTransform:'capitalize'}}>{dateLabel}</div>
+          <button onClick={()=>setSelDk(null)} style={{background:'none',border:'none',color:C.tx3,cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
+        </div>
+        {selSess.length>0&&<div style={{marginBottom:8}}>
+          <div style={{fontSize:8,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:4}}>Séances</div>
+          {selSess.map((item,i)=>{const col=item.type==='energy'?C.o:item.done?C.g:C.coach;return<button key={i} onClick={()=>item.done&&setSessDetail({sessId:item.sessId,week:item.week})} style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid '+col+'40',background:col+'12',cursor:item.done?'pointer':'default',fontFamily:'inherit',marginBottom:3,textAlign:'left'}}>
+            <span style={{fontSize:12,color:col}}>{item.done?'✓':'○'}</span>
+            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:700,color:col}}>{item.sess?.name||item.sessId}</div><div style={{fontSize:9,color:C.tx3}}>S{item.week} · {item.type==='energy'?'Énergétique':'Musculation'}{item.done?'':' — planifié'}</div></div>
+            {item.done&&<span style={{fontSize:9,color:C.tx3}}>Voir ›</span>}
+          </button>;})}
+        </div>}
+        {sportEvs.length>0&&<div style={{marginBottom:8}}>
+          <div style={{fontSize:8,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.4px',marginBottom:4}}>Événements</div>
+          {sportEvs.map(ev=><div key={ev.id} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:8,background:C.bS,border:'1px solid '+C.b+'30',marginBottom:3}}>
+            <span style={{fontSize:13}}>{ev.emoji}</span>
+            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:C.b}}>{ev.label}</div>{ev.eventType&&<div style={{fontSize:9,color:C.tx3}}>{EV_TYPES.find(t=>t.k===ev.eventType)?.l}</div>}</div>
+            <button onClick={()=>removeEvent(selDk,ev.id)} style={{background:'none',border:'none',color:C.r,cursor:'pointer',fontSize:15,padding:'0 3px',lineHeight:1}}>×</button>
+          </div>)}
+        </div>}
+        <div style={{display:'flex',gap:5,marginBottom:addEv?8:0}}>
+          <button onClick={()=>toggleDayOff(selDk)} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid '+(hasDayOff?C.r+'60':C.brdL),background:hasDayOff?C.rS:'transparent',color:hasDayOff?C.r:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{hasDayOff?'✕ Retirer OFF':'+ Jour OFF'}</button>
+          <button onClick={()=>setAddEv(addEv?null:{label:'',eventType:'match',emoji:'⚔️'})} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid '+C.b+'40',background:C.bS,color:C.b,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{addEv?'Annuler':'+ Événement'}</button>
+        </div>
+        {addEv&&<div style={{padding:'10px',borderRadius:10,background:C.s2,border:'1px solid '+C.brd}}>
+          <input value={addEv.label} onChange={e=>setAddEv(f=>({...f,label:e.target.value}))} placeholder="Nom de l'événement..." style={{width:'100%',padding:'7px 10px',borderRadius:7,border:'1px solid '+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:'inherit',marginBottom:7,boxSizing:'border-box'}}/>
+          <div style={{display:'flex',gap:3,marginBottom:7,flexWrap:'wrap'}}>
+            {EV_TYPES.map(t=><button key={t.k} onClick={()=>setAddEv(f=>({...f,eventType:t.k,emoji:t.e}))} style={{padding:'4px 9px',borderRadius:6,border:'1px solid '+(addEv.eventType===t.k?C.b+'60':C.brdL),background:addEv.eventType===t.k?C.bS:'transparent',color:addEv.eventType===t.k?C.b:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{t.e} {t.l}</button>)}
+          </div>
+          <button onClick={()=>{if(addEv.label.trim()){saveEvent(selDk,{...addEv,type:'sport_event'});setAddEv(null);}}} style={{width:'100%',padding:'7px 0',borderRadius:8,border:'none',background:C.b,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Ajouter</button>
+        </div>}
+        {!blockConfig?.startDate&&<div style={{marginTop:8,padding:'8px 10px',borderRadius:8,background:C.o+'10',border:'1px solid '+C.o+'30',fontSize:10,color:C.o}}>Définis une date de début de bloc pour voir les séances planifiées sur le calendrier.</div>}
+      </div>);
+    })()}
+    {sessDetail&&<SessionDetailModal sid={sessDetail.sessId} wk={sessDetail.week} sessions={sessions} exos={exos} sets={sets} completedSessions={completedSessions} allMethods={allMethods} blockConfig={blockConfig} currentWeek={sessDetail.week} onClose={()=>setSessDetail(null)}/>}
+  </div>);
+}
+
 function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={},exos={},energySessions=[],energyWeekPlan={},energyDayPlan={}}){
   const[selectDay,setSelectDay]=useState(null);
   const[weekOffset,setWeekOffset]=useState(0);
@@ -4788,6 +4929,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             {dw>0&&<button onClick={()=>setBlockConfig(c=>({...c,deloadWeek:0}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
           </div>
         </div>
+        {/* Calendrier mensuel */}
+        <MonthCalendar sessions={sessions} completedSessions={completedSessions} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} sets={sets} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} allMethods={allMethods} C={C}/>
         {/* Sous-onglets prog */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
           {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
@@ -4801,7 +4944,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
               <button onClick={()=>setShowTierModal(true)} style={{padding:"6px 10px",borderRadius:8,border:"1px solid "+C.o+"40",background:C.o+"12",color:C.o,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>⚙ Surcharge</button>
             </div>
           </div>
-          {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions}/>}
+          {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule}/>}
           {sessions.length>0&&<div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+C.brd}}>
             <button onClick={()=>setShowExoParams(p=>!p)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"1px solid "+C.brdL,background:showExoParams?C.acS:"transparent",color:showExoParams?C.ac:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:showExoParams?12:0}}>
               ⚙ Paramètres exercices{showExoParams?" ∧":" ∨"}
