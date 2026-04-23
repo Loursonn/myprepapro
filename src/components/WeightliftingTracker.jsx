@@ -3316,11 +3316,12 @@ function AIChatBar({exos,sessions,chatHistory,setChatHistory,onApply,onOpenChang
 
 // ── CoachFourWeekCalendar ──────────────────────────────────────────────────────
 
-function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C,wellnessHistory={},sessionLogs={},energySessions=[],energyWeekPlan={},energyDayPlan={},setEnergyWeekPlan,setEnergyDayPlan,testSessions=[],visibilitySettings={},onUpdateSessionDay,onUpdateSessionWeekDay,onUpdateVisibility,athleteId,blockConfig,weekSchedule={},setWeekSchedule}){
+function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C,wellnessHistory={},sessionLogs={},energySessions=[],energyWeekPlan={},energyDayPlan={},setEnergyWeekPlan,setEnergyDayPlan,testSessions=[],visibilitySettings={},onUpdateSessionDay,onUpdateSessionWeekDay,onUpdateVisibility,athleteId,blockConfig,weekSchedule={},setWeekSchedule,exos={},allMethods={}}){
   const[weekOffset,setWeekOffset]=useState(0);
   const[selectDay,setSelectDay]=useState(null);
   const[showPlanModal,setShowPlanModal]=useState(null);
   const[showVisModal,setShowVisModal]=useState(false);
+  const[previewItem,setPreviewItem]=useState(null);// {type:'muscu'|'energy'|'test', data, planWeek}
   const touchStartX=useRef(null);
 
   const DAYS_ABBR=["L","M","M","J","V","S","D"];
@@ -3370,14 +3371,17 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
   const eventsForDate=dateStr=>(wkEvents[dateStr]||[]);
   const addEvent=(dateStr,evt)=>{if(setWeekSchedule)setWeekSchedule({...(weekSchedule||{}),events:{...wkEvents,[dateStr]:[...eventsForDate(dateStr),evt]}});};
   const removeEvent=(dateStr,id)=>{if(setWeekSchedule){const n=(wkEvents[dateStr]||[]).filter(e=>e.id!==id);setWeekSchedule({...(weekSchedule||{}),events:{...wkEvents,[dateStr]:n.length?n:undefined}});}};
-  // Pour l'énergie : filtre par semaine de bloc + jour (pas d'affichage global)
-  const energyForDay=(di,blockWeek)=>(energySessions||[]).filter(s=>{
-    const sid=s.id||s.session_key;
-    const inWeek=(energyWeekPlan[blockWeek]||[]).includes(sid)||(energyWeekPlan[blockWeek]||[]).includes(s.session_key);
-    if(!inWeek)return false;
-    const dayMap=energyDayPlan[blockWeek]||{};
-    return dayMap[sid]===di||dayMap[s.session_key]===di;
-  });
+  // Pour l'énergie : filtre par semaine de bloc + jour (semaines passées exclues)
+  const energyForDay=(di,blockWeek)=>{
+    if(blockWeek<currentWeek)return[];
+    return(energySessions||[]).filter(s=>{
+      const sid=s.id||s.session_key;
+      const inWeek=(energyWeekPlan[blockWeek]||[]).includes(sid)||(energyWeekPlan[blockWeek]||[]).includes(s.session_key);
+      if(!inWeek)return false;
+      const dayMap=energyDayPlan[blockWeek]||{};
+      return dayMap[sid]===di||dayMap[s.session_key]===di;
+    });
+  };
   const testsForDate=dateStr=>(testSessions||[]).filter(t=>t.date===dateStr);
   const wScore2=w=>w?Math.round(((w.fatigue||3)+(w.sommeil||3)+(w.stress||3)+(w.energie||3)+(w.doms||3))/25*100):null;
   const wColor2=s=>s>=80?C.g:s>=65?'#6FCF97':s>=50?C.o:s>=35?'#E8956D':C.r;
@@ -3549,13 +3553,13 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
             </div>}
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
               {sessList.map(s=>{const done=doneSet.has(s.id);return(
-                <div key={s.id} style={{padding:'5px 10px',borderRadius:9,background:C.b+'15',border:'1px solid '+C.b+'30',fontSize:11,fontWeight:600,color:C.b}}>🏋 {s.name}{done?' ✓':''}</div>
+                <button key={s.id} onClick={()=>setPreviewItem({type:'muscu',data:s,planWeek:planWeek})} style={{padding:'5px 10px',borderRadius:9,background:C.b+'15',border:'1px solid '+C.b+'30',fontSize:11,fontWeight:600,color:C.b,cursor:'pointer',fontFamily:'inherit'}}>🏋 {s.name}{done?' ✓':''} ›</button>
               );})}
               {eAssigned.map(s=>(
-                <div key={s.id||s.session_key} style={{padding:'5px 10px',borderRadius:9,background:C.coach+'15',border:'1px solid '+C.coach+'30',fontSize:11,fontWeight:600,color:C.coach}}>⚡ {s.session_label||'Énergie'}</div>
+                <button key={s.id||s.session_key} onClick={()=>setPreviewItem({type:'energy',data:s,planWeek:planWeek})} style={{padding:'5px 10px',borderRadius:9,background:C.coach+'15',border:'1px solid '+C.coach+'30',fontSize:11,fontWeight:600,color:C.coach,cursor:'pointer',fontFamily:'inherit'}}>⚡ {s.session_label||'Énergie'} ›</button>
               ))}
               {tests.map(t=>{const tc=t.type==='musculation'?'#7B6FFF':t.type==='energetique'?'#EF4B4B':t.type==='specifique'?'#F5A623':'#22C993';return(
-                <div key={t.id} style={{padding:'5px 10px',borderRadius:9,background:tc+'15',border:'1px solid '+tc+'30',fontSize:11,fontWeight:600,color:tc}}>📋 {t.title}</div>
+                <button key={t.id} onClick={()=>setPreviewItem({type:'test',data:t,planWeek:planWeek})} style={{padding:'5px 10px',borderRadius:9,background:tc+'15',border:'1px solid '+tc+'30',fontSize:11,fontWeight:600,color:tc,cursor:'pointer',fontFamily:'inherit'}}>📋 {t.title} ›</button>
               );})}
               {sessList.length===0&&eAssigned.length===0&&tests.length===0&&dayEvts.length===0&&<span style={{fontSize:11,color:C.tx3}}>Aucun contenu planifié — cliquer "+ Planifier"</span>}
             </div>
@@ -3689,6 +3693,76 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
           </div>
         </div>
       )}
+
+      {/* Bottom sheet preview séance/énergie/test */}
+      {previewItem&&(()=>{
+        const{type,data,planWeek}=previewItem;
+        return(
+          <div style={{position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setPreviewItem(null)}>
+            <div style={{width:'100%',maxWidth:640,background:C.s1,borderRadius:'20px 20px 0 0',padding:'20px 20px 32px',overflowY:'auto',maxHeight:'80vh'}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                <div style={{fontSize:15,fontWeight:700,color:C.tx}}>
+                  {type==='muscu'&&'🏋 '+data.name}
+                  {type==='energy'&&'⚡ '+(data.session_label||'Séance énergétique')}
+                  {type==='test'&&'📋 '+data.title}
+                </div>
+                <button onClick={()=>setPreviewItem(null)} style={{background:'none',border:'none',color:C.tx3,fontSize:22,cursor:'pointer',lineHeight:1}}>×</button>
+              </div>
+
+              {/* Prévisuel musculation : liste des exercices pour planWeek */}
+              {type==='muscu'&&(()=>{
+                const exList=exos[data.id]||[];
+                if(!exList.length)return<div style={{fontSize:12,color:C.tx3,textAlign:'center',padding:'20px 0'}}>Aucun exercice dans cette séance</div>;
+                return(<div>{exList.map((ex,i)=>{
+                  const wd=ex.weeks?.[planWeek]||null;
+                  const method=wd?.method||null;
+                  const mInfo=allMethods?.[method]||null;
+                  return(<div key={ex.id||i} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',borderBottom:'1px solid '+C.brd+'50'}}>
+                    <div style={{width:3,height:36,borderRadius:2,background:mInfo?mInfo.c:C.ac,flexShrink:0}}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:600,color:C.tx}}>{ex.name}</div>
+                      {wd?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.pdc?'Poids de corps':wd.kg+'kg'} · {wd.sets}×{wd.repsRange||'?'} reps{wd.rir!=null?' · RIR '+wd.rir:''}{method&&mInfo?' · '+mInfo.label:''}</div>
+                        :<div style={{fontSize:10,color:C.tx3,marginTop:2,fontStyle:'italic'}}>Non programmé S{planWeek}</div>}
+                    </div>
+                  </div>);
+                })}</div>);
+              })()}
+
+              {/* Prévisuel énergie */}
+              {type==='energy'&&(<div>
+                {(data.appareil_types||[]).length>0&&<div style={{fontSize:11,color:C.tx3,marginBottom:12}}>Équipements : {data.appareil_types.join(', ')}</div>}
+                <div style={{padding:'12px 14px',borderRadius:10,background:C.coach+'10',border:'1px solid '+C.coach+'30',fontSize:12,color:C.coach,marginBottom:8}}>
+                  Pour voir le détail des blocs, ouvrir l'onglet <strong>Prog → Énergétique</strong>.
+                </div>
+                <div style={{fontSize:10,color:C.tx3}}>Semaine planifiée : S{planWeek}</div>
+              </div>)}
+
+              {/* Prévisuel test */}
+              {type==='test'&&(()=>{
+                const tc=data.type==='musculation'?'#7B6FFF':data.type==='energetique'?'#EF4B4B':data.type==='specifique'?'#F5A623':'#22C993';
+                return(<div>
+                  <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:11,padding:'3px 10px',borderRadius:7,background:tc+'20',color:tc,fontWeight:600}}>{data.type||'Test'}</span>
+                    <span style={{fontSize:11,color:C.tx3}}>📅 {data.date}</span>
+                    {data.completed&&<span style={{fontSize:11,padding:'3px 10px',borderRadius:7,background:C.g+'20',color:C.g,fontWeight:600}}>✓ Complété</span>}
+                  </div>
+                  {data.protocol_description&&<div style={{padding:'10px 14px',borderRadius:10,background:C.s2,border:'1px solid '+C.brd,fontSize:12,color:C.tx,lineHeight:1.6,marginBottom:8}}>{data.protocol_description}</div>}
+                  {data.results_structured?.metrics?.length>0&&(<div style={{marginTop:8}}>
+                    <div style={{fontSize:10,fontWeight:700,color:C.tx3,textTransform:'uppercase',marginBottom:6}}>Résultats</div>
+                    {data.results_structured.metrics.map((m,i)=>(
+                      <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid '+C.brd+'50',fontSize:12}}>
+                        <span style={{color:C.tx2}}>{m.name}</span>
+                        <span style={{fontWeight:700,color:tc}}>{m.value}{m.unit?' '+m.unit:''}</span>
+                      </div>
+                    ))}
+                  </div>)}
+                  {!data.protocol_description&&!data.results_structured?.metrics?.length&&<div style={{fontSize:12,color:C.tx3,textAlign:'center',padding:'16px 0'}}>Voir l'onglet <strong>Test</strong> pour le détail.</div>}
+                </div>);
+              })()}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -5591,8 +5665,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             {dw>0&&<button onClick={()=>setBlockConfig(c=>({...c,deloadWeek:0}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
           </div>
         </div>
-        {/* Calendrier mensuel */}
-        <MonthCalendar sessions={sessions} completedSessions={completedSessions} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} sets={sets} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} allMethods={allMethods} wellnessHistory={wellnessHistory} nutritionLog={nutritionLog} sessionLogs={sessionLogs} currentWeek={currentWeek} C={C}/>
+        {/* Planning 4 semaines */}
+        <CoachFourWeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} C={C} wellnessHistory={wellnessHistory} sessionLogs={sessionLogs} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} setEnergyWeekPlan={setEnergyWeekPlan} setEnergyDayPlan={setEnergyDayPlan} testSessions={testSessions} visibilitySettings={visibilitySettings} onUpdateSessionDay={updateSessionDay} onUpdateSessionWeekDay={updateSessionWeekDay} onUpdateVisibility={setVisibilitySettings} athleteId={athleteId} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} allMethods={allMethods}/>
         {/* Sous-onglets prog */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
           {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
@@ -5631,9 +5705,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {coachTab==="stats"&&(<>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Suivi athlete</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
-
-        {/* Calendrier coach 4 semaines */}
-        <CoachFourWeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} C={C} wellnessHistory={wellnessHistory} sessionLogs={sessionLogs} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} setEnergyWeekPlan={setEnergyWeekPlan} setEnergyDayPlan={setEnergyDayPlan} testSessions={testSessions} visibilitySettings={visibilitySettings} onUpdateSessionDay={updateSessionDay} onUpdateSessionWeekDay={updateSessionWeekDay} onUpdateVisibility={setVisibilitySettings} athleteId={athleteId} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule}/>
 
         {/* 1RM Progression */}
         <div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
@@ -5922,7 +5993,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           return(<button onClick={()=>{setInitialLogSess(nextSess);setTab("log");}} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"none",background:C.acS,color:C.ac,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left",display:"flex",alignItems:"center",gap:10}}><div><div style={{fontSize:11,fontWeight:700}}>Prochaine séance</div><div style={{fontSize:10,color:C.tx2}}>{nextSess.short} - {nextSess.name}</div></div><span style={{marginLeft:"auto",fontSize:14}}>&gt;</span></button>);
         })()}
         </div>
-        {habitEnabled&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
+        {(habitEnabled||habits.length>0)&&<HabitDashboard habits={habits} setHabits={setHabits} habitLogs={habitLogs} onToggle={toggleHabitLog} viewOnly={viewOnly} athleteId={athleteId}/>}
       </div>)}
 
       {tab==="log"&&(<>

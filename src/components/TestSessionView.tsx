@@ -412,7 +412,9 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
           {selectedTest.reference_file_url && (
             <div style={{ marginBottom: 14 }}>
               {selectedTest.reference_file_type === "image" ? (
-                <img src={selectedTest.reference_file_url} alt="Référence" style={{ width: "100%", borderRadius: 12, border: "1px solid " + C.brdL, maxHeight: 280, objectFit: "contain", background: C.s2 }} />
+                <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid " + C.brdL, background: C.s2, maxWidth: "100%" }}>
+                  <img src={selectedTest.reference_file_url} alt="Référence" style={{ width: "100%", display: "block", maxHeight: 320, objectFit: "contain" }} />
+                </div>
               ) : (
                 <a href={selectedTest.reference_file_url} target="_blank" rel="noreferrer"
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderRadius: 12, border: "1px solid " + C.brdL, background: C.s1, color: C.ac, textDecoration: "none" }}>
