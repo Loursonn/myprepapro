@@ -55,6 +55,8 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
   const [step, setStep] = useState<"list" | "create" | "view" | "fill">("list");
   const [selectedTest, setSelectedTest] = useState<TestSession | null>(null);
   const [fileUploading, setFileUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Formulaire création
@@ -97,14 +99,31 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
 
   const handleFileUpload = async (file: File) => {
     setFileUploading(true);
+    setUploadError("");
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      const type = ext === "pdf" ? "pdf" : "image";
-      const path = `${athleteId}/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("test-files").upload(path, file);
-      if (error) throw error;
-      const { data: signed } = await supabase.storage.from("test-files").createSignedUrl(path, 60 * 60 * 24 * 365);
-      setCreateForm(f => ({ ...f, reference_file_url: signed?.signedUrl || "", reference_file_type: type }));
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const isPdf = ext === "pdf";
+
+      if (!isPdf) {
+        // Images : stockage base64 dans la BDD (pas besoin de bucket Storage)
+        if (file.size > 3 * 1024 * 1024) throw new Error("Image trop grande (max 3 Mo)");
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target?.result as string);
+          reader.onerror = () => reject(new Error("Erreur lecture fichier"));
+          reader.readAsDataURL(file);
+        });
+        setCreateForm(f => ({ ...f, reference_file_url: dataUrl, reference_file_type: "image" }));
+      } else {
+        // PDFs : bucket Supabase Storage requis
+        const path = `${athleteId}/${Date.now()}.pdf`;
+        const { error } = await supabase.storage.from("test-media").upload(path, file);
+        if (error) throw new Error("Bucket 'test-media' manquant. Créez-le dans Supabase Storage > New bucket (private).");
+        const { data: signed } = await supabase.storage.from("test-media").createSignedUrl(path, 60 * 60 * 24 * 365);
+        setCreateForm(f => ({ ...f, reference_file_url: signed?.signedUrl || "", reference_file_type: "pdf" }));
+      }
+    } catch (e: any) {
+      setUploadError(e?.message || "Erreur upload");
     } finally {
       setFileUploading(false);
     }
@@ -151,6 +170,7 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
   const handleSaveResults = async () => {
     if (!selectedTest || saving) return;
     setSaving(true);
+    setSaveError("");
     try {
       const validMetrics = metrics.filter(m => m.name.trim() && m.value.trim());
       const payload = {
@@ -159,51 +179,49 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
         results_structured: validMetrics.length ? { metrics: validMetrics } : {},
         updated_at: new Date().toISOString(),
       };
-      await supabase.from("test_sessions").update(payload).eq("id", selectedTest.id);
+      const { error: updateErr } = await supabase.from("test_sessions").update(payload).eq("id", selectedTest.id);
+      if (updateErr) throw updateErr;
 
-      // Proposer de sauvegarder comme performance si métriques renseignées
+      // Sauvegarder comme performance (optionnel — table peut ne pas exister)
       if (validMetrics.length > 0) {
-        for (const m of validMetrics) {
-          const numVal = parseFloat(m.value);
-          if (!isNaN(numVal)) {
-            await supabase.from("performance_logs").insert({
-              athlete_id: athleteId,
-              metric_type: guessMetricType(m.name),
-              metric_name: m.name,
-              value: numVal,
-              unit: m.unit || "custom",
-              date: selectedTest.date,
-              test_session_id: selectedTest.id,
-              is_active_reference: false,
-              created_by: athleteId,
-            });
-
-            // Notifier coach
-            const { data: prof } = await supabase.from("profiles").select("coach_id").eq("id", athleteId).single();
-            if (prof?.coach_id) {
-              const { data: perfLog } = await supabase.from("performance_logs")
-                .select("id")
-                .eq("athlete_id", athleteId)
-                .eq("metric_name", m.name)
-                .eq("date", selectedTest.date)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .single();
-              if (perfLog) {
-                await supabase.from("performance_notifications").insert({
-                  coach_id: prof.coach_id,
-                  athlete_id: athleteId,
-                  performance_log_id: perfLog.id,
-                  status: "pending",
-                });
-              }
+        try {
+          for (const m of validMetrics) {
+            const numVal = parseFloat(m.value);
+            if (!isNaN(numVal)) {
+              await supabase.from("performance_logs").insert({
+                athlete_id: athleteId,
+                metric_type: guessMetricType(m.name),
+                metric_name: m.name,
+                value: numVal,
+                unit: m.unit || "custom",
+                date: selectedTest.date,
+                test_session_id: selectedTest.id,
+                is_active_reference: false,
+                created_by: athleteId,
+              });
             }
           }
-        }
+        } catch (_) { /* performance_logs optionnel */ }
+
+        // Notifier coach (optionnel)
+        try {
+          const { data: prof } = await supabase.from("profiles").select("coach_id").eq("id", athleteId).single();
+          if (prof?.coach_id) {
+            await supabase.from("performance_notifications").insert({
+              coach_id: prof.coach_id,
+              athlete_id: athleteId,
+              test_session_id: selectedTest.id,
+              status: "pending",
+            });
+          }
+        } catch (_) { /* performance_notifications optionnel */ }
       }
 
+      setSelectedTest(prev => prev ? { ...prev, completed: true, results_note: resultsNote || undefined, results_structured: validMetrics.length ? { metrics: validMetrics } : {} } : prev);
       setStep("list");
       loadTests();
+    } catch (e: any) {
+      setSaveError(e?.message || "Erreur lors de l'enregistrement des résultats.");
     } finally {
       setSaving(false);
     }
@@ -355,10 +373,10 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
                     style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: "rgba(239,75,75,0.12)", color: "#EF4B4B", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Supprimer</button>
                 </div>
               ) : (
-                <label style={{ display: "block", padding: "20px", borderRadius: 9, border: "1px dashed " + C.brdL, background: C.s2, textAlign: "center", cursor: fileUploading ? "default" : "pointer" }}>
+                <label style={{ display: "block", padding: "20px", borderRadius: 9, border: "1px dashed " + (uploadError ? "#EF4B4B" : C.brdL), background: C.s2, textAlign: "center", cursor: fileUploading ? "default" : "pointer" }}>
                   <div style={{ fontSize: 24, marginBottom: 6 }}>📎</div>
-                  <div style={{ fontSize: 12, color: C.tx3 }}>{fileUploading ? "Upload en cours…" : "Photo, PNG, JPG ou PDF"}</div>
-                  <input type="file" accept="image/*,application/pdf" onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])} style={{ display: "none" }} />
+                  <div style={{ fontSize: 12, color: uploadError ? "#EF4B4B" : C.tx3 }}>{fileUploading ? "Upload en cours…" : uploadError || "Photo, PNG, JPG ou PDF"}</div>
+                  <input type="file" accept="image/*,application/pdf" onChange={e => { setUploadError(""); e.target.files?.[0] && handleFileUpload(e.target.files[0]); }} style={{ display: "none" }} />
                 </label>
               )}
             </div>
@@ -432,7 +450,7 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
             </div>
           )}
 
-          {!viewOnly && (
+          {(!viewOnly || isCoach) && (
             <button onClick={startFill}
               style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: selectedTest.completed ? C.s2 : (tInfo?.color || C.ac), color: selectedTest.completed ? C.tx3 : "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
               {selectedTest.completed ? "Modifier les résultats" : "▶ Remplir les résultats"}
@@ -489,9 +507,11 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
               style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
           </div>
 
-          <div style={{ background: "rgba(59,141,240,0.08)", borderRadius: 10, padding: "10px 14px", border: "1px solid rgba(59,141,240,0.2)", marginBottom: 16, fontSize: 11, color: "#3B8DF0" }}>
-            💡 Les mesures seront automatiquement ajoutées aux performances de l'athlète. Le coach recevra une notification pour valider.
-          </div>
+          {saveError && (
+            <div style={{ background: "rgba(239,75,75,0.08)", borderRadius: 10, padding: "10px 14px", border: "1px solid rgba(239,75,75,0.2)", marginBottom: 16, fontSize: 11, color: "#EF4B4B" }}>
+              ⚠️ {saveError}
+            </div>
+          )}
 
           <button onClick={handleSaveResults} disabled={saving}
             style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: saving ? C.s2 : (tInfo?.color || C.g), color: saving ? C.tx3 : "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>
