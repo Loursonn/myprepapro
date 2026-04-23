@@ -77,7 +77,7 @@ const hISO=d=>(d||new Date()).toISOString().slice(0,10);
 const hAddDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
 const calcHabitStreak=logs=>{const today=new Date();const todayISO=hISO(today);const todayDone=logs.includes(todayISO);const base=todayDone?0:1;let s=0;for(let i=base;i<365;i++){if(logs.includes(hISO(hAddDays(today,-i))))s++;else break;}return s;};
 const streakMsg=s=>{if(s===0)return"🧊 Fais le aujourd'hui au moins";if(s===1)return"1er jour, garde la pêche 🍑";if(s<=2)return`🔥 ${s} jours d'affilée`;if(s<=4)return`🔥🔥 ${s} jours d'affilée`;if(s<=9)return`🔥🔥🔥 ${s} jours d'affilée`;if(s<=29)return`🔥🔥🔥🔥 ${s} jours d'affilée`;if(s<365)return`🔥🔥🔥🔥🔥 ${s} jours d'affilée`;const y=Math.floor(s/365),d=s%365;return`🏆🔥 ${y} an${y>1?'s':''} et ${d} jours d'affilée !`;};
-const getHabitWeekDays=()=>{const today=new Date();const dow=(today.getDay()+6)%7;const mon=new Date(today);mon.setDate(today.getDate()-dow);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});};
+const getHabitWeekDays=()=>{const today=new Date();return Array.from({length:7},(_,i)=>hAddDays(today,i-6));};
 const checkMilestone=(log,baseline)=>{const sorted=Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1);if(sorted.length<3)return null;const last3=sorted.slice(-3);return last3.every(([,kg])=>kg>baseline)?parseFloat((last3.reduce((s,[,kg])=>s+kg,0)/3).toFixed(1)):null;};
 const getWeightChartData=(log,milestones,target)=>Object.entries(log).sort((a,b)=>a[0]<b[0]?-1:1).map(([date,kg])=>({d:date.slice(6)+"/"+date.slice(4,6),kg,target,isMilestone:milestones?.some(m=>m.date===date)?1:null}));
 const getWellnessChartData=(wh,period)=>{const DAY=['D','L','M','Me','J','V','S'];const MON=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];const dateEntries=Object.entries(wh).filter(([k,v])=>/^\d{8}$/.test(k)&&v&&typeof v==='object');const byDate=Object.fromEntries(dateEntries);if(period==='week'){return Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const k=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');const e=byDate[k];return{label:DAY[d.getDay()],score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='month'){const sorted=[...dateEntries].sort((a,b)=>a[0]<b[0]?-1:1).slice(-30);return sorted.map(([k,e])=>{const y=+k.slice(0,4),m=+k.slice(4,6)-1,dd=+k.slice(6,8);const d=new Date(y,m,dd);return{label:dd===1?MON[m]:String(dd),score:e?.score??null,sleep:e?.sleepDur??null};});}if(period==='year'){const now=new Date();return Array.from({length:12},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-11+i,1);const pfx=String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0');const mes=dateEntries.filter(([k])=>k.startsWith(pfx)).map(([,v])=>v);const sc=mes.filter(v=>v?.score!=null).map(v=>v.score);const sl=mes.filter(v=>v?.sleepDur!=null).map(v=>v.sleepDur);return{label:MON[d.getMonth()],score:sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):null,sleep:sl.length?Math.round(sl.reduce((a,b)=>a+b,0)/sl.length*10)/10:null};});}return[];};
@@ -1234,7 +1234,7 @@ function SessionDetailModal({sid,wk,sessions,exos,sets,completedSessions,allMeth
   );
 }
 
-function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={}}){
+function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={},weekSchedule={},setWeekSchedule}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;const progPct=blockConfig?.progressionPct||2.5;const deloadPct=blockConfig?.deloadPct||40;
   const blockStarted=!blockConfig?.startDate||Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000)>=0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
@@ -1307,6 +1307,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         const tc=tierCfg[tier]||tierCfg[3];
         const newWeeks={...ex.weeks};
         const trainWeeks=weeksArr.filter(w=>w!==dw&&w>1);
+        const allTrainWeeks=weeksArr.filter(w=>w!==dw);
         const totalTrainWeeks=trainWeeks.length;
         const defSets=w1.sets||3;
         const defReps=w1.repsRange||(tc.repsStart?String(tc.repsStart):"10");
@@ -1323,12 +1324,15 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
             const dlPct=tc.deloadPct||40;
             newWeeks[w]={...prevW,...(w1.kg?{kg:Math.round(w1.kg*(1-dlPct/100)/2.5)*2.5}:{}),sets:Math.max(2,Math.round((prevW.sets||defSets)*0.6)),rir:(tc.rirStart||2)+2,repsRange:prevW.repsRange};
           }else{
-            const weekIdx=trainWeeks.indexOf(w);const progress=totalTrainWeeks>1?weekIdx/(totalTrainWeeks-1):0;
+            const weekIdx=trainWeeks.indexOf(w);
+            const allWeekIdx=allTrainWeeks.indexOf(w);
+            const totalAll=allTrainWeeks.length;
+            const progress=totalAll>1?allWeekIdx/(totalAll-1):0;
             if(tc.mode==="rir"){
               const rirRange=tc.rirStart-tc.rirEnd;
               const newRir=Math.round((tc.rirStart-rirRange*progress)*2)/2;
               const kgStep=tc.kgStep??2.5;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*weekIdx)}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*allWeekIdx)}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
             }else if(tc.mode==="reps"){
               const repRange=tc.repsEnd-tc.repsStart;
               const cycleLen=Math.max(2,repRange+1);
@@ -1627,6 +1631,19 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
 
     <div style={{display:"flex",gap:3,marginBottom:6,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWeek(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===week?"2px solid "+C.coach:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===week?C.coachS:(w===dw?C.bS:"transparent"),color:w===week?C.coach:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>
     {dw>0&&<div style={{fontSize:10,color:C.b,marginBottom:6,display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:"50%",background:C.b,display:"inline-block"}}/> S{dw} = Deload (-{deloadPct}% charge, volume reduit)</div>}
+
+    {safeSessions.length>0&&setWeekSchedule&&<div style={{marginBottom:10,background:C.s1,borderRadius:9,padding:"8px 10px",border:"1px solid "+C.brdL}}>
+      <div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:6}}>Jours séances — S{week}</div>
+      {safeSessions.map(s=>{
+        const curDay=weekSchedule?.sessions?.[week]?.[s.id]??s.day_of_week??null;
+        const setDay=(i)=>{const prev=weekSchedule||{};const prevSess=prev.sessions||{};const wMap={...(prevSess[week]||{})};if(curDay===i){delete wMap[s.id];}else{wMap[s.id]=i;}setWeekSchedule({...prev,sessions:{...prevSess,[week]:wMap}});};
+        return(<div key={s.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.coach,minWidth:46,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.short}</span>
+          <div style={{display:"flex",gap:2}}>
+            {["L","Ma","Me","J","V","S","D"].map((d,i)=>{const sel=curDay===i;return(<button key={i} onClick={()=>setDay(i)} style={{padding:"3px 5px",borderRadius:5,border:"1px solid "+(sel?C.coach:C.brdL),background:sel?C.coachS:"transparent",color:sel?C.coach:C.tx3,fontSize:9,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{d}</button>);})}
+          </div>
+        </div>);})}
+    </div>}
 
     <button onClick={autoFillProgression} style={{width:"100%",padding:"9px 0",borderRadius:8,border:"1px solid "+C.o+"50",background:C.oS,color:C.o,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
       ↗ Surcharge progressive — tout le bloc (S1→S{tw})
@@ -2901,6 +2918,14 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;
         const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];
         const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
+        // Surcharge basée sur le réel S-1 plutôt que la planif initiale
+        const prevDoneRows=(!wd?.pdc&&!isFlex&&wk>1)?(sets[ex.id+"_"+(wk-1)]||[]).filter(r=>r.done&&(r.kg||0)>0):[];
+        const prevMedianKg=prevDoneRows.length?prevDoneRows.map(r=>r.kg).sort((a,b)=>a-b)[Math.floor(prevDoneRows.length/2)]:null;
+        const exTierCfg=(blockConfig?.tierConfig||DEF_TIER_CONFIG)[getExTier(ex.name,ex)]||(blockConfig?.tierConfig||DEF_TIER_CONFIG)[3];
+        const exKgStep=exTierCfg?.kgStep??2.5;
+        const effectiveKg=prevMedianKg!==null?roundHalf(prevMedianKg+exKgStep):(wd?.kg??null);
+        const effectivePlanned=wd&&prevMedianKg!==null&&!wd.pdc?{...wd,kg:effectiveKg}:wd;
+        const kgFromActual=!!(wd&&!wd.pdc&&!isFlex&&prevMedianKg!==null&&effectiveKg!==wd?.kg);
         const bankEx=bankExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
         const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
         return(
@@ -2908,14 +2933,14 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
             <div style={inSS?{background:"transparent",overflow:"hidden"}:{background:C.s1,borderRadius:12,marginBottom:6,border:"1px solid "+(allDone?C.g+"50":C.brd),overflow:"hidden"}}>
               <div onClick={()=>setOpenEx(isOpen?null:ex.id)} style={{display:"flex",alignItems:"center",padding:"12px 14px",cursor:"pointer",gap:10}}>
                 <div style={{width:3,height:32,borderRadius:2,background:allDone?C.g:bt.c,flexShrink:0}}/>
-                <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
+                <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:600}}>{ex.name}</span>{allDone&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:5,background:C.gS,color:C.g}}>OK</span>}{isFlex&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:C.b+"20",color:C.b,fontWeight:600}}>Souplesse</span>}{mInfo&&!isFlex&&<span style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+mInfo.c+"60",background:mInfo.c+"22",color:mInfo.c,fontSize:10,fontWeight:700}}>{mInfo.e} {mInfo.label}</span>}</div>{wd?(!isFlex?<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.pdc?"PDC":(effectiveKg??wd.kg)+"kg"} - {fmtMR(method,mp,wd.sets,wd.repsRange)}{wd.tempo?" - "+wd.tempo:""}{(!method||method==="dropset"||method==="restpause")?" - ":""}{(!method||method==="dropset"||method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}{kgFromActual&&<span style={{fontSize:9,color:C.g,marginLeft:6,fontWeight:600}}>↑ S{wk-1}+{exKgStep}kg</span>}</div>:<div style={{fontSize:11,color:C.tx2,marginTop:3}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>):<div style={{fontSize:11,color:C.tx3,marginTop:3,fontStyle:"italic"}}>Non programme S{wk}</div>}{wd?.coachNote&&<div style={{marginTop:6,padding:"6px 10px",borderRadius:6,background:C.coachS,border:"1px solid "+C.coach+"30",fontSize:11,color:C.coach,lineHeight:1.5}}>{wd.coachNote}</div>}{!isFlex&&method&&mp&&mInfo&&<div style={{fontSize:10,color:mInfo.c,marginTop:4}}>{method==="dropset"&&(mp.drops||2)+" drops -"+(mp.pct||20)+"%"}{method==="myoreps"&&(mp.activation||12)+" + "+(mp.minisets||4)+"x"+(mp.reps_mini||5)}{method==="restpause"&&(mp.rounds||3)+" rounds"}{method==="cluster"&&clusterReps(mp).join("+")+", "+(mp.pause||10)+"s"}{method==="amrap"&&(mp.type==="timed"?mp.duration+"s":"A l echec")}{method==="isometrique"&&(mp.positions||2)+"x"+(mp.hold_sec||30)+"s"}</div>}</div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
                   {hasVideo&&<button onClick={e=>{e.stopPropagation();setVideoEx(bankEx);}} style={{background:'none',border:'none',color:C.tx3,fontSize:16,cursor:'pointer',padding:'0',lineHeight:1,pointerEvents:'all'}} title="Voir la vidéo">📹</button>}
                   {rows.length>0&&<span style={{fontSize:12,fontWeight:700,color:allDone?C.g:C.tx2,fontFamily:"monospace"}}>{done}/{total}</span>}
                   <span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span>
                 </div>
               </div>
-              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm(wd.kg,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}<SmartSetEditor planned={wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly} isUnilateral={!!(bankEx?.is_unilateral||ex.is_unilateral)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm((effectivePlanned||wd)?.kg||0,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}{kgFromActual&&<div style={{marginBottom:10,padding:"6px 10px",borderRadius:8,background:C.g+"10",border:"1px solid "+C.g+"30",fontSize:10,color:C.g,display:"flex",alignItems:"center",gap:6}}><span>Basé sur S{wk-1} réel :</span><span style={{fontWeight:700}}>{prevMedianKg}kg → {effectiveKg}kg (+{exKgStep}kg)</span></div>}<SmartSetEditor planned={effectivePlanned||wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly} isUnilateral={!!(bankEx?.is_unilateral||ex.is_unilateral)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
             </div>
           </div>
         );
@@ -3668,6 +3693,332 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
   );
 }
 
+// ── MonthCalendar ─────────────────────────────────────────────────────────────
+
+function MonthCalendar({sessions,completedSessions,blockConfig,weekSchedule,setWeekSchedule,exos={},sets={},energySessions=[],energyWeekPlan={},energyDayPlan={},allMethods={},wellnessHistory={},nutritionLog={},sessionLogs={},currentWeek=1,C}){
+  const[vm,setVm]=useState(()=>{const d=new Date();return{y:d.getFullYear(),m:d.getMonth()};});
+  const[selDk,setSelDk]=useState(null);
+  const[addEv,setAddEv]=useState(null);
+  const[dragging,setDragging]=useState(null);
+  const[dragOverDk,setDragOverDk]=useState(null);
+  const[sessDetail,setSessDetail]=useState(null);
+  const[previewWell,setPreviewWell]=useState(null);
+  const[previewNutr,setPreviewNutr]=useState(null);
+  const MONTHS_FR=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const DAYS_S=["L","Ma","Me","J","V","S","D"];
+  const DAYS_FULL=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+  const EV_TYPES=[{k:'match',l:'Match',e:'⚔️'},{k:'compet',l:'Compétition',e:'🏆'},{k:'stage',l:'Stage',e:'🏕️'},{k:'autre',l:'Autre',e:'📅'}];
+  const toKey=d=>String(d.getFullYear())+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  const todKey=toKey(new Date());
+  const calEvs=weekSchedule?.calendarEvents||{};
+  const dayEvs=dk=>calEvs[dk]||[];
+  const tw=blockConfig?.totalWeeks||6;
+  const weeksArr=Array.from({length:tw},(_,i)=>i+1);
+  const getWell=dk=>wellnessHistory[dk]||null;
+  const calcScore=w=>w?Math.round(((w.fatigue||3)+(w.sommeil||3)+(w.stress||3)+(w.energie||3)+(w.doms||3))/25*100):null;
+  const wColor=s=>s>=80?C.g:s>=65?'#6FCF97':s>=50?C.o:s>=35?'#E8956D':C.r;
+  const wLabel=s=>s>=80?'Optimal':s>=65?'Bon':s>=50?'Modéré':s>=35?'Fatigué':'Surmenage';
+  const fmtDur=s=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return(h>0?h+'h ':'')+m+'min';};
+  const getNutr=dk=>{const y=dk.slice(0,4),mo=dk.slice(4,6),d2=dk.slice(6,8);return nutritionLog[dk]||nutritionLog[`${y}-${mo}-${d2}`]||null;};
+  const sessMap=useMemo(()=>{
+    const map={};
+    if(!blockConfig?.startDate)return map;
+    const start=new Date(blockConfig.startDate);
+    weeksArr.forEach(week=>{
+      (sessions||[]).forEach(sess=>{
+        const dayIdx=weekSchedule?.sessions?.[week]?.[sess.id]??sess.day_of_week??null;
+        if(dayIdx==null)return;
+        const d=new Date(start);d.setDate(start.getDate()+(week-1)*7+dayIdx);
+        const dk=toKey(d);if(!map[dk])map[dk]=[];
+        const done=(completedSessions[week]||[]).includes(sess.id);
+        map[dk].push({type:'muscu',sessId:sess.id,week,done,sess});
+      });
+      const wkKeys=energyWeekPlan[week]||[];
+      (energySessions||[]).forEach(sess=>{
+        if(!wkKeys.includes(sess.session_key))return;
+        const dayIdx=energyDayPlan[week]?.[sess.session_key]??null;
+        if(dayIdx==null)return;
+        const d=new Date(start);d.setDate(start.getDate()+(week-1)*7+dayIdx);
+        const dk=toKey(d);if(!map[dk])map[dk]=[];
+        map[dk].push({type:'energy',sessId:sess.session_key,week,done:false,sess});
+      });
+    });
+    return map;
+  },[sessions,completedSessions,blockConfig,weekSchedule,energySessions,energyWeekPlan,energyDayPlan]);
+  const firstDay=new Date(vm.y,vm.m,1);const lastDay=new Date(vm.y,vm.m+1,0);
+  const startOffset=(firstDay.getDay()+6)%7;
+  const cells=[];
+  for(let i=0;i<startOffset;i++)cells.push(null);
+  for(let d=1;d<=lastDay.getDate();d++)cells.push(new Date(vm.y,vm.m,d));
+  while(cells.length%7!==0)cells.push(null);
+  const prevM=()=>{setSelDk(null);setVm(v=>{const nm=v.m===0?11:v.m-1;const ny=v.m===0?v.y-1:v.y;return{y:ny,m:nm};});};
+  const nextM=()=>{setSelDk(null);setVm(v=>{const nm=v.m===11?0:v.m+1;const ny=v.m===11?v.y+1:v.y;return{y:ny,m:nm};});};
+  const toggleDayOff=dk=>{
+    const cur=calEvs[dk]||[];const has=cur.some(e=>e.type==='dayoff');
+    const next=has?cur.filter(e=>e.type!=='dayoff'):[...cur,{type:'dayoff',id:String(Date.now())}];
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:next.length?next:undefined}});
+  };
+  const saveEvent=(dk,ev)=>{
+    const cur=calEvs[dk]||[];
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:[...cur,{...ev,id:String(Date.now())}]}});
+  };
+  const removeEvent=(dk,id)=>{
+    const cur=(calEvs[dk]||[]).filter(e=>e.id!==id);
+    setWeekSchedule({...weekSchedule,calendarEvents:{...calEvs,[dk]:cur.length?cur:undefined}});
+  };
+  const getWeekForDate=date=>{
+    if(!blockConfig?.startDate)return null;
+    const start=new Date(blockConfig.startDate);
+    const diff=Math.floor((date-start)/86400000);
+    if(diff<0||diff>=tw*7)return null;
+    return Math.floor(diff/7)+1;
+  };
+  const handleDragStart=(e,item)=>{setDragging(item);e.dataTransfer.effectAllowed='move';e.stopPropagation();};
+  const handleDragEnd=()=>{setDragging(null);setDragOverDk(null);};
+  const handleDragOver=(e,date)=>{
+    if(!dragging||!date||dragging.type!=='muscu')return;
+    const tw2=getWeekForDate(date);
+    if(tw2===null||tw2!==dragging.week)return;
+    e.preventDefault();e.dataTransfer.dropEffect='move';
+    setDragOverDk(toKey(date));
+  };
+  const handleDrop=(e,date)=>{
+    e.preventDefault();
+    if(!dragging||!date||dragging.type!=='muscu')return;
+    const tw2=getWeekForDate(date);
+    if(tw2===null||tw2!==dragging.week)return;
+    const dayIdx=(date.getDay()+6)%7;
+    const prev=weekSchedule||{};const prevSess=prev.sessions||{};
+    const wMap={...(prevSess[dragging.week]||{}),[dragging.sessId]:dayIdx};
+    setWeekSchedule({...prev,sessions:{...prevSess,[dragging.week]:wMap}});
+    setDragging(null);setDragOverDk(null);
+  };
+
+  // Données du jour sélectionné
+  const selEvs=selDk?dayEvs(selDk):[];
+  const selSess=selDk?sessMap[selDk]||[]:[];
+  const hasDayOff=selEvs.some(e=>e.type==='dayoff');
+  const sportEvs=selEvs.filter(e=>e.type!=='dayoff');
+  const selWell=selDk?getWell(selDk):null;
+  const selScore=calcScore(selWell);
+  const selNutr=selDk?getNutr(selDk):null;
+  const selDateLabel=selDk?(()=>{const[sy,sm,sd]=[+selDk.slice(0,4),+selDk.slice(4,6)-1,+selDk.slice(6,8)];return new Date(sy,sm,sd).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});})():null;
+
+  return(<div style={{background:C.s1,borderRadius:18,border:'1px solid '+C.brd,overflow:'hidden',marginBottom:14}}>
+    {/* En-tête */}
+    <div style={{padding:'14px 16px 12px',borderBottom:'1px solid '+C.brd+'80'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{fontSize:15,fontWeight:800,color:C.tx,letterSpacing:'-0.2px'}}>{MONTHS_FR[vm.m]} <span style={{color:C.tx3,fontWeight:500}}>{vm.y}</span></div>
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <button onClick={prevM} style={{width:28,height:28,borderRadius:8,border:'1px solid '+C.brdL,background:C.s2,color:C.tx2,fontSize:15,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center'}}>‹</button>
+          <button onClick={()=>{setSelDk(null);setVm({y:new Date().getFullYear(),m:new Date().getMonth()});}} style={{padding:'4px 10px',borderRadius:7,border:'1px solid '+C.brdL,background:C.s2,color:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Auj.</button>
+          <button onClick={nextM} style={{width:28,height:28,borderRadius:8,border:'1px solid '+C.brdL,background:C.s2,color:C.tx2,fontSize:15,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center'}}>›</button>
+        </div>
+      </div>
+    </div>
+    {/* Jours de semaine */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:0,borderBottom:'1px solid '+C.brd+'60',padding:'0 2px'}}>
+      {DAYS_S.map(d=><div key={d} style={{textAlign:'center',fontSize:9,fontWeight:700,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',padding:'6px 0'}}>{d}</div>)}
+    </div>
+    {/* Grille mensuelle */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:0}}>
+      {cells.map((date,i)=>{
+        if(!date)return<div key={'e'+i} style={{minHeight:88,borderRight:i%7<6?'1px solid '+C.brd+'30':'none',borderBottom:'1px solid '+C.brd+'30'}}/>;
+        const dk=toKey(date);
+        const isToday=dk===todKey;
+        const isSel=selDk===dk;
+        const isDragOver=dragOverDk===dk;
+        const isPast=date<new Date(new Date().setHours(0,0,0,0))&&!isToday;
+        const sessList=sessMap[dk]||[];
+        const evs=dayEvs(dk);
+        const isDayOff=evs.some(e=>e.type==='dayoff');
+        const sports=evs.filter(e=>e.type!=='dayoff');
+        const well=getWell(dk);
+        const ws=calcScore(well);
+        const nutr=getNutr(dk);
+        const canDrop=dragging&&getWeekForDate(date)===dragging?.week;
+        const allDone=sessList.length>0&&sessList.filter(s=>s.type==='muscu').every(s=>s.done);
+        const hasMissed=isPast&&sessList.filter(s=>s.type==='muscu').some(s=>!s.done);
+        const bgCell=isDayOff?C.rS+'55':isToday?C.acS+'60':isSel?C.acS+'40':allDone&&sessList.length>0?C.g+'08':hasMissed?C.r+'08':'transparent';
+        return(<div key={dk}
+          onClick={()=>!dragging&&setSelDk(isSel?null:dk)}
+          onDragOver={e=>handleDragOver(e,date)}
+          onDrop={e=>handleDrop(e,date)}
+          onDragLeave={()=>setDragOverDk(null)}
+          style={{
+            minHeight:88,position:'relative',
+            background:bgCell,
+            borderRight:i%7<6?'1px solid '+C.brd+'30':'none',
+            borderBottom:'2px solid '+(isSel?C.ac:isToday?C.ac+'80':'transparent'),
+            padding:'5px 4px 4px',cursor:dragging?'crosshair':'pointer',
+            transition:'background 0.1s',userSelect:'none',overflow:'hidden',
+          }}>
+          {/* Overlay drag — filtre coloré sur le survol */}
+          {isDragOver&&canDrop&&<div style={{position:'absolute',inset:0,background:C.acS,border:'2px solid '+C.ac,borderRadius:0,zIndex:2,pointerEvents:'none',boxShadow:'inset 0 0 0 1px '+C.ac+'60'}}/>}
+          {/* Trait aujourd'hui à gauche */}
+          {isToday&&<div style={{position:'absolute',top:4,left:0,width:2,height:'calc(100% - 8px)',borderRadius:2,background:C.ac}}/>}
+          {/* Numéro */}
+          <div style={{fontSize:isToday?15:12,fontWeight:isToday?800:400,color:isToday?C.ac:isDayOff?C.r:isPast?C.tx3:C.tx,textAlign:'center',lineHeight:1,marginBottom:3}}>
+            {date.getDate()}
+            {isDayOff&&<span style={{fontSize:7,color:C.r,marginLeft:2,fontWeight:700,verticalAlign:'top'}}>off</span>}
+          </div>
+          {/* Séances */}
+          <div style={{display:'flex',flexDirection:'column',gap:2,marginBottom:2,padding:'0 1px'}}>
+            {sessList.slice(0,3).map((s,j)=>{
+              const missed=isPast&&!s.done&&s.type==='muscu';
+              const col=s.type==='energy'?C.coach:s.done?C.g:missed?C.r:C.b;
+              const indicator=s.type==='energy'?'⚡':s.done?'✓':missed?'✗':'·';
+              const isDraggingThis=dragging?.sessId===s.sessId&&dragging?.week===s.week;
+              return(<div key={j}
+                draggable={s.type==='muscu'}
+                onDragStart={e=>handleDragStart(e,s)}
+                onDragEnd={handleDragEnd}
+                onClick={e=>{e.stopPropagation();if(s.type==='muscu')setSessDetail({sessId:s.sessId,week:s.week});}}
+                style={{fontSize:8,fontWeight:700,color:col,background:col+'22',borderRadius:4,padding:'2px 4px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:s.type==='muscu'?'grab':'default',opacity:isDraggingThis?0.25:1,display:'flex',alignItems:'center',gap:2,lineHeight:1.5}}>
+                <span style={{flexShrink:0}}>{indicator}</span>
+                <span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{s.sess?.short||s.sessId}</span>
+              </div>);
+            })}
+            {sessList.length>3&&<div style={{fontSize:7,color:C.tx3,textAlign:'center'}}>+{sessList.length-3}</div>}
+          </div>
+          {/* Événements sport — violet, avec label tronqué */}
+          {sports.slice(0,2).map((ev,j)=><div key={j} style={{display:'flex',alignItems:'center',gap:2,background:C.acS,border:'1px solid '+C.ac+'40',borderRadius:4,padding:'2px 4px',marginBottom:1,overflow:'hidden'}}>
+            <span style={{fontSize:8,flexShrink:0}}>{ev.emoji}</span>
+            <span style={{fontSize:7,fontWeight:700,color:C.ac,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.label}</span>
+          </div>)}
+          {/* Wellness dot */}
+          {ws!==null&&<div style={{width:16,height:16,borderRadius:'50%',background:wColor(ws),margin:'2px auto 0',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 1px 3px '+wColor(ws)+'50'}}>
+            <span style={{fontSize:6,fontWeight:800,color:'#fff',lineHeight:1}}>{ws}</span>
+          </div>}
+          {/* Nutrition */}
+          {nutr&&<div style={{textAlign:'center',fontSize:8,marginTop:1}}>🍽</div>}
+        </div>);
+      })}
+    </div>
+
+    {/* Panneau jour sélectionné */}
+    {selDk&&<div style={{borderTop:'1px solid '+C.brd+'80',background:C.s2}}>
+      {/* Header */}
+      <div style={{padding:'10px 14px 8px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:C.tx,textTransform:'capitalize'}}>{selDateLabel}</div>
+          {!blockConfig?.startDate&&<div style={{fontSize:9,color:C.o,marginTop:2}}>Définis une date de début de bloc pour voir les séances.</div>}
+        </div>
+        <button onClick={()=>setSelDk(null)} style={{background:'none',border:'none',color:C.tx3,cursor:'pointer',fontSize:22,lineHeight:1,padding:'0 4px'}}>×</button>
+      </div>
+      {/* Cartes résumé — cliquables */}
+      <div style={{padding:'0 14px 10px',display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+        {/* Wellness */}
+        {selWell&&selScore!==null&&<div onClick={()=>setPreviewWell(selWell)} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:wColor(selScore)+'15',border:'1px solid '+wColor(selScore)+'30',cursor:'pointer'}}>
+          <div style={{width:24,height:24,borderRadius:'50%',background:wColor(selScore),display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 1px 4px '+wColor(selScore)+'60'}}>
+            <span style={{fontSize:9,fontWeight:800,color:'#fff'}}>{selScore}</span>
+          </div>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:wColor(selScore)}}>{wLabel(selScore)}</div>
+            <div style={{fontSize:9,color:C.tx3}}>forme ↗</div>
+          </div>
+        </div>}
+        {/* Séances muscu */}
+        {selSess.filter(s=>s.type==='muscu').map((item,i)=>{
+          const missed=item.sess&&!item.done;
+          const dc=item.done?C.g:missed?C.r:C.b;
+          const log=sessionLogs[item.sessId+'_'+item.week];
+          return(<div key={i} onClick={()=>setSessDetail({sessId:item.sessId,week:item.week})} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:dc+'12',border:'1px solid '+dc+'30',cursor:'pointer'}}>
+            <span style={{fontSize:14}}>{item.done?'✅':missed?'❌':'🏋'}</span>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:dc}}>{item.sess?.name||item.sessId}</div>
+              {log?.duration?<div style={{fontSize:9,color:C.tx3}}>{fmtDur(log.duration)}</div>:<div style={{fontSize:9,color:C.tx3}}>S{item.week}</div>}
+            </div>
+            <span style={{fontSize:9,color:C.tx3,marginLeft:'auto'}}>↗</span>
+          </div>);
+        })}
+        {/* Séances énergie */}
+        {selSess.filter(s=>s.type==='energy').map((item,i)=><div key={'e'+i} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:C.coach+'12',border:'1px solid '+C.coach+'30'}}>
+          <span style={{fontSize:14}}>⚡</span>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.coach}}>{item.sess?.session_label||'Séance énergie'}</div>
+            <div style={{fontSize:9,color:C.tx3}}>S{item.week}</div>
+          </div>
+        </div>)}
+        {/* Nutrition */}
+        {selNutr&&<div onClick={()=>setPreviewNutr(selNutr)} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:10,background:C.o+'12',border:'1px solid '+C.o+'30',cursor:'pointer'}}>
+          <span style={{fontSize:14}}>🍽</span>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.o}}>{selNutr.total_calories_consumed!=null?selNutr.total_calories_consumed+' kcal':'Nutrition'}</div>
+            <div style={{fontSize:9,color:C.tx3}}>consommées ↗</div>
+          </div>
+        </div>}
+        {/* Événements */}
+        {sportEvs.length>0&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'5px 10px',borderRadius:10,background:C.bS,border:'1px solid '+C.b+'30',flexWrap:'wrap'}}>
+          {sportEvs.map(ev=><div key={ev.id} style={{display:'flex',alignItems:'center',gap:4}}>
+            <span style={{fontSize:12}}>{ev.emoji}</span>
+            <span style={{fontSize:10,fontWeight:600,color:C.b}}>{ev.label}</span>
+            <button onClick={e=>{e.stopPropagation();removeEvent(selDk,ev.id);}} style={{background:'none',border:'none',color:C.r,cursor:'pointer',fontSize:13,padding:'0 2px',lineHeight:1}}>×</button>
+          </div>)}
+        </div>}
+        {!selWell&&!selSess.length&&!selNutr&&!sportEvs.length&&<span style={{fontSize:11,color:C.tx3}}>Aucune donnée pour ce jour</span>}
+      </div>
+      {/* Actions */}
+      <div style={{borderTop:'1px solid '+C.brd+'60',padding:'10px 14px 12px',display:'flex',gap:6,flexWrap:'wrap'}}>
+        <button onClick={()=>toggleDayOff(selDk)} style={{padding:'6px 12px',borderRadius:20,border:'1px solid '+(hasDayOff?C.r+'60':C.brdL),background:hasDayOff?C.rS:'transparent',color:hasDayOff?C.r:C.tx3,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+          {hasDayOff?'✕ Retirer OFF':'+ Jour OFF'}
+        </button>
+        <button onClick={()=>setAddEv(addEv?null:{label:'',eventType:'match',emoji:'⚔️'})} style={{padding:'6px 12px',borderRadius:20,border:'1px solid '+C.b+'40',background:addEv?C.bS:'transparent',color:C.b,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+          {addEv?'Annuler':'+ Événement'}
+        </button>
+      </div>
+      {addEv&&<div style={{padding:'0 14px 14px'}}>
+        <div style={{padding:'12px',borderRadius:10,background:C.s1,border:'1px solid '+C.brd}}>
+          <input value={addEv.label} onChange={e=>setAddEv(f=>({...f,label:e.target.value}))} placeholder="Nom de l'événement..." style={{width:'100%',padding:'8px 10px',borderRadius:7,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:'inherit',marginBottom:8,boxSizing:'border-box'}}/>
+          <div style={{display:'flex',gap:4,marginBottom:8,flexWrap:'wrap'}}>
+            {EV_TYPES.map(t=><button key={t.k} onClick={()=>setAddEv(f=>({...f,eventType:t.k,emoji:t.e}))} style={{padding:'5px 10px',borderRadius:7,border:'1px solid '+(addEv.eventType===t.k?C.b+'60':C.brdL),background:addEv.eventType===t.k?C.bS:'transparent',color:addEv.eventType===t.k?C.b:C.tx3,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{t.e} {t.l}</button>)}
+          </div>
+          <button onClick={()=>{if(addEv.label.trim()){saveEvent(selDk,{...addEv,type:'sport_event'});setAddEv(null);}}} style={{width:'100%',padding:'8px 0',borderRadius:9,border:'none',background:C.b,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Ajouter</button>
+        </div>
+      </div>}
+    </div>}
+
+    {/* Modal wellness (bottom sheet) */}
+    {previewWell&&<div style={{position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setPreviewWell(null)}>
+      <div style={{width:'100%',maxWidth:500,background:C.s1,borderRadius:'20px 20px 0 0',padding:'20px 20px 32px',overflowY:'auto',maxHeight:'80vh'}} onClick={e=>e.stopPropagation()}>
+        {(()=>{const w=previewWell;const ws2=calcScore(w);const wc=wColor(ws2);return(<>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <div style={{width:44,height:44,borderRadius:'50%',background:wc,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><span style={{fontSize:15,fontWeight:800,color:'#fff'}}>{ws2}</span></div>
+              <div><div style={{fontSize:15,fontWeight:700,color:wc}}>{wLabel(ws2)}</div><div style={{fontSize:10,color:C.tx3}}>Forme du jour</div></div>
+            </div>
+            <button onClick={()=>setPreviewWell(null)} style={{background:'none',border:'none',color:C.tx3,fontSize:24,cursor:'pointer',lineHeight:1}}>×</button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:5,marginBottom:14}}>
+            {[{l:'Récup.',v:w.fatigue,e:'😴'},{l:'Sommeil',v:w.sommeil,e:'💤'},{l:'Stress',v:w.stress,e:'🧠'},{l:'Énergie',v:w.energie,e:'⚡'},{l:'DOMS',v:w.doms,e:'💪'}].map(item=>{const iv=item.v||0;const ic=iv>=4?C.g:iv>=3?C.o:C.r;return(<div key={item.l} style={{background:C.s2,borderRadius:10,padding:'8px 4px',textAlign:'center',border:'1px solid '+ic+'20'}}><div style={{fontSize:13,marginBottom:2}}>{item.e}</div><div style={{fontSize:15,fontWeight:800,color:ic}}>{item.v||'—'}<span style={{fontSize:8,color:C.tx3}}>/5</span></div><div style={{fontSize:8,color:C.tx3,marginTop:1}}>{item.l}</div></div>);})}
+          </div>
+          {(w.coucher||w.reveil||w.sleepDur!=null)&&<div style={{padding:'10px 14px',borderRadius:10,background:C.s2,marginBottom:10}}><div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:8}}>Sommeil</div><div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>{w.coucher&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',borderRadius:8,background:C.bg}}><span style={{fontSize:11}}>🌙</span><span style={{fontSize:12,fontWeight:600,color:C.tx}}>{String(w.coucher.h).padStart(2,'0')}:{String(w.coucher.m).padStart(2,'0')}</span></div>}{w.reveil&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',borderRadius:8,background:C.bg}}><span style={{fontSize:11}}>☀️</span><span style={{fontSize:12,fontWeight:600,color:C.tx}}>{String(w.reveil.h).padStart(2,'0')}:{String(w.reveil.m).padStart(2,'0')}</span></div>}{w.sleepDur!=null&&<div style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',borderRadius:8,background:C.b+'18'}}><span style={{fontSize:11}}>💤</span><span style={{fontSize:12,fontWeight:700,color:C.b}}>{typeof w.sleepDur==='number'?w.sleepDur.toFixed(1):w.sleepDur}h</span></div>}</div>{w.sleepInterrupt===true&&<div style={{marginTop:6,fontSize:11,color:C.o,padding:'4px 8px',borderRadius:6,background:C.o+'12'}}>⚠ Réveil nocturne{w.sleepInterruptNote?' — '+w.sleepInterruptNote:''}</div>}</div>}
+          {w.poids&&<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',borderRadius:10,background:C.s2,marginBottom:10}}><span style={{fontSize:12}}>⚖️</span><div><div style={{fontSize:12,fontWeight:700,color:C.tx}}>{w.poids} kg</div><div style={{fontSize:9,color:C.tx3}}>Poids ce matin</div></div></div>}
+          {w.domsZones?.length>0&&<div style={{padding:'10px 14px',borderRadius:10,background:C.o+'10',border:'1px solid '+C.o+'30',marginBottom:10}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:'uppercase',marginBottom:6}}>Zones DOMS</div><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{w.domsZones.map(id=>{const z=ALL_BZ.find(z=>z.id===id);return z?<span key={id} style={{fontSize:10,padding:'3px 8px',borderRadius:6,background:C.o+'20',color:C.o}}>{z.label}</span>:null;})}</div></div>}
+          {w.injComment&&<div style={{padding:'10px 14px',borderRadius:10,background:C.r+'10',border:'1px solid '+C.r+'30',fontSize:11,color:C.r}}>🩺 {w.injComment}</div>}
+        </>);})()}
+      </div>
+    </div>}
+
+    {/* Modal nutrition (bottom sheet) */}
+    {previewNutr&&<div style={{position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setPreviewNutr(null)}>
+      <div style={{width:'100%',maxWidth:500,background:C.s1,borderRadius:'20px 20px 0 0',padding:'20px 20px 32px',overflowY:'auto',maxHeight:'80vh'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.tx}}>Alimentation</div>
+          <button onClick={()=>setPreviewNutr(null)} style={{background:'none',border:'none',color:C.tx3,fontSize:24,cursor:'pointer',lineHeight:1}}>×</button>
+        </div>
+        {(()=>{const n=previewNutr;return(<>
+          {n.total_calories_consumed!=null&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',borderRadius:10,background:C.o+'12',border:'1px solid '+C.o+'25',marginBottom:12}}><span style={{fontSize:11,color:C.tx3}}>Total consommé</span><span style={{fontSize:20,fontWeight:800,color:C.o}}>{n.total_calories_consumed}<span style={{fontSize:11,fontWeight:400,color:C.tx3}}> kcal</span></span></div>}
+          {(n.glucides_consumed!=null||n.lipides_consumed!=null||n.proteines_consumed!=null)&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>{[{l:'Glucides',v:n.glucides_consumed,c:C.b,e:'🍞'},{l:'Lipides',v:n.lipides_consumed,c:C.o,e:'🥑'},{l:'Protéines',v:n.proteines_consumed,c:C.g,e:'🥩'}].map(m=><div key={m.l} style={{background:C.s2,borderRadius:10,padding:'12px 6px',textAlign:'center',border:'1px solid '+m.c+'20'}}><div style={{fontSize:14,marginBottom:4}}>{m.e}</div><div style={{fontSize:16,fontWeight:800,color:m.c}}>{m.v!=null?Math.round(m.v):'-'}<span style={{fontSize:9,color:C.tx3}}>g</span></div><div style={{fontSize:10,color:C.tx3,marginTop:2}}>{m.l}</div></div>)}</div>}
+        </>);})()}
+      </div>
+    </div>}
+
+    {/* SessionDetailModal — toutes séances (faites ou planifiées) */}
+    {sessDetail&&<SessionDetailModal sid={sessDetail.sessId} wk={sessDetail.week} sessions={sessions} exos={exos} sets={sets} completedSessions={completedSessions} allMethods={allMethods} blockConfig={blockConfig} currentWeek={sessDetail.week} onClose={()=>setSessDetail(null)}/>}
+  </div>);
+}
+
 // ── WeekCalendar ──────────────────────────────────────────────────────────────
 
 function WeekCalendar({sessions,completedSessions,currentWeek,weekSchedule,setWeekSchedule,C,wellnessHistory={},weightLog={},sessionLogs={},nutritionLog={},exos={},energySessions=[],energyWeekPlan={},energyDayPlan={},testSessions=[],visibilitySettings={}}){
@@ -4344,20 +4695,36 @@ function HabitCreateModal({onSave,onClose,initial=null}){
 function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}){
   const[showCreate,setShowCreate]=useState(false);
   const[menuId,setMenuId]=useState(null);
-  // Vue glissante J-1 → J+6 (7 jours)
-  const wdays=Array.from({length:7},(_,i)=>hAddDays(new Date(),-1+i));
+  const[editHabit,setEditHabit]=useState(null);
+  const wdays=getHabitWeekDays();
   const todayISO=hISO();
   const DAY_LABELS=['Di','Lu','Ma','Me','Je','Ve','Sa'];
   const dayLabel=d=>{const n=d.getDay();return DAY_LABELS[n];};
   const handleCreate=async d=>{
-    const{data:h,error}=await supabase.from('habits').insert({...d,athlete_id:athleteId}).select().single();
+    const{data:h,error}=await supabase.from('habits').insert({...d,athlete_id:athleteId,sort_order:habits.length}).select().single();
     if(!error&&h)setHabits(p=>[...p,h]);
     setShowCreate(false);
+  };
+  const handleEdit=async(id,d)=>{
+    const{error}=await supabase.from('habits').update({name:d.name,emoji:d.emoji,color:d.color}).eq('id',id);
+    if(!error)setHabits(p=>p.map(h=>h.id===id?{...h,...d}:h));
+    setEditHabit(null);
   };
   const handleDelete=async id=>{
     await supabase.from('habits').update({is_active:false}).eq('id',id);
     setHabits(p=>p.filter(h=>h.id!==id));
     setMenuId(null);
+  };
+  const handleMove=async(idx,dir)=>{
+    const ni=idx+dir;
+    if(ni<0||ni>=habits.length)return;
+    const next=[...habits];[next[idx],next[ni]]=[next[ni],next[idx]];
+    setHabits(next);
+    setMenuId(null);
+    await Promise.all([
+      supabase.from('habits').update({sort_order:idx}).eq('id',next[idx].id),
+      supabase.from('habits').update({sort_order:ni}).eq('id',next[ni].id),
+    ]);
   };
   return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:`1px solid ${C.brd}`,marginBottom:12}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
@@ -4374,7 +4741,7 @@ function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}
             <div style={{fontSize:9,fontWeight:isToday?700:400,color:isToday?C.ac:isPast?C.tx2:C.tx3+"80"}}>{d.getDate()}</div>
           </div>);})}
         </div>
-        {habits.map(h=>{
+        {habits.map((h,idx)=>{
           const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
           return(<div key={h.id} style={{marginBottom:12}}>
             <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,30px)',gap:3,alignItems:'center'}}>
@@ -4391,15 +4758,19 @@ function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}
               })}
             </div>
             <div style={{fontSize:10,color:streak>0?h.color:C.tx3,fontWeight:streak>0?600:400,paddingLeft:2,marginTop:3}}>{streakMsg(streak)}</div>
-            {menuId===h.id&&!viewOnly&&<div style={{marginTop:6,padding:'8px 10px',borderRadius:10,background:C.s2,border:`1px solid ${C.brd}`,display:'flex',gap:8}}>
-              <button onClick={()=>handleDelete(h.id)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.r}40`,background:C.rS,color:C.r,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Supprimer</button>
-              <button onClick={()=>setMenuId(null)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx3,fontSize:11,cursor:'pointer',fontFamily:'inherit'}}>Annuler</button>
+            {menuId===h.id&&!viewOnly&&<div style={{marginTop:6,padding:'8px 10px',borderRadius:10,background:C.s2,border:`1px solid ${C.brd}`,display:'flex',flexWrap:'wrap',gap:6}}>
+              <button onClick={()=>{setEditHabit(h);setMenuId(null);}} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.ac}40`,background:C.acS,color:C.ac,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',minWidth:70}}>Modifier</button>
+              {idx>0&&<button onClick={()=>handleMove(idx,-1)} style={{width:34,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx2,fontSize:14,cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}>↑</button>}
+              {idx<habits.length-1&&<button onClick={()=>handleMove(idx,1)} style={{width:34,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx2,fontSize:14,cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}>↓</button>}
+              <button onClick={()=>handleDelete(h.id)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.r}40`,background:C.rS,color:C.r,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',minWidth:70}}>Supprimer</button>
+              <button onClick={()=>setMenuId(null)} style={{flex:1,padding:'7px 0',borderRadius:8,border:`1px solid ${C.brdL}`,background:'transparent',color:C.tx3,fontSize:11,cursor:'pointer',fontFamily:'inherit',minWidth:70}}>Annuler</button>
             </div>}
           </div>);
         })}
       </div>
     )}
     {showCreate&&<HabitCreateModal onSave={handleCreate} onClose={()=>setShowCreate(false)}/>}
+    {editHabit&&<HabitCreateModal initial={editHabit} onSave={d=>handleEdit(editHabit.id,d)} onClose={()=>setEditHabit(null)}/>}
   </div>);
 }
 
@@ -4416,7 +4787,7 @@ function HabitTrackerProfile({habits,habitLogs,onToggle,viewOnly}){
   const renderWeek=()=>(<div>
     <div style={{display:'grid',gridTemplateColumns:'1fr repeat(7,34px)',gap:4,marginBottom:10}}>
       <div/>
-      {wdays.map((d,i)=>{const iso=hISO(d);const isT=iso===todayISO;return(<div key={i} style={{textAlign:'center'}}><div style={{fontSize:9,fontWeight:600,color:isT?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[i]}</div><div style={{fontSize:11,color:isT?C.ac:C.tx2,fontWeight:isT?700:400}}>{d.getDate()}</div></div>);})}
+      {wdays.map((d,i)=>{const iso=hISO(d);const isT=iso===todayISO;return(<div key={i} style={{textAlign:'center'}}><div style={{fontSize:9,fontWeight:600,color:isT?C.ac:C.tx3,textTransform:'uppercase'}}>{DL[(d.getDay()+6)%7]}</div><div style={{fontSize:11,color:isT?C.ac:C.tx2,fontWeight:isT?700:400}}>{d.getDate()}</div></div>);})}
     </div>
     {habits.map(h=>{
       const logs=habitLogs[h.id]||[];const streak=calcHabitStreak(logs);
@@ -4621,7 +4992,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
   useEffect(()=>{
     if(!athleteId)return;
-    supabase.from('habits').select('*').eq('athlete_id',athleteId).eq('is_active',true).order('created_at').then(({data})=>{if(data)setHabits(data);});
+    supabase.from('habits').select('*').eq('athlete_id',athleteId).eq('is_active',true).order('sort_order',{ascending:true,nullsFirst:false}).then(({data})=>{if(data)setHabits(data);});
     const cutoff=hAddDays(new Date(),-365).toISOString().slice(0,10);
     supabase.from('habit_logs').select('habit_id,date').eq('athlete_id',athleteId).gte('date',cutoff).then(({data})=>{if(data){const l={};data.forEach(r=>{if(!l[r.habit_id])l[r.habit_id]=[];l[r.habit_id].push(r.date);});setHabitLogs(l);}});
     supabase.from('profiles').select('habit_tracker_enabled').eq('id',athleteId).single().then(({data})=>{if(data)setHabitEnabled(!!data.habit_tracker_enabled);});
@@ -4753,14 +5124,15 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const activeInjuries=injuries.filter(i=>i.status!=="Guerie");
 
   const switchMode=m=>{setMode(m);if(m==="coach")setCoachTab("prog");else setTab("dash");};
-  const autoProgressOnComplete=(sessId,completedWeek,currentExos)=>{
-    const sessExos=(currentExos||exos)[sessId]||[];
-    if(!sessExos.length)return;
+  // Calcule la surcharge depuis le réel — fonction pure, ne modifie pas l'état
+  const computeAutoProgress=(sessId,completedWeek,srcExos)=>{
+    const sessExos=(srcExos||exos)[sessId]||[];
+    if(!sessExos.length)return null;
     const tierCfgL=blockConfig?.tierConfig||DEF_TIER_CONFIG;
     const dwL=blockConfig?.deloadWeek||tw;
     const futureWeeks=weeksArr.filter(w=>w>completedWeek);
     const futureTrainWeeks=futureWeeks.filter(w=>w!==dwL);
-    if(!futureWeeks.length)return;
+    if(!futureWeeks.length)return null;
     let changed=false;
     const newSessExos=sessExos.map(ex=>{
       const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");
@@ -4770,7 +5142,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       const tier=getExTier(ex.name,ex);
       const tc=tierCfgL[tier]||tierCfgL[3];
       const plannedWd=ex.weeks[completedWeek]||{};
-      // Compute effective performance from done rows
       const mainRows=doneRows.filter(r=>!r.type||r.type==="set");
       const refRows=mainRows.length?mainRows:doneRows;
       const kgVals=refRows.map(r=>r.kg||0).filter(v=>v>0);
@@ -4783,7 +5154,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       const baseSets=mainRows.length||plannedWd.sets||3;
       const newWeeks={...ex.weeks};
       futureWeeks.forEach(w=>{
-        if((completedSessions[w]||[]).includes(sessId))return;// skip already-done weeks
+        if((completedSessions[w]||[]).includes(sessId))return;
         const existingWd=newWeeks[w]||{};
         const preserve={coachNote:existingWd.coachNote,tempo:existingWd.tempo,method:existingWd.method,methodParams:existingWd.methodParams};
         const kgBase=basePdc?undefined:baseKg;
@@ -4791,7 +5162,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           const dlPct=tc.deloadPct||40;
           newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:Math.round(kgBase*(1-dlPct/100)/2.5)*2.5}:{})),sets:Math.max(2,Math.round(baseSets*0.6)),rir:(tc.rirStart||2)+2,repsRange:String(baseReps)};
         }else{
-          const wIdx=futureTrainWeeks.indexOf(w);// 0-based among future training weeks
+          const wIdx=futureTrainWeeks.indexOf(w);
           const total=futureTrainWeeks.length;
           const kgStep=tc.kgStep??2.5;
           if(tc.mode==="rir"){
@@ -4815,13 +5186,31 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       });
       return{...ex,weeks:newWeeks};
     });
-    if(changed){
-      const newExos={...(currentExos||exos),[sessId]:newSessExos};
+    if(!changed)return null;
+    return{...(srcExos||exos),[sessId]:newSessExos};
+  };
+  const autoProgressOnComplete=(sessId,completedWeek,currentExos)=>{
+    const newExos=computeAutoProgress(sessId,completedWeek,currentExos||exos);
+    if(newExos){
       setExos(newExos);
       setAutoProgNotif(`Progression S${completedWeek+1}→S${tw} mise à jour`);
       setTimeout(()=>setAutoProgNotif(null),3500);
     }
   };
+  // Synchronisation au chargement : applique la surcharge réelle sur toutes les semaines avec des données réelles
+  useEffect(()=>{
+    if(!loaded)return;
+    let current=exos;let anyChanged=false;
+    weeksArr.forEach(week=>{
+      sessions.forEach(s=>{
+        const hasActual=(current[s.id]||[]).some(ex=>(sets[ex.id+"_"+week]||[]).some(r=>r.done&&(r.kg||0)>0));
+        if(!hasActual)return;
+        const result=computeAutoProgress(s.id,week,current);
+        if(result){current=result;anyChanged=true;}
+      });
+    });
+    if(anyChanged){setExos(current);setAutoProgNotif('Progression synchronisée depuis le réel');setTimeout(()=>setAutoProgNotif(null),3500);}
+  },[loaded]);// eslint-disable-line react-hooks/exhaustive-deps
   const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);autoProgressOnComplete(sessId,week);if(newW.length>=(weeklyTarget[week]||goals.sessionsPerWeek)){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
   const uncompleteSession=(sessId,week)=>setCompletedSessions({...completedSessions,[week]:(completedSessions[week]||[]).filter(s=>s!==sessId)});
   const[bankAddEx,setBankAddEx]=useState(null);const[bankAddMsg,setBankAddMsg]=useState('');
@@ -5202,6 +5591,8 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
             {dw>0&&<button onClick={()=>setBlockConfig(c=>({...c,deloadWeek:0}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:"transparent",color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>✕</button>}
           </div>
         </div>
+        {/* Calendrier mensuel */}
+        <MonthCalendar sessions={sessions} completedSessions={completedSessions} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} sets={sets} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} allMethods={allMethods} wellnessHistory={wellnessHistory} nutritionLog={nutritionLog} sessionLogs={sessionLogs} currentWeek={currentWeek} C={C}/>
         {/* Sous-onglets prog */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
           {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
@@ -5215,7 +5606,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
               <button onClick={()=>setShowTierModal(true)} style={{padding:"6px 10px",borderRadius:8,border:"1px solid "+C.o+"40",background:C.o+"12",color:C.o,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>⚙ Surcharge</button>
             </div>
           </div>
-          {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions}/>}
+          {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule}/>}
           {sessions.length>0&&<div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+C.brd}}>
             <button onClick={()=>setShowExoParams(p=>!p)} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:"1px solid "+C.brdL,background:showExoParams?C.acS:"transparent",color:showExoParams?C.ac:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:showExoParams?12:0}}>
               ⚙ Paramètres exercices{showExoParams?" ∧":" ∨"}
