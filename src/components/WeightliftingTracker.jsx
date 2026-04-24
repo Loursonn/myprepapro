@@ -10,6 +10,8 @@ import TestSessionView from "@/components/TestSessionView";
 import CoachPerfNotification from "@/components/coach/CoachPerfNotification";
 import EnergyExerciseBank from "@/components/coach/EnergyExerciseBank";
 import EnergySessionEditor from "@/components/coach/EnergySessionEditor";
+import { PlanningEditor } from "@/components/coach/PlanningEditor";
+import { PlanningOverview } from "@/components/coach/PlanningOverview";
 import * as XLSX from "xlsx";
 import { PDFDocument } from "pdf-lib";
 
@@ -4990,7 +4992,7 @@ function HabitTrackerProfile({habits,habitLogs,onToggle,viewOnly}){
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function App({athleteId,defaultMode,canToggleMode=true,userName,athleteProfile,onEditProfile,viewOnly=false}){
-  const{profile:myProfile}=useAuth();
+  const{user,profile:myProfile}=useAuth();
   const load=(k,fb)=>sLoad(k,fb,athleteId);
   const save=(k,v)=>sSave(k,v,athleteId);
   const[mode,setMode]=useState(defaultMode||"athlete");const[tab,setTab]=useState("dash");const[coachTab,setCoachTab]=useState("prog");const[logSubTab,setLogSubTab]=useState("muscu");const[testSubTab,setTestSubTab]=useState("musculation");const[banqueSubTab,setBanqueSubTab]=useState("muscu");const[progSubTab,setProgSubTab]=useState("muscu");const[energyEditorKey,setEnergyEditorKey]=useState(null);const[energySessions,setEnergySessions]=useState([]);const[energySessionsLoaded,setEnergySessionsLoaded]=useState(false);const[energyWeekPlan,setEnergyWeekPlan]=useState({});const[energyDayPlan,setEnergyDayPlan]=useState({});const[energyPlanLoaded,setEnergyPlanLoaded]=useState(false);const[drawerPrOpen,setDrawerPrOpen]=useState(false);const[drawerInjOpen,setDrawerInjOpen]=useState(false);
@@ -5669,10 +5671,11 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
         <CoachFourWeekCalendar sessions={sessions} completedSessions={completedSessions} currentWeek={currentWeek} C={C} wellnessHistory={wellnessHistory} sessionLogs={sessionLogs} energySessions={energySessions} energyWeekPlan={energyWeekPlan} energyDayPlan={energyDayPlan} setEnergyWeekPlan={setEnergyWeekPlan} setEnergyDayPlan={setEnergyDayPlan} testSessions={testSessions} visibilitySettings={visibilitySettings} onUpdateSessionDay={updateSessionDay} onUpdateSessionWeekDay={updateSessionWeekDay} onUpdateVisibility={setVisibilitySettings} athleteId={athleteId} blockConfig={blockConfig} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule} exos={exos} allMethods={allMethods}/>
         {/* Sous-onglets prog */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.brd,marginBottom:16}}>
-          {[{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
+          {[{k:"planification",l:"Planification"},{k:"muscu",l:"Musculation"},{k:"energie",l:"Énergétique"},{k:"specifique",l:"Spécifique"}].map(t=>(
             <button key={t.k} onClick={()=>{setProgSubTab(t.k);setEnergyEditorKey(null);}} style={{padding:"9px 18px",border:"none",borderBottom:"2px solid "+(progSubTab===t.k?C.coach:"transparent"),background:"transparent",color:progSubTab===t.k?C.coach:C.tx3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.3px",flexShrink:0}}>{t.l}</button>
           ))}
         </div>
+        {progSubTab==="planification"&&(<PlanningEditor athleteId={athleteId} coachId={user?.id} sessions={sessions}/>)}
         {progSubTab==="muscu"&&(<>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
             <div style={{fontSize:16,fontWeight:700}}>Musculation{blockConfig?.blockName&&<span style={{fontSize:11,color:C.b,fontWeight:600,marginLeft:8}}>{blockConfig.blockName} · {tw} sem.</span>}</div>
@@ -5705,6 +5708,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       {coachTab==="stats"&&(<>
         <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Suivi athlete</div>
         <div style={{fontSize:12,color:C.tx2,marginBottom:12}}>{sessions.length>0?(blockConfig?.blockName||"Programme")+" · S"+currentWeek+"/"+tw:"Aucun bloc actif"}</div>
+        <PlanningOverview athleteId={athleteId}/>
 
         {/* 1RM Progression */}
         <div style={{background:C.s1,borderRadius:14,padding:14,border:"1px solid "+C.brd,marginBottom:14}}>
