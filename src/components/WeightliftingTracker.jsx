@@ -472,7 +472,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
 
   if(!loaded)return(<div style={{background:C.bg,minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,fontFamily:"system-ui"}}><div style={{width:48,height:48,borderRadius:14,background:C.acS,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>~</div><div style={{fontSize:13,color:C.tx2}}>Chargement...</div></div>);
 
-  return(<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",color:C.tx,maxWidth:mode==="athlete"?480:"100%",margin:mode==="athlete"?"0 auto":0}}>
+  return(<div style={{background:C.bg,minHeight:"100vh",fontFamily:"'SF Pro Display',-apple-system,BlinkMacSystemFont,system-ui,sans-serif",color:C.tx,maxWidth:mode==="athlete"?480:"100%",margin:mode==="athlete"?"0 auto":0,display:mode==="coach"?"flex":undefined,flexDirection:mode==="coach"?"column":undefined}}>
 
     {drawerOpen&&mode==="athlete"&&(<>
       <div onClick={()=>setDrawerOpen(false)} style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(2px)"}}/>
@@ -778,7 +778,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     </div>)}
 
     <div style={{position:"sticky",top:0,zIndex:20,background:C.bg,borderBottom:"1px solid "+C.brd}}>
-      <div style={{padding:"8px "+(mode==="coach"?"40px":"16px")+" 0",display:"flex",alignItems:"center",justifyContent:"space-between",maxWidth:mode==="coach"?1400:"none",margin:mode==="coach"?"0 auto":"0"}}>
+      <div style={{padding:"8px "+(mode==="coach"?"16px":"16px")+" 8px",display:"flex",alignItems:"center",justifyContent:"space-between",maxWidth:"none",margin:"0"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{fontSize:14,fontWeight:700,letterSpacing:"-0.3px"}}>MyPrepaPro</div>
           {saveStatus&&<div style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:6,background:saveStatus==="saved"?C.gS:C.rS,color:saveStatus==="saved"?C.g:C.r}}>{saveStatus==="saved"?"OK":"Err"}</div>}
@@ -791,11 +791,97 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           {userName&&!myProfile?.is_admin&&<div style={{fontSize:11,color:C.tx3,fontWeight:500,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{userName}</div>}
         </div>
       </div>
-      <div style={{display:"flex",marginTop:4,maxWidth:mode==="coach"?1400:"none",margin:mode==="coach"?"0 auto":"unset",paddingLeft:mode==="coach"?40:0}}>{activeTabs.map(t=><button key={t.k} onClick={()=>setActiveTab(t.k)} style={tabS(t.k)}>{t.l}</button>)}</div>
+      {mode!=="coach"&&<div style={{display:"flex",maxWidth:"none",margin:"unset",paddingLeft:0}}>{activeTabs.map(t=><button key={t.k} onClick={()=>setActiveTab(t.k)} style={tabS(t.k)}>{t.l}</button>)}</div>}
     </div>
 
-    {mode==="coach"&&(<div style={{padding:"20px 40px "+(aiChatOpen?"calc(60vh + 40px)":"60px"),maxWidth:1400,margin:"0 auto"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:C.coachS,border:"1px solid "+C.coach+"30",marginBottom:20}}><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Mode Coach</div><div style={{fontSize:11,color:C.tx3}}>- Planification</div></div>
+    {mode==="coach"&&(<>
+      <style>{`
+        .coach-layout { display: flex; flex: 1; min-height: 0; }
+        .coach-sidebar {
+          width: clamp(180px, 16vw, 240px);
+          position: sticky; top: 48px;
+          height: calc(100vh - 48px);
+          overflow-y: auto; overflow-x: hidden;
+          flex-shrink: 0; align-self: flex-start;
+          display: flex; flex-direction: column;
+        }
+        .coach-sidebar-athlete { display: flex; flex-direction: column; }
+        .coach-sidebar-label { display: inline; }
+        .coach-sidebar-footer { display: block; }
+        .coach-sidebar-nav button {
+          display: flex; align-items: center; gap: 10px;
+          width: 100%; border: none; cursor: pointer;
+          font-family: inherit; text-align: left;
+          padding: 10px 14px;
+          transition: background 0.12s, color 0.12s;
+        }
+        .coach-content {
+          flex: 1; min-width: 0;
+          padding: clamp(16px, 2.5vw, 32px) clamp(16px, 3vw, 44px);
+        }
+        @media (max-width: 1100px) {
+          .coach-sidebar { width: clamp(56px, 14vw, 180px); }
+        }
+        @media (max-width: 900px) {
+          .coach-sidebar { width: 56px; }
+          .coach-sidebar-label { display: none; }
+          .coach-sidebar-athlete { display: none; }
+          .coach-sidebar-footer { display: none; }
+          .coach-sidebar-nav button { justify-content: center; padding: 12px 0; gap: 0; }
+          .coach-content { padding: 16px 14px; }
+        }
+        @media (max-width: 640px) {
+          .coach-layout { flex-direction: column; }
+          .coach-sidebar { width: 100%; height: auto; position: static; flex-direction: row; overflow-x: auto; top: 0; }
+          .coach-sidebar-nav { display: flex; flex-direction: row; padding: 0; flex: 1; }
+          .coach-sidebar-nav button { flex: 1; flex-direction: column; padding: 8px 4px; gap: 3px; justify-content: center; font-size: 9px; }
+          .coach-sidebar-nav button span:first-child { font-size: 18px; }
+          .coach-sidebar-label { display: inline; font-size: 9px; }
+          .coach-content { padding: 12px; }
+        }
+      `}</style>
+      <div className="coach-layout">
+      {/* ── Sidebar navigation ── */}
+      <div className="coach-sidebar" style={{borderRight:"1px solid "+C.brd,background:C.s1}}>
+        {/* Athlete info */}
+        {athleteProfile&&(<div className="coach-sidebar-athlete" style={{padding:"14px 12px",borderBottom:"1px solid "+C.brd}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:blockConfig?.blockName?10:0}}>
+            <div style={{width:34,height:34,borderRadius:"50%",background:C.coach+"25",border:"2px solid "+C.coach+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.coach,flexShrink:0}}>
+              {([athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name||"?").split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)}
+            </div>
+            <div className="coach-sidebar-label" style={{minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{[athleteProfile.first_name,athleteProfile.last_name].filter(Boolean).join(" ")||athleteProfile.full_name}</div>
+              <div style={{fontSize:10,color:C.coach,fontWeight:600}}>Mode coach</div>
+            </div>
+          </div>
+          {blockConfig?.blockName&&(<div style={{padding:"7px 10px",borderRadius:8,background:C.s2,border:"1px solid "+C.brd}}>
+            <div className="coach-sidebar-label" style={{fontSize:11,fontWeight:700,color:C.tx,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{blockConfig.blockName}</div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:10,color:C.b,fontWeight:600}}>S{currentWeek}/{tw}</span>
+              {dw>0&&<span className="coach-sidebar-label" style={{fontSize:9,color:C.b+"90"}}>DL S{dw}</span>}
+            </div>
+          </div>)}
+        </div>)}
+        {/* Nav tabs */}
+        <nav className="coach-sidebar-nav" style={{flex:1,paddingTop:6}}>
+          {coachTabs.map(t=>{
+            const ICONS={prog:"📋",banque:"🏋",stats:"📊",data:"👤",test:"🧪",retours:"💬"};
+            const active=coachTab===t.k;
+            return(<button key={t.k} onClick={()=>setCoachTab(t.k)} style={{borderLeft:"3px solid "+(active?C.coach:"transparent"),background:active?C.coach+"14":"transparent",color:active?C.coach:C.tx2,fontSize:12,fontWeight:active?700:500}}>
+              <span style={{fontSize:15,flexShrink:0,opacity:active?1:0.6}}>{ICONS[t.k]}</span>
+              <span className="coach-sidebar-label">{t.l}</span>
+            </button>);
+          })}
+        </nav>
+        {/* Footer infos */}
+        {saveStatus&&(<div className="coach-sidebar-footer" style={{padding:"10px 14px",borderTop:"1px solid "+C.brd}}>
+          <div style={{fontSize:10,fontWeight:600,padding:"3px 8px",borderRadius:6,display:"inline-block",background:saveStatus==="saved"?C.gS:C.rS,color:saveStatus==="saved"?C.g:C.r}}>
+            {saveStatus==="saved"?"✓ Sauvegardé":"✕ Erreur"}
+          </div>
+        </div>)}
+      </div>
+      {/* ── Content area ── */}
+      <div className="coach-content" style={{paddingBottom:aiChatOpen?"calc(60vh + 36px)":"60px"}}>
       {coachTab==="prog"&&(<>
         {/* Paramètres de bloc au-dessus des sous-onglets */}
         <div style={{background:C.s1,borderRadius:14,padding:"12px 16px",border:"1px solid "+C.b+"30",marginBottom:14}}>
@@ -1090,7 +1176,9 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       /></>)}
       {coachTab==="test"&&<TestSessionView athleteId={athleteId} viewOnly={viewOnly} C={C} testSubTab={testSubTab} setTestSubTab={setTestSubTab} isCoach={true}/>}
       {coachTab==="retours"&&<CoachWeeklyFeedback athleteId={athleteId} sessions={sessions} completedSessions={completedSessions} energySessions={energySessions} currentWeek={currentWeek} blockConfig={blockConfig} exos={exos} sets={sets} wellnessHistory={wellnessHistory} C={C}/>}
-    </div>)}
+      </div>{/* end coach-content */}
+      </div>{/* end coach-layout */}
+    </>)}
 
     {mode==="athlete"&&tab!=="log"&&(()=>{const lsA=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:sess_start')||'null');if(d?.sid&&d?.wk){const s=sessions.find(x=>x.id===d.sid);return s?{...d,name:s.name}:null;}return null;}catch{return null;}})();const lsF=(()=>{try{const d=JSON.parse(localStorage.getItem('mpp:free_start')||'null');if(d?.id){const f=(freeSessions||[]).find(x=>x.id===d.id);return f&&!f.completed?{...d,name:f.name}:null;}return null;}catch{return null;}})();if(!lsA&&!lsF)return null;const active=lsA||lsF;return(<div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:300,maxWidth:360,width:"calc(100% - 32px)"}}>
       <button onClick={()=>setTab("log")} style={{width:"100%",padding:"12px 16px",borderRadius:16,border:"none",background:C.ac,color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10,justifyContent:"center",boxShadow:"0 4px 24px rgba(123,111,255,0.45)"}}>

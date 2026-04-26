@@ -5,26 +5,42 @@ import type { Competition, CompetitionInsert } from '@/types/planning';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-export function useCompetitions(athleteId: string, seasonId?: string | null) {
+/**
+ * Charge TOUTES les compétitions d'un athlète (pas de filtre saison).
+ * Le filtre par saison se fait côté client pour garantir une clé de cache unique
+ * et une synchronisation immédiate entre PlanningEditor et PlanningOverview.
+ */
+export function useCompetitions(athleteId: string) {
   return useQuery<Competition[]>({
-    queryKey: ['competitions', athleteId, seasonId ?? 'all'],
+    queryKey: ['competitions', athleteId],
     queryFn: async () => {
-      let query = db
+      const { data, error } = await db
         .from('competitions')
         .select('*')
         .eq('athlete_id', athleteId)
         .order('date', { ascending: true });
-
-      if (seasonId) {
-        query = query.eq('season_id', seasonId);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as Competition[];
     },
     enabled: !!athleteId,
+    staleTime: 0,           // Toujours considéré comme périmé → refetch à chaque montage
+    refetchOnMount: true,
   });
+}
+
+/** Compétitions filtrées pour une saison donnée (filtre client-side). */
+export function useSeasonCompetitions(athleteId: string, seasonId: string | null) {
+  const query = useCompetitions(athleteId);
+  return {
+    ...query,
+    data: seasonId
+      ? (query.data ?? []).filter((c) => c.season_id === seasonId)
+      : (query.data ?? []),
+  };
+}
+
+function invalidate(qc: ReturnType<typeof useQueryClient>, athleteId: string) {
+  qc.invalidateQueries({ queryKey: ['competitions', athleteId] });
 }
 
 export function useCreateCompetition() {
@@ -40,7 +56,10 @@ export function useCreateCompetition() {
       return data as Competition;
     },
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['competitions', data.athlete_id] });
+      invalidate(qc, data.athlete_id);
+    },
+    onError: (err) => {
+      console.error('[useCreateCompetition] Erreur:', err);
     },
   });
 }
@@ -59,7 +78,7 @@ export function useUpdateCompetition() {
       return data as Competition;
     },
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['competitions', data.athlete_id] });
+      invalidate(qc, data.athlete_id);
     },
   });
 }
@@ -72,7 +91,7 @@ export function useDeleteCompetition() {
       if (error) throw error;
     },
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['competitions', vars.athlete_id] });
+      invalidate(qc, vars.athlete_id);
     },
   });
 }

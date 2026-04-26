@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useCompetitions } from "@/hooks/useCompetitions";
 import { C, BT, BLOC_COLORS, HABIT_COLORS, HABIT_EMOJIS } from "@/lib/theme";
 import { todayKey, hISO } from "@/lib/date";
 import { parseReps, fmtMR, clusterReps, DEF_METHODS, BLOC_METHODS, EVENT_TYPES, normalizeExName, fuzzyExMatch } from "@/lib/exercises";
@@ -60,6 +61,9 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
   const eventsForDate=dateStr=>(wkEvents[dateStr]||[]);
   const addEvent=(dateStr,evt)=>{if(setWeekSchedule)setWeekSchedule({...(weekSchedule||{}),events:{...wkEvents,[dateStr]:[...eventsForDate(dateStr),evt]}});};
   const removeEvent=(dateStr,id)=>{if(setWeekSchedule){const n=(wkEvents[dateStr]||[]).filter(e=>e.id!==id);setWeekSchedule({...(weekSchedule||{}),events:{...wkEvents,[dateStr]:n.length?n:undefined}});}};
+  // Compétitions planification (Supabase) — read-only dans le calendrier
+  const { data: planComps=[] } = useCompetitions(athleteId||'');
+  const planCompsForDate=dateStr=>(planComps||[]).filter(c=>c.date===dateStr);
   // Pour l'énergie : filtre par semaine de bloc + jour (semaines passées exclues)
   const energyForDay=(di,blockWeek)=>{
     if(blockWeek<currentWeek)return[];
@@ -165,20 +169,26 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
               const ws2=wScore2(well);
               const eList=energyForDay(di,bw);
               const dayEvts=eventsForDate(isoDate(date));
+              const planCompsDay=planCompsForDate(isoDate(date));
               const topEvt=dayEvts[0]||null;
+              const topComp=planCompsDay[0]||null;
               const evtInfo=topEvt?EVENT_TYPES.find(t=>t.v===topEvt.type)||EVENT_TYPES[4]:null;
+              const hlColor=topEvt?evtInfo.c:topComp?'#F5A623':null;
               return(
                 <div key={di} onClick={()=>setSelectDay(isSel?null:{wi,di,date,bw})}
                   style={{position:'relative',padding:'6px 2px 5px',textAlign:'center',cursor:'pointer',
-                    background:isToday?C.ac+'1A':isSel?C.ac+'14':topEvt?evtInfo.c+'0A':'transparent',
+                    background:isToday?C.ac+'1A':isSel?C.ac+'14':hlColor?hlColor+'0A':'transparent',
                     borderRight:di<6?'1px solid '+C.brd+'25':'none',
-                    borderLeft:isToday?'2px solid '+C.ac:topEvt?'2px solid '+evtInfo.c:'2px solid transparent',
+                    borderLeft:isToday?'2px solid '+C.ac:hlColor?'2px solid '+hlColor:'2px solid transparent',
                     borderBottom:isSel?'2px solid '+C.ac:'none',
                     minHeight:72,transition:'background 0.1s',boxSizing:'border-box'}}>
                   {/* Date */}
                   <div style={{fontSize:12,fontWeight:isToday?800:isPast?400:600,color:isToday?C.ac:isPast?C.tx3+'90':C.tx,lineHeight:1,marginBottom:3}}>{date.getDate()}</div>
-                  {/* Événements */}
+                  {/* Événements locaux */}
                   {dayEvts.slice(0,1).map(ev=>{const ei=EVENT_TYPES.find(t=>t.v===ev.type)||EVENT_TYPES[4];return(<div key={ev.id} style={{fontSize:8,fontWeight:800,padding:'2px 3px',borderRadius:4,background:ei.c+'30',color:ei.c,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:2,lineHeight:1.3}}>{ei.e} {(ev.title||ei.l).slice(0,5)}</div>);})}
+                  {/* Compétitions planification */}
+                  {planCompsDay.slice(0,1).map(comp=>(<div key={comp.id} style={{fontSize:8,fontWeight:800,padding:'2px 3px',borderRadius:4,background:'#F5A62330',color:'#F5A623',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:2,lineHeight:1.3}}>🏆 {comp.name.slice(0,6)}</div>))}
+                  {planCompsDay.length>1&&<div style={{fontSize:7,color:'#F5A623',lineHeight:1,marginBottom:2}}>+{planCompsDay.length-1}</div>}
                   {/* Séances muscu */}
                   {visibilitySettings.muscu!==false&&sessList.length>0&&<div style={{display:'flex',flexDirection:'column',gap:2,marginBottom:2}}>
                     {sessList.slice(0,2).map(s=>{const done=doneSet.has(s.id);const dc=done?C.g:C.b;return(
@@ -201,7 +211,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
                     </div>
                   )}
                   {/* Vide */}
-                  {sessList.length===0&&eList.length===0&&tests.length===0&&ws2===null&&dayEvts.length===0&&(
+                  {sessList.length===0&&eList.length===0&&tests.length===0&&ws2===null&&dayEvts.length===0&&planCompsDay.length===0&&(
                     <div style={{width:4,height:4,borderRadius:'50%',background:C.brd+'80',margin:'6px auto 0'}}/>
                   )}
                 </div>
@@ -222,6 +232,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
         const ws3=wScore2(well);
         const eAssigned=(energySessions||[]).filter(s=>{const sid=s.id||s.session_key;return(energyWeekPlan[planWeek]||[]).includes(sid)&&(energyDayPlan[planWeek]?.[sid]===di||energyDayPlan[planWeek]?.[s.session_key]===di);});
         const dayEvts=eventsForDate(isoDate(date));
+        const planCompsDay=planCompsForDate(isoDate(date));
         return(
           <div style={{borderTop:'1px solid '+C.brd+'80',background:C.s2,padding:'12px 14px 14px'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
@@ -231,6 +242,20 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
               </div>
               <button onClick={()=>setShowPlanModal({wi:selectDay.wi,di,date,planWeek})} style={{display:'flex',alignItems:'center',gap:5,padding:'7px 12px',borderRadius:10,border:'none',background:C.coach,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>+ Planifier</button>
             </div>
+            {/* Compétitions depuis Planification (read-only) */}
+            {planCompsDay.length>0&&<div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:8}}>
+              {planCompsDay.map(comp=>(
+                <div key={comp.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderRadius:9,background:'#F5A62318',border:'1px solid #F5A62350'}}>
+                  <span style={{fontSize:18}}>🏆</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'#F5A623',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{comp.name}</div>
+                    {comp.location&&<div style={{fontSize:9,color:C.tx3}}>{comp.location}</div>}
+                  </div>
+                  <span style={{fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:4,background:'#F5A62325',color:'#F5A623',flexShrink:0}}>{comp.priority||comp.type}</span>
+                </div>
+              ))}
+            </div>}
+            {/* Événements locaux */}
             {dayEvts.length>0&&<div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
               {dayEvts.map(ev=>{const ei=EVENT_TYPES.find(t=>t.v===ev.type)||EVENT_TYPES[4];return(
                 <div key={ev.id} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:9,background:ei.c+'20',border:'1px solid '+ei.c+'50',flex:'1 1 auto'}}>
@@ -250,7 +275,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
               {tests.map(t=>{const tc=t.type==='musculation'?'#7B6FFF':t.type==='energetique'?'#EF4B4B':t.type==='specifique'?'#F5A623':'#22C993';return(
                 <button key={t.id} onClick={()=>setPreviewItem({type:'test',data:t,planWeek:planWeek})} style={{padding:'5px 10px',borderRadius:9,background:tc+'15',border:'1px solid '+tc+'30',fontSize:11,fontWeight:600,color:tc,cursor:'pointer',fontFamily:'inherit'}}>📋 {t.title} ›</button>
               );})}
-              {sessList.length===0&&eAssigned.length===0&&tests.length===0&&dayEvts.length===0&&<span style={{fontSize:11,color:C.tx3}}>Aucun contenu planifié — cliquer "+ Planifier"</span>}
+              {sessList.length===0&&eAssigned.length===0&&tests.length===0&&dayEvts.length===0&&planCompsDay.length===0&&<span style={{fontSize:11,color:C.tx3}}>Aucun contenu planifié — cliquer "+ Planifier"</span>}
             </div>
           </div>
         );

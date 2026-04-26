@@ -128,7 +128,9 @@ export function PlanningOverview({ athleteId }: { athleteId: string }) {
   }, [seasons]);
 
   const { data: blocks = [] } = usePlanningBlocks(currentSeason?.id ?? null);
-  const { data: competitions = [] } = useCompetitions(athleteId, currentSeason?.id ?? null);
+  // Toutes les compétitions de l'athlète (pas seulement la saison courante)
+  // pour que les ajouts du coach dans n'importe quelle saison soient visibles ici.
+  const { data: competitions = [] } = useCompetitions(athleteId);
 
   const totalWeeks = useMemo(
     () => (currentSeason ? getSeasonWeeks(currentSeason.start_date, currentSeason.end_date) : 0),
@@ -149,44 +151,48 @@ export function PlanningOverview({ athleteId }: { athleteId: string }) {
     [blocks, currentWeek]
   );
 
-  // Compétitions à venir (dans les 90 prochains jours)
+  // Compétitions à venir — comparaison par date ISO (pas par timestamp) pour éviter
+  // les décalages UTC : '2026-04-26' >= '2026-04-26' est toujours vrai le jour J
+  const todayISO = new Date().toISOString().slice(0, 10);
   const upcomingComps = useMemo(() => {
-    const today = Date.now();
     return competitions
-      .filter((c) => new Date(c.date).getTime() >= today)
+      .filter((c) => c.date >= todayISO)
       .slice(0, 4);
-  }, [competitions]);
-
-  if (!currentSeason) return null;
+  }, [competitions, todayISO]);
 
   const isInSeason = currentWeek >= 1 && currentWeek <= totalWeeks;
+
+  // Pas de saison ET pas de compétitions → rien à montrer
+  if (!currentSeason && competitions.length === 0) return null;
 
   return (
     <div
       className="rounded-2xl border overflow-hidden mb-4"
       style={{ background: '#141519', borderColor: 'rgba(255,255,255,0.06)' }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-        <div>
-          <div className="text-xs font-bold text-white">{currentSeason.name}</div>
-          <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            {fmtDate(currentSeason.start_date)} → {fmtDate(currentSeason.end_date)} · {totalWeeks} semaines
+      {/* Header saison — uniquement si saison trouvée */}
+      {currentSeason && (
+        <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <div>
+            <div className="text-xs font-bold text-white">{currentSeason.name}</div>
+            <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              {fmtDate(currentSeason.start_date)} → {fmtDate(currentSeason.end_date)} · {totalWeeks} semaines
+            </div>
           </div>
+          {isInSeason && (
+            <div
+              className="px-2.5 py-1 rounded-full text-xs font-bold"
+              style={{ background: 'rgba(91,201,115,0.15)', color: '#22C993' }}
+            >
+              S{currentWeek} / {totalWeeks}
+            </div>
+          )}
         </div>
-        {isInSeason && (
-          <div
-            className="px-2.5 py-1 rounded-full text-xs font-bold"
-            style={{ background: 'rgba(91,201,115,0.15)', color: '#22C993' }}
-          >
-            S{currentWeek} / {totalWeeks}
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="p-4 space-y-3">
-        {/* Gantt */}
-        {blocks.length > 0 && (
+        {/* Gantt — uniquement si saison + blocs */}
+        {currentSeason && blocks.length > 0 && (
           <MiniGantt blocks={blocks} totalWeeks={totalWeeks} currentWeek={currentWeek} />
         )}
 
@@ -258,10 +264,10 @@ export function PlanningOverview({ athleteId }: { athleteId: string }) {
         )}
 
         {/* Empty state */}
-        {blocks.length === 0 && competitions.length === 0 && (
+        {blocks.length === 0 && upcomingComps.length === 0 && (
           <div className="text-center py-4">
             <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              Aucun bloc ni compétition planifiés pour cette saison
+              Aucun bloc ni événement à venir
             </div>
           </div>
         )}

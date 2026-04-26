@@ -13,7 +13,7 @@ import {
   getBlockDepth,
 } from '@/hooks/usePlanningBlocks';
 import {
-  useCompetitions,
+  useSeasonCompetitions,
   useCreateCompetition,
   useUpdateCompetition,
   useDeleteCompetition,
@@ -730,7 +730,8 @@ export function PlanningEditor({ athleteId, coachId: coachIdProp, sessions = [] 
   // Queries
   const { data: seasons = [] } = useSeasons(athleteId);
   const { data: flatBlocks = [] } = usePlanningBlocks(selectedSeasonId);
-  const { data: competitions = [] } = useCompetitions(athleteId, selectedSeasonId);
+  // Compétitions filtrées pour la saison sélectionnée (cache partagé avec PlanningOverview)
+  const { data: competitions = [] } = useSeasonCompetitions(athleteId, selectedSeasonId);
 
   // Mutations
   const createSeason = useCreateSeason();
@@ -814,7 +815,10 @@ export function PlanningEditor({ athleteId, coachId: coachIdProp, sessions = [] 
   }
 
   function handleSaveComp(form: CompFormState) {
-    if (!coachId) return;
+    if (!coachId || !selectedSeasonId) {
+      console.warn('[handleSaveComp] Bloqué — coachId:', coachId, 'selectedSeasonId:', selectedSeasonId);
+      return;
+    }
     const payload = {
       ...form,
       coach_id: coachId,
@@ -938,15 +942,13 @@ export function PlanningEditor({ athleteId, coachId: coachIdProp, sessions = [] 
             </button>
           </div>
 
-          {/* Gantt timeline */}
-          {flatBlocks.length > 0 && (
-            <GanttTimeline
-              blocks={flatBlocks}
-              competitions={competitions}
-              totalWeeks={totalWeeks}
-              seasonStart={season.start_date}
-            />
-          )}
+          {/* Gantt timeline — toujours visible dès qu'une saison existe */}
+          <GanttTimeline
+            blocks={flatBlocks}
+            competitions={competitions}
+            totalWeeks={totalWeeks}
+            seasonStart={season.start_date}
+          />
 
           {/* Block tree header */}
           <div className="flex items-center justify-between">
