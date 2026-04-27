@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { C } from "@/lib/theme";
+import { CommandPaletteProvider } from "./context/CommandPaletteContext";
+import { CommandPalette } from "./components/CommandPalette";
+import { useCommandPalette } from "./context/CommandPaletteContext";
+import { Search } from "lucide-react";
 
 // ── Navigation items ──────────────────────────────────────────────────────────
 
@@ -40,10 +44,11 @@ const SIDEBAR_STYLE: React.CSSProperties = {
 
 // ── CoachShell ────────────────────────────────────────────────────────────────
 
-export default function CoachShell() {
+function CoachShellInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, logout } = useAuth();
+  const { toggle } = useCommandPalette();
 
   function isActive(path: string, exact: boolean) {
     if (exact) return location.pathname === path;
@@ -78,6 +83,32 @@ export default function CoachShell() {
             </span>
           </div>
         </SidebarHeader>
+
+        {/* Search button — opens command palette */}
+        <div style={{ padding: "8px 10px 4px" }}>
+          <button
+            onClick={toggle}
+            className="coach-sidebar-search"
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 8,
+              padding: "7px 10px", borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.04)",
+              color: C.tx3, fontSize: 12, cursor: "pointer",
+              fontFamily: "inherit", transition: "border-color 150ms ease-out",
+            }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = C.ac + "60")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)")}
+          >
+            <Search size={13} style={{ flexShrink: 0 }} />
+            <span className="coach-sidebar-label" style={{ flex: 1, textAlign: "left" }}>
+              Rechercher…
+            </span>
+            <span className="coach-sidebar-label" style={{ fontSize: 10, opacity: 0.5, letterSpacing: "0.02em" }}>
+              ⌘K
+            </span>
+          </button>
+        </div>
 
         {/* Nav items */}
         <SidebarContent style={{ padding: "8px 0" }}>
@@ -124,6 +155,7 @@ export default function CoachShell() {
         {/* Footer — coach profile */}
         <SidebarFooter style={{ padding: "12px 14px", borderTop: "1px solid #1A1B22" }}>
           <SidebarSeparator style={{ marginBottom: 10, background: "#1A1B22" }} />
+
           <div
             className="coach-sidebar-label"
             style={{ display: "flex", alignItems: "center", gap: 8 }}
@@ -170,9 +202,9 @@ export default function CoachShell() {
         <div
           style={{
             position: "sticky", top: 0, zIndex: 10,
-            background: C.bg, borderBottom: "1px solid " + C.brd,
+            background: "#0F1014", borderBottom: "1px solid #1A1B22",
             padding: "8px 16px", display: "flex", alignItems: "center", gap: 8,
-            flexShrink: 0,
+            flexShrink: 0, minHeight: 45,
           }}
         >
           <SidebarTrigger
@@ -183,7 +215,44 @@ export default function CoachShell() {
               alignItems: "center", justifyContent: "center", fontSize: 14,
             }}
           />
-          {/* Breadcrumb filled by outlet pages via portal or passed via context — kept simple */}
+          {/* Cmd+K button in topbar */}
+          <button
+            onClick={toggle}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "5px 12px", borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(255,255,255,0.04)",
+              color: C.tx3, fontSize: 12, cursor: "pointer",
+              fontFamily: "inherit", transition: "border-color 150ms ease-out",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = C.ac + "60")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.08)")}
+          >
+            <Search size={12} />
+            <span>Rechercher</span>
+            <kbd style={{ fontSize: 10, opacity: 0.5, marginLeft: 2, fontFamily: "inherit" }}>⌘K</kbd>
+          </button>
+          {/* Mode switch — visible pour coach et coach_athlete */}
+          {(profile?.role === "coach_athlete" || profile?.role === "coach") && (
+            <button
+              onClick={() => navigate("/athlete")}
+              style={{
+                marginLeft: "auto",
+                padding: "5px 12px", borderRadius: 20,
+                border: "1px solid " + C.coach + "40",
+                background: C.coach + "15", color: C.coach,
+                fontSize: 11, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5,
+                transition: "background 150ms", whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = C.coach + "28")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = C.coach + "15")}
+            >
+              🏃 Mode Athlète
+            </button>
+          )}
         </div>
 
         {/* Page content */}
@@ -192,11 +261,23 @@ export default function CoachShell() {
         </div>
       </SidebarInset>
 
+      {/* Command palette (coach-only) */}
+      <CommandPalette />
+
       {/* Responsive sidebar label hiding */}
       <style>{`
         @media (max-width: 1024px) { .coach-sidebar-label { display: none; } }
+        @media (max-width: 1024px) { .coach-sidebar-search { display: none; } }
         @media (max-width: 1024px) { [data-sidebar="sidebar"] { width: var(--sidebar-width-icon) !important; } }
       `}</style>
     </SidebarProvider>
+  );
+}
+
+export default function CoachShell() {
+  return (
+    <CommandPaletteProvider>
+      <CoachShellInner />
+    </CommandPaletteProvider>
   );
 }

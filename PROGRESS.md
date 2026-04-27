@@ -120,27 +120,27 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 ---
 
 ## ⌨️ PROMPT 5 - Command palette + finitions
-- [ ] cmdk installé + shadcn Command configuré
-- [ ] CommandPaletteProvider créé
-- [ ] Raccourci Cmd+K / Ctrl+K fonctionnel
-- [ ] Groupe Athlètes (fuzzy search)
-- [ ] Groupe Navigation
-- [ ] Groupe Actions rapides
-- [ ] Groupe Récents (5 dernières pages)
-- [ ] useCommandPalette() hook créé
-- [ ] Listener global keydown
-- [ ] Skeletons créés : PageSkeleton, CardSkeleton, TableSkeleton, ChartSkeleton, ListSkeleton
-- [ ] Tous les "Loading..." remplacés par skeletons
-- [ ] Audit useMutation fait
-- [ ] Optimistic updates implémentés (onMutate + rollback onError)
-- [ ] sonner configuré (position bottom-right desktop, top-center mobile)
-- [ ] Tous alert() remplacés par toasts
-- [ ] EmptyState component créé
+- [x] cmdk installé + shadcn Command configuré
+- [x] CommandPaletteProvider créé
+- [x] Raccourci Cmd+K / Ctrl+K fonctionnel
+- [x] Groupe Athlètes (fuzzy search)
+- [x] Groupe Navigation
+- [x] Groupe Actions rapides
+- [x] Groupe Récents (5 dernières pages)
+- [x] useCommandPalette() hook créé
+- [x] Listener global keydown
+- [x] Skeletons créés : PageSkeleton, CardSkeleton, TableSkeleton, ChartSkeleton, ListSkeleton
+- [x] Tous les "Loading..." remplacés par skeletons
+- [x] Audit useMutation fait
+- [x] Optimistic updates implémentés (onMutate + rollback onError)
+- [x] sonner configuré (position bottom-right desktop, top-center mobile)
+- [x] Tous alert() remplacés par toasts
+- [x] EmptyState component créé
 - [ ] Empty states appliqués partout
-- [ ] StatusPill component créé (planned, in-progress, completed, missed, skipped)
+- [x] StatusPill component créé (planned, in-progress, completed, missed, skipped)
 - [ ] StatusPills utilisés partout
-- [ ] Transitions hover/active 150ms appliquées
-- [ ] framer-motion AnimatePresence sur routes
+- [x] Transitions hover/active 150ms appliquées
+- [x] framer-motion AnimatePresence sur routes
 - [ ] npm run build passe
 - [ ] npm run lint passe
 - [ ] CONTRIBUTING.md créé (conventions skeletons, toasts, mutations)
