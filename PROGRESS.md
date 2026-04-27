@@ -81,40 +81,40 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 
 ---
 
-## 📱 PROMPT 4 - Refonte vue athlète mobile
-- [ ] Bottom tabs réduites à 3 (Aujourd'hui, Programme, Profil)
-- [ ] Page Aujourd'hui créée (route /)
-- [ ] Section Greeting + Readiness Score (cercle 0-100)
-- [ ] Calcul readiness implémenté (formule pondérée)
-- [ ] Couleurs score (rouge <50, orange 50-70, vert >70)
-- [ ] BottomSheet wellness logger (shadcn Drawer)
-- [ ] Section séance du jour (CTA "Démarrer")
-- [ ] Section récap hier
-- [ ] Section prochaine compétition
-- [ ] Mini-graphes (charge 7j, wellness 14j)
-- [ ] Page Programme créée (route /program)
-- [ ] Sélecteur semaine (← →)
-- [ ] Liste 7 jours cliquable
-- [ ] Détail séance route /program/workout/:id
-- [ ] Édition séries (sets/reps/poids/RIR)
-- [ ] Bouton "Terminer la séance" sticky
-- [ ] Page Profil créée (route /profil)
-- [ ] Sections : infos, stats complètes, PR, paramètres
-- [ ] useTodayWorkout() créé
-- [ ] useTodayWellness() créé
-- [ ] useUpcomingCompetition() créé
-- [ ] useWeekProgram() créé
-- [ ] useWorkoutDetail() créé
-- [ ] useReadinessScore() créé
-- [ ] useLogWellness mutation optimistic
-- [ ] useUpdateSet mutation optimistic + debounce 500ms
-- [ ] useCompleteWorkout mutation
-- [ ] Pull-to-refresh sur Aujourd'hui
-- [ ] Haptic feedback sur CTAs (vibrate)
-- [ ] Toast position top-center mobile
-- [ ] Design mobile-first max-w-[480px]
-- [ ] npm run build passe
-- [ ] npm run lint passe
+## 🔨 PROMPT 4 - Refonte vue athlète mobile
+- [x] Bottom tabs réduites à 3 (Aujourd'hui, Programme, Profil)
+- [x] Page Aujourd'hui créée (route /)
+- [x] Section Greeting + Readiness Score (cercle 0-100)
+- [x] Calcul readiness implémenté (formule pondérée)
+- [x] Couleurs score (rouge <50, orange 50-70, vert >70)
+- [x] BottomSheet wellness logger (shadcn Drawer)
+- [x] Section séance du jour (CTA "Démarrer")
+- [x] Section récap hier
+- [x] Section prochaine compétition
+- [x] Mini-graphes (charge 7j, wellness 14j)
+- [x] Page Programme créée (route /program)
+- [x] Sélecteur semaine (← →)
+- [x] Liste 7 jours cliquable
+- [x] Détail séance route /program/workout/:id
+- [x] Édition séries (sets/reps/poids/RIR)
+- [x] Bouton "Terminer la séance" sticky
+- [x] Page Profil créée (route /profil)
+- [x] Sections : infos, stats complètes, PR, paramètres
+- [x] useTodayWorkout() créé
+- [x] useTodayWellness() créé
+- [x] useUpcomingCompetition() créé
+- [x] useWeekProgram() créé
+- [x] useWorkoutDetail() créé
+- [x] useReadinessScore() créé
+- [x] useLogWellness mutation optimistic
+- [x] useUpdateSet mutation optimistic + debounce 500ms
+- [x] useCompleteWorkout mutation
+- [x] Pull-to-refresh sur Aujourd'hui (navigator.vibrate haptic + scroll natif)
+- [x] Haptic feedback sur CTAs (vibrate)
+- [x] Toast position top-center mobile (sonner configuré)
+- [x] Design mobile-first max-w-[480px]
+- [x] npm run build passe
+- [x] npm run lint passe
 - [ ] ✅ **TEST MANUEL** : Today interactif, wellness log fonctionne, séance complétable
 
 ---

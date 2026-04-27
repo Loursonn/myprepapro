@@ -18,7 +18,11 @@ const CoachShell       = lazy(() => import("./features/coach/CoachShell.tsx"));
 const CoachAthleteArea = lazy(() => import("./pages/coach/CoachAthleteArea.tsx"));
 
 // Pages athlète (lazy)
-const DashboardPage   = lazy(() => import("./features/athlete/pages/DashboardPage.tsx"));
+const TodayPage          = lazy(() => import("./features/athlete/pages/TodayPage.tsx"));
+const ProgramPage        = lazy(() => import("./features/athlete/pages/ProgramPage.tsx"));
+const WorkoutDetailPage  = lazy(() => import("./features/athlete/pages/WorkoutDetailPage.tsx"));
+const ProfilPage         = lazy(() => import("./features/athlete/pages/ProfilPage.tsx"));
+// Legacy pages still accessible via direct navigation
 const LogSeancePage   = lazy(() => import("./features/athlete/pages/LogSeancePage.tsx"));
 const AlimPage        = lazy(() => import("./features/athlete/pages/AlimPage.tsx"));
 const AthleteTestPage = lazy(() => import("./features/athlete/pages/AthleteTestPage.tsx"));
@@ -67,7 +71,11 @@ const App = () => (
 
               {/* Vue athlète (layout + sous-routes) */}
               <Route path="/athlete" element={<ProtectedRoute><AthleteApp /></ProtectedRoute>}>
-                <Route index element={<DashboardPage />} />
+                <Route index element={<TodayPage />} />
+                <Route path="program" element={<ProgramPage />} />
+                <Route path="program/workout/:id" element={<WorkoutDetailPage />} />
+                <Route path="profil" element={<ProfilPage />} />
+                {/* Legacy routes kept for backward compat */}
                 <Route path="log" element={<LogSeancePage />} />
                 <Route path="alim" element={<AlimPage />} />
                 <Route path="test" element={<AthleteTestPage />} />
