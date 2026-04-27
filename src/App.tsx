@@ -1,17 +1,53 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute, { RoleRedirect } from "@/components/ProtectedRoute";
+
+// Pages publiques (chargées immédiatement — nécessaires au démarrage)
 import Login from "./pages/Login.tsx";
 import InviteAccept from "./pages/InviteAccept.tsx";
 import NotFound from "./pages/NotFound.tsx";
-import CoachDashboard from "./pages/coach/Dashboard.tsx";
-import AthleteDashboard from "./pages/athlete/Dashboard.tsx";
+
+// Layouts (lazy — chargés après auth)
+const AthleteApp       = lazy(() => import("./pages/athlete/AthleteApp.tsx"));
+const CoachShell       = lazy(() => import("./features/coach/CoachShell.tsx"));
+const CoachAthleteArea = lazy(() => import("./pages/coach/CoachAthleteArea.tsx"));
+
+// Pages athlète (lazy)
+const DashboardPage   = lazy(() => import("./features/athlete/pages/DashboardPage.tsx"));
+const LogSeancePage   = lazy(() => import("./features/athlete/pages/LogSeancePage.tsx"));
+const AlimPage        = lazy(() => import("./features/athlete/pages/AlimPage.tsx"));
+const AthleteTestPage = lazy(() => import("./features/athlete/pages/AthleteTestPage.tsx"));
+
+// Pages coach globales (lazy)
+const CoachHomePage      = lazy(() => import("./features/coach/pages/CoachHomePage.tsx"));
+const AthletesListPage   = lazy(() => import("./features/coach/pages/AthletesListPage.tsx"));
+const LibraryPage        = lazy(() => import("./features/coach/pages/LibraryPage.tsx"));
+const CoachTestsBankPage = lazy(() => import("./features/coach/pages/CoachTestsBankPage.tsx"));
+const SettingsPage       = lazy(() => import("./features/coach/pages/SettingsPage.tsx"));
+
+// Pages coach par athlète (lazy)
+const PlanningPage = lazy(() => import("./features/coach/pages/PlanningPage.tsx"));
+const StatsPage    = lazy(() => import("./features/coach/pages/StatsPage.tsx"));
+const DonneesPage  = lazy(() => import("./features/coach/pages/DonneesPage.tsx"));
+const RetoursPage  = lazy(() => import("./features/coach/pages/RetoursPage.tsx"));
+const CoachTestPage = lazy(() => import("./features/coach/pages/TestPage.tsx"));
 
 const queryClient = new QueryClient();
+
+// Fallback minimal pendant le chargement des chunks
+function PageLoader() {
+  return (
+    <div style={{ minHeight: "100vh", background: "#08090C", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 28, height: 28, border: "2.5px solid rgba(255,255,255,0.08)", borderTopColor: "#7B6FFF", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -20,23 +56,49 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            {/* Pages publiques */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/invite/:token" element={<InviteAccept />} />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Pages publiques */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/invite/:token" element={<InviteAccept />} />
 
-            {/* Redirection selon le rôle */}
-            <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
+              {/* Redirection selon le rôle */}
+              <Route path="/" element={<ProtectedRoute><RoleRedirect /></ProtectedRoute>} />
 
-            {/* Vue coach */}
-            <Route path="/coach" element={<ProtectedRoute><CoachDashboard /></ProtectedRoute>} />
+              {/* Vue athlète (layout + sous-routes) */}
+              <Route path="/athlete" element={<ProtectedRoute><AthleteApp /></ProtectedRoute>}>
+                <Route index element={<DashboardPage />} />
+                <Route path="log" element={<LogSeancePage />} />
+                <Route path="alim" element={<AlimPage />} />
+                <Route path="test" element={<AthleteTestPage />} />
+              </Route>
 
-            {/* Vue athlète */}
-            <Route path="/athlete" element={<ProtectedRoute><AthleteDashboard /></ProtectedRoute>} />
+              {/* Vue coach — sidebar + toutes sous-routes */}
+              <Route path="/coach" element={<ProtectedRoute><CoachShell /></ProtectedRoute>}>
+                {/* Page d'accueil coach */}
+                <Route index element={<CoachHomePage />} />
 
-            {/* 404 */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+                {/* Pages globales */}
+                <Route path="athletes" element={<AthletesListPage />} />
+                <Route path="library"  element={<LibraryPage />} />
+                <Route path="tests"    element={<CoachTestsBankPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+
+                {/* Vue par athlète (ContextBar + AthleteProvider) */}
+                <Route path="athletes/:athleteId" element={<CoachAthleteArea />}>
+                  <Route index element={<Navigate to="planning" replace />} />
+                  <Route path="planning" element={<PlanningPage />} />
+                  <Route path="stats"    element={<StatsPage />} />
+                  <Route path="donnees"  element={<DonneesPage />} />
+                  <Route path="retours"  element={<RetoursPage />} />
+                  <Route path="tests"    element={<CoachTestPage />} />
+                </Route>
+              </Route>
+
+              {/* 404 */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
