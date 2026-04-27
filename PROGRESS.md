@@ -57,26 +57,26 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 
 ---
 
-## 🏠 PROMPT 3 - Home coach (dashboard)
-- [ ] HomePage.tsx créée (route /coach)
-- [ ] Row 1 - 4 KPICards (athlètes actifs, ratio séances, wellness moyen, compétitions)
-- [ ] Row 2 gauche - Alertes "À traiter" (surcharge, manquées, PR)
-- [ ] Row 2 droite - Alertes "À venir" (compétitions, athlètes sans planning)
-- [ ] Row 3 - ActivityTimeline (10 dernières actions)
-- [ ] useCoachOverview() créé
-- [ ] useOverloadedAthletes() créé
-- [ ] useMissedWorkouts() créé
-- [ ] useUpcomingCompetitions() créé
-- [ ] useRecentActivity() créé
-- [ ] KPICard component créé
-- [ ] AlertCard component créé
-- [ ] ActivityTimeline component créé
-- [ ] Empty states pour chaque section
-- [ ] Skeletons pendant chargement
-- [ ] Clics sur cards → navigation vers sous-routes
-- [ ] Date locale française (date-fns fr)
-- [ ] npm run build passe
-- [ ] npm run lint passe
+## ✅ PROMPT 3 - Home coach (dashboard)
+- [x] HomePage.tsx créée (route /coach)
+- [x] Row 1 - 4 KPICards (athlètes actifs, ratio séances, wellness moyen, compétitions)
+- [x] Row 2 gauche - Alertes "À traiter" (surcharge, manquées, PR)
+- [x] Row 2 droite - Alertes "À venir" (compétitions, athlètes sans planning)
+- [x] Row 3 - ActivityTimeline (10 dernières actions)
+- [x] useCoachOverview() créé
+- [x] useOverloadedAthletes() créé
+- [x] useMissedWorkouts() créé
+- [x] useUpcomingCompetitions() créé
+- [x] useRecentActivity() créé
+- [x] KPICard component créé
+- [x] AlertCard component créé
+- [x] ActivityTimeline component créé
+- [x] Empty states pour chaque section
+- [x] Skeletons pendant chargement
+- [x] Clics sur cards → navigation vers sous-routes
+- [x] Date locale française (date-fns fr)
+- [x] npm run build passe
+- [x] npm run lint passe
 - [ ] ✅ **TEST MANUEL** : Home affiche les bonnes données, clics fonctionnent
 
 ---

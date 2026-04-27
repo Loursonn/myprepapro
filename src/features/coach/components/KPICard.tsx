@@ -1,0 +1,67 @@
+import { C } from "@/lib/theme";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface KPICardProps {
+  icon: string;
+  title: string;
+  value: string | number | null;
+  subtitle?: string;
+  valueColor?: string;
+  loading?: boolean;
+  onClick?: () => void;
+}
+
+/**
+ * Single KPI tile for the coach home dashboard.
+ * Surface #0F1014, border #1A1B22, value text-2xl bold.
+ */
+export function KPICard({
+  icon, title, value, subtitle, valueColor, loading = false, onClick,
+}: KPICardProps) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: "#0F1014",
+        border: "1px solid #1A1B22",
+        borderRadius: 14,
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        cursor: onClick ? "pointer" : "default",
+        transition: "border-color 150ms",
+        minHeight: 96,
+      }}
+      onMouseEnter={(e) => {
+        if (onClick) (e.currentTarget as HTMLElement).style.borderColor = "rgba(123,111,255,0.3)";
+      }}
+      onMouseLeave={(e) => {
+        if (onClick) (e.currentTarget as HTMLElement).style.borderColor = "#1A1B22";
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+          {title}
+        </span>
+      </div>
+
+      {loading ? (
+        <>
+          <Skeleton style={{ height: 32, width: "60%", borderRadius: 6, background: C.s2 }} />
+          {subtitle && <Skeleton style={{ height: 14, width: "80%", borderRadius: 4, background: C.s2 }} />}
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 28, fontWeight: 800, color: valueColor ?? C.tx, lineHeight: 1, letterSpacing: "-0.5px" }}>
+            {value ?? "—"}
+          </div>
+          {subtitle && (
+            <div style={{ fontSize: 11, color: C.tx3, marginTop: -2 }}>{subtitle}</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
