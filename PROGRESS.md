@@ -158,16 +158,16 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 - [x] Migration D - RPC readiness_score (si serveur) OU skip
 - [x] Migration E - RLS audit + corrections
 - [x] Migration F - Cron mark-missed-workouts créé
-- [ ] Types TS régénérés (database.types.ts)
-- [ ] useCoachOverview adapté pour appeler RPC
-- [ ] Mutations adaptées (.select().single())
-- [ ] useRealtimeWorkoutStatus créé (si nécessaire)
-- [ ] Tests SQL créés (supabase/tests/)
+- [x] Types TS régénérés (database.types.ts)
+- [x] useCoachOverview adapté pour appeler RPC
+- [x] Mutations adaptées (.select().single())
+- [x] useRealtimeWorkoutStatus créé (si nécessaire)
+- [x] Tests SQL créés (supabase/tests/)
 - [ ] Tests RLS coach/athlète passent
-- [ ] DB_MIGRATIONS.md créé (ordre, rollback, déploiement)
+- [x] DB_MIGRATIONS.md créé (ordre, rollback, déploiement)
 - [ ] Backup DB Supabase fait
 - [ ] Migrations testées sur projet staging Supabase
-- [ ] npm run build passe
+- [x] npm run build passe
 - [ ] ✅ **TEST MANUEL** : données coach OK, RLS respectées, pas d'accès croisé
 
 ---
