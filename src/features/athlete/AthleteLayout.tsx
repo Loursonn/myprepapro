@@ -13,6 +13,7 @@ import { getBig3 } from "@/lib/calculations";
 const ATH_TABS = [
   { k: "",        l: "Aujourd'hui", icon: "🏠" },
   { k: "program", l: "Programme",   icon: "📅" },
+  { k: "alim",    l: "Nutrition",   icon: "🥗" },
   { k: "profil",  l: "Profil",      icon: "👤" },
 ];
 
@@ -93,7 +94,7 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
       <div
         style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 30,
-          background: "#0A0B0F", borderTop: "1px solid #1A1B22",
+          background: C.bg, borderTop: "1px solid " + C.brd,
           display: "flex", height: 64,
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
@@ -106,7 +107,7 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
               onClick={() => navigate(t.k || ".")}
               style={{
                 flex: 1, border: "none", background: "transparent",
-                color: isActive ? C.coach : "#71717a",
+                color: isActive ? C.ac : C.tx3,
                 fontSize: 9, fontWeight: isActive ? 700 : 400,
                 cursor: "pointer", fontFamily: "inherit",
                 display: "flex", flexDirection: "column", alignItems: "center",

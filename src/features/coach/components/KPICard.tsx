@@ -13,7 +13,6 @@ interface KPICardProps {
 
 /**
  * Single KPI tile for the coach home dashboard.
- * Surface #0F1014, border #1A1B22, value text-2xl bold.
  */
 export function KPICard({
   icon, title, value, subtitle, valueColor, loading = false, onClick,
@@ -22,8 +21,8 @@ export function KPICard({
     <div
       onClick={onClick}
       style={{
-        background: "#0F1014",
-        border: "1px solid #1A1B22",
+        background: C.s1,
+        border: "1px solid " + C.brd,
         borderRadius: 14,
         padding: 16,
         display: "flex",
@@ -34,10 +33,10 @@ export function KPICard({
         minHeight: 96,
       }}
       onMouseEnter={(e) => {
-        if (onClick) (e.currentTarget as HTMLElement).style.borderColor = "rgba(123,111,255,0.3)";
+        if (onClick) (e.currentTarget as HTMLElement).style.borderColor = C.ac + "50";
       }}
       onMouseLeave={(e) => {
-        if (onClick) (e.currentTarget as HTMLElement).style.borderColor = "#1A1B22";
+        if (onClick) (e.currentTarget as HTMLElement).style.borderColor = C.brd;
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

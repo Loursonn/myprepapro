@@ -73,7 +73,7 @@ export default function ContextBar() {
         position: "sticky",
         top: 45, // below the topbar (45px height)
         zIndex: 9,
-        background: "rgba(8,9,12,0.85)",
+        background: "rgba(29,28,30,0.9)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
         borderBottom: "1px solid " + C.brd,
@@ -141,7 +141,7 @@ export default function ContextBar() {
           <PopoverContent
             style={{
               width: 260, padding: 0,
-              background: "#111318", border: "1px solid " + C.brdL,
+              background: C.s1, border: "1px solid " + C.brdL,
               borderRadius: 12, overflow: "hidden",
             }}
           >
@@ -165,7 +165,7 @@ export default function ContextBar() {
                       }}
                       style={{
                         cursor: "pointer",
-                        background: a.id === athleteId ? "rgba(123,111,255,0.1)" : "transparent",
+                        background: a.id === athleteId ? "rgba(168,85,247,0.12)" : "transparent",
                         color: a.id === athleteId ? C.ac : C.tx,
                         fontSize: 12,
                         padding: "8px 12px",

@@ -54,8 +54,8 @@ const fadeVariants: Variants = {
 // Fallback minimal pendant le chargement des chunks
 function PageLoader() {
   return (
-    <div style={{ minHeight: "100vh", background: "#08090C", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 28, height: 28, border: "2.5px solid rgba(255,255,255,0.08)", borderTopColor: "#7B6FFF", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+    <div style={{ minHeight: "100vh", background: "#1D1C1E", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 28, height: 28, border: "2.5px solid rgba(124,116,128,0.2)", borderTopColor: "#A855F7", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

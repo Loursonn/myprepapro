@@ -113,7 +113,7 @@ export default function CoachHomePage() {
             title="Compétitions <30j"
             value={overview.competitionsCount || null}
             subtitle={overview.competitionsCount === 0 ? "Aucune à venir" : "à venir"}
-            valueColor={overview.competitionsCount > 0 ? "#D4538E" : undefined}
+            valueColor={overview.competitionsCount > 0 ? C.coach : undefined}
             loading={overview.isLoading}
             onClick={() => navigate("/coach/athletes")}
           />

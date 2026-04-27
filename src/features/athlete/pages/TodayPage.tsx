@@ -9,6 +9,7 @@ import { useTodayWellness } from "@/features/shared/hooks/useTodayWellness";
 import { useReadinessScore } from "@/features/shared/hooks/useReadinessScore";
 import { useUpcomingCompetition } from "@/features/shared/hooks/useUpcomingCompetition";
 import { useLogWellness } from "@/features/shared/hooks/useLogWellness";
+import { useWeekProgram } from "@/features/shared/hooks/useWeekProgram";
 import { COMPETITION_META } from "@/types/planning";
 import type { WellnessData } from "@/features/shared/types/athlete";
 
@@ -31,13 +32,23 @@ function todayFr(): string {
 function ReadinessCircle({ score, color }: { score: number; color: string }) {
   const r = 54;
   const circ = 2 * Math.PI * r;
+  // Use gradient for score > 70 (violet→rose), solid color otherwise
+  const useGradient = score > 70;
+  const gradientId = "scoreGradient";
   return (
     <div style={{ position: "relative", width: 136, height: 136, flexShrink: 0 }}>
       <svg width={136} height={136} viewBox="0 0 136 136" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={68} cy={68} r={r} fill="none" stroke="#1A1B22" strokeWidth={10} />
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#A855F7" />
+            <stop offset="100%" stopColor="#F472B6" />
+          </linearGradient>
+        </defs>
+        <circle cx={68} cy={68} r={r} fill="none" stroke="rgba(124,116,128,0.2)" strokeWidth={10} />
         <circle
           cx={68} cy={68} r={r} fill="none"
-          stroke={color} strokeWidth={10}
+          stroke={useGradient ? `url(#${gradientId})` : color}
+          strokeWidth={10}
           strokeDasharray={String(circ)}
           strokeDashoffset={String(circ * (1 - score / 100))}
           strokeLinecap="round"
@@ -49,7 +60,7 @@ function ReadinessCircle({ score, color }: { score: number; color: string }) {
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
       }}>
-        <div style={{ fontSize: 30, fontWeight: 900, color, lineHeight: 1 }}>{score}</div>
+        <div style={{ fontSize: 30, fontWeight: 900, color: useGradient ? "#A855F7" : color, lineHeight: 1 }}>{score}</div>
         <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>/ 100</div>
       </div>
     </div>
@@ -91,7 +102,7 @@ function WellnessSheet({ open, onClose, existing, onSave }: WellnessSheetProps) 
 
   return (
     <Drawer open={open} onOpenChange={(v) => !v && onClose()}>
-      <DrawerContent style={{ background: C.s1, borderTop: "1px solid #1A1B22", padding: "0 0 24px" }}>
+      <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: "0 0 24px" }}>
         <DrawerHeader style={{ padding: "16px 20px 8px" }}>
           <DrawerTitle style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
             Bilan wellness du jour
@@ -103,8 +114,8 @@ function WellnessSheet({ open, onClose, existing, onSave }: WellnessSheetProps) 
             const v = vals[f.key as string] as number;
             const inv = f.inv;
             const trackColor = inv
-              ? (v >= 7 ? "#EF4B4B" : v <= 3 ? "#22C993" : "#F5A623")
-              : (v >= 7 ? "#22C993" : v <= 3 ? "#EF4B4B" : "#F5A623");
+              ? (v >= 7 ? "#EF4B4B" : v <= 3 ? "#22C993" : C.o)
+              : (v >= 7 ? "#22C993" : v <= 3 ? "#EF4B4B" : C.o);
             return (
               <div key={f.key as string}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -159,8 +170,10 @@ export default function TodayPage() {
 
   const wellness        = useTodayWellness();
   const readiness       = useReadinessScore(wellness);
-  const { workouts, nextWorkout, allDoneToday } = useTodayWorkout();
+  const { workouts, nextWorkout, allDoneToday, todayTests } = useTodayWorkout();
   const { data: nextComp } = useUpcomingCompetition(athleteId);
+  const weekDays = useWeekProgram(null);
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
   const { mutate: logWellness } = useLogWellness();
 
   // ── Yesterday's recap ─────────────────────────────────────────────────────
@@ -211,8 +224,8 @@ export default function TodayPage() {
           {readiness ? (
             <div
               style={{
-                background: "#0F1014", borderRadius: 20, padding: 16,
-                border: "1px solid #1A1B22",
+                background: C.s1, borderRadius: 20, padding: 16,
+                border: "1px solid " + C.brd,
                 display: "flex", alignItems: "center", gap: 20,
               }}
             >
@@ -242,7 +255,7 @@ export default function TodayPage() {
               onClick={() => { setWellnessOpen(true); haptic(); }}
               style={{
                 width: "100%", padding: "16px", borderRadius: 20,
-                border: "1.5px dashed #D4538E60", background: "rgba(212,83,142,0.06)",
+                border: "1.5px dashed " + C.coach + "60", background: C.coachS,
                 color: C.coach, fontSize: 13, fontWeight: 600,
                 cursor: "pointer", fontFamily: "inherit", minHeight: 44,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
@@ -272,20 +285,20 @@ export default function TodayPage() {
             Séance du jour
           </div>
 
-          {restDay ? (
-            <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #1A1B22", textAlign: "center" }}>
+          {restDay && todayTests.length === 0 ? (
+            <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd, textAlign: "center" }}>
               <div style={{ fontSize: 20, marginBottom: 4 }}>😌</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>Jour de repos</div>
               <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>Profitez pour récupérer !</div>
             </div>
           ) : allDoneToday ? (
-            <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #22C99340" }}>
+            <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid #22C99340" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#22C99320", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✓</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#22C993" }}>Séance complétée !</div>
               </div>
               <button
-                onClick={() => { navigate("program"); haptic(); }}
+                onClick={() => { navigate("/athlete/log"); haptic(); }}
                 style={{
                   width: "100%", padding: "12px 0", borderRadius: 12,
                   border: "1px solid #22C99340", background: "rgba(34,201,147,0.08)",
@@ -297,7 +310,7 @@ export default function TodayPage() {
               </button>
             </div>
           ) : nextWorkout ? (
-            <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #D4538E40" }}>
+            <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.coach + "40" }}>
               <div style={{ fontSize: 12, color: C.tx3, marginBottom: 4 }}>
                 {nextWorkout.session.short}
               </div>
@@ -310,7 +323,7 @@ export default function TodayPage() {
               <button
                 onClick={() => {
                   haptic();
-                  navigate(`program/workout/${nextWorkout.session.id}`);
+                  navigate("/athlete/log", { state: { initialSess: nextWorkout.session } });
                 }}
                 style={{
                   width: "100%", padding: "14px 0", borderRadius: 14,
@@ -323,13 +336,133 @@ export default function TodayPage() {
               </button>
             </div>
           ) : (
-            <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #1A1B22", textAlign: "center", color: C.tx3, fontSize: 12 }}>
+            <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd, textAlign: "center", color: C.tx3, fontSize: 12 }}>
               Aucune séance planifiée aujourd'hui
+            </div>
+          )}
+
+          {/* Tests du jour */}
+          {todayTests.length > 0 && (
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+              {todayTests.map((t) => (
+                <div
+                  key={t.id}
+                  style={{
+                    background: C.s1, borderRadius: 14, padding: "12px 14px",
+                    border: "1px solid " + (t.completed ? "#22C99330" : C.ac + "30"),
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                      background: t.completed ? "#22C99318" : C.acS,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 18,
+                    }}
+                  >
+                    🧪
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {t.title}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+                      {t.type}{t.completed ? " · Complété ✓" : " · À faire"}
+                    </div>
+                  </div>
+                  {t.completed && (
+                    <span style={{ fontSize: 16, color: "#22C993" }}>✓</span>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Section 3 — Récap hier */}
+        {/* Section 3 — Planning semaine horizontal */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+            Cette semaine
+          </div>
+          <div
+            style={{
+              display: "flex", gap: 6,
+              overflowX: "auto", scrollbarWidth: "none",
+              paddingBottom: 2,
+            }}
+          >
+            {weekDays.map((day) => {
+              const isToday = day.date === today;
+              const hasSess = day.sessions.length > 0;
+              const hasTest = day.tests.length > 0;
+              const allDone = hasSess && day.sessions.every(s => s.isCompleted);
+              const DOW_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
+              return (
+                <button
+                  key={day.date}
+                  onClick={() => navigate("program")}
+                  style={{
+                    flex: "1 0 0",
+                    minWidth: 40,
+                    padding: "8px 4px",
+                    borderRadius: 12,
+                    border: "1px solid " + (isToday ? C.coach + "60" : C.brd),
+                    background: isToday ? C.coachS : C.s1,
+                    cursor: "pointer", fontFamily: "inherit",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                  }}
+                >
+                  {/* Day letter */}
+                  <div style={{ fontSize: 9, fontWeight: 600, color: isToday ? C.coach : C.tx3 }}>
+                    {DOW_SHORT[day.dow]}
+                  </div>
+                  {/* Date number */}
+                  <div
+                    style={{
+                      width: 26, height: 26, borderRadius: "50%",
+                      background: isToday ? C.coach : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 12, fontWeight: 700,
+                      color: isToday ? "#fff" : (hasSess || hasTest) ? C.tx : C.tx3,
+                    }}
+                  >
+                    {new Date(day.date + "T12:00:00").getDate()}
+                  </div>
+                  {/* Dots: sessions + tests */}
+                  <div style={{ display: "flex", gap: 3, height: 6, alignItems: "center" }}>
+                    {day.sessions.map((s) => (
+                      <div
+                        key={s.session.id}
+                        style={{
+                          width: 5, height: 5, borderRadius: "50%",
+                          background: s.isCompleted ? "#22C993" : C.coach,
+                        }}
+                      />
+                    ))}
+                    {day.tests.map((t) => (
+                      <div
+                        key={t.id}
+                        style={{
+                          width: 5, height: 5, borderRadius: "50%",
+                          background: t.completed ? "#22C993" : C.ac,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {/* "Repos" label or done check */}
+                  {allDone ? (
+                    <div style={{ fontSize: 8, color: "#22C993", fontWeight: 700 }}>✓</div>
+                  ) : !hasSess && !hasTest ? (
+                    <div style={{ fontSize: 8, color: C.tx3 }}>—</div>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Section 4 — Récap hier */}
         {(yesterdayWellness || yesterdaySessName) && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
@@ -337,8 +470,8 @@ export default function TodayPage() {
             </div>
             <div
               style={{
-                background: "#0F1014", borderRadius: 14, padding: "12px 16px",
-                border: "1px solid #1A1B22",
+                background: C.s1, borderRadius: 14, padding: "12px 16px",
+                border: "1px solid " + C.brd,
                 display: "flex", alignItems: "center", gap: 16,
               }}
             >
@@ -372,8 +505,8 @@ export default function TodayPage() {
             </div>
             <div
               style={{
-                background: "#0F1014", borderRadius: 16, padding: 16,
-                border: "1px solid #D4538E40",
+                background: C.s1, borderRadius: 16, padding: 16,
+                border: "1px solid " + C.coach + "40",
                 display: "flex", alignItems: "center", gap: 14,
               }}
             >
@@ -385,8 +518,8 @@ export default function TodayPage() {
                     style={{
                       fontSize: 9, fontWeight: 700,
                       padding: "2px 7px", borderRadius: 20,
-                      background: nextComp.priority === "A" ? "#D4538E25" : "#F5A62320",
-                      color: nextComp.priority === "A" ? "#D4538E" : "#F5A623",
+                      background: nextComp.priority === "A" ? C.coachS : C.oS,
+                      color: nextComp.priority === "A" ? C.coach : C.o,
                     }}
                   >
                     {nextComp.priority}
@@ -419,7 +552,7 @@ export default function TodayPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {/* Charge 7j */}
               {chargeData.length > 0 && (
-                <div style={{ background: "#0F1014", borderRadius: 14, padding: "12px 16px", border: "1px solid #1A1B22" }}>
+                <div style={{ background: C.s1, borderRadius: 14, padding: "12px 16px", border: "1px solid " + C.brd }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, marginBottom: 8 }}>Charge · 7j</div>
                   <ResponsiveContainer width="100%" height={80}>
                     <BarChart data={chargeData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -437,7 +570,7 @@ export default function TodayPage() {
 
               {/* Wellness 14j */}
               {wellnessTrend.some(d => d.score !== null) && (
-                <div style={{ background: "#0F1014", borderRadius: 14, padding: "12px 16px", border: "1px solid #1A1B22" }}>
+                <div style={{ background: C.s1, borderRadius: 14, padding: "12px 16px", border: "1px solid " + C.brd }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, marginBottom: 8 }}>Wellness · 14j</div>
                   <ResponsiveContainer width="100%" height={80}>
                     <LineChart data={wellnessTrend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>

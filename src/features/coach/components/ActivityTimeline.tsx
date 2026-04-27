@@ -5,9 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ActivityItem } from "@/features/shared/hooks/useRecentActivity";
 
 const TYPE_META: Record<string, { icon: string; color: string }> = {
-  session:  { icon: "💪", color: "#7B6FFF" },
-  wellness: { icon: "❤️", color: "#22C993" },
-  pr:       { icon: "🏆", color: "#F5A623" },
+  session:  { icon: "💪", color: "#A855F7" },   // primary violet
+  wellness: { icon: "❤️", color: "#22C993" },   // success vert
+  pr:       { icon: "🏆", color: "#FB923C" },   // tertiary orange
 };
 
 interface ActivityTimelineProps {
@@ -26,8 +26,8 @@ export function ActivityTimeline({
   return (
     <div
       style={{
-        background: "#0F1014",
-        border: "1px solid #1A1B22",
+        background: C.s1,
+        border: "1px solid " + C.brd,
         borderRadius: 14,
         overflow: "hidden",
       }}
@@ -88,7 +88,7 @@ export function ActivityTimeline({
                 }}
                 onClick={() => onAthleteClick?.(item.athleteId)}
                 onMouseEnter={(e) => {
-                  if (onAthleteClick) (e.currentTarget as HTMLElement).style.background = C.s1;
+                  if (onAthleteClick) (e.currentTarget as HTMLElement).style.background = C.s2;
                 }}
                 onMouseLeave={(e) => {
                   if (onAthleteClick) (e.currentTarget as HTMLElement).style.background = "transparent";

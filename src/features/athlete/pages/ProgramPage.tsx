@@ -14,7 +14,7 @@ function toMonday(date: Date): Date {
 }
 
 function isoDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function weekLabel(monday: Date): string {
@@ -94,13 +94,15 @@ export default function ProgramPage() {
         {days.map((day) => {
           const isToday = day.date === today;
           const hasSessions = day.sessions.length > 0;
+          const hasTests = day.tests.length > 0;
+          const hasContent = hasSessions || hasTests;
 
           return (
             <div
               key={day.date}
               style={{
-                background: "#0F1014",
-                border: "1px solid " + (isToday ? C.coach + "50" : "#1A1B22"),
+                background: C.s1,
+                border: "1px solid " + (isToday ? C.coach + "50" : C.brd),
                 borderRadius: 16,
                 overflow: "hidden",
               }}
@@ -110,8 +112,8 @@ export default function ProgramPage() {
                 style={{
                   padding: "10px 14px",
                   display: "flex", alignItems: "center", gap: 10,
-                  background: isToday ? "rgba(212,83,142,0.06)" : "transparent",
-                  borderBottom: hasSessions ? "1px solid " + C.brd : "none",
+                  background: isToday ? C.coachS : "transparent",
+                  borderBottom: hasContent ? "1px solid " + C.brd : "none",
                 }}
               >
                 <div
@@ -135,8 +137,14 @@ export default function ProgramPage() {
                       Aujourd'hui
                     </div>
                   )}
-                  <div style={{ fontSize: 12, fontWeight: hasSessions ? 600 : 400, color: hasSessions ? C.tx : C.tx3 }}>
-                    {hasSessions ? `${day.sessions.length} séance${day.sessions.length > 1 ? "s" : ""}` : "Repos"}
+                  <div style={{ fontSize: 12, fontWeight: hasContent ? 600 : 400, color: hasContent ? C.tx : C.tx3 }}>
+                    {!hasContent
+                      ? "Repos"
+                      : [
+                          hasSessions && `${day.sessions.length} séance${day.sessions.length > 1 ? "s" : ""}`,
+                          hasTests    && `${day.tests.length} test${day.tests.length > 1 ? "s" : ""}`,
+                        ].filter(Boolean).join(" · ")
+                    }
                   </div>
                 </div>
               </div>
@@ -145,7 +153,7 @@ export default function ProgramPage() {
               {day.sessions.map(({ session, exercises, isCompleted }) => (
                 <button
                   key={session.id}
-                  onClick={() => navigate(`workout/${session.id}`)}
+                  onClick={() => navigate("/athlete/log", { state: { initialSess: session } })}
                   style={{
                     width: "100%", padding: "12px 14px",
                     border: "none", background: "transparent",
@@ -157,19 +165,17 @@ export default function ProgramPage() {
                   onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = C.s1)}
                   onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                 >
-                  {/* Status indicator */}
                   <div
                     style={{
                       width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
-                      background: isCompleted ? "#22C99320" : "rgba(212,83,142,0.12)",
-                      border: "1px solid " + (isCompleted ? "#22C99350" : "#D4538E40"),
+                      background: isCompleted ? "#22C99320" : C.coachS,
+                      border: "1px solid " + (isCompleted ? "#22C99350" : C.coach + "40"),
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 11,
                     }}
                   >
                     {isCompleted ? "✓" : "▶"}
                   </div>
-
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {session.name}
@@ -181,6 +187,39 @@ export default function ProgramPage() {
                   </div>
                   <span style={{ fontSize: 14, color: C.tx3 }}>›</span>
                 </button>
+              ))}
+
+              {/* Tests list */}
+              {day.tests.map((t) => (
+                <div
+                  key={t.id}
+                  style={{
+                    padding: "12px 14px",
+                    display: "flex", alignItems: "center", gap: 12,
+                    borderBottom: "1px solid " + C.brd,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
+                      background: t.completed ? "#22C99320" : C.acS,
+                      border: "1px solid " + (t.completed ? "#22C99350" : C.ac + "40"),
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11,
+                    }}
+                  >
+                    🧪
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {t.title}
+                    </div>
+                    <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+                      Test · {t.type}{t.completed ? " · Complété ✓" : ""}
+                    </div>
+                  </div>
+                  {t.completed && <span style={{ fontSize: 14, color: "#22C993" }}>✓</span>}
+                </div>
               ))}
             </div>
           );

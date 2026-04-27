@@ -56,7 +56,7 @@ export default function ProfilPage() {
         <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
           Profil
         </div>
-        <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #1A1B22" }}>
+        <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
             <div
               style={{
@@ -94,7 +94,7 @@ export default function ProfilPage() {
           <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
             Volume · programme
           </div>
-          <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #1A1B22" }}>
+          <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd }}>
             <ResponsiveContainer width="100%" height={120}>
               <BarChart data={volData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
                 <Bar dataKey="vol" fill={C.ac} radius={[2, 2, 0, 0]} />
@@ -117,7 +117,7 @@ export default function ProfilPage() {
           <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
             Wellness · 30 jours
           </div>
-          <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #1A1B22" }}>
+          <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd }}>
             <ResponsiveContainer width="100%" height={120}>
               <LineChart data={wellnessTrend30} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                 <Line type="monotone" dataKey="score" stroke={C.coach} strokeWidth={2} dot={false} connectNulls />
@@ -135,27 +135,47 @@ export default function ProfilPage() {
       )}
 
       {/* ── Section stats — poids ── */}
-      {weightData.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
-            Poids de corps · 30 jours
+      {weightData.length > 0 && (() => {
+        const kgValues = weightData.map(d => d.kg);
+        const kgMin = Math.min(...kgValues);
+        const kgMax = Math.max(...kgValues);
+        const spread = kgMax - kgMin;
+        const pad = spread < 1 ? 0.5 : spread * 0.12;
+        const domain: [number, number] = [
+          Math.floor((kgMin - pad) * 10) / 10,
+          Math.ceil((kgMax + pad) * 10) / 10,
+        ];
+        return (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
+              Poids de corps · 30 jours
+            </div>
+            <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd }}>
+              <ResponsiveContainer width="100%" height={110}>
+                <LineChart data={weightData} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
+                  <Line type="monotone" dataKey="kg" stroke={C.b} strokeWidth={2} dot={false} />
+                  <XAxis dataKey="d" tick={{ fontSize: 8, fill: C.tx3 }} axisLine={false} tickLine={false} interval={4} />
+                  <YAxis
+                    domain={domain}
+                    tickCount={4}
+                    tick={{ fontSize: 8, fill: C.tx3 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={32}
+                    tickFormatter={(v: number) => `${v}`}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: C.s1, border: "none", borderRadius: 8, fontSize: 11 }}
+                    labelStyle={{ color: C.tx3 }}
+                    itemStyle={{ color: C.b }}
+                    formatter={(v: number) => [`${v} kg`, "Poids"]}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div style={{ background: "#0F1014", borderRadius: 16, padding: 16, border: "1px solid #1A1B22" }}>
-            <ResponsiveContainer width="100%" height={100}>
-              <LineChart data={weightData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                <Line type="monotone" dataKey="kg" stroke={C.b} strokeWidth={2} dot={false} />
-                <XAxis dataKey="d" tick={{ fontSize: 8, fill: C.tx3 }} axisLine={false} tickLine={false} interval={4} />
-                <YAxis hide />
-                <Tooltip
-                  contentStyle={{ background: C.s1, border: "none", borderRadius: 8, fontSize: 11 }}
-                  labelStyle={{ color: C.tx3 }}
-                  itemStyle={{ color: C.b }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Section PRs ── */}
       {prEntries.length > 0 && (
@@ -163,7 +183,7 @@ export default function ProfilPage() {
           <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
             Records personnels
           </div>
-          <div style={{ background: "#0F1014", borderRadius: 16, border: "1px solid #1A1B22", overflow: "hidden" }}>
+          <div style={{ background: C.s1, borderRadius: 16, border: "1px solid " + C.brd, overflow: "hidden" }}>
             {prEntries.map(([name, v], i) => (
               <div
                 key={name}
@@ -189,7 +209,7 @@ export default function ProfilPage() {
         <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
           Paramètres
         </div>
-        <div style={{ background: "#0F1014", borderRadius: 16, border: "1px solid #1A1B22", overflow: "hidden" }}>
+        <div style={{ background: C.s1, borderRadius: 16, border: "1px solid " + C.brd, overflow: "hidden" }}>
           {/* Weight input */}
           <div style={{ padding: "12px 16px", borderBottom: "1px solid " + C.brd }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, marginBottom: 4 }}>Poids de corps actuel</div>

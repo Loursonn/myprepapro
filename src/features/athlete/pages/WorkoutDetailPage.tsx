@@ -159,8 +159,8 @@ export default function WorkoutDetailPage() {
               <div
                 key={exercise.id}
                 style={{
-                  background: "#0F1014", borderRadius: 14,
-                  border: "1px solid #1A1B22", overflow: "hidden",
+                  background: C.s1, borderRadius: 14,
+                  border: "1px solid " + C.brd, overflow: "hidden",
                 }}
               >
                 {/* Exercise header */}
@@ -215,7 +215,7 @@ export default function WorkoutDetailPage() {
             color: isCompleted ? C.tx3 : "#fff",
             fontSize: 14, fontWeight: 700, cursor: isCompleted ? "default" : "pointer",
             fontFamily: "inherit", minHeight: 44,
-            boxShadow: isCompleted ? "none" : "0 4px 20px rgba(212,83,142,0.35)",
+            boxShadow: isCompleted ? "none" : "0 4px 20px rgba(168,85,247,0.35)",
           }}
         >
           {isCompleted ? "Séance déjà complétée ✓" : "Terminer la séance 🏁"}

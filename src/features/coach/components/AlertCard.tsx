@@ -4,10 +4,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 export type AlertVariant = "danger" | "warning" | "success" | "coach";
 
 const VARIANT_COLORS: Record<AlertVariant, string> = {
-  danger:  "rgb(239,68,68)",   // surcharge / séance manquée
-  warning: "#F5A623",          // attention
-  success: "#22C993",          // positif
-  coach:   "#D4538E",          // compétition priorité A
+  danger:  "#EF4B4B",   // surcharge / séance manquée
+  warning: "#FB923C",   // attention — orange tertiary
+  success: "#22C993",   // positif — vert
+  coach:   "#F472B6",   // compétition priorité A — rose secondary
 };
 
 interface AlertRow {
@@ -24,7 +24,6 @@ interface AlertCardProps {
   variant?: AlertVariant;
   loading?: boolean;
   emptyMessage?: string;
-  /** Action button shown at card level */
   action?: { label: string; onClick: () => void };
 }
 
@@ -40,8 +39,8 @@ export function AlertCard({
   return (
     <div
       style={{
-        background: "#0F1014",
-        border: "1px solid #1A1B22",
+        background: C.s1,
+        border: "1px solid " + C.brd,
         borderLeft: `3px solid ${accent}`,
         borderRadius: 14,
         overflow: "hidden",
@@ -117,7 +116,7 @@ export function AlertCard({
                 transition: "background 150ms",
               }}
               onMouseEnter={(e) => {
-                if (row.onClick) (e.currentTarget as HTMLElement).style.background = C.s1;
+                if (row.onClick) (e.currentTarget as HTMLElement).style.background = C.s2;
               }}
               onMouseLeave={(e) => {
                 if (row.onClick) (e.currentTarget as HTMLElement).style.background = "transparent";

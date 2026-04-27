@@ -1,4 +1,4 @@
-/** Status pill for workout/session states. */
+/** Status pill for workout/session states — palette v2 */
 
 export type SessionStatus = "planned" | "in-progress" | "completed" | "missed" | "skipped";
 
@@ -8,39 +8,38 @@ const CONFIG: Record<
 > = {
   planned: {
     label: "Planifiée",
-    bg: "rgba(145,148,160,0.12)",
-    color: "#9194A0",
-    dot: "#9194A0",
+    bg:    "rgba(124,116,128,0.18)",
+    color: "#7C7480",
+    dot:   "#7C7480",
   },
   "in-progress": {
     label: "En cours",
-    bg: "rgba(123,111,255,0.14)",
-    color: "#7B6FFF",
-    dot: "#7B6FFF",
+    bg:    "rgba(168,85,247,0.18)",
+    color: "#A855F7",
+    dot:   "#A855F7",
   },
   completed: {
     label: "Terminée",
-    bg: "rgba(34,201,147,0.12)",
+    bg:    "rgba(34,201,147,0.15)",
     color: "#22C993",
-    dot: "#22C993",
+    dot:   "#22C993",
   },
   missed: {
     label: "Manquée",
-    bg: "rgba(239,75,75,0.12)",
-    color: "#EF4B4B",
-    dot: "#EF4B4B",
+    bg:    "rgba(251,146,60,0.15)",
+    color: "#FB923C",
+    dot:   "#FB923C",
   },
   skipped: {
     label: "Ignorée",
-    bg: "rgba(249,115,22,0.12)",
-    color: "#F97316",
-    dot: "#F97316",
+    bg:    "rgba(244,114,182,0.15)",
+    color: "#F472B6",
+    dot:   "#F472B6",
   },
 };
 
 interface StatusPillProps {
   status: SessionStatus;
-  /** Override label (defaults to French label from CONFIG) */
   label?: string;
   size?: "sm" | "md";
 }

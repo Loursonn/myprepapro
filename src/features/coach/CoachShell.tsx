@@ -34,12 +34,12 @@ const NAV_ITEMS = [
 const SIDEBAR_STYLE: React.CSSProperties = {
   "--sidebar-width": "240px",
   "--sidebar-width-icon": "64px",
-  "--sidebar-background": "#0A0B0F",
-  "--sidebar-foreground": "#9194A0",
-  "--sidebar-border": "#1A1B22",
-  "--sidebar-accent": "rgba(123,111,255,0.1)",
-  "--sidebar-accent-foreground": "#7B6FFF",
-  "--sidebar-ring": "#7B6FFF",
+  "--sidebar-background": "#1D1C1E",
+  "--sidebar-foreground": "#7C7480",
+  "--sidebar-border": "rgba(124,116,128,0.2)",
+  "--sidebar-accent": "rgba(168,85,247,0.1)",
+  "--sidebar-accent-foreground": "#A855F7",
+  "--sidebar-ring": "#A855F7",
 } as React.CSSProperties;
 
 // ── CoachShell ────────────────────────────────────────────────────────────────
@@ -60,10 +60,10 @@ function CoachShellInner() {
       {/* ── Sidebar ── */}
       <Sidebar
         collapsible="icon"
-        style={{ background: "#0A0B0F", borderRight: "1px solid #1A1B22" }}
+        style={{ background: "#1D1C1E", borderRight: "1px solid rgba(124,116,128,0.2)" }}
       >
         {/* Logo */}
-        <SidebarHeader style={{ padding: "16px 14px 12px", borderBottom: "1px solid #1A1B22" }}>
+        <SidebarHeader style={{ padding: "16px 14px 12px", borderBottom: "1px solid rgba(124,116,128,0.2)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div
               style={{
@@ -127,7 +127,7 @@ function CoachShellInner() {
                       padding: "9px 14px",
                       borderRadius: 0,
                       borderLeft: "2px solid " + (active ? C.ac : "transparent"),
-                      background: active ? "rgba(123,111,255,0.1)" : "transparent",
+                      background: active ? "rgba(168,85,247,0.1)" : "transparent",
                       color: active ? C.ac : C.tx2,
                       fontSize: 13,
                       fontWeight: active ? 600 : 400,
@@ -153,8 +153,8 @@ function CoachShellInner() {
         </SidebarContent>
 
         {/* Footer — coach profile */}
-        <SidebarFooter style={{ padding: "12px 14px", borderTop: "1px solid #1A1B22" }}>
-          <SidebarSeparator style={{ marginBottom: 10, background: "#1A1B22" }} />
+        <SidebarFooter style={{ padding: "12px 14px", borderTop: "1px solid rgba(124,116,128,0.2)" }}>
+          <SidebarSeparator style={{ marginBottom: 10, background: C.brd }} />
 
           <div
             className="coach-sidebar-label"
@@ -202,7 +202,7 @@ function CoachShellInner() {
         <div
           style={{
             position: "sticky", top: 0, zIndex: 10,
-            background: "#0F1014", borderBottom: "1px solid #1A1B22",
+            background: C.s1, borderBottom: "1px solid " + C.brd,
             padding: "8px 16px", display: "flex", alignItems: "center", gap: 8,
             flexShrink: 0, minHeight: 45,
           }}

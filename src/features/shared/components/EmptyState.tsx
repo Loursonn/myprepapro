@@ -34,7 +34,7 @@ export function EmptyState({ icon: Icon, title, description, cta }: EmptyStatePr
           width: 48,
           height: 48,
           borderRadius: 12,
-          background: "rgba(123,111,255,0.1)",
+          background: "rgba(168,85,247,0.1)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -62,7 +62,7 @@ export function EmptyState({ icon: Icon, title, description, cta }: EmptyStatePr
             padding: "8px 20px",
             borderRadius: 8,
             border: "1px solid " + C.ac + "50",
-            background: "rgba(123,111,255,0.12)",
+            background: "rgba(168,85,247,0.12)",
             color: C.ac,
             fontSize: 13,
             fontWeight: 600,
@@ -71,10 +71,10 @@ export function EmptyState({ icon: Icon, title, description, cta }: EmptyStatePr
             transition: "background 150ms ease-out",
           }}
           onMouseEnter={(e) =>
-            ((e.currentTarget as HTMLElement).style.background = "rgba(123,111,255,0.22)")
+            ((e.currentTarget as HTMLElement).style.background = "rgba(168,85,247,0.22)")
           }
           onMouseLeave={(e) =>
-            ((e.currentTarget as HTMLElement).style.background = "rgba(123,111,255,0.12)")
+            ((e.currentTarget as HTMLElement).style.background = "rgba(168,85,247,0.12)")
           }
         >
           {cta.label}

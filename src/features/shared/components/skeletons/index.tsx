@@ -32,7 +32,7 @@ export function CardSkeleton() {
         padding: "16px",
         borderRadius: 14,
         border: "1px solid rgba(255,255,255,0.06)",
-        background: "#111318",
+        background: C.s1,
       }}
     >
       <Skeleton className="h-3 w-20 mb-3" style={{ background: "rgba(255,255,255,0.06)" }} />
@@ -50,7 +50,7 @@ export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
       style={{
         borderRadius: 14,
         border: "1px solid rgba(255,255,255,0.06)",
-        background: "#111318",
+        background: C.s1,
         overflow: "hidden",
       }}
     >
@@ -97,7 +97,7 @@ export function ChartSkeleton({ height = 200 }: { height?: number }) {
       style={{
         borderRadius: 14,
         border: "1px solid rgba(255,255,255,0.06)",
-        background: "#111318",
+        background: C.s1,
         padding: 16,
       }}
     >
@@ -123,7 +123,7 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
             padding: "12px 16px",
             borderRadius: 10,
             border: "1px solid rgba(255,255,255,0.06)",
-            background: "#111318",
+            background: C.s1,
           }}
         >
           <Skeleton
