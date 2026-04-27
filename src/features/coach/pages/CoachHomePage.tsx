@@ -1,6 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { C } from "@/lib/theme";
+import { EmptyState } from "@/features/shared/components/EmptyState";
+import { Users } from "lucide-react";
 import { useCoachOverview } from "@/features/shared/hooks/useCoachOverview";
 import { useOverloadedAthletes } from "@/features/shared/hooks/useOverloadedAthletes";
 import { useMissedWorkouts } from "@/features/shared/hooks/useMissedWorkouts";
@@ -219,21 +221,13 @@ export default function CoachHomePage() {
 
       {/* ── Quick access (athletes without planned view) ── */}
       {athletes.length === 0 && !isCoachAthlete && (
-        <div
-          style={{
-            marginTop: 32, padding: "24px",
-            borderRadius: 14, border: "1px dashed " + C.brdL,
-            textAlign: "center", color: C.tx3, fontSize: 13,
-          }}
-        >
-          Aucun athlète pour l'instant.
-          <br />
-          <span style={{ fontSize: 11 }}>
-            Code coach :{" "}
-            <strong style={{ color: C.coach }}>
-              {profile?.coach_code ?? "—"}
-            </strong>
-          </span>
+        <div style={{ marginTop: 32 }}>
+          <EmptyState
+            icon={Users}
+            title="Aucun athlète pour l'instant"
+            description={`Code coach : ${profile?.coach_code ?? "—"} — partage-le pour que tes athlètes te rejoignent.`}
+            cta={{ label: "Gérer les athlètes", onClick: () => navigate("/coach/athletes") }}
+          />
         </div>
       )}
 

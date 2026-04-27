@@ -139,3 +139,53 @@ Toutes les pages lisent les données via `useAthleteContext()`.
 - Migrer les lectures Supabase restantes vers `useQuery` / `useMutation` (voir `AUDIT.md` §2)
 - Extraire `<AthleteProfileCard>`, `<WellnessScoreChart>`, `<InjuryList>` (voir `AUDIT.md` §5)
 - Supprimer `Dashboard.tsx` et `CoachAthleteView.tsx` après validation en TEST MANUEL
+
+---
+
+## PROMPT 5 — Command palette + finitions (2026-04-27)
+
+### Pattern optimistic updates (useMutation)
+
+Toutes les mutations qui modifient une liste visible doivent suivre ce pattern :
+
+```ts
+useMutation({
+  mutationFn: async (input) => { /* appel Supabase */ },
+
+  // 1. Annuler les requêtes en cours pour éviter les conflits
+  onMutate: async (input) => {
+    await qc.cancelQueries({ queryKey: QK.xxx(id) });
+    const previous = qc.getQueryData(QK.xxx(id));
+    // 2. Mise à jour optimiste immédiate (< 50ms)
+    qc.setQueryData(QK.xxx(id), (old) => /* nouveau state */);
+    return { previous }; // contexte pour rollback
+  },
+
+  // 3. En cas d'erreur : rollback
+  onError: (_err, _input, ctx) => {
+    if (ctx?.previous !== undefined) {
+      qc.setQueryData(QK.xxx(id), ctx.previous);
+    }
+    toast.error("Erreur, modification annulée");
+  },
+
+  // 4. En succès : synchroniser avec la vraie valeur serveur
+  onSuccess: (data) => {
+    qc.setQueryData(QK.xxx(id), data);
+  },
+});
+```
+
+Mutations implémentées avec optimistic updates :
+- `useFeedbacks.ts` → `addFeedbackMutation` (PROMPT 5)
+- `useUpdateSet.ts` → context local (optimistic via React state, pas React Query)
+- `useLogWellness.ts` → context local (optimistic via React state)
+
+### Command palette
+
+- Provider : `src/features/coach/context/CommandPaletteContext.tsx`
+- Hook : `useCommandPalette()` — open/close/toggle + pushRecent
+- Composant : `src/features/coach/components/CommandPalette.tsx`
+- Raccourci global : `Cmd+K` / `Ctrl+K` (listener dans le Provider)
+- Récents : 5 dernières pages visitées, stockées dans `localStorage` (`coach:cmd_palette_recents`)
+- Coach only : Provider monté dans `CoachShell`, pas dans `AthleteLayout`

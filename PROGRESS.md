@@ -136,14 +136,14 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 - [x] sonner configuré (position bottom-right desktop, top-center mobile)
 - [x] Tous alert() remplacés par toasts
 - [x] EmptyState component créé
-- [ ] Empty states appliqués partout
+- [x] Empty states appliqués partout
 - [x] StatusPill component créé (planned, in-progress, completed, missed, skipped)
-- [ ] StatusPills utilisés partout
+- [x] StatusPills utilisés partout
 - [x] Transitions hover/active 150ms appliquées
 - [x] framer-motion AnimatePresence sur routes
-- [ ] npm run build passe
-- [ ] npm run lint passe
-- [ ] CONTRIBUTING.md créé (conventions skeletons, toasts, mutations)
+- [x] npm run build passe
+- [x] npm run lint passe
+- [x] CONTRIBUTING.md créé (conventions skeletons, toasts, mutations)
 - [ ] ✅ **TEST MANUEL** : Cmd+K ouvre palette, optimistic updates réagissent <50ms, UI fluide
 
 ---
@@ -188,4 +188,4 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 
 ---
 
-**Dernière mise à jour :** 2026-04-27 — PROMPT 2 en cours
+**Dernière mise à jour :** 2026-04-27 — PROMPT 5 terminé (TEST MANUEL restant)

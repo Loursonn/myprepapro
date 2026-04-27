@@ -3,6 +3,9 @@ import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill } from "@/features/shared/components/StatusPill";
+import { EmptyState } from "@/features/shared/components/EmptyState";
+import { CalendarDays } from "lucide-react";
 
 // Vue Saison
 import { PlanningOverview } from "@/components/coach/PlanningOverview";
@@ -509,14 +512,11 @@ function DayView({ sessions, exos, completedSessions, currentWeek }: DayViewProp
 
       {/* Sessions for selected day */}
       {daySessions.length === 0 ? (
-        <div
-          style={{
-            padding: "40px 20px", textAlign: "center",
-            color: C.tx3, fontSize: 13,
-          }}
-        >
-          Aucune séance planifiée ce jour.
-        </div>
+        <EmptyState
+          icon={CalendarDays}
+          title="Aucune séance ce jour"
+          description="Aucune séance planifiée pour ce jour dans le bloc actif."
+        />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {daySessions.map((sess) => {
@@ -539,16 +539,7 @@ function DayView({ sessions, exos, completedSessions, currentWeek }: DayViewProp
                   >
                     {sess.name || sess.label}
                   </div>
-                  {done && (
-                    <span
-                      style={{
-                        fontSize: 10, color: C.g, fontWeight: 600,
-                        padding: "2px 8px", borderRadius: 6, background: C.gS,
-                      }}
-                    >
-                      ✓ Fait
-                    </span>
-                  )}
+                  <StatusPill status={done ? "completed" : "planned"} size="sm" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {exercises.slice(0, 5).map((ex, i) => (

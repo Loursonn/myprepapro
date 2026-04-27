@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { C } from "@/lib/theme";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { EmptyState } from "@/features/shared/components/EmptyState";
+import { Users } from "lucide-react";
 
 export default function AthletesListPage() {
   const { profile, athletes, user, loading, createInviteLink } = useAuth();
@@ -202,17 +204,11 @@ export default function AthletesListPage() {
             ))}
 
             {athletes.length === 0 && !isCoachAthlete && (
-              <div
-                style={{
-                  padding: "32px 24px", borderRadius: 14,
-                  border: "1px dashed " + C.brdL, color: C.tx3,
-                  fontSize: 13, textAlign: "center",
-                }}
-              >
-                Aucun athlète pour l'instant.
-                <br />
-                <span style={{ fontSize: 11 }}>Partage ton code ou un lien d'invitation.</span>
-              </div>
+              <EmptyState
+                icon={Users}
+                title="Aucun athlète pour l'instant"
+                description="Partage ton code coach ou génère un lien d'invitation pour que tes athlètes te rejoignent."
+              />
             )}
           </>
         )}
