@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { C } from "@/lib/theme";
 import { useAuth } from "@/hooks/useAuth";
 import {
   CommandDialog,
