@@ -22,17 +22,29 @@ import { TierConfigModal } from "@/components/coach/CoachComponents";
 // Vue Semaine
 import WeekCalendar from "@/components/coach/WeekCalendar";
 
+// Vue Mois
+import { CalendarMonthView } from "@/features/coach/components/planning/CalendarMonthView";
+
+// Vue Frise
+import { TimelineView } from "@/features/coach/components/planning/TimelineView";
+
+// Vue Synthèse
+import { SummaryView } from "@/features/coach/components/planning/SummaryView";
+
 import { useState } from "react";
 
 // ── View types ────────────────────────────────────────────────────────────────
 
-type PlanView = "season" | "block" | "week" | "day";
+type PlanView = "season" | "timeline" | "month" | "summary" | "block" | "week" | "day";
 
 const VIEWS: { key: PlanView; label: string }[] = [
-  { key: "season", label: "Saison"  },
-  { key: "block",  label: "Bloc"    },
-  { key: "week",   label: "Semaine" },
-  { key: "day",    label: "Jour"    },
+  { key: "season",   label: "Saison"   },
+  { key: "timeline", label: "Frise"    },
+  { key: "month",    label: "Mois"     },
+  { key: "summary",  label: "Synthèse" },
+  { key: "block",    label: "Bloc"     },
+  { key: "week",     label: "Semaine"  },
+  { key: "day",      label: "Jour"     },
 ];
 
 // ── PlanningPage ──────────────────────────────────────────────────────────────
@@ -121,6 +133,25 @@ export default function PlanningPage() {
             <PlanningEditor athleteId={athleteId} coachId={user?.id} sessions={sessions} />
           )}
         </div>
+      )}
+
+      {/* ── FRISE ─────────────────────────────────────────────────────────── */}
+      {view === "timeline" && (
+        <TimelineView athleteId={athleteId} />
+      )}
+
+      {/* ── MOIS ──────────────────────────────────────────────────────────── */}
+      {view === "month" && (
+        <CalendarMonthView
+          athleteId={athleteId}
+          coachId={user?.id ?? ""}
+          sessions={sessions}
+        />
+      )}
+
+      {/* ── SYNTHÈSE ──────────────────────────────────────────────────────── */}
+      {view === "summary" && (
+        <SummaryView athleteId={athleteId} />
       )}
 
       {/* ── BLOC ──────────────────────────────────────────────────────────── */}
