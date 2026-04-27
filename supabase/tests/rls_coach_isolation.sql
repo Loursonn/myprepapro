@@ -56,7 +56,7 @@ ON CONFLICT DO NOTHING;
 
 -- Habitude de l'athlète A
 INSERT INTO public.habits (id, athlete_id, name, emoji, color) VALUES
-  ('aaaaaaaa-hhhh-0000-0000-000000000006', 'aaaaaaaa-1111-0000-0000-000000000003', 'Sport', '🏋️', '#7B6FFF')
+  ('aaaaaaaa-ab00-0000-0000-000000000006', 'aaaaaaaa-1111-0000-0000-000000000003', 'Sport', '🏋️', '#7B6FFF')
 ON CONFLICT DO NOTHING;
 
 -- ── Test 1 : Coach A voit l'app_data de son athlète ──────────────────────────
