@@ -149,15 +149,15 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 ---
 
 ## 🗄️ PROMPT 6 - Migration DB / RLS Supabase
-- [ ] DB_AUDIT.md créé (tables, RLS, manques)
-- [ ] Indexes manquants identifiés
-- [ ] Requêtes N+1 identifiées
-- [ ] Migration A - Indexes créée et testée
-- [ ] Migration B - Status workouts créée (colonne + backfill)
-- [ ] Migration C - RPC get_coach_overview créée
-- [ ] Migration D - RPC readiness_score (si serveur) OU skip
-- [ ] Migration E - RLS audit + corrections
-- [ ] Migration F - Cron mark-missed-workouts créé
+- [x] DB_AUDIT.md créé (tables, RLS, manques)
+- [x] Indexes manquants identifiés
+- [x] Requêtes N+1 identifiées
+- [x] Migration A - Indexes créée et testée
+- [x] Migration B - Status workouts créée (colonne + backfill)
+- [x] Migration C - RPC get_coach_overview créée
+- [x] Migration D - RPC readiness_score (si serveur) OU skip
+- [x] Migration E - RLS audit + corrections
+- [x] Migration F - Cron mark-missed-workouts créé
 - [ ] Types TS régénérés (database.types.ts)
 - [ ] useCoachOverview adapté pour appeler RPC
 - [ ] Mutations adaptées (.select().single())
