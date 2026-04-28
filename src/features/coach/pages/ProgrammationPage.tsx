@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
+// view driven by ContextBar sub-tabs via ?view= param
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,16 +22,10 @@ import { PlanningEditor } from "@/components/coach/PlanningEditor";
 
 type ProgView = "block" | "week" | "day";
 
-const VIEWS: { key: ProgView; label: string }[] = [
-  { key: "block", label: "Bloc"    },
-  { key: "week",  label: "Semaine" },
-  { key: "day",   label: "Jour"    },
-];
-
 // ── ProgrammationPage ─────────────────────────────────────────────────────────
 
 export default function ProgrammationPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const view = (searchParams.get("view") as ProgView) ?? "block";
 
   const { user } = useAuth();
@@ -75,34 +70,6 @@ export default function ProgrammationPage() {
 
   return (
     <div style={{ padding: "16px 24px 60px" }}>
-      {/* View selector */}
-      <div
-        style={{
-          display: "inline-flex", background: C.s1, borderRadius: 10,
-          padding: 3, border: "1px solid " + C.brdL, marginBottom: 20, gap: 2,
-        }}
-      >
-        {VIEWS.map((v) => {
-          const active = view === v.key;
-          return (
-            <button
-              key={v.key}
-              onClick={() => setView(v.key)}
-              style={{
-                padding: "6px 16px", borderRadius: 8, border: "none",
-                background: active ? C.ac : "transparent",
-                color: active ? "#fff" : C.tx3,
-                fontSize: 12, fontWeight: active ? 600 : 400,
-                cursor: "pointer", fontFamily: "inherit",
-                transition: "all 150ms",
-              }}
-            >
-              {v.label}
-            </button>
-          );
-        })}
-      </div>
-
       {/* ── BLOC ──────────────────────────────────────────────────────────── */}
       {view === "block" && (
         <>

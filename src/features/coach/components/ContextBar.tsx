@@ -18,7 +18,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-// ── Secondary tabs ─────────────────────────────────────────────────────────────
+// ── Navigation tabs ────────────────────────────────────────────────────────────
 
 const TABS = [
   { key: "planning",      label: "Planning"      },
@@ -28,6 +28,20 @@ const TABS = [
   { key: "retours",       label: "Retours"       },
   { key: "tests",         label: "Tests"         },
 ] as const;
+
+const SUB_TABS: Record<string, { key: string; label: string }[]> = {
+  planning: [
+    { key: "season",   label: "Saison"   },
+    { key: "timeline", label: "Frise"    },
+    { key: "month",    label: "Mois"     },
+    { key: "summary",  label: "Synthèse" },
+  ],
+  programmation: [
+    { key: "block", label: "Bloc"    },
+    { key: "week",  label: "Semaine" },
+    { key: "day",   label: "Jour"    },
+  ],
+};
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -44,8 +58,19 @@ export default function ContextBar() {
   const segments = location.pathname.split("/");
   const activeTab = TABS.find((t) => segments.includes(t.key))?.key ?? "planning";
 
+  // Active sub-tab from ?view= param
+  const searchParams = new URLSearchParams(location.search);
+  const activeSubView = searchParams.get("view");
+  const subTabs = SUB_TABS[activeTab] ?? [];
+  const defaultSubView = subTabs[0]?.key ?? null;
+  const activeSubTab = activeSubView ?? defaultSubView;
+
   function goTab(key: string) {
     navigate(`/coach/athletes/${athleteId}/${key}`);
+  }
+
+  function goSubTab(view: string) {
+    navigate(`/coach/athletes/${athleteId}/${activeTab}?view=${view}`);
   }
 
   // Initials from name
@@ -196,15 +221,8 @@ export default function ContextBar() {
         </Popover>
       </div>
 
-      {/* Secondary tabs */}
-      <div
-        style={{
-          display: "flex",
-          padding: "0 20px",
-          gap: 0,
-          overflowX: "auto",
-        }}
-      >
+      {/* Main tabs */}
+      <div style={{ display: "flex", padding: "0 20px", gap: 0, overflowX: "auto" }}>
         {TABS.map((tab) => {
           const active = tab.key === activeTab;
           return (
@@ -236,6 +254,46 @@ export default function ContextBar() {
           );
         })}
       </div>
+
+      {/* Sub-tabs (Saison/Frise/Mois/Synthèse ou Bloc/Semaine/Jour) */}
+      {subTabs.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            padding: "0 20px",
+            gap: 4,
+            overflowX: "auto",
+            borderTop: "1px solid " + C.brd,
+            background: "rgba(255,255,255,0.02)",
+          }}
+        >
+          {subTabs.map((sub) => {
+            const active = sub.key === activeSubTab;
+            return (
+              <button
+                key={sub.key}
+                onClick={() => goSubTab(sub.key)}
+                style={{
+                  padding: "7px 12px",
+                  border: "none",
+                  borderRadius: 0,
+                  borderBottom: "2px solid " + (active ? C.ac : "transparent"),
+                  background: "transparent",
+                  color: active ? C.ac : C.tx3,
+                  fontSize: 11,
+                  fontWeight: active ? 600 : 400,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  whiteSpace: "nowrap",
+                  transition: "color 150ms, border-color 150ms",
+                }}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
