@@ -57,11 +57,6 @@ export default function ProgrammationPage() {
   if (!loaded) {
     return (
       <div style={{ padding: "16px 24px" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-          {VIEWS.map((v) => (
-            <Skeleton key={v.key} style={{ height: 32, width: 80, borderRadius: 8, background: C.s1 }} />
-          ))}
-        </div>
         <Skeleton style={{ height: 120, borderRadius: 14, background: C.s1, marginBottom: 12 }} />
         <Skeleton style={{ height: 300, borderRadius: 14, background: C.s1 }} />
       </div>

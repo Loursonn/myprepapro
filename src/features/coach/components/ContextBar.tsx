@@ -97,7 +97,7 @@ export default function ContextBar() {
     <div
       style={{
         position: "sticky",
-        top: 45, // below the topbar (45px height)
+        top: 0,
         zIndex: 9,
         background: "rgba(29,28,30,0.9)",
         backdropFilter: "blur(12px)",
@@ -106,45 +106,44 @@ export default function ContextBar() {
         flexShrink: 0,
       }}
     >
-      {/* Athlete info row */}
+      {/* Athlete info row — compact */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
-          padding: "10px 20px",
+          gap: 8,
+          padding: "6px 16px",
           borderBottom: "1px solid " + C.brd,
         }}
       >
         {/* Avatar */}
         <div
           style={{
-            width: 34, height: 34, borderRadius: "50%",
+            width: 24, height: 24, borderRadius: "50%",
             background: C.coach + "25", border: "1px solid " + C.coach + "40",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 800, color: C.coach, flexShrink: 0,
+            fontSize: 9, fontWeight: 800, color: C.coach, flexShrink: 0,
           }}
         >
           {initials}
         </div>
 
-        {/* Name + bloc info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 13, fontWeight: 700, color: C.tx,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}
-          >
-            {fullName}
-            {selectedAthlete?.id === user?.id && (
-              <span style={{ fontSize: 10, color: C.ac, marginLeft: 6, fontWeight: 500 }}>(moi)</span>
-            )}
-          </div>
+        {/* Name */}
+        <div
+          style={{
+            fontSize: 12, fontWeight: 700, color: C.tx,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            flex: 1, minWidth: 0,
+          }}
+        >
+          {fullName}
+          {selectedAthlete?.id === user?.id && (
+            <span style={{ fontSize: 9, color: C.ac, marginLeft: 5, fontWeight: 500 }}>(moi)</span>
+          )}
           {blockConfig?.blockName && (
-            <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+            <span style={{ fontSize: 10, color: C.tx3, marginLeft: 8, fontWeight: 400 }}>
               {blockConfig.blockName} · S{currentWeek}/{tw}
-            </div>
+            </span>
           )}
         </div>
 
