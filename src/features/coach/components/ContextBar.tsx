@@ -21,11 +21,12 @@ import {
 // ── Secondary tabs ─────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: "planning", label: "Planning" },
-  { key: "stats",    label: "Stats"    },
-  { key: "donnees",  label: "Données"  },
-  { key: "retours",  label: "Retours"  },
-  { key: "tests",    label: "Tests"    },
+  { key: "planning",      label: "Planning"      },
+  { key: "programmation", label: "Programmation" },
+  { key: "stats",         label: "Stats"         },
+  { key: "donnees",       label: "Données"       },
+  { key: "retours",       label: "Retours"       },
+  { key: "tests",         label: "Tests"         },
 ] as const;
 
 // ── Component ──────────────────────────────────────────────────────────────────
