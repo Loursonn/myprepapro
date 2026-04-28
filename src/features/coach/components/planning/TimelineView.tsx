@@ -1,8 +1,12 @@
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
-import { addYears, subYears, startOfYear, endOfYear, format, parseISO } from "date-fns";
+import { startOfMonth, addMonths, subMonths, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus } from "lucide-react";
 import { C } from "@/lib/theme";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 import { useTimelineData }      from "./hooks/useTimelineData";
 import { useCalculatePosition } from "./hooks/useCalculatePosition";
@@ -20,12 +24,13 @@ import { TestMarkers }         from "./TestMarkers";
 
 import { MacrocycleDrawer }    from "./drawers/MacrocycleDrawer";
 import { MesocycleDrawer }     from "./drawers/MesocycleDrawer";
+import { CycleDrawer }         from "./drawers/CycleDrawer";
 import { MicrocycleDrawer }    from "./drawers/MicrocycleDrawer";
 import { CompetitionDrawer }   from "./drawers/CompetitionDrawer";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const MIN_WIDTH    = 1400;
+const MIN_WIDTH    = 600;
 const ROW_H        = 52;
 const ROWS_COUNT   = 4;
 const TOTAL_ROW_H  = ROW_H * ROWS_COUNT;
@@ -91,20 +96,17 @@ function DrawerShell({
     case "cycle": {
       const c = data.cycles.find((x) => x.id === state.id);
       if (!c) return null;
+      const parentMeso = data.mesocycles.find((m) => m.id === c.mesocycle_id);
       title    = c.name;
       subtitle = `${format(parseISO(c.start_date), "d MMM", { locale: fr })} → ${format(parseISO(c.end_date), "d MMM", { locale: fr })}`;
       content  = (
-        <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12 }}>
-          Voir ce mois dans le calendrier pour les détails.
-          <div style={{ marginTop: 12 }}>
-            <a
-              href={`?view=month&month=${c.start_date.slice(0, 7)}`}
-              style={{ color: C.ac, fontWeight: 600, fontSize: 13 }}
-            >
-              → Ouvrir Mois {format(parseISO(c.start_date), "MMMM yyyy", { locale: fr })}
-            </a>
-          </div>
-        </div>
+        <CycleDrawer
+          cycle={c}
+          parentMeso={parentMeso}
+          athleteId={athleteId}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+        />
       );
       break;
     }
@@ -172,16 +174,200 @@ function DrawerShell({
   );
 }
 
+// ── Create modal ──────────────────────────────────────────────────────────────
+
+type CreateLevel = "macrocycle" | "mesocycle" | "cycle" | "microcycle";
+
+interface CreateState {
+  level:        CreateLevel;
+  parentId?:    string;
+  defaultStart: string;
+  defaultEnd:   string;
+}
+
+function CreateModal({
+  state, athleteId, coachId, rangeStart, rangeEnd, onClose,
+}: {
+  state:      CreateState;
+  athleteId:  string;
+  coachId:    string;
+  rangeStart: string;
+  rangeEnd:   string;
+  onClose:    () => void;
+}) {
+  const qc = useQueryClient();
+
+  const [name,      setName]      = useState(state.level === "microcycle" ? "" : "");
+  const [weekNum,   setWeekNum]   = useState(1);
+  const [isDeload,  setIsDeload]  = useState(false);
+  const [startDate, setStartDate] = useState(state.defaultStart);
+  const [endDate,   setEndDate]   = useState(state.defaultEnd);
+  const [saving,    setSaving]    = useState(false);
+
+  const LEVEL_COLOR: Record<CreateLevel, string> = {
+    macrocycle: C.ac, mesocycle: C.coach, cycle: C.o, microcycle: C.tx3,
+  };
+  const color = LEVEL_COLOR[state.level];
+
+  const LEVEL_LABEL: Record<CreateLevel, string> = {
+    macrocycle: "Macrocycle", mesocycle: "Mésocycle", cycle: "Cycle", microcycle: "Microcycle",
+  };
+
+  async function handleSubmit() {
+    if (!startDate || !endDate) { toast.error("Dates requises"); return; }
+    if (state.level !== "microcycle" && !name.trim()) { toast.error("Nom requis"); return; }
+    setSaving(true);
+    let error: unknown = null;
+    switch (state.level) {
+      case "macrocycle":
+        ({ error } = await supabase.from("macrocycles").insert({
+          athlete_id: athleteId, coach_id: coachId,
+          name: name.trim(), start_date: startDate, end_date: endDate,
+        }));
+        break;
+      case "mesocycle":
+        ({ error } = await supabase.from("mesocycles").insert({
+          macrocycle_id: state.parentId!, name: name.trim(),
+          start_date: startDate, end_date: endDate,
+        }));
+        break;
+      case "cycle":
+        ({ error } = await supabase.from("cycles").insert({
+          mesocycle_id: state.parentId!, name: name.trim(),
+          start_date: startDate, end_date: endDate,
+        }));
+        break;
+      case "microcycle":
+        ({ error } = await supabase.from("microcycles").insert({
+          cycle_id: state.parentId!, week_number: weekNum,
+          start_date: startDate, end_date: endDate, is_deload: isDeload,
+        }));
+        break;
+    }
+    setSaving(false);
+    if (error) { toast.error("Erreur lors de la création"); return; }
+    qc.invalidateQueries({ queryKey: ["timeline-data", athleteId, rangeStart, rangeEnd] });
+    toast.success(`${LEVEL_LABEL[state.level]} créé`);
+    onClose();
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "8px 10px", borderRadius: 8,
+    border: "1px solid " + C.brdL, background: C.s2,
+    color: C.tx, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box",
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)" }} />
+      <div
+        style={{
+          position: "fixed", top: "50%", left: "50%", zIndex: 61,
+          transform: "translate(-50%, -50%)",
+          width: 400, maxWidth: "92vw",
+          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+          padding: "20px 24px",
+          animation: "fadeScaleIn 150ms ease-out",
+        }}
+      >
+        <style>{`@keyframes fadeScaleIn { from { opacity:0; transform:translate(-50%,-50%) scale(0.95) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }`}</style>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+          <div style={{ width: 4, height: 28, borderRadius: 3, background: color, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9, color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Nouveau
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.tx }}>{LEVEL_LABEL[state.level]}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {state.level === "microcycle" ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label style={{ fontSize: 11, color: C.tx3, flexShrink: 0 }}>Semaine n°</label>
+              <input
+                type="number" min={1} max={52}
+                value={weekNum}
+                onChange={(e) => setWeekNum(parseInt(e.target.value) || 1)}
+                style={{ ...inputStyle, width: 80 }}
+              />
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.tx3, cursor: "pointer" }}>
+                <input
+                  type="checkbox" checked={isDeload}
+                  onChange={(e) => setIsDeload(e.target.checked)}
+                  style={{ accentColor: C.b }}
+                />
+                Deload
+              </label>
+            </div>
+          ) : (
+            <div>
+              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>Nom</label>
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                placeholder={`Nom du ${LEVEL_LABEL[state.level].toLowerCase()}…`}
+                style={inputStyle}
+              />
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>Début</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>Fin</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: color, color: "#fff", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}
+          >
+            {saving ? "…" : "Créer"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── TimelineView ──────────────────────────────────────────────────────────────
 
 interface TimelineViewProps { athleteId: string }
 
-export function TimelineView({ athleteId }: TimelineViewProps) {
-  const [year,       setYear]       = useState(new Date().getFullYear());
-  const [drawer,     setDrawer]     = useState<DrawerState | null>(null);
+const MONTHS_SHOWN = 18;
 
-  const rangeStart = startOfYear(new Date(year, 0, 1));
-  const rangeEnd   = endOfYear(new Date(year, 0, 1));
+export function TimelineView({ athleteId }: TimelineViewProps) {
+  const [windowStart, setWindowStart] = useState(() => startOfMonth(new Date()));
+  const [drawer,      setDrawer]      = useState<DrawerState | null>(null);
+  const [createModal, setCreateModal] = useState<CreateState | null>(null);
+
+  const { user } = useAuth();
+
+  const rangeStart = windowStart;
+  const rangeEnd   = addMonths(windowStart, MONTHS_SHOWN);
   const rsStr      = format(rangeStart, "yyyy-MM-dd");
   const reStr      = format(rangeEnd,   "yyyy-MM-dd");
 
@@ -204,6 +390,25 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const { mutate: resize } = useResizeCycle();
 
   const open = useCallback((type: DrawerType, id: string) => setDrawer({ type, id }), []);
+
+  function openCreate(level: CreateLevel, parentId?: string, defaultStart?: string, defaultEnd?: string) {
+    setCreateModal({
+      level, parentId,
+      defaultStart: defaultStart ?? rsStr,
+      defaultEnd:   defaultEnd   ?? reStr,
+    });
+  }
+
+  function makeAddHandler(
+    childLevel: CreateLevel,
+    parentArr: "macrocycles" | "mesocycles" | "cycles",
+  ) {
+    return (parentId: string) => {
+      const parent = (data?.[parentArr] as Array<{ id: string; start_date: string; end_date: string }>)
+        ?.find((i) => i.id === parentId);
+      openCreate(childLevel, parentId, parent?.start_date, parent?.end_date);
+    };
+  }
 
   function makeDragHandler(level: "macrocycles" | "mesocycles" | "cycles" | "microcycles") {
     return (id: string, ns: string, ne: string, ps?: string, pe?: string) => {
@@ -250,12 +455,32 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
         {/* ── Header ── */}
         <div style={{ padding: "12px 20px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={() => setYear((y) => y - 1)} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <button onClick={() => setWindowStart((d) => subMonths(d, 6))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <ChevronLeft size={16} />
             </button>
-            <div style={{ fontSize: 16, fontWeight: 800, color: C.tx, minWidth: 44, textAlign: "center" }}>{year}</div>
-            <button onClick={() => setYear((y) => y + 1)} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, minWidth: 160, textAlign: "center" }}>
+              {format(rangeStart, "MMM yyyy", { locale: fr })} — {format(rangeEnd, "MMM yyyy", { locale: fr })}
+            </div>
+            <button onClick={() => setWindowStart((d) => addMonths(d, 6))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <ChevronRight size={16} />
+            </button>
+            <button
+              onClick={() => setWindowStart(startOfMonth(new Date()))}
+              style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              Auj.
+            </button>
+            <button
+              onClick={() => openCreate("macrocycle", undefined, rsStr, reStr)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "5px 12px", borderRadius: 8,
+                border: "1px solid " + C.ac + "50", background: C.acS,
+                color: C.ac, fontSize: 11, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Plus size={11} /> Macrocycle
             </button>
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -270,7 +495,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
 
         {/* ── Scrollable area ── */}
         <div style={{ overflowX: "auto", paddingBottom: 40 }}>
-          <div ref={containerRef} style={{ width: "100%", minWidth: MIN_WIDTH }}>
+          <div ref={containerRef} style={{ width: "100%" }}>
             {/* TimeAxis */}
             <div style={{ padding: "10px 0 0" }}>
               <TimeAxis rangeStart={rangeStart} rangeEnd={rangeEnd} containerWidth={width} />
@@ -284,29 +509,48 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
             ) : (data?.macrocycles ?? []).length === 0 ? (
               <div style={{ padding: "60px 0", textAlign: "center" }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>Aucun macrocycle en {year}</div>
-                <div style={{ fontSize: 12, color: C.tx3, marginTop: 4 }}>Crée un macrocycle pour visualiser la frise.</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>Aucun macrocycle sur cette période</div>
+                <div style={{ fontSize: 12, color: C.tx3, marginTop: 4, marginBottom: 16 }}>Crée un macrocycle pour visualiser la frise.</div>
+                <button
+                  onClick={() => openCreate("macrocycle", undefined, rsStr, reStr)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "9px 18px", borderRadius: 10,
+                    border: "none", background: C.ac,
+                    color: "#fff", fontSize: 12, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  <Plus size={13} /> Créer un macrocycle
+                </button>
               </div>
             ) : (
               /* Relative container for absolute markers */
               <div style={{ position: "relative" }}>
                 <TimelineRow level="macrocycle" items={macroRows} {...sharedRowProps}
                   onOpen={(id) => open("macrocycle", id)}
+                  onAdd={makeAddHandler("mesocycle", "macrocycles")}
+                  onNewRow={() => openCreate("macrocycle", undefined, rsStr, reStr)}
                   onDrag={makeDragHandler("macrocycles")}
                   onResize={makeResizeHandler("macrocycles")}
                 />
                 <TimelineRow level="mesocycle" items={mesoRows} {...sharedRowProps}
                   onOpen={(id) => open("mesocycle", id)}
+                  onAdd={makeAddHandler("cycle", "mesocycles")}
+                  onNewRow={() => openCreate("mesocycle", data?.macrocycles[0]?.id, data?.macrocycles[0]?.start_date, data?.macrocycles[0]?.end_date)}
                   onDrag={makeDragHandler("mesocycles")}
                   onResize={makeResizeHandler("mesocycles")}
                 />
                 <TimelineRow level="cycle" items={cycleRows} {...sharedRowProps}
                   onOpen={(id) => open("cycle", id)}
+                  onAdd={makeAddHandler("microcycle", "cycles")}
+                  onNewRow={() => openCreate("cycle", data?.mesocycles[0]?.id, data?.mesocycles[0]?.start_date, data?.mesocycles[0]?.end_date)}
                   onDrag={makeDragHandler("cycles")}
                   onResize={makeResizeHandler("cycles")}
                 />
                 <TimelineRow level="microcycle" items={microRows} {...sharedRowProps}
                   onOpen={(id) => open("microcycle", id)}
+                  onNewRow={() => openCreate("microcycle", data?.cycles[0]?.id, data?.cycles[0]?.start_date, data?.cycles[0]?.end_date)}
                   onDrag={makeDragHandler("microcycles")}
                   onResize={makeResizeHandler("microcycles")}
                 />
@@ -333,6 +577,18 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           Drag axe X pour déplacer · Poignées colorées pour redimensionner · + pour détails · Compétitions: 🏆 rose(A) violet(B) gris(C)
         </div>
       </div>
+
+      {/* Create modal */}
+      {createModal && (
+        <CreateModal
+          state={createModal}
+          athleteId={athleteId}
+          coachId={user?.id ?? ""}
+          rangeStart={rsStr}
+          rangeEnd={reStr}
+          onClose={() => setCreateModal(null)}
+        />
+      )}
 
       {/* Drawer */}
       {drawer && data && (

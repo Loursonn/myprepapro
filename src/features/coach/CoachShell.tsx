@@ -56,7 +56,7 @@ function CoachShellInner() {
   }
 
   return (
-    <SidebarProvider style={SIDEBAR_STYLE}>
+    <SidebarProvider defaultOpen={typeof window !== "undefined" ? window.innerWidth > 1024 : true} style={SIDEBAR_STYLE}>
       {/* ── Sidebar ── */}
       <Sidebar
         collapsible="icon"
@@ -76,7 +76,7 @@ function CoachShellInner() {
               M
             </div>
             <span
-              className="coach-sidebar-label"
+              className="group-data-[collapsible=icon]:hidden"
               style={{ fontSize: 13, fontWeight: 700, color: C.tx, letterSpacing: "-0.3px" }}
             >
               MyPrepaPro
@@ -85,7 +85,7 @@ function CoachShellInner() {
         </SidebarHeader>
 
         {/* Search button — opens command palette */}
-        <div style={{ padding: "8px 10px 4px" }}>
+        <div className="group-data-[collapsible=icon]:hidden" style={{ padding: "8px 10px 4px" }}>
           <button
             onClick={toggle}
             className="coach-sidebar-search"
@@ -144,7 +144,7 @@ function CoachShellInner() {
                     }}
                   >
                     <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-                    <span className="coach-sidebar-label">{item.label}</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               );
@@ -157,7 +157,7 @@ function CoachShellInner() {
           <SidebarSeparator style={{ marginBottom: 10, background: C.brd }} />
 
           <div
-            className="coach-sidebar-label"
+            className="group-data-[collapsible=icon]:hidden"
             style={{ display: "flex", alignItems: "center", gap: 8 }}
           >
             <div
@@ -264,12 +264,6 @@ function CoachShellInner() {
       {/* Command palette (coach-only) */}
       <CommandPalette />
 
-      {/* Responsive sidebar label hiding */}
-      <style>{`
-        @media (max-width: 1024px) { .coach-sidebar-label { display: none; } }
-        @media (max-width: 1024px) { .coach-sidebar-search { display: none; } }
-        @media (max-width: 1024px) { [data-sidebar="sidebar"] { width: var(--sidebar-width-icon) !important; } }
-      `}</style>
     </SidebarProvider>
   );
 }

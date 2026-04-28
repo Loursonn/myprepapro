@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Rnd } from "react-rnd";
 import { Plus } from "lucide-react";
-import { format, differenceInDays, parseISO } from "date-fns";
+import { format, differenceInDays, parseISO, eachMonthOfInterval, getMonth } from "date-fns";
 import { C } from "@/lib/theme";
 import type { useCalculatePosition } from "./hooks/useCalculatePosition";
 
@@ -45,11 +45,12 @@ interface TLItemProps {
   color:      string;
   bg:         string;
   onOpen:     () => void;
+  onAdd?:     () => void;
   onDragStop: (newX: number) => void;
   onResizeStop: (newX: number, newWidth: number) => void;
 }
 
-function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onDragStop, onResizeStop }: TLItemProps) {
+function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onDragStop, onResizeStop }: TLItemProps) {
   const [dragging, setDragging] = useState(false);
 
   return (
@@ -58,7 +59,6 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onDragStop, 
       position={{ x, y: ITEM_Y }}
       size={{ width: Math.max(width, MIN_W_PX), height: ITEM_H }}
       dragAxis="x"
-      bounds="parent"
       minWidth={MIN_W_PX}
       enableResizing={{
         left: true, right: true,
@@ -89,6 +89,7 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onDragStop, 
         onResizeStop(pos.x, ref.offsetWidth);
       }}
       style={{ zIndex: dragging ? 10 : 2 }}
+      enableUserSelectHack={false}
     >
       <div
         onClick={(e) => { if (!dragging) { e.stopPropagation(); onOpen(); } }}
@@ -129,18 +130,20 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onDragStop, 
           {isDeload && <span style={{ color: C.b, marginRight: 3 }}>⟳</span>}
           {label}
         </span>
-        <button
-          onClick={(e) => { e.stopPropagation(); onOpen(); }}
-          style={{
-            width: 18, height: 18, borderRadius: 5, flexShrink: 0,
-            border: `1px solid ${color}60`, background: "transparent",
-            color, cursor: "pointer", fontFamily: "inherit",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginLeft: 4,
-          }}
-        >
-          <Plus size={10} />
-        </button>
+        {onAdd && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdd(); }}
+            style={{
+              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+              border: `1px solid ${color}60`, background: "transparent",
+              color, cursor: "pointer", fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginLeft: 4,
+            }}
+          >
+            <Plus size={10} />
+          </button>
+        )}
       </div>
     </Rnd>
   );
@@ -169,12 +172,14 @@ interface TimelineRowProps {
   rangeEnd:   string;
   athleteId:  string;
   onOpen:   (id: string) => void;
+  onAdd?:   (id: string) => void;
+  onNewRow?: () => void;
   onDrag:   (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
   onResize: (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
 }
 
 export function TimelineRow({
-  level, items, calc, athleteId, onOpen, onDrag, onResize,
+  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onNewRow, onDrag, onResize,
 }: TimelineRowProps) {
   const color = LEVEL_COLOR[level];
   const bg    = LEVEL_BG[level];
@@ -187,17 +192,32 @@ export function TimelineRow({
       <div
         style={{
           width: LABEL_W, flexShrink: 0, height: ROW_H,
-          display: "flex", alignItems: "center", paddingLeft: 8, paddingRight: 8,
+          display: "flex", alignItems: "center", paddingLeft: 8, paddingRight: 4,
+          gap: 4,
         }}
       >
         <span
           style={{
             fontSize: 9, fontWeight: 700, color,
-            textTransform: "uppercase", letterSpacing: "0.5px",
+            textTransform: "uppercase", letterSpacing: "0.5px", flex: 1,
           }}
         >
           {LEVEL_LABEL[level]}
         </span>
+        {onNewRow && (
+          <button
+            onClick={onNewRow}
+            title={`Nouveau ${LEVEL_LABEL[level].toLowerCase()}`}
+            style={{
+              width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+              border: `1px solid ${color}50`, background: "transparent",
+              color, cursor: "pointer", fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Plus size={9} />
+          </button>
+        )}
       </div>
 
       {/* Track */}
@@ -208,17 +228,23 @@ export function TimelineRow({
         }}
       >
         {/* Month grid lines */}
-        {Array.from({ length: 12 }, (_, i) => (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: `${(i / 12) * 100}%`,
-              top: 0, bottom: 0, width: 1,
-              background: C.brd, opacity: 0.5, pointerEvents: "none",
-            }}
-          />
-        ))}
+        {eachMonthOfInterval({ start: parseISO(rangeStart), end: parseISO(rangeEnd) }).map((m) => {
+          const x = calc.dateToX(format(m, "yyyy-MM-dd"));
+          const isJan = getMonth(m) === 0;
+          return (
+            <div
+              key={m.toISOString()}
+              style={{
+                position: "absolute",
+                left: x,
+                top: 0, bottom: 0, width: isJan ? 2 : 1,
+                background: isJan ? C.brd : C.brd,
+                opacity: isJan ? 0.9 : 0.4,
+                pointerEvents: "none",
+              }}
+            />
+          );
+        })}
 
         {items.map((item) => {
           const { x, width } = calc.position(item.startDate, item.endDate);
@@ -235,12 +261,14 @@ export function TimelineRow({
               color={color}
               bg={bg}
               onOpen={() => onOpen(item.id)}
+              onAdd={onAdd ? () => onAdd(item.id) : undefined}
               onDragStop={(newX) => {
-                // Snap to parent if out of bounds
                 let fx = newX;
                 if (item.parentStart && item.parentEnd) {
                   const { x: px, width: pw } = calc.position(item.parentStart, item.parentEnd);
                   fx = Math.max(px, Math.min(newX, px + pw - width));
+                } else {
+                  fx = Math.max(0, Math.min(newX, trackW - width));
                 }
                 const newStart = calc.xToDateStr(fx);
                 const newEnd   = format(
@@ -254,6 +282,9 @@ export function TimelineRow({
                 if (item.parentStart && item.parentEnd) {
                   const clamped = calc.clampToParent(newX, newW, item.parentStart, item.parentEnd);
                   fx = clamped.x; fw = clamped.width;
+                } else {
+                  fx = Math.max(0, newX);
+                  fw = Math.min(newW, trackW - fx);
                 }
                 const newStart = calc.xToDateStr(fx);
                 const newEnd   = calc.xToDateStr(fx + fw);

@@ -19,6 +19,7 @@ export interface Mesocycle {
 export interface Cycle {
   id: string; mesocycle_id: string;
   name: string; start_date: string; end_date: string;
+  objective?: string | null;
 }
 export interface Microcycle {
   id: string; cycle_id: string;
