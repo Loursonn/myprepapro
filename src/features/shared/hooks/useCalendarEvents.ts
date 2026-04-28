@@ -32,7 +32,7 @@ export function useCalendarEvents(athleteId: string, month: Date) {
         // workout_logs + RPE
         supabase
           .from("workout_logs")
-          .select("id, session_name, scheduled_date, status, workout_rpe(rpe_score)")
+          .select("id, session_id, session_name, scheduled_date, status, workout_rpe(rpe_score)")
           .eq("athlete_id", athleteId)
           .gte("scheduled_date", start)
           .lte("scheduled_date", end)
@@ -71,7 +71,7 @@ export function useCalendarEvents(athleteId: string, month: Date) {
           type: "workout",
           status: w.status,
           rpe,
-          raw: w as Record<string, unknown>,
+          raw: { ...(w as Record<string, unknown>), session_id: w.session_id },
         });
       }
 

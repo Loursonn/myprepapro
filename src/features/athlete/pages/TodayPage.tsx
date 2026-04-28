@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
@@ -12,6 +12,7 @@ import { useLogWellness } from "@/features/shared/hooks/useLogWellness";
 import { useWeekProgram } from "@/features/shared/hooks/useWeekProgram";
 import { COMPETITION_META } from "@/types/planning";
 import type { WellnessData } from "@/features/shared/types/athlete";
+import type { DayProgram } from "@/features/shared/hooks/useWeekProgram";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -157,14 +158,191 @@ function WellnessSheet({ open, onClose, existing, onSave }: WellnessSheetProps) 
   );
 }
 
+// ── Day preview bottom sheet ──────────────────────────────────────────────────
+
+const DAYS_FULL_FR = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+
+interface DayPreviewSheetProps {
+  day: DayProgram | null;
+  onClose: () => void;
+  onStartSession: (sess: DayProgram["sessions"][number]["session"]) => void;
+}
+
+function DayPreviewSheet({ day, onClose, onStartSession }: DayPreviewSheetProps) {
+  if (!day) return null;
+  const date = new Date(day.date + "T12:00:00");
+  const dateLabel = `${DAYS_FULL_FR[day.dow]} ${date.getDate()} ${MONTHS_FR[date.getMonth()]}`;
+  const isToday = day.date === new Date().toISOString().split("T")[0];
+  const isPast  = day.date < new Date().toISOString().split("T")[0];
+  const empty   = day.sessions.length === 0 && day.tests.length === 0;
+
+  return (
+    <Drawer open={!!day} onOpenChange={(v) => !v && onClose()}>
+      <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: "0 0 32px" }}>
+        <DrawerHeader style={{ padding: "16px 20px 8px" }}>
+          <DrawerTitle style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
+            {dateLabel}
+            {isToday && (
+              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: C.coachS, color: C.coach }}>
+                Aujourd'hui
+              </span>
+            )}
+          </DrawerTitle>
+        </DrawerHeader>
+
+        <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {empty ? (
+            <div style={{ textAlign: "center", padding: "24px 0", color: C.tx3, fontSize: 13 }}>
+              😌 Jour de repos — rien de prévu
+            </div>
+          ) : (
+            <>
+              {/* Sessions */}
+              {day.sessions.map(({ session, exercises, isCompleted }) => (
+                <div
+                  key={session.id}
+                  style={{
+                    background: isCompleted ? C.gS : C.coachS,
+                    borderRadius: 14, padding: "14px 16px",
+                    border: "1px solid " + (isCompleted ? C.g + "40" : C.coach + "40"),
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: exercises.length ? 10 : 0 }}>
+                    <div
+                      style={{
+                        width: 32, height: 32, borderRadius: 10, flexShrink: 0,
+                        background: isCompleted ? C.g + "20" : C.coach + "20",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 16,
+                      }}
+                    >
+                      {isCompleted ? "✅" : "🏋"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>{session.name}</div>
+                      <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+                        {session.short} · {exercises.length} exercice{exercises.length !== 1 ? "s" : ""}
+                        {isCompleted ? " · Complétée ✓" : isPast ? " · Manquée" : ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Exercise preview (up to 5) */}
+                  {exercises.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: isCompleted || isPast ? 0 : 10 }}>
+                      {exercises.slice(0, 5).map((ex) => (
+                        <div
+                          key={ex.id}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "6px 10px", borderRadius: 8, background: C.s2,
+                          }}
+                        >
+                          <div style={{ fontSize: 11, color: C.tx, flex: 1 }}>{ex.name}</div>
+                          {ex.weeks && Object.values(ex.weeks)[0] && (
+                            <div style={{ fontSize: 10, color: C.tx3 }}>
+                              {(Object.values(ex.weeks)[0] as { sets?: number; repsRange?: string }).sets}×{(Object.values(ex.weeks)[0] as { sets?: number; repsRange?: string }).repsRange}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {exercises.length > 5 && (
+                        <div style={{ fontSize: 10, color: C.tx3, paddingLeft: 10 }}>
+                          +{exercises.length - 5} exercice{exercises.length - 5 !== 1 ? "s" : ""}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!isCompleted && !isPast && (
+                    <button
+                      onClick={() => { onStartSession(session); onClose(); haptic(); }}
+                      style={{
+                        width: "100%", padding: "11px 0", borderRadius: 10,
+                        border: "none", background: C.coach, color: "#fff",
+                        fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        fontFamily: "inherit", minHeight: 44,
+                      }}
+                    >
+                      Démarrer ▶
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {/* Tests */}
+              {day.tests.map((t) => {
+                const tc = t.type === "musculation" ? "#7B6FFF"
+                  : t.type === "energetique" ? "#EF4B4B"
+                  : t.type === "specifique" ? "#F5A623"
+                  : "#22C993";
+                return (
+                  <div
+                    key={t.id}
+                    style={{
+                      background: t.completed ? C.gS : tc + "12",
+                      borderRadius: 14, padding: "14px 16px",
+                      border: "1px solid " + (t.completed ? C.g + "40" : tc + "40"),
+                      display: "flex", alignItems: "center", gap: 12,
+                    }}
+                  >
+                    <div style={{ fontSize: 24 }}>🧪</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>{t.title}</div>
+                      <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>
+                        {t.type} · {t.completed ? "Réalisé ✓" : "À faire"}
+                      </div>
+                    </div>
+                    {t.completed && <span style={{ fontSize: 18, color: C.g }}>✓</span>}
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+// ── Forme advice ──────────────────────────────────────────────────────────────
+
+const FORM_FIELDS = [
+  { key: "fatigue", label: "Récupération", icon: "😴", inv: true,
+    advice: (v: number) => v >= 7 ? "Grande fatigue détectée. Priorise le sommeil et réduis l'intensité cette semaine." : v <= 3 ? "Bonne récupération. Tu peux pousser plus fort." : null },
+  { key: "sommeil", label: "Sommeil",      icon: "🌙", inv: false,
+    advice: (v: number) => v <= 4 ? "Sommeil insuffisant. Vise 7-9h et couche-toi avant minuit." : null },
+  { key: "stress",  label: "Stress",       icon: "😰", inv: true,
+    advice: (v: number) => v >= 7 ? "Stress élevé : évite les séances HIIT, préfère l'endurance légère." : null },
+  { key: "energie", label: "Énergie",      icon: "⚡", inv: false,
+    advice: (v: number) => v <= 3 ? "Énergie basse : vérifie tes apports glucidiques avant les séances." : null },
+  { key: "doms",    label: "DOMS",         icon: "💪", inv: true,
+    advice: (v: number) => v >= 7 ? "Courbatures importantes. Privilégie du travail léger ou une séance d'activation." : null },
+];
+
+function getFormeAdvice(wellness: Record<string, number> | null): Array<{ icon: string; label: string; text: string; color: string }> {
+  if (!wellness) return [];
+  const tips: Array<{ icon: string; label: string; text: string; color: string }> = [];
+  for (const f of FORM_FIELDS) {
+    const v = wellness[f.key] as number | undefined;
+    if (v == null) continue;
+    const tip = f.advice(v);
+    if (!tip) continue;
+    const isBad = f.inv ? v >= 7 : v <= 3;
+    tips.push({ icon: f.icon, label: f.label, text: tip, color: isBad ? C.r : C.o });
+  }
+  return tips;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function TodayPage() {
   const navigate = useNavigate();
-  const [wellnessOpen, setWellnessOpen] = useState(false);
+  const [wellnessOpen,  setWellnessOpen]  = useState(false);
+  const [selectedDay,   setSelectedDay]   = useState<DayProgram | null>(null);
 
   const {
-    athleteId, athleteProfile, wellnessHistory, combinedData,
+    athleteId, athleteProfile, wellnessHistory,
     currentWeek, sessions, exos, completedSessions,
   } = useAthleteContext();
 
@@ -185,19 +363,35 @@ export default function TodayPage() {
     (s) => s.day_of_week === yesterdayDow && (exos[s.id] ?? []).length > 0 && doneLastWeek.has(s.id),
   )?.name ?? null;
 
-  // ── Load charge data (last 7 days from combinedData) ─────────────────────
-  const chargeData = combinedData?.slice(-7).map((d: { s: string; volProg: number; volReal: number | null }) => ({
-    s: d.s,
-    vol: d.volReal ?? d.volProg,
-  })) ?? [];
-
-  // ── Wellness trend (last 14 days from wellnessHistory) ───────────────────
+  // ── Wellness trend (last 14 days) ────────────────────────────────────────
   const wellnessTrend = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(Date.now() - (13 - i) * 86400000);
     const iso = d.toISOString().split("T")[0];
-    const w = wellnessHistory?.[iso];
-    return { d: iso.slice(5), score: w?.score ?? null };
+    const w = wellnessHistory?.[iso] as Record<string, number> | null | undefined;
+    const score = w ? Math.round(
+      ((w.fatigue ?? 3) + (w.sommeil ?? 3) + (w.stress ?? 3) + (w.energie ?? 3) + (w.doms ?? 3)) / 25 * 100
+    ) : null;
+    return { d: iso.slice(5), score };
   });
+  const wellnessTrendHasData = wellnessTrend.some((d) => d.score !== null);
+
+  // ── Form advice from today's wellness ────────────────────────────────────
+  const formeAdvice = getFormeAdvice(wellness as Record<string, number> | null);
+
+  // ── Average wellness score (last 7 days with data) ───────────────────────
+  const recentScores = wellnessTrend.slice(-7).map((d) => d.score).filter((s): s is number => s !== null);
+  const avgFormeScore = recentScores.length > 0
+    ? Math.round(recentScores.reduce((a, b) => a + b, 0) / recentScores.length)
+    : null;
+  const formeColor = avgFormeScore == null ? C.tx3
+    : avgFormeScore >= 75 ? C.g
+    : avgFormeScore >= 55 ? C.o
+    : C.r;
+  const formeLabel = avgFormeScore == null ? "—"
+    : avgFormeScore >= 75 ? "Excellente"
+    : avgFormeScore >= 60 ? "Bonne"
+    : avgFormeScore >= 45 ? "Correcte"
+    : "À surveiller";
 
   // ── Today's session CTA ───────────────────────────────────────────────────
   const firstDoneSession = workouts.find((w) => w.isCompleted);
@@ -401,7 +595,7 @@ export default function TodayPage() {
               return (
                 <button
                   key={day.date}
-                  onClick={() => navigate("program")}
+                  onClick={() => { setSelectedDay(day); haptic(); }}
                   style={{
                     flex: "1 0 0",
                     minWidth: 40,
@@ -534,59 +728,117 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* Section 5 — Mini-graphes */}
-        {(chargeData.length > 0 || wellnessTrend.some(d => d.score !== null)) && (
+        {/* Section 5 — Tendance de forme */}
+        {wellnessTrendHasData && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Tendances
+                Tendance de forme
               </div>
               <button
                 onClick={() => navigate("profil")}
                 style={{ fontSize: 10, color: C.ac, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}
               >
-                Voir plus →
+                Historique →
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {/* Charge 7j */}
-              {chargeData.length > 0 && (
-                <div style={{ background: C.s1, borderRadius: 14, padding: "12px 16px", border: "1px solid " + C.brd }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, marginBottom: 8 }}>Charge · 7j</div>
-                  <ResponsiveContainer width="100%" height={80}>
-                    <BarChart data={chargeData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                      <Bar dataKey="vol" fill={C.ac} radius={[2, 2, 0, 0]} />
-                      <XAxis dataKey="s" tick={{ fontSize: 9, fill: C.tx3 }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        contentStyle={{ background: C.s1, border: "none", borderRadius: 8, fontSize: 11 }}
-                        labelStyle={{ color: C.tx3 }}
-                        itemStyle={{ color: C.ac }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+            {/* Score + graph */}
+            <div style={{ background: C.s1, borderRadius: 16, padding: "14px 16px", border: "1px solid " + C.brd, marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: C.tx3, marginBottom: 2 }}>Forme moyenne · 7j</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: formeColor }}>
+                    {avgFormeScore ?? "—"}
+                    {avgFormeScore != null && <span style={{ fontSize: 12, fontWeight: 400, color: C.tx3 }}>/100</span>}
+                  </div>
                 </div>
-              )}
+                <div
+                  style={{
+                    padding: "5px 12px", borderRadius: 20,
+                    background: formeColor + "18", border: "1px solid " + formeColor + "40",
+                    fontSize: 12, fontWeight: 700, color: formeColor,
+                  }}
+                >
+                  {formeLabel}
+                </div>
+              </div>
 
-              {/* Wellness 14j */}
-              {wellnessTrend.some(d => d.score !== null) && (
-                <div style={{ background: C.s1, borderRadius: 14, padding: "12px 16px", border: "1px solid " + C.brd }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, marginBottom: 8 }}>Wellness · 14j</div>
-                  <ResponsiveContainer width="100%" height={80}>
-                    <LineChart data={wellnessTrend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                      <Line type="monotone" dataKey="score" stroke={C.coach} strokeWidth={2} dot={false} connectNulls />
-                      <XAxis dataKey="d" tick={{ fontSize: 9, fill: C.tx3 }} axisLine={false} tickLine={false} interval={3} />
-                      <YAxis domain={[0, 100]} hide />
-                      <Tooltip
-                        contentStyle={{ background: C.s1, border: "none", borderRadius: 8, fontSize: 11 }}
-                        labelStyle={{ color: C.tx3 }}
-                        itemStyle={{ color: C.coach }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              {/* 14-day line chart */}
+              <ResponsiveContainer width="100%" height={80}>
+                <LineChart data={wellnessTrend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <ReferenceLine y={60} stroke={C.brd} strokeDasharray="3 3" />
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    stroke={formeColor}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                  />
+                  <XAxis
+                    dataKey="d"
+                    tick={{ fontSize: 9, fill: C.tx3 }}
+                    axisLine={false} tickLine={false}
+                    interval={3}
+                  />
+                  <YAxis domain={[0, 100]} hide />
+                  <Tooltip
+                    contentStyle={{ background: C.s1, border: "none", borderRadius: 8, fontSize: 11 }}
+                    labelStyle={{ color: C.tx3 }}
+                    formatter={(v: number) => [`${v}/100`, "Forme"]}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
+
+            {/* Advice cards */}
+            {formeAdvice.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {formeAdvice.map((tip) => (
+                  <div
+                    key={tip.label}
+                    style={{
+                      background: C.s1, borderRadius: 12, padding: "12px 14px",
+                      border: "1px solid " + tip.color + "30",
+                      display: "flex", gap: 12, alignItems: "flex-start",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                        background: tip.color + "15",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 18,
+                      }}
+                    >
+                      {tip.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: tip.color, marginBottom: 3 }}>
+                        {tip.label}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.4 }}>{tip.text}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {formeAdvice.length === 0 && avgFormeScore != null && avgFormeScore >= 70 && (
+              <div
+                style={{
+                  background: C.gS, borderRadius: 12, padding: "12px 14px",
+                  border: "1px solid " + C.g + "30",
+                  display: "flex", gap: 10, alignItems: "center",
+                }}
+              >
+                <span style={{ fontSize: 20 }}>💚</span>
+                <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.4 }}>
+                  Ton état de forme est bon. Continue sur ta lancée et maintiens tes bonnes habitudes !
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -597,6 +849,13 @@ export default function TodayPage() {
         onClose={() => setWellnessOpen(false)}
         existing={wellness}
         onSave={logWellness}
+      />
+
+      {/* Day preview BottomSheet */}
+      <DayPreviewSheet
+        day={selectedDay}
+        onClose={() => setSelectedDay(null)}
+        onStartSession={(sess) => navigate("/athlete/log", { state: { initialSess: sess } })}
       />
     </>
   );

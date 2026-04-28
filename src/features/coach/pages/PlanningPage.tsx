@@ -27,7 +27,7 @@ export default function PlanningPage() {
   const view = (searchParams.get("view") as PlanView) ?? "season";
 
   const { user } = useAuth();
-  const { athleteId, loaded, sessions } = useAthleteContext();
+  const { athleteId, loaded, sessions, blockConfig, setBlockConfig } = useAthleteContext();
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
@@ -57,6 +57,8 @@ export default function PlanningPage() {
           athleteId={athleteId}
           coachId={user?.id ?? ""}
           sessions={sessions}
+          blockConfig={blockConfig}
+          setBlockConfig={setBlockConfig}
         />
       )}
 

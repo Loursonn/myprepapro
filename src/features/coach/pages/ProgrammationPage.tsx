@@ -16,8 +16,6 @@ import { NewBlockModal } from "@/components/coach/CoachComponents";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { TierConfigModal } from "@/components/coach/CoachComponents";
 import WeekCalendar from "@/components/coach/WeekCalendar";
-import { PlanningEditor } from "@/components/coach/PlanningEditor";
-
 // ── View types ────────────────────────────────────────────────────────────────
 
 type ProgView = "block" | "week" | "day";
@@ -45,7 +43,7 @@ export default function ProgrammationPage() {
     archiveAndNewBlock, updateSessionDay, updateSessionWeekDay,
   } = useAthleteContext();
 
-  const [progSubTab, setProgSubTab] = useState("planification");
+  const [progSubTab, setProgSubTab] = useState("muscu");
   const [showExoParams, setShowExoParams] = useState(false);
 
   function setView(v: ProgView) {
@@ -68,146 +66,6 @@ export default function ProgrammationPage() {
       {/* ── BLOC ──────────────────────────────────────────────────────────── */}
       {view === "block" && (
         <>
-          {/* Block config header */}
-          <div
-            style={{
-              background: C.s1, borderRadius: 14, padding: "12px 16px",
-              border: "1px solid " + C.b + "30", marginBottom: 14,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: C.b, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Bloc d'entraînement
-              </div>
-              {!viewOnly && (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    onClick={() => setShowNewBlock(true)}
-                    style={{
-                      padding: "4px 10px", borderRadius: 7,
-                      border: "1px solid " + C.coach + "40", background: C.coachS,
-                      color: C.coach, fontSize: 10, fontWeight: 600,
-                      cursor: "pointer", fontFamily: "inherit",
-                    }}
-                  >
-                    Nouveau bloc
-                  </button>
-                  <button
-                    onClick={() => setShowBlockHistory(true)}
-                    style={{
-                      padding: "4px 10px", borderRadius: 7,
-                      border: "1px solid " + C.brdL, background: "transparent",
-                      color: C.tx3, fontSize: 10, fontWeight: 600,
-                      cursor: "pointer", fontFamily: "inherit", position: "relative",
-                    }}
-                  >
-                    Historique
-                    {blockHistory.length > 0 && (
-                      <span
-                        style={{
-                          position: "absolute", top: -3, right: -3,
-                          background: C.ac, color: "#fff", fontSize: 8, fontWeight: 800,
-                          width: 13, height: 13, borderRadius: "50%",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                        }}
-                      >
-                        {blockHistory.length}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {!viewOnly && (
-              <>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                  <input
-                    value={blockConfig?.blockName || ""}
-                    onChange={(e) =>
-                      setBlockConfig((c) => ({ ...c, blockName: e.target.value }))
-                    }
-                    placeholder="Nom du bloc..."
-                    style={{
-                      flex: 1, padding: "7px 10px", borderRadius: 8,
-                      border: "1px solid " + C.brdL, background: C.s2,
-                      color: C.tx, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-                    }}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 10, color: C.tx3, flexShrink: 0 }}>Début</span>
-                    <input
-                      type="date"
-                      value={blockConfig?.startDate || ""}
-                      onChange={(e) =>
-                        setBlockConfig((c) => ({ ...c, startDate: e.target.value || null }))
-                      }
-                      style={{
-                        padding: "6px 8px", borderRadius: 8,
-                        border: "1px solid " + (blockConfig?.startDate ? C.brdL : C.o + "60"),
-                        background: C.s2, color: blockConfig?.startDate ? C.tx : C.o,
-                        fontSize: 12, fontFamily: "inherit",
-                      }}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd }}>
-                    <span style={{ fontSize: 10, color: C.tx3 }}>Durée</span>
-                    <button
-                      onClick={() => setBlockConfig((c) => ({ ...c, totalWeeks: Math.max(3, (c.totalWeeks ?? 4) - 1) }))}
-                      style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 14, cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}
-                    >-</button>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: C.b, minWidth: 36, textAlign: "center" }}>{tw}sem</span>
-                    <button
-                      onClick={() => setBlockConfig((c) => ({ ...c, totalWeeks: Math.min(16, (c.totalWeeks ?? 4) + 1) }))}
-                      style={{ width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 14, cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}
-                    >+</button>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, color: C.tx3, flexShrink: 0 }}>Deload :</span>
-                    {weeksArr.map((w) => {
-                      const isDL = dw === w;
-                      return (
-                        <button
-                          key={w}
-                          onClick={() => setBlockConfig((c) => ({ ...c, deloadWeek: c.deloadWeek === w ? 0 : w }))}
-                          style={{
-                            padding: "4px 9px", borderRadius: 6,
-                            border: "1px solid " + (isDL ? C.b + "60" : C.brdL),
-                            background: isDL ? C.bS : "transparent",
-                            color: isDL ? C.b : C.tx3, fontSize: 10,
-                            fontWeight: isDL ? 700 : 400,
-                            cursor: "pointer", fontFamily: "inherit",
-                          }}
-                        >
-                          S{w}
-                        </button>
-                      );
-                    })}
-                    {dw > 0 && (
-                      <button
-                        onClick={() => setBlockConfig((c) => ({ ...c, deloadWeek: 0 }))}
-                        style={{
-                          padding: "4px 8px", borderRadius: 6,
-                          border: "1px solid " + C.r + "40", background: "transparent",
-                          color: C.r, fontSize: 10, cursor: "pointer", fontFamily: "inherit",
-                        }}
-                      >✕</button>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {blockConfig?.blockName && (
-              <div style={{ fontSize: 11, color: C.tx3 }}>
-                {blockConfig.blockName} · S{currentWeek}/{tw}
-                {dw > 0 ? ` · Deload S${dw}` : ""}
-              </div>
-            )}
-          </div>
-
           {/* 4-week calendar */}
           <CoachFourWeekCalendar
             sessions={sessions}
@@ -234,10 +92,9 @@ export default function ProgrammationPage() {
             allMethods={allMethods}
           />
 
-          {/* Sub-tabs: Planification / Muscu / Énergie / Spécifique */}
+          {/* Sub-tabs: Muscu / Énergie / Spécifique */}
           <div style={{ display: "flex", gap: 0, borderBottom: "1px solid " + C.brd, margin: "16px 0 16px" }}>
             {[
-              { k: "planification", l: "Planification" },
               { k: "muscu",         l: "Musculation"   },
               { k: "energie",       l: "Énergétique"   },
               { k: "specifique",    l: "Spécifique"    },
@@ -261,9 +118,6 @@ export default function ProgrammationPage() {
             ))}
           </div>
 
-          {progSubTab === "planification" && (
-            <PlanningEditor athleteId={athleteId} coachId={user?.id} sessions={sessions} />
-          )}
           {progSubTab === "muscu" && (
             sessions.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px 20px" }}>

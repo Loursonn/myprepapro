@@ -22,6 +22,7 @@ export interface Mesocycle {
 export interface Cycle {
   id: string; mesocycle_id: string;
   name: string; start_date: string; end_date: string;
+  objective?: string | null;
 }
 
 export interface Microcycle {
@@ -138,6 +139,43 @@ export function useTimelineData(
   });
 }
 
+// ── Cycle sessions ────────────────────────────────────────────────────────────
+
+export interface CycleSession {
+  id: string;
+  session_name: string;
+  scheduled_date: string;
+  status: string;
+  rpe: number | null;
+}
+
+export function useCycleSessions(athleteId: string, startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ["cycle-sessions", athleteId, startDate, endDate],
+    enabled: !!athleteId && !!startDate && !!endDate,
+    staleTime: 60_000,
+    queryFn: async (): Promise<CycleSession[]> => {
+      const { data } = await supabase
+        .from("workout_logs")
+        .select("id, session_name, scheduled_date, status, workout_rpe(rpe_score)")
+        .eq("athlete_id", athleteId)
+        .gte("scheduled_date", startDate)
+        .lte("scheduled_date", endDate)
+        .order("scheduled_date");
+
+      return (data ?? []).map((w) => ({
+        id: w.id,
+        session_name: w.session_name,
+        scheduled_date: w.scheduled_date,
+        status: w.status,
+        rpe: Array.isArray(w.workout_rpe) && w.workout_rpe.length > 0
+          ? (w.workout_rpe[0] as { rpe_score: number }).rpe_score
+          : null,
+      }));
+    },
+  });
+}
+
 // ── Microcycle day data ───────────────────────────────────────────────────────
 
 export interface MicroDayData {
@@ -176,53 +214,46 @@ export function useMicroDayData(athleteId: string, dateStr: string) {
 // ── Mutations ─────────────────────────────────────────────────────────────────
 
 type DateUpdate = { id: string; start_date: string; end_date: string };
+type WithObjective = { objective?: string | null };
 
-function makeDateMutation(
-  table: string,
-  qKey: string,
-  athleteId: string,
-  qc: ReturnType<typeof useQueryClient>,
-) {
-  return async (vars: DateUpdate) => {
-    const { error } = await supabase
-      .from(table)
-      .update({ start_date: vars.start_date, end_date: vars.end_date })
-      .eq("id", vars.id);
-    if (error) throw error;
-  };
+async function patchRow(table: string, id: string, patch: Record<string, unknown>) {
+  const { error } = await supabase.from(table).update(patch).eq("id", id);
+  if (error) throw error;
 }
 
 export function useUpdateMacrocycle(athleteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: DateUpdate) =>
-      makeDateMutation("macrocycles", "timeline-data", athleteId, qc)(v),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }),
-    onError:    () => toast.error("Erreur mise à jour macrocycle"),
+    mutationFn: (v: DateUpdate & WithObjective) => {
+      const { id, ...rest } = v;
+      return patchRow("macrocycles", id, rest);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }),
+    onError:   () => toast.error("Erreur mise à jour macrocycle"),
   });
 }
 
 export function useUpdateMesocycle(athleteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: DateUpdate & Partial<Omit<Mesocycle, "id" | "macrocycle_id" | "start_date" | "end_date">>) =>
-      (async () => {
-        const { id, ...rest } = v;
-        const { error } = await supabase.from("mesocycles").update(rest).eq("id", id);
-        if (error) throw error;
-      })(),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }),
-    onError:    () => toast.error("Erreur mise à jour mésocycle"),
+    mutationFn: (v: DateUpdate & WithObjective & Partial<Omit<Mesocycle, "id" | "macrocycle_id" | "start_date" | "end_date">>) => {
+      const { id, ...rest } = v;
+      return patchRow("mesocycles", id, rest);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }),
+    onError:   () => toast.error("Erreur mise à jour mésocycle"),
   });
 }
 
 export function useUpdateCycle(athleteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: DateUpdate) =>
-      makeDateMutation("cycles", "timeline-data", athleteId, qc)(v),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }),
-    onError:    () => toast.error("Erreur mise à jour cycle"),
+    mutationFn: (v: DateUpdate & WithObjective) => {
+      const { id, ...rest } = v;
+      return patchRow("cycles", id, rest);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }),
+    onError:   () => toast.error("Erreur mise à jour cycle"),
   });
 }
 
