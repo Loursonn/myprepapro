@@ -52,7 +52,7 @@ interface Props {
 export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testSubTab, setTestSubTab }: Props) {
   const [tests, setTests] = useState<TestSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<"list" | "create" | "view" | "fill">("list");
+  const [step, setStep] = useState<"list" | "create" | "view" | "fill" | "edit">("list");
   const [selectedTest, setSelectedTest] = useState<TestSession | null>(null);
   const [fileUploading, setFileUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -165,6 +165,43 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
       ? selectedTest.results_structured.metrics
       : [{ name: "", value: "", unit: "" }]);
     setStep("fill");
+  };
+
+  const startEdit = () => {
+    if (!selectedTest) return;
+    setCreateForm({
+      type: selectedTest.type,
+      custom_type: selectedTest.custom_type || "",
+      title: selectedTest.title,
+      description: selectedTest.description || "",
+      reference_file_url: selectedTest.reference_file_url || "",
+      reference_file_type: selectedTest.reference_file_type || "",
+      date: selectedTest.date,
+    });
+    setUploadError("");
+    setStep("edit");
+  };
+
+  const handleEditSave = async () => {
+    if (!selectedTest || !createForm.title.trim() || saving) return;
+    setSaving(true);
+    try {
+      const payload = {
+        type: createForm.type,
+        custom_type: createForm.type === "custom" ? createForm.custom_type : null,
+        title: createForm.title.trim(),
+        description: createForm.description || null,
+        reference_file_url: createForm.reference_file_url || null,
+        reference_file_type: createForm.reference_file_type || null,
+        date: createForm.date,
+      };
+      await supabase.from("test_sessions").update(payload).eq("id", selectedTest.id);
+      setSelectedTest(prev => prev ? { ...prev, ...payload, custom_type: payload.custom_type ?? undefined, description: payload.description ?? undefined, reference_file_url: payload.reference_file_url ?? undefined, reference_file_type: payload.reference_file_type ?? undefined } : null);
+      loadTests();
+      setStep("view");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSaveResults = async () => {
@@ -376,7 +413,7 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
                 <label style={{ display: "block", padding: "20px", borderRadius: 9, border: "1px dashed " + (uploadError ? "#EF4B4B" : C.brdL), background: C.s2, textAlign: "center", cursor: fileUploading ? "default" : "pointer" }}>
                   <div style={{ fontSize: 24, marginBottom: 6 }}>📎</div>
                   <div style={{ fontSize: 12, color: uploadError ? "#EF4B4B" : C.tx3 }}>{fileUploading ? "Upload en cours…" : uploadError || "Photo, PNG, JPG ou PDF"}</div>
-                  <input type="file" accept="image/*,application/pdf" onChange={e => { setUploadError(""); e.target.files?.[0] && handleFileUpload(e.target.files[0]); }} style={{ display: "none" }} />
+                  <input type="file" accept="image/*,application/pdf" onChange={e => { setUploadError(""); if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); }} style={{ display: "none" }} />
                 </label>
               )}
             </div>
@@ -453,11 +490,101 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
           )}
 
           {(!viewOnly || isCoach) && (
-            <button onClick={startFill}
-              style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: selectedTest.completed ? C.s2 : (tInfo?.color || C.ac), color: selectedTest.completed ? C.tx3 : "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-              {selectedTest.completed ? "Modifier les résultats" : "▶ Remplir les résultats"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button onClick={startFill}
+                style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: selectedTest.completed ? C.s2 : (tInfo?.color || C.ac), color: selectedTest.completed ? C.tx3 : "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                {selectedTest.completed ? "Modifier les résultats" : "▶ Remplir les résultats"}
+              </button>
+              <button onClick={startEdit}
+                style={{ width: "100%", padding: "11px 0", borderRadius: 14, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                ✏ Modifier le test
+              </button>
+            </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vue édition du test ───────────────────────────────────────────────────────
+  if (step === "edit" && selectedTest) {
+    const editTypeInfo = TEST_TYPES.find(t => t.id === createForm.type);
+    return (
+      <div>
+        <SubTabs />
+        <div style={{ padding: "16px 16px 40px" }}>
+          <button onClick={() => setStep("view")} style={{ background: "none", border: "none", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 14 }}>‹ Retour</button>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.tx, marginBottom: 16 }}>Modifier le test</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Type */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Type de test</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {TEST_TYPES.map(t => (
+                  <button key={t.id} onClick={() => setCreateForm(f => ({ ...f, type: t.id }))}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid " + (createForm.type === t.id ? t.color : C.brdL), background: createForm.type === t.id ? t.color + "20" : "transparent", color: createForm.type === t.id ? t.color : C.tx3, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    <span>{t.emoji}</span> {t.label}
+                  </button>
+                ))}
+              </div>
+              {createForm.type === "custom" && (
+                <input value={createForm.custom_type} onChange={e => setCreateForm(f => ({ ...f, custom_type: e.target.value }))} placeholder="Préciser le type de test…"
+                  style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+              )}
+            </div>
+
+            {/* Titre */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Titre *</div>
+              <input value={createForm.title} onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Test VMA Cooper — 12 min"
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </div>
+
+            {/* Date */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Date du test</div>
+              <input type="date" value={createForm.date} onChange={e => setCreateForm(f => ({ ...f, date: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </div>
+
+            {/* Description */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Instructions / Description</div>
+              <textarea value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Décris le protocole du test, les consignes pour l'athlète…"
+                rows={4}
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+            </div>
+
+            {/* Fichier de référence */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Fichier de référence (optionnel)</div>
+              <div style={{ fontSize: 10, color: C.tx3, marginBottom: 10 }}>Photo, schéma, PDF de protocole</div>
+              {createForm.reference_file_url ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {createForm.reference_file_type === "image" ? (
+                    <img src={createForm.reference_file_url} alt="Ref" style={{ height: 80, borderRadius: 8, objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ padding: "10px 16px", borderRadius: 8, background: C.s2, color: C.ac, fontSize: 12, fontWeight: 600 }}>📄 PDF chargé</div>
+                  )}
+                  <button onClick={() => setCreateForm(f => ({ ...f, reference_file_url: "", reference_file_type: "" }))}
+                    style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: "rgba(239,75,75,0.12)", color: "#EF4B4B", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Supprimer</button>
+                </div>
+              ) : (
+                <label style={{ display: "block", padding: "20px", borderRadius: 9, border: "1px dashed " + (uploadError ? "#EF4B4B" : C.brdL), background: C.s2, textAlign: "center", cursor: fileUploading ? "default" : "pointer" }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>📎</div>
+                  <div style={{ fontSize: 12, color: uploadError ? "#EF4B4B" : C.tx3 }}>{fileUploading ? "Upload en cours…" : uploadError || "Photo, PNG, JPG ou PDF"}</div>
+                  <input type="file" accept="image/*,application/pdf" onChange={e => { setUploadError(""); if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); }} style={{ display: "none" }} />
+                </label>
+              )}
+            </div>
+          </div>
+
+          <button onClick={handleEditSave} disabled={!createForm.title.trim() || saving}
+            style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: (createForm.title.trim() && !saving) ? (editTypeInfo?.color || C.ac) : C.s2, color: (createForm.title.trim() && !saving) ? "#fff" : C.tx3, fontSize: 14, fontWeight: 800, cursor: (createForm.title.trim() && !saving) ? "pointer" : "default", fontFamily: "inherit", marginTop: 20 }}>
+            {saving ? "Enregistrement…" : "Enregistrer les modifications"}
+          </button>
         </div>
       </div>
     );

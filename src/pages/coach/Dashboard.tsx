@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth, Profile } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import WeightliftingTracker from "@/components/WeightliftingTracker.jsx";
 import AthleteProfileForm from "@/components/coach/AthleteProfileForm";
 
 const C = {
@@ -14,8 +14,8 @@ const C = {
 };
 
 export default function CoachDashboard() {
-  const { user, profile, athletes, activeAthleteId, setActiveAthleteId, logout, createInviteLink } = useAuth();
-  const [showPanel, setShowPanel] = useState(false);
+  const { user, profile, athletes, createInviteLink } = useAuth();
+  const navigate = useNavigate();
   const [inviteLink, setInviteLink] = useState("");
   const [copyMsg, setCopyMsg] = useState("");
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
@@ -31,8 +31,6 @@ export default function CoachDashboard() {
   }
 
   const isCoachAthlete = profile?.role === "coach" || profile?.role === "coach_athlete";
-  const selectedAthlete = athletes.find(a => a.id === activeAthleteId);
-  const isOwnAthleteView = activeAthleteId === user?.id;
 
   async function handleCopyLink() {
     try {
@@ -53,92 +51,7 @@ export default function CoachDashboard() {
     setTimeout(() => setCopyMsg(""), 2500);
   }
 
-  // ── Vue athlète sélectionné (tracker) ──
-  if (activeAthleteId) {
-    return (
-      <div style={{ position: "relative" }}>
-        {/* Top bar */}
-        <div style={{ position: "sticky", top: 0, zIndex: 100, background: C.bg, borderBottom: "1px solid " + C.brd, padding: "8px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setActiveAthleteId(null)}
-            style={{ background: "none", border: "none", color: C.tx3, fontSize: 18, cursor: "pointer", fontFamily: "inherit", padding: "0 4px" }}>
-            ‹
-          </button>
-          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: isOwnAthleteView ? C.ac + "25" : C.coach + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: isOwnAthleteView ? C.ac : C.coach, flexShrink: 0 }}>
-              {isOwnAthleteView ? profile?.full_name.charAt(0).toUpperCase() : selectedAthlete?.full_name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>
-                {isOwnAthleteView ? profile?.full_name + " (moi)" : selectedAthlete?.full_name}
-              </div>
-              <div style={{ fontSize: 10, color: C.tx3 }}>{isOwnAthleteView ? "Mon programme" : "Athlète"}</div>
-            </div>
-          </div>
-          {athletes.length > 0 && (
-            <button onClick={() => setShowPanel(!showPanel)}
-              style={{ padding: "5px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s1, color: C.tx2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
-              Changer
-            </button>
-          )}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-            <div style={{ fontSize: 10, color: C.tx3 }}>Coach</div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.coach }}>{profile?.full_name?.split(" ")[0]}</div>
-          </div>
-        </div>
-
-        {/* Quick-switch panel */}
-        {showPanel && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end" }}
-            onClick={() => setShowPanel(false)}>
-            <div style={{ width: "100%", maxWidth: 960, margin: "0 auto", background: C.s1, borderRadius: "16px 16px 0 0", padding: 20, maxHeight: "60vh", overflowY: "auto" }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.tx2, marginBottom: 14 }}>Choisir un athlète</div>
-              {athletes.map(a => (
-                <button key={a.id} onClick={() => { setActiveAthleteId(a.id); setShowPanel(false); }}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, border: "1px solid " + (a.id === activeAthleteId ? C.coach : C.brdL), background: a.id === activeAthleteId ? C.coachS : C.s2, marginBottom: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.coach + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: C.coach }}>
-                    {a.full_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>{a.full_name}</div>
-                  {a.id === activeAthleteId && <div style={{ marginLeft: "auto", fontSize: 12, color: C.coach }}>✓</div>}
-                </button>
-              ))}
-              {isCoachAthlete && (
-                <button onClick={() => { setActiveAthleteId(user!.id); setShowPanel(false); }}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, border: "1px solid " + (isOwnAthleteView ? C.ac : C.brdL), background: isOwnAthleteView ? C.acS : C.s2, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: C.ac + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: C.ac }}>
-                    {profile?.full_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: C.tx }}>Moi — {profile?.full_name}</div>
-                  {isOwnAthleteView && <div style={{ marginLeft: "auto", fontSize: 12, color: C.ac }}>✓</div>}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        <WeightliftingTracker
-          key={activeAthleteId}
-          athleteId={activeAthleteId}
-          defaultMode="coach"
-          canToggleMode={true}
-          userName={profile?.full_name}
-          athleteProfile={isOwnAthleteView ? profile : selectedAthlete}
-          onEditProfile={() => setEditingAthlete(isOwnAthleteView ? profile! : selectedAthlete!)}
-          viewOnly={!isOwnAthleteView}
-        />
-
-        {editingAthlete && (
-          <AthleteProfileForm
-            athlete={editingAthlete}
-            onClose={() => setEditingAthlete(null)}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // ── Accueil coach (aucun athlète sélectionné) ──
+  // ── Accueil coach — sélection d'athlète ──
   return (
     <>
     <div style={{ minHeight: "100vh", background: C.bg }}>
@@ -177,7 +90,7 @@ export default function CoachDashboard() {
 
               {athletes.map(a => (
                 <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <button onClick={() => setActiveAthleteId(a.id)}
+                  <button onClick={() => navigate("/coach/" + a.id)}
                     style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s2, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
                     <div style={{ width: 38, height: 38, borderRadius: "50%", background: C.coach + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: C.coach, flexShrink: 0 }}>
                       {a.full_name.charAt(0).toUpperCase()}
@@ -200,7 +113,7 @@ export default function CoachDashboard() {
               ))}
 
               {isCoachAthlete && (
-                <button onClick={() => setActiveAthleteId(user!.id)}
+                <button onClick={() => navigate("/coach/" + user!.id)}
                   style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 10, border: "1px solid " + C.ac + "40", background: C.acS, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
                   <div style={{ width: 38, height: 38, borderRadius: "50%", background: C.ac + "25", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: C.ac, flexShrink: 0 }}>
                     {profile?.full_name.charAt(0).toUpperCase()}
