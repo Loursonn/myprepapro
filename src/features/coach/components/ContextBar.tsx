@@ -36,11 +36,7 @@ const SUB_TABS: Record<string, { key: string; label: string }[]> = {
     { key: "month",    label: "Mois"     },
     { key: "summary",  label: "Synthèse" },
   ],
-  programmation: [
-    { key: "block", label: "Bloc"    },
-    { key: "week",  label: "Semaine" },
-    { key: "day",   label: "Jour"    },
-  ],
+  programmation: [],
 };
 
 // ── Component ──────────────────────────────────────────────────────────────────

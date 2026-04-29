@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { X, Dumbbell, FlaskConical } from "lucide-react";
 import { C } from "@/lib/theme";
-import { useAssignWorkout, useCreateTestSession } from "@/features/shared/hooks/useCalendarEvents";
+import { useAssignWorkout, useCreateTestSession } from "@/features/shared/hooks/useUnifiedCalendar";
 
 type Tab = "workout" | "test";
 

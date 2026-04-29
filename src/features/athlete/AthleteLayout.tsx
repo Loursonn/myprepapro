@@ -13,6 +13,7 @@ import { getBig3 } from "@/lib/calculations";
 const ATH_TABS = [
   { k: "",        l: "Aujourd'hui", icon: "🏠" },
   { k: "program", l: "Programme",   icon: "📅" },
+  { k: "test",    l: "Tests",       icon: "🧪" },
   { k: "alim",    l: "Nutrition",   icon: "🥗" },
   { k: "profil",  l: "Profil",      icon: "👤" },
 ];
@@ -244,7 +245,13 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
             <div style={{ fontSize: 14, fontWeight: 700 }}>Wellness du jour</div>
             <button onClick={() => setShowWellness(false)} style={{ background: "none", border: "none", color: C.tx3, fontSize: 20, cursor: "pointer", fontFamily: "inherit" }}>×</button>
           </div>
-          <WellnessFlow existing={wellness} onSave={saveWellness} sleepTarget={goals.sleepTarget} onAddInjury={addInjury} weightLog={weightLog} />
+          <WellnessFlow
+            existing={wellness}
+            onSave={(data) => { saveWellness(data); setShowWellness(false); }}
+            sleepTarget={goals.sleepTarget}
+            onAddInjury={addInjury}
+            weightLog={weightLog}
+          />
         </div>
       )}
 

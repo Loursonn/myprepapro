@@ -311,10 +311,6 @@ function CoachEnergyProgram({athleteId,energyEditorKey,setEnergyEditorKey,energy
               {(s.appareil_types||[]).length>0&&<div style={{fontSize:10,color:C.tx3}}>{(s.appareil_types||[]).join(", ")}</div>}
             </div>
           </div>
-          {assigned&&(<div style={{padding:"0 14px 12px",display:"flex",gap:5,flexWrap:"wrap"}}>
-            <div style={{fontSize:9,color:C.tx3,width:"100%",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.3px"}}>Jour :</div>
-            {DAY_S.map((d,i)=>(<button key={i} onClick={e=>{e.stopPropagation();setSessionDay(selWeek,sid,sessDay===i?null:i);}} style={{padding:"3px 8px",borderRadius:6,border:"1px solid "+(sessDay===i?C.coach:C.brdL),background:sessDay===i?C.coach:"transparent",color:sessDay===i?"#fff":C.tx3,fontSize:10,fontWeight:sessDay===i?700:400,cursor:"pointer",fontFamily:"inherit"}}>{d}</button>))}
-          </div>)}
         </div>);})}</div>
     </div>)}
   </div>);

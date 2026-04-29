@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import { X, ChevronLeft, ChevronRight, ExternalLink, Calendar, Check, Minus } from "lucide-react";
+import { X, ExternalLink, Calendar, Check, Minus, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { C } from "@/lib/theme";
 import type { Macrocycle, Mesocycle, Cycle, Microcycle } from "@/features/shared/hooks/useTimelineData";
 import {
   useUpdateMesocycle,
+  useUpdateMacrocycle,
+  useUpdateCycle,
+  useUpdateMicrocycle,
   useMicroDayData,
+  useCycleSessions,
 } from "@/features/shared/hooks/useTimelineData";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -86,6 +90,10 @@ function MicrocycleDashboard({
   athleteId: string;
   prevMicro?: Microcycle;
 }) {
+  const { mutate: update, isPending } = useUpdateMicrocycle(athleteId);
+  const [startDate, setStartDate] = useState(micro.start_date);
+  const [endDate,   setEndDate]   = useState(micro.end_date);
+  const dirty = startDate !== micro.start_date || endDate !== micro.end_date;
   const [showPrev, setShowPrev] = useState(false);
 
   const currentDays = eachDayOfInterval({
@@ -111,6 +119,21 @@ function MicrocycleDashboard({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Dates */}
+      <DateFields
+        startDate={startDate} endDate={endDate}
+        onStartChange={setStartDate} onEndChange={setEndDate}
+        color={C.tx3}
+      />
+      {dirty && (
+        <button
+          onClick={() => update({ id: micro.id, start_date: startDate, end_date: endDate })}
+          disabled={isPending}
+          style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: C.tx2, color: "#fff", fontSize: 13, fontWeight: 700, cursor: isPending ? "default" : "pointer", fontFamily: "inherit", opacity: isPending ? 0.7 : 1 }}
+        >
+          {isPending ? "Sauvegarde…" : "Enregistrer les dates"}
+        </button>
+      )}
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -160,12 +183,17 @@ function MicrocycleDashboard({
 function MesocycleForm({
   meso,
   athleteId,
+  parentObjective,
 }: {
   meso: Mesocycle;
   athleteId: string;
+  parentObjective?: string | null;
 }) {
   const { mutate: update, isPending } = useUpdateMesocycle(athleteId);
 
+  const [startDate,   setStartDate]   = useState(meso.start_date);
+  const [endDate,     setEndDate]     = useState(meso.end_date);
+  const [objective,   setObjective]   = useState(meso.objective ?? "");
   const [frequency,   setFrequency]   = useState<number>(meso.frequency ?? 3);
   const [deloadWeek,  setDeloadWeek]  = useState<number>(meso.deload_week ?? 4);
   const [volumeType,  setVolumeType]  = useState<string>(meso.volume_config?.type ?? "progressive");
@@ -183,8 +211,9 @@ function MesocycleForm({
   function save() {
     update({
       id: meso.id,
-      start_date: meso.start_date,
-      end_date: meso.end_date,
+      start_date: startDate,
+      end_date: endDate,
+      objective: objective || null,
       frequency,
       deload_week: deloadWeek,
       volume_config: { type: volumeType },
@@ -194,6 +223,14 @@ function MesocycleForm({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Objectif */}
+      <ObjectiveField value={objective} onChange={setObjective} parentObjective={parentObjective} color={C.coach} />
+      {/* Dates */}
+      <DateFields
+        startDate={startDate} endDate={endDate}
+        onStartChange={setStartDate} onEndChange={setEndDate}
+        color={C.coach}
+      />
       {/* Volume */}
       <div>
         <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, marginBottom: 6, textTransform: "uppercase" }}>
@@ -308,56 +345,220 @@ function MesocycleForm({
   );
 }
 
-// ── MacrocyclePanel ───────────────────────────────────────────────────────────
+// ── ObjectiveField helper ─────────────────────────────────────────────────────
 
-function MacrocyclePanel({ macro }: { macro: Macrocycle }) {
+function ObjectiveField({
+  value, onChange, parentObjective, color,
+}: {
+  value: string; onChange: (v: string) => void;
+  parentObjective?: string | null; color: string;
+}) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {macro.objective && (
-        <div
-          style={{
-            background: C.acS, borderRadius: 10, padding: "12px 14px",
-            border: "1px solid " + C.ac + "30",
-          }}
-        >
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.ac, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
-            Objectif
-          </div>
-          <div style={{ fontSize: 13, color: C.tx }}>{macro.objective}</div>
+    <div>
+      {parentObjective && (
+        <div style={{ fontSize: 10, color: C.tx3, marginBottom: 6, padding: "6px 10px", borderRadius: 7, background: C.s2, border: "1px solid " + C.brd }}>
+          <span style={{ fontWeight: 700, color }}>↑ Parent : </span>{parentObjective}
         </div>
       )}
-      <div style={{ display: "flex", gap: 10 }}>
-        {[
-          { label: "Début",    value: format(parseISO(macro.start_date), "d MMM yyyy", { locale: fr }) },
-          { label: "Fin",      value: format(parseISO(macro.end_date),   "d MMM yyyy", { locale: fr }) },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontSize: 9, color: C.tx3, marginBottom: 2 }}>{label}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{value}</div>
-          </div>
-        ))}
-      </div>
+      <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>Objectif</div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Ex: Courir en 4:00/km…"
+        style={{
+          width: "100%", padding: "7px 10px", borderRadius: 8,
+          border: "1px solid " + color + "40", background: C.s2,
+          color: C.tx, fontSize: 12, fontFamily: "inherit",
+          outline: "none", boxSizing: "border-box",
+        }}
+      />
+    </div>
+  );
+}
+
+// ── DateFields helper ─────────────────────────────────────────────────────────
+
+function DateFields({
+  startDate, endDate,
+  onStartChange, onEndChange,
+  color,
+}: {
+  startDate: string; endDate: string;
+  onStartChange: (v: string) => void;
+  onEndChange: (v: string) => void;
+  color: string;
+}) {
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "7px 10px", borderRadius: 8,
+    border: "1px solid " + color + "40", background: C.s2,
+    color: C.tx, fontSize: 12, fontFamily: "inherit",
+    outline: "none", boxSizing: "border-box",
+  };
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      {[
+        { label: "Début", value: startDate, onChange: onStartChange },
+        { label: "Fin",   value: endDate,   onChange: onEndChange   },
+      ].map(({ label, value, onChange }) => (
+        <div key={label} style={{ flex: 1 }}>
+          <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>{label}</div>
+          <input type="date" value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── MacrocyclePanel ───────────────────────────────────────────────────────────
+
+function MacrocyclePanel({ macro, athleteId }: { macro: Macrocycle; athleteId: string }) {
+  const { mutate: update, isPending } = useUpdateMacrocycle(athleteId);
+  const [startDate, setStartDate] = useState(macro.start_date);
+  const [endDate,   setEndDate]   = useState(macro.end_date);
+  const [objective, setObjective] = useState(macro.objective ?? "");
+  const dirty = startDate !== macro.start_date || endDate !== macro.end_date || objective !== (macro.objective ?? "");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <ObjectiveField value={objective} onChange={setObjective} color={C.ac} />
+      <DateFields
+        startDate={startDate} endDate={endDate}
+        onStartChange={setStartDate} onEndChange={setEndDate}
+        color={C.ac}
+      />
+      {dirty && (
+        <button
+          onClick={() => update({ id: macro.id, start_date: startDate, end_date: endDate, objective: objective || null })}
+          disabled={isPending}
+          style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: C.ac, color: "#fff", fontSize: 13, fontWeight: 700, cursor: isPending ? "default" : "pointer", fontFamily: "inherit", opacity: isPending ? 0.7 : 1 }}
+        >
+          {isPending ? "Sauvegarde…" : "Enregistrer"}
+        </button>
+      )}
     </div>
   );
 }
 
 // ── CyclePanel ────────────────────────────────────────────────────────────────
 
-function CyclePanel({ cycle, athleteId }: { cycle: Cycle; athleteId: string }) {
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  completed: { label: "Réalisée",   color: C.g,     bg: C.g  + "18" },
+  planned:   { label: "Planifiée",  color: C.tx3,   bg: C.s2       },
+  missed:    { label: "Manquée",    color: C.r,     bg: C.r  + "18" },
+  skipped:   { label: "Ignorée",    color: C.tx3,   bg: C.s2       },
+};
+
+function CyclePanel({ cycle, athleteId, parentObjective }: { cycle: Cycle; athleteId: string; parentObjective?: string | null }) {
   const navigate = useNavigate();
+  const { mutate: update, isPending } = useUpdateCycle(athleteId);
+  const [startDate, setStartDate] = useState(cycle.start_date);
+  const [endDate,   setEndDate]   = useState(cycle.end_date);
+  const [objective, setObjective] = useState(cycle.objective ?? "");
+  const dirty = startDate !== cycle.start_date || endDate !== cycle.end_date || objective !== (cycle.objective ?? "");
+  const { data: sessions = [], isLoading } = useCycleSessions(athleteId, cycle.start_date, cycle.end_date);
+
+  const completed = sessions.filter((s) => s.status === "completed");
+  const planned   = sessions.filter((s) => s.status === "planned");
+  const missed    = sessions.filter((s) => s.status === "missed");
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", gap: 10 }}>
-        {[
-          { label: "Début", value: format(parseISO(cycle.start_date), "d MMM yyyy", { locale: fr }) },
-          { label: "Fin",   value: format(parseISO(cycle.end_date),   "d MMM yyyy", { locale: fr }) },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontSize: 9, color: C.tx3, marginBottom: 2 }}>{label}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{value}</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Objectif */}
+      <ObjectiveField value={objective} onChange={setObjective} parentObjective={parentObjective} color={C.o} />
+      {/* Dates */}
+      <DateFields
+        startDate={startDate} endDate={endDate}
+        onStartChange={setStartDate} onEndChange={setEndDate}
+        color={C.o}
+      />
+      {dirty && (
+        <button
+          onClick={() => update({ id: cycle.id, start_date: startDate, end_date: endDate, objective: objective || null })}
+          disabled={isPending}
+          style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "none", background: C.o, color: "#fff", fontSize: 13, fontWeight: 700, cursor: isPending ? "default" : "pointer", fontFamily: "inherit", opacity: isPending ? 0.7 : 1 }}
+        >
+          {isPending ? "Sauvegarde…" : "Enregistrer"}
+        </button>
+      )}
+
+      {/* Stats summary */}
+      {sessions.length > 0 && (
+        <div style={{ display: "flex", gap: 8 }}>
+          {[
+            { label: "Réalisées", count: completed.length, color: C.g },
+            { label: "Planifiées", count: planned.length,  color: C.tx3 },
+            { label: "Manquées",  count: missed.length,    color: C.r },
+          ].map(({ label, count, color }) => (
+            <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 10, padding: "8px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color }}>{count}</div>
+              <div style={{ fontSize: 9, color: C.tx3, marginTop: 2 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Sessions list */}
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 8 }}>
+          Séances du cycle
+        </div>
+
+        {isLoading ? (
+          <div style={{ padding: "20px 0", textAlign: "center" }}>
+            <div style={{ width: 18, height: 18, border: "2px solid " + C.brdL, borderTopColor: C.o, borderRadius: "50%", animation: "spin 0.7s linear infinite", margin: "0 auto" }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
-        ))}
+        ) : sessions.length === 0 ? (
+          <div style={{ padding: "16px 0", textAlign: "center", fontSize: 12, color: C.tx3 }}>
+            Aucune séance sur cette période
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {sessions.map((s) => {
+              const cfg = STATUS_CONFIG[s.status] ?? STATUS_CONFIG.planned;
+              return (
+                <div
+                  key={s.id}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "9px 12px", borderRadius: 10,
+                    background: cfg.bg,
+                    border: "1px solid " + cfg.color + "30",
+                  }}
+                >
+                  {/* Status dot */}
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color, flexShrink: 0 }} />
+
+                  {/* Date */}
+                  <div style={{ fontSize: 10, color: C.tx3, minWidth: 52, flexShrink: 0 }}>
+                    {format(parseISO(s.scheduled_date), "EEE d MMM", { locale: fr })}
+                  </div>
+
+                  {/* Name */}
+                  <div style={{ flex: 1, fontSize: 12, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s.session_name}
+                  </div>
+
+                  {/* RPE badge */}
+                  {s.rpe != null && (
+                    <div style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, background: C.acS, color: C.ac, flexShrink: 0 }}>
+                      RPE {s.rpe}
+                    </div>
+                  )}
+
+                  {/* Status label */}
+                  <div style={{ fontSize: 9, fontWeight: 700, color: cfg.color, flexShrink: 0 }}>
+                    {cfg.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Calendar month button */}
       <button
         onClick={() =>
           navigate(`/coach/athletes/${athleteId}/planning?view=month&month=${cycle.start_date.slice(0, 7)}`)
@@ -372,7 +573,7 @@ function CyclePanel({ cycle, athleteId }: { cycle: Cycle; athleteId: string }) {
       >
         <Calendar size={15} />
         Voir dans le calendrier mois
-        <ExternalLink size={13} style={{ opacity: 0.6 }} />
+        <ChevronRight size={13} style={{ opacity: 0.6 }} />
       </button>
     </div>
   );
@@ -386,8 +587,11 @@ interface CycleDrawerProps {
   level: CycleLevel | null;
   item: CycleItem | null;
   athleteId: string;
-  // For microcycle: pass adjacent microcycles for S-1 feature
   prevMicrocycle?: Microcycle;
+  // Full timeline data to look up parent objectives
+  macrocycles?: Macrocycle[];
+  mesocycles?:  Mesocycle[];
+  cycles?:      Cycle[];
 }
 
 const LEVEL_LABELS: Record<CycleLevel, string> = {
@@ -405,16 +609,20 @@ const LEVEL_COLORS: Record<CycleLevel, string> = {
 };
 
 export function CycleDrawer({
-  open,
-  onClose,
-  level,
-  item,
-  athleteId,
-  prevMicrocycle,
+  open, onClose, level, item, athleteId, prevMicrocycle,
+  macrocycles = [], mesocycles = [], cycles = [],
 }: CycleDrawerProps) {
   if (!open || !level || !item) return null;
 
   const color = LEVEL_COLORS[level];
+
+  // Resolve parent objectives for hierarchy display
+  const mesoParentObjective = level === "mesocycle"
+    ? macrocycles.find((m) => m.id === (item as Mesocycle).macrocycle_id)?.objective
+    : undefined;
+  const cycleParentObjective = level === "cycle"
+    ? mesocycles.find((m) => m.id === (item as Cycle).mesocycle_id)?.objective
+    : undefined;
 
   return (
     <>
@@ -476,13 +684,13 @@ export function CycleDrawer({
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px", scrollbarWidth: "none" }}>
           {level === "macrocycle" && (
-            <MacrocyclePanel macro={item as Macrocycle} />
+            <MacrocyclePanel macro={item as Macrocycle} athleteId={athleteId} />
           )}
           {level === "mesocycle" && (
-            <MesocycleForm meso={item as Mesocycle} athleteId={athleteId} />
+            <MesocycleForm meso={item as Mesocycle} athleteId={athleteId} parentObjective={mesoParentObjective} />
           )}
           {level === "cycle" && (
-            <CyclePanel cycle={item as Cycle} athleteId={athleteId} />
+            <CyclePanel cycle={item as Cycle} athleteId={athleteId} parentObjective={cycleParentObjective} />
           )}
           {level === "microcycle" && (
             <MicrocycleDashboard

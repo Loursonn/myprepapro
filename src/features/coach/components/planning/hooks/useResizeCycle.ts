@@ -1,8 +1,37 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, parseISO, max, min } from "date-fns";
+import { format, parseISO, max, min, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { AnyItem, Level, TimelineData } from "./useTimelineData";
+
+// ── Microcycle helpers ────────────────────────────────────────────────────────
+
+function buildMicrocycles(cycleId: string, start: Date, end: Date) {
+  const rows: { cycle_id: string; week_number: number; start_date: string; end_date: string; is_deload: boolean }[] = [];
+  let weekMon = startOfISOWeek(start); // Monday of start week
+  let week = 1;
+  while (weekMon <= end) {
+    rows.push({
+      cycle_id:    cycleId,
+      week_number: week,
+      start_date:  format(weekMon,               "yyyy-MM-dd"),
+      end_date:    format(endOfISOWeek(weekMon), "yyyy-MM-dd"), // Sunday
+      is_deload:   false,
+    });
+    weekMon = addWeeks(weekMon, 1);
+    week++;
+  }
+  return rows;
+}
+
+async function regenerateMicrocycles(cycleId: string, newStart: Date, newEnd: Date) {
+  await supabase.from("microcycles").delete().eq("cycle_id", cycleId);
+  const rows = buildMicrocycles(cycleId, newStart, newEnd);
+  if (rows.length > 0) {
+    const { error } = await supabase.from("microcycles").insert(rows);
+    if (error) console.error("[regenerate-microcycles]", error.message);
+  }
+}
 
 export type { AnyItem, Level };
 
@@ -133,24 +162,7 @@ async function cascadeClipChildren(
     }
   }
 
-  if (level === "cycles") {
-    const { data: micros } = await supabase
-      .from("microcycles")
-      .select("id, start_date, end_date")
-      .eq("cycle_id", parentId);
-
-    for (const mi of micros ?? []) {
-      const ms = max([parseISO(mi.start_date), newStart]);
-      const me = min([parseISO(mi.end_date),   newEnd]);
-      if (ms >= me) {
-        updates.push({ table: "microcycles", id: mi.id, start_date: ns, end_date: ns });
-        continue;
-      }
-      if (format(ms, "yyyy-MM-dd") !== mi.start_date || format(me, "yyyy-MM-dd") !== mi.end_date) {
-        updates.push({ table: "microcycles", id: mi.id, start_date: format(ms, "yyyy-MM-dd"), end_date: format(me, "yyyy-MM-dd") });
-      }
-    }
-  }
+  // "cycles" level: microcycles are regenerated separately in mutationFn — skip here.
 
   return updates;
 }
@@ -210,7 +222,11 @@ export function useResizeCycle() {
         .eq("id", vars.item.id);
       if (error) throw error;
 
-      // Cascade clip children
+      // Cascade clip children (or regenerate for cycles)
+      if (vars.level === "cycles") {
+        await regenerateMicrocycles(vars.item.id, vars.newStart, vars.newEnd);
+      }
+
       const childUpdates = await cascadeClipChildren(
         vars.level,
         vars.item.id,
@@ -246,7 +262,8 @@ export function useResizeCycle() {
     },
 
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["timeline-data", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["timeline-data",    vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["planning-summary", vars.athleteId] });
     },
   });
 }

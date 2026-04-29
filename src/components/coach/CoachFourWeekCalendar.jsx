@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompetitions } from "@/hooks/useCompetitions";
+import { useUnifiedCalendar } from "@/features/shared/hooks/useUnifiedCalendar";
 import { C, BT, BLOC_COLORS, HABIT_COLORS, HABIT_EMOJIS } from "@/lib/theme";
 import { todayKey, hISO } from "@/lib/date";
 import { parseReps, fmtMR, clusterReps, DEF_METHODS, BLOC_METHODS, EVENT_TYPES, normalizeExName, fuzzyExMatch } from "@/lib/exercises";
@@ -27,6 +28,14 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
   // Semaine n-1 + offset (en semaines)
   const startMonday=new Date(baseMonday);
   startMonday.setDate(baseMonday.getDate()-7+weekOffset*7);
+
+  // ── Single source of truth: workout_logs via useUnifiedCalendar ──────────────
+  const _rangeEnd=new Date(startMonday);_rangeEnd.setDate(startMonday.getDate()+27);
+  const _schedRange={start:hISO(startMonday),end:hISO(_rangeEnd)};
+  const{data:_schedData=[]}=useUnifiedCalendar(athleteId||'',_schedRange,{includeExercises:false,staleTime:30000});
+  // Map to session-like shape for rendering compatibility
+  const workoutsForDate=dateStr=>(_schedData||[]).filter(e=>e.type==='workout'&&e.date===dateStr).map(e=>({id:e.sessionId||e.id,name:e.title,short:(e.title||'').slice(0,8),_done:e.status==='completed'}));
+  const _hasRealData=(_schedData||[]).some(e=>e.type==='workout');
 
   const weeks=Array.from({length:4},(_,wi)=>{
     const ws=new Date(startMonday);ws.setDate(startMonday.getDate()+wi*7);
@@ -163,7 +172,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
               const isToday=isoDate(date)===todStr;
               const isPast=date<new Date(new Date().setHours(0,0,0,0))&&!isToday;
               const isSel=selectDay&&selectDay.wi===wi&&selectDay.di===di;
-              const sessList=sessForDay(di,bw);
+              const sessList=_hasRealData?workoutsForDate(isoDate(date)):sessForDay(di,bw);
               const tests=testsForDate(isoDate(date));
               const well=wellnessHistory[dKey2(date)]||null;
               const ws2=wScore2(well);
@@ -191,7 +200,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
                   {planCompsDay.length>1&&<div style={{fontSize:7,color:'#F5A623',lineHeight:1,marginBottom:2}}>+{planCompsDay.length-1}</div>}
                   {/* Séances muscu */}
                   {visibilitySettings.muscu!==false&&sessList.length>0&&<div style={{display:'flex',flexDirection:'column',gap:2,marginBottom:2}}>
-                    {sessList.slice(0,2).map(s=>{const done=doneSet.has(s.id);const dc=done?C.g:C.b;return(
+                    {sessList.slice(0,2).map(s=>{const done=s._done!==undefined?s._done:doneSet.has(s.id);const dc=done?C.g:C.b;return(
                       <div key={s.id} style={{fontSize:8,fontWeight:700,padding:'2px 3px',borderRadius:4,background:dc+'22',color:dc,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.3}}>{done?'✓ ':''}{s.short||s.name?.slice(0,4)}</div>
                     );})}
                     {sessList.length>2&&<div style={{fontSize:7,color:C.tx3,lineHeight:1}}>+{sessList.length-2}</div>}
@@ -226,7 +235,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
         const date=weeks[selectDay.wi][selectDay.di];
         const di=selectDay.di;
         const planWeek=selectDay.bw||weekForWi(selectDay.wi);
-        const sessList=sessForDay(di,planWeek);
+        const sessList=_hasRealData?workoutsForDate(isoDate(date)):sessForDay(di,planWeek);
         const tests=testsForDate(isoDate(date));
         const well=wellnessHistory[dKey2(date)]||null;
         const ws3=wScore2(well);
@@ -266,7 +275,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
               );})}
             </div>}
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-              {sessList.map(s=>{const done=doneSet.has(s.id);return(
+              {sessList.map(s=>{const done=s._done!==undefined?s._done:doneSet.has(s.id);return(
                 <button key={s.id} onClick={()=>setPreviewItem({type:'muscu',data:s,planWeek:planWeek})} style={{padding:'5px 10px',borderRadius:9,background:C.b+'15',border:'1px solid '+C.b+'30',fontSize:11,fontWeight:600,color:C.b,cursor:'pointer',fontFamily:'inherit'}}>🏋 {s.name}{done?' ✓':''} ›</button>
               );})}
               {eAssigned.map(s=>(

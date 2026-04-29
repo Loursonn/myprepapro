@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, isToday,
-  eachDayOfInterval,
+  eachDayOfInterval, parseISO,
 } from "date-fns";
+import type { BlockConfig, Session } from "@/features/shared/types/athlete";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import {
@@ -18,8 +19,12 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { C } from "@/lib/theme";
-import { useCalendarEvents, useAssignWorkout } from "@/features/shared/hooks/useCalendarEvents";
-import type { CalEvent } from "@/features/shared/hooks/useCalendarEvents";
+import {
+  useUnifiedCalendar,
+  useAssignWorkout,
+  toCalEvent,
+} from "@/features/shared/hooks/useUnifiedCalendar";
+import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { DayDetailsDrawer } from "./DayDetailsDrawer";
 import { QuickAddDialog } from "./QuickAddDialog";
 
@@ -60,26 +65,30 @@ function EventChip({
   const bg    = TYPE_BG[event.type];
   const opacity = event.status ? STATUS_OPACITY[event.status] ?? 1 : 1;
 
+  const isProjected = event.raw?.source === "block_plan";
+
   return (
     <div
       style={{
-        background: bg,
-        borderLeft: "2px solid " + color,
+        background: isProjected ? "transparent" : bg,
+        borderLeft: `2px ${isProjected ? "dashed" : "solid"} ${color}`,
         borderRadius: "0 4px 4px 0",
         padding: compact ? "1px 5px" : "2px 6px",
         fontSize: compact ? 9 : 10,
-        fontWeight: 600,
+        fontWeight: isProjected ? 400 : 600,
         color: color,
-        opacity,
+        opacity: isProjected ? 0.6 : opacity,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
         cursor: "pointer",
         maxWidth: "100%",
+        fontStyle: isProjected ? "italic" : "normal",
       }}
     >
       {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : ""}
       {event.title}
+      {isProjected && <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>}
       {event.rpe != null && (
         <span style={{ opacity: 0.7, marginLeft: 3 }}>RPE{event.rpe}</span>
       )}
@@ -294,21 +303,78 @@ function SessionBank({
 interface CalendarMonthViewProps {
   athleteId: string;
   coachId: string;
-  sessions: Array<{ id: string; name?: string; label?: string }>;
+  sessions: Session[];
+  blockConfig?: BlockConfig;
+  setBlockConfig?: (fn: (prev: BlockConfig) => BlockConfig) => void;
 }
 
 export function CalendarMonthView({
   athleteId,
   coachId,
   sessions,
+  blockConfig,
+  setBlockConfig,
 }: CalendarMonthViewProps) {
   const [month, setMonth]             = useState(new Date());
   const [drawerDay, setDrawerDay]     = useState<Date | null>(null);
   const [quickAddDay, setQuickAddDay] = useState<Date | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
-  const { data: events = [], isLoading } = useCalendarEvents(athleteId, month);
-  const { mutate: assignWorkout }        = useAssignWorkout();
+  const monthRange = useMemo(() => ({
+    start: format(startOfMonth(month), "yyyy-MM-dd"),
+    end:   format(endOfMonth(month),   "yyyy-MM-dd"),
+  }), [month]);
+
+  const { data: rawEvents = [], isLoading } = useUnifiedCalendar(athleteId, monthRange);
+  const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
+  const { mutate: assignWorkout }           = useAssignWorkout();
+
+  // ── Project block sessions onto calendar dates ────────────────────────────
+  const projectedEvents = useMemo<CalEvent[]>(() => {
+    if (!blockConfig?.startDate || !sessions.length) return [];
+
+    // Snap to Monday of the week containing startDate
+    const blockStart = startOfWeek(parseISO(blockConfig.startDate), { weekStartsOn: 1 });
+    const mStart = startOfMonth(month);
+    const mEnd   = endOfMonth(month);
+
+    // Build set of already-logged session_id:date to avoid duplication
+    const logged = new Set(
+      realEvents
+        .filter((e) => e.type === "workout" && e.raw?.session_id)
+        .map((e) => `${e.raw.session_id}:${e.date}`),
+    );
+
+    const out: CalEvent[] = [];
+    for (let w = 0; w < (blockConfig.totalWeeks ?? 8); w++) {
+      for (const sess of sessions) {
+        // Per-week day override → fallback to default day_of_week
+        const dow = (sess.weekDays?.[String(w + 1)] ?? sess.day_of_week) as number | undefined;
+        if (dow == null) continue;
+
+        const d    = addDays(blockStart, w * 7 + dow);
+        if (d < mStart || d > mEnd) continue;
+
+        const dateStr = format(d, "yyyy-MM-dd");
+        if (logged.has(`${sess.id}:${dateStr}`)) continue;
+
+        out.push({
+          id:     `block-${sess.id}-w${w + 1}`,
+          title:  sess.name,
+          date:   dateStr,
+          type:   "workout",
+          status: "planned",
+          raw:    { session_id: sess.id, source: "block_plan" },
+        });
+      }
+    }
+    return out;
+  }, [blockConfig, sessions, month, realEvents]);
+
+  const events = useMemo(
+    () => [...realEvents, ...projectedEvents],
+    [realEvents, projectedEvents],
+  );
 
   // Sensors : require 8px of movement before drag starts (prevent accidental drags)
   const sensors = useSensors(
@@ -406,6 +472,51 @@ export function CalendarMonthView({
               <ChevronRight size={18} />
             </button>
           </div>
+
+          {/* Block-program start-date prompt / legend */}
+          {blockConfig && (
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 14px", borderRadius: 10,
+                background: C.s1, border: "1px solid " + C.brd,
+                fontSize: 11, flexWrap: "wrap",
+              }}
+            >
+              <span style={{ color: C.tx3, fontWeight: 600 }}>📋 Bloc :</span>
+              {blockConfig.blockName && (
+                <span style={{ color: C.tx, fontWeight: 600 }}>{blockConfig.blockName}</span>
+              )}
+              <span style={{ color: C.tx3 }}>·</span>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, color: C.tx3 }}>
+                Début :
+                <input
+                  type="date"
+                  value={blockConfig.startDate ?? ""}
+                  onChange={(e) =>
+                    setBlockConfig?.((prev) => ({ ...prev, startDate: e.target.value || null }))
+                  }
+                  style={{
+                    padding: "3px 7px", borderRadius: 6,
+                    border: "1px solid " + (blockConfig.startDate ? C.brdL : C.o + "60"),
+                    background: C.s2,
+                    color: blockConfig.startDate ? C.tx : C.o,
+                    fontSize: 11, fontFamily: "inherit",
+                  }}
+                />
+              </label>
+              {blockConfig.startDate && projectedEvents.length === 0 && (
+                <span style={{ color: C.tx3, fontSize: 10 }}>
+                  (aucune séance dans ce mois)
+                </span>
+              )}
+              {projectedEvents.length > 0 && (
+                <span style={{ color: C.tx3, fontSize: 10 }}>
+                  — <span style={{ fontStyle: "italic" }}>prévu</span> = séances du programme
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Grid */}
           <div

@@ -61,11 +61,15 @@ const ZONES = ["Z1", "Z2", "Z3", "Z4", "Z5"] as const;
 export function MesocycleDrawer({ meso, athleteId, rangeStart, rangeEnd }: Props) {
   const qc = useQueryClient();
 
-  const [volumeType,  setVolumeType]  = useState(meso.volume_config?.type ?? "progressive");
-  const [zones,       setZones]       = useState<string[]>(meso.intensity_config?.zones ?? []);
-  const [frequency,   setFrequency]   = useState(meso.frequency ?? 3);
-  const [deloadWeek,  setDeloadWeek]  = useState(meso.deload_week ?? 4);
-  const [saving,      setSaving]      = useState(false);
+  const [volumeType,   setVolumeType]   = useState(meso.volume_config?.type ?? "progressive");
+  const [zones,        setZones]        = useState<string[]>(meso.intensity_config?.zones ?? []);
+  const [frequency,    setFrequency]    = useState(meso.frequency ?? 3);
+  const [deloadWeek,   setDeloadWeek]   = useState(meso.deload_week ?? 4);
+  const [saving,       setSaving]       = useState(false);
+  const [editingDates, setEditingDates] = useState(false);
+  const [startDate,    setStartDate]    = useState(meso.start_date);
+  const [endDate,      setEndDate]      = useState(meso.end_date);
+  const [savingDates,  setSavingDates]  = useState(false);
 
   const numWeeks = Math.max(1, differenceInWeeks(parseISO(meso.end_date), parseISO(meso.start_date)) + 1);
 
@@ -89,25 +93,66 @@ export function MesocycleDrawer({ meso, athleteId, rangeStart, rangeEnd }: Props
       .eq("id", meso.id);
     setSaving(false);
     if (error) { toast.error("Erreur"); return; }
-    qc.invalidateQueries({ queryKey: ["timeline-data", athleteId, rangeStart, rangeEnd] });
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
     toast.success("Mésocycle mis à jour");
   }
+
+  async function saveDates() {
+    if (!startDate || !endDate || startDate >= endDate) { toast.error("Dates invalides"); return; }
+    setSavingDates(true);
+    const { error } = await supabase
+      .from("mesocycles")
+      .update({ start_date: startDate, end_date: endDate })
+      .eq("id", meso.id);
+    setSavingDates(false);
+    if (error) { toast.error("Erreur"); return; }
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+    setEditingDates(false);
+    toast.success("Dates mises à jour");
+  }
+
+  const numWeeksLocal = Math.max(1, differenceInWeeks(parseISO(endDate), parseISO(startDate)) + 1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
       {/* Dates */}
-      <div style={{ display: "flex", gap: 8 }}>
-        {[
-          { label: "Début", val: format(parseISO(meso.start_date), "d MMM", { locale: fr }) },
-          { label: "Fin",   val: format(parseISO(meso.end_date),   "d MMM", { locale: fr }) },
-          { label: "Durée", val: `${numWeeks} sem.` },
-        ].map(({ label, val }) => (
-          <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 8, padding: "8px 10px" }}>
-            <div style={{ fontSize: 9, color: C.tx3 }}>{label}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{val}</div>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>Dates</span>
+          <button
+            onClick={() => editingDates ? saveDates() : setEditingDates(true)}
+            disabled={savingDates}
+            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 7, border: "1px solid " + (editingDates ? C.g + "60" : C.brdL), background: editingDates ? C.gS : "transparent", color: editingDates ? C.g : C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {editingDates ? <><Check size={11} />{savingDates ? "…" : "Enregistrer"}</> : <><Edit3 size={11} />Modifier</>}
+          </button>
+        </div>
+        {editingDates ? (
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ label: "Début", val: startDate, set: setStartDate }, { label: "Fin", val: endDate, set: setEndDate }].map(({ label, val, set }) => (
+              <div key={label} style={{ flex: 1 }}>
+                <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>{label}</div>
+                <input type="date" value={val} onChange={(e) => set(e.target.value)} style={{ width: "100%", padding: "7px 9px", borderRadius: 8, border: "1px solid " + C.coach + "60", background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { label: "Début", val: format(parseISO(startDate), "d MMM", { locale: fr }) },
+              { label: "Fin",   val: format(parseISO(endDate),   "d MMM", { locale: fr }) },
+              { label: "Durée", val: `${numWeeksLocal} sem.` },
+            ].map(({ label, val }) => (
+              <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 8, padding: "8px 10px" }}>
+                <div style={{ fontSize: 9, color: C.tx3 }}>{label}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Volume type */}

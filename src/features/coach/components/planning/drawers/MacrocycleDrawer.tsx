@@ -45,8 +45,12 @@ export function MacrocycleDrawer({ macro, athleteId, rangeStart, rangeEnd, onClo
   const qc = useQueryClient();
   const { data: testResults = [] } = useTestResults(athleteId, macro.id);
 
-  const [editingObj, setEditingObj] = useState(false);
-  const [objective,  setObjective]  = useState(macro.objective ?? "");
+  const [editingObj,   setEditingObj]   = useState(false);
+  const [objective,    setObjective]    = useState(macro.objective ?? "");
+  const [editingDates, setEditingDates] = useState(false);
+  const [startDate,    setStartDate]    = useState(macro.start_date);
+  const [endDate,      setEndDate]      = useState(macro.end_date);
+  const [savingDates,  setSavingDates]  = useState(false);
 
   async function saveObjective() {
     const { error } = await supabase
@@ -54,9 +58,25 @@ export function MacrocycleDrawer({ macro, athleteId, rangeStart, rangeEnd, onClo
       .update({ objective })
       .eq("id", macro.id);
     if (error) { toast.error("Erreur"); return; }
-    qc.invalidateQueries({ queryKey: ["timeline-data", athleteId, rangeStart, rangeEnd] });
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
     setEditingObj(false);
     toast.success("Objectif enregistré");
+  }
+
+  async function saveDates() {
+    if (!startDate || !endDate || startDate >= endDate) { toast.error("Dates invalides"); return; }
+    setSavingDates(true);
+    const { error } = await supabase
+      .from("macrocycles")
+      .update({ start_date: startDate, end_date: endDate })
+      .eq("id", macro.id);
+    setSavingDates(false);
+    if (error) { toast.error("Erreur"); return; }
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+    setEditingDates(false);
+    toast.success("Dates mises à jour");
   }
 
   // Group test results by test name for chart
@@ -74,16 +94,39 @@ export function MacrocycleDrawer({ macro, athleteId, rangeStart, rangeEnd, onClo
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* Dates */}
-      <div style={{ display: "flex", gap: 8 }}>
-        {[
-          { label: "Début", val: format(parseISO(macro.start_date), "d MMM yyyy", { locale: fr }) },
-          { label: "Fin",   val: format(parseISO(macro.end_date),   "d MMM yyyy", { locale: fr }) },
-        ].map(({ label, val }) => (
-          <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ fontSize: 9, color: C.tx3 }}>{label}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{val}</div>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>Dates</span>
+          <button
+            onClick={() => editingDates ? saveDates() : setEditingDates(true)}
+            disabled={savingDates}
+            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 7, border: "1px solid " + (editingDates ? C.g + "60" : C.brdL), background: editingDates ? C.gS : "transparent", color: editingDates ? C.g : C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {editingDates ? <><Check size={11} />{savingDates ? "…" : "Enregistrer"}</> : <><Edit3 size={11} />Modifier</>}
+          </button>
+        </div>
+        {editingDates ? (
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ label: "Début", val: startDate, set: setStartDate }, { label: "Fin", val: endDate, set: setEndDate }].map(({ label, val, set }) => (
+              <div key={label} style={{ flex: 1 }}>
+                <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>{label}</div>
+                <input type="date" value={val} onChange={(e) => set(e.target.value)} style={{ width: "100%", padding: "7px 9px", borderRadius: 8, border: "1px solid " + C.ac + "60", background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { label: "Début", val: format(parseISO(startDate), "d MMM yyyy", { locale: fr }) },
+              { label: "Fin",   val: format(parseISO(endDate),   "d MMM yyyy", { locale: fr }) },
+            ].map(({ label, val }) => (
+              <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 9, color: C.tx3 }}>{label}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Objectif */}

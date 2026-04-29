@@ -269,8 +269,8 @@ CREATE POLICY "macrocycles_select" ON public.macrocycles FOR SELECT USING (
 );
 
 CREATE POLICY "macrocycles_insert" ON public.macrocycles FOR INSERT WITH CHECK (
-  public.is_coach_of(athlete_id)
-  AND coach_id = auth.uid()
+  (public.is_coach_of(athlete_id) AND coach_id = auth.uid())
+  OR (athlete_id = auth.uid() AND coach_id = auth.uid())
 );
 
 CREATE POLICY "macrocycles_update" ON public.macrocycles FOR UPDATE
@@ -299,21 +299,24 @@ CREATE POLICY "mesocycles_select" ON public.mesocycles FOR SELECT USING (
 CREATE POLICY "mesocycles_insert" ON public.mesocycles FOR INSERT WITH CHECK (
   EXISTS (
     SELECT 1 FROM public.macrocycles m
-    WHERE m.id = macrocycle_id AND public.is_coach_of(m.athlete_id)
+    WHERE m.id = macrocycle_id
+      AND (public.is_coach_of(m.athlete_id) OR m.coach_id = auth.uid())
   )
 );
 
 CREATE POLICY "mesocycles_update" ON public.mesocycles FOR UPDATE USING (
   EXISTS (
     SELECT 1 FROM public.macrocycles m
-    WHERE m.id = macrocycle_id AND public.is_coach_of(m.athlete_id)
+    WHERE m.id = macrocycle_id
+      AND (public.is_coach_of(m.athlete_id) OR m.coach_id = auth.uid())
   )
 );
 
 CREATE POLICY "mesocycles_delete" ON public.mesocycles FOR DELETE USING (
   EXISTS (
     SELECT 1 FROM public.macrocycles m
-    WHERE m.id = macrocycle_id AND public.is_coach_of(m.athlete_id)
+    WHERE m.id = macrocycle_id
+      AND (public.is_coach_of(m.athlete_id) OR m.coach_id = auth.uid())
   )
 );
 
@@ -340,7 +343,8 @@ CREATE POLICY "cycles_insert" ON public.cycles FOR INSERT WITH CHECK (
     SELECT 1
       FROM public.mesocycles me
       JOIN public.macrocycles ma ON ma.id = me.macrocycle_id
-     WHERE me.id = mesocycle_id AND public.is_coach_of(ma.athlete_id)
+     WHERE me.id = mesocycle_id
+       AND (public.is_coach_of(ma.athlete_id) OR ma.coach_id = auth.uid())
   )
 );
 
@@ -349,7 +353,8 @@ CREATE POLICY "cycles_update" ON public.cycles FOR UPDATE USING (
     SELECT 1
       FROM public.mesocycles me
       JOIN public.macrocycles ma ON ma.id = me.macrocycle_id
-     WHERE me.id = mesocycle_id AND public.is_coach_of(ma.athlete_id)
+     WHERE me.id = mesocycle_id
+       AND (public.is_coach_of(ma.athlete_id) OR ma.coach_id = auth.uid())
   )
 );
 
@@ -358,7 +363,8 @@ CREATE POLICY "cycles_delete" ON public.cycles FOR DELETE USING (
     SELECT 1
       FROM public.mesocycles me
       JOIN public.macrocycles ma ON ma.id = me.macrocycle_id
-     WHERE me.id = mesocycle_id AND public.is_coach_of(ma.athlete_id)
+     WHERE me.id = mesocycle_id
+       AND (public.is_coach_of(ma.athlete_id) OR ma.coach_id = auth.uid())
   )
 );
 
@@ -383,21 +389,37 @@ SET search_path = public AS $$
 $$;
 GRANT EXECUTE ON FUNCTION public.cycle_athlete_id(uuid) TO authenticated;
 
+-- Helper : retourne le coach_id du macrocycle owning un cycle donné
+CREATE OR REPLACE FUNCTION public.cycle_coach_id(p_cycle_id uuid)
+RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER
+SET search_path = public AS $$
+  SELECT ma.coach_id
+    FROM public.cycles cy
+    JOIN public.mesocycles me ON me.id = cy.mesocycle_id
+    JOIN public.macrocycles ma ON ma.id = me.macrocycle_id
+   WHERE cy.id = p_cycle_id;
+$$;
+GRANT EXECUTE ON FUNCTION public.cycle_coach_id(uuid) TO authenticated;
+
 CREATE POLICY "microcycles_select" ON public.microcycles FOR SELECT USING (
   public.cycle_athlete_id(cycle_id) = auth.uid()
   OR public.is_coach_of(public.cycle_athlete_id(cycle_id))
+  OR public.cycle_coach_id(cycle_id) = auth.uid()
 );
 
 CREATE POLICY "microcycles_insert" ON public.microcycles FOR INSERT WITH CHECK (
   public.is_coach_of(public.cycle_athlete_id(cycle_id))
+  OR public.cycle_coach_id(cycle_id) = auth.uid()
 );
 
 CREATE POLICY "microcycles_update" ON public.microcycles FOR UPDATE USING (
   public.is_coach_of(public.cycle_athlete_id(cycle_id))
+  OR public.cycle_coach_id(cycle_id) = auth.uid()
 );
 
 CREATE POLICY "microcycles_delete" ON public.microcycles FOR DELETE USING (
   public.is_coach_of(public.cycle_athlete_id(cycle_id))
+  OR public.cycle_coach_id(cycle_id) = auth.uid()
 );
 
 -- ──────────────────────────────────────────────────────────────
