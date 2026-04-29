@@ -134,6 +134,8 @@ export function useAssignWorkout() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["cal", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
       toast.success("Séance ajoutée");
     },
     onError: () => toast.error("Erreur lors de l'ajout"),
@@ -169,6 +171,8 @@ export function useCreateTestSession() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["cal", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
       toast.success("Test créé");
     },
     onError: () => toast.error("Erreur lors de la création"),
@@ -187,6 +191,8 @@ export function useDeleteCalendarEvent() {
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["cal", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
       toast.success("Supprimé");
     },
   });

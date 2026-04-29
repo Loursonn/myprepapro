@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { format, parseISO, eachDayOfInterval, subDays } from "date-fns";
+import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Check, Minus, MessageSquare } from "lucide-react";
+import { Check, Minus, Edit3 } from "lucide-react";
 import { C } from "@/lib/theme";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { Microcycle } from "../hooks/useTimelineData";
 import { useMicrocycleDays } from "../hooks/useTimelineData";
 
@@ -142,28 +145,72 @@ interface Props {
 }
 
 export function MicrocycleDrawer({ micro, prevMicro, athleteId }: Props) {
-  const [showPrev, setShowPrev] = useState(false);
+  const qc = useQueryClient();
+  const [showPrev,     setShowPrev]     = useState(false);
+  const [editingDates, setEditingDates] = useState(false);
+  const [startDate,    setStartDate]    = useState(micro.start_date);
+  const [endDate,      setEndDate]      = useState(micro.end_date);
+  const [isDeload,     setIsDeload]     = useState(micro.is_deload);
+  const [savingDates,  setSavingDates]  = useState(false);
+
+  async function saveDates() {
+    if (!startDate || !endDate || startDate > endDate) { toast.error("Dates invalides"); return; }
+    setSavingDates(true);
+    const { error } = await supabase
+      .from("microcycles")
+      .update({ start_date: startDate, end_date: endDate, is_deload: isDeload })
+      .eq("id", micro.id);
+    setSavingDates(false);
+    if (error) { toast.error("Erreur"); return; }
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+    setEditingDates(false);
+    toast.success("Microcycle mis à jour");
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Header badges */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, color: C.tx3 }}>
-          {format(parseISO(micro.start_date), "d MMM", { locale: fr })} →{" "}
-          {format(parseISO(micro.end_date), "d MMM", { locale: fr })}
-        </span>
-        {micro.is_deload && (
-          <span style={{ fontSize: 10, fontWeight: 700, background: C.bS, color: C.b, borderRadius: 6, padding: "2px 8px" }}>
-            DELOAD
-          </span>
-        )}
-        {prevMicro && (
-          <button
-            onClick={() => setShowPrev((p) => !p)}
-            style={{ marginLeft: "auto", padding: "4px 10px", borderRadius: 7, border: "1px solid " + C.brdL, background: showPrev ? C.s2 : "transparent", color: C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            {showPrev ? "Masquer S-1" : "Voir S-1"}
-          </button>
+      {/* Dates + deload */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: C.tx3 }}>
+              {format(parseISO(startDate), "d MMM", { locale: fr })} → {format(parseISO(endDate), "d MMM", { locale: fr })}
+            </span>
+            {isDeload && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: C.bS, color: C.b, borderRadius: 6, padding: "2px 8px" }}>DELOAD</span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {prevMicro && (
+              <button onClick={() => setShowPrev((p) => !p)} style={{ padding: "4px 10px", borderRadius: 7, border: "1px solid " + C.brdL, background: showPrev ? C.s2 : "transparent", color: C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                {showPrev ? "Masquer S-1" : "Voir S-1"}
+              </button>
+            )}
+            <button
+              onClick={() => editingDates ? saveDates() : setEditingDates((p) => !p)}
+              disabled={savingDates}
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 7, border: "1px solid " + (editingDates ? C.g + "60" : C.brdL), background: editingDates ? C.gS : "transparent", color: editingDates ? C.g : C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              {editingDates ? <><Check size={11} />{savingDates ? "…" : "OK"}</> : <><Edit3 size={11} />Modifier</>}
+            </button>
+          </div>
+        </div>
+        {editingDates && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[{ label: "Début", val: startDate, set: setStartDate }, { label: "Fin", val: endDate, set: setEndDate }].map(({ label, val, set }) => (
+                <div key={label} style={{ flex: 1 }}>
+                  <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>{label}</div>
+                  <input type="date" value={val} onChange={(e) => set(e.target.value)} style={{ width: "100%", padding: "7px 9px", borderRadius: 8, border: "1px solid " + C.tx3 + "60", background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box" }} />
+                </div>
+              ))}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: C.tx3 }}>
+              <input type="checkbox" checked={isDeload} onChange={(e) => setIsDeload(e.target.checked)} style={{ accentColor: C.b, width: 14, height: 14 }} />
+              Semaine de deload
+            </label>
+          </div>
         )}
       </div>
 

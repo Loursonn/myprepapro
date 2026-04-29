@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, parseISO, differenceInWeeks, eachDayOfInterval, startOfMonth } from "date-fns";
+import { format, parseISO, differenceInWeeks, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Edit3, Check, CheckCircle2, Clock, Circle } from "lucide-react";
 import { C } from "@/lib/theme";
@@ -7,6 +7,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Cycle, Mesocycle } from "../hooks/useTimelineData";
+
+async function regenerateMicrocycles(cycleId: string, start: string, end: string) {
+  await supabase.from("microcycles").delete().eq("cycle_id", cycleId);
+  const rows = [];
+  let weekMon = startOfISOWeek(parseISO(start));
+  const ed = parseISO(end);
+  let week = 1;
+  while (weekMon <= ed) {
+    rows.push({ cycle_id: cycleId, week_number: week, start_date: format(weekMon, "yyyy-MM-dd"), end_date: format(endOfISOWeek(weekMon), "yyyy-MM-dd"), is_deload: false });
+    weekMon = addWeeks(weekMon, 1);
+    week++;
+  }
+  if (rows.length > 0) await supabase.from("microcycles").insert(rows);
+}
 
 // ── Session list ──────────────────────────────────────────────────────────────
 
@@ -71,10 +85,14 @@ export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd
     athleteId, cycle.start_date, cycle.end_date,
   );
 
-  const [editingObj, setEditingObj] = useState(false);
-  const [objective,  setObjective]  = useState(cycle.objective ?? "");
+  const [editingObj,   setEditingObj]   = useState(false);
+  const [objective,    setObjective]    = useState(cycle.objective ?? "");
+  const [editingDates, setEditingDates] = useState(false);
+  const [startDate,    setStartDate]    = useState(cycle.start_date);
+  const [endDate,      setEndDate]      = useState(cycle.end_date);
+  const [savingDates,  setSavingDates]  = useState(false);
 
-  const numWeeks = Math.max(1, differenceInWeeks(parseISO(cycle.end_date), parseISO(cycle.start_date)) + 1);
+  const numWeeks = Math.max(1, differenceInWeeks(parseISO(endDate), parseISO(startDate)) + 1);
 
   const completed = sessions.filter((s) => s.status === "completed").length;
   const total     = sessions.length;
@@ -88,9 +106,26 @@ export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd
       .update({ objective })
       .eq("id", cycle.id);
     if (error) { toast.error("Erreur"); return; }
-    qc.invalidateQueries({ queryKey: ["timeline-data", athleteId, rangeStart, rangeEnd] });
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
     setEditingObj(false);
     toast.success("Objectif enregistré");
+  }
+
+  async function saveDates() {
+    if (!startDate || !endDate || startDate >= endDate) { toast.error("Dates invalides"); return; }
+    setSavingDates(true);
+    const { error } = await supabase
+      .from("cycles")
+      .update({ start_date: startDate, end_date: endDate })
+      .eq("id", cycle.id);
+    if (!error) await regenerateMicrocycles(cycle.id, startDate, endDate);
+    setSavingDates(false);
+    if (error) { toast.error("Erreur"); return; }
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+    setEditingDates(false);
+    toast.success("Dates mises à jour · microcycles régénérés");
   }
 
   // Month for calendar link
@@ -100,17 +135,40 @@ export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
       {/* Dates + duration */}
-      <div style={{ display: "flex", gap: 8 }}>
-        {[
-          { label: "Début", val: format(parseISO(cycle.start_date), "d MMM", { locale: fr }) },
-          { label: "Fin",   val: format(parseISO(cycle.end_date),   "d MMM", { locale: fr }) },
-          { label: "Durée", val: `${numWeeks} sem.` },
-        ].map(({ label, val }) => (
-          <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 8, padding: "8px 10px" }}>
-            <div style={{ fontSize: 9, color: C.tx3 }}>{label}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{val}</div>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>Dates</span>
+          <button
+            onClick={() => editingDates ? saveDates() : setEditingDates(true)}
+            disabled={savingDates}
+            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 7, border: "1px solid " + (editingDates ? C.g + "60" : C.brdL), background: editingDates ? C.gS : "transparent", color: editingDates ? C.g : C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {editingDates ? <><Check size={11} />{savingDates ? "…" : "Enregistrer"}</> : <><Edit3 size={11} />Modifier</>}
+          </button>
+        </div>
+        {editingDates ? (
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ label: "Début", val: startDate, set: setStartDate }, { label: "Fin", val: endDate, set: setEndDate }].map(({ label, val, set }) => (
+              <div key={label} style={{ flex: 1 }}>
+                <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>{label}</div>
+                <input type="date" value={val} onChange={(e) => set(e.target.value)} style={{ width: "100%", padding: "7px 9px", borderRadius: 8, border: "1px solid " + C.o + "60", background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box" }} />
+              </div>
+            ))}
           </div>
-        ))}
+        ) : (
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { label: "Début", val: format(parseISO(startDate), "d MMM", { locale: fr }) },
+              { label: "Fin",   val: format(parseISO(endDate),   "d MMM", { locale: fr }) },
+              { label: "Durée", val: `${numWeeks} sem.` },
+            ].map(({ label, val }) => (
+              <div key={label} style={{ flex: 1, background: C.s2, borderRadius: 8, padding: "8px 10px" }}>
+                <div style={{ fontSize: 9, color: C.tx3 }}>{label}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Parent meso objective (context) */}

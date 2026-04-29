@@ -2,8 +2,8 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { X, Trash2, Plus } from "lucide-react";
 import { C } from "@/lib/theme";
-import type { CalEvent } from "@/features/shared/hooks/useCalendarEvents";
-import { useDeleteCalendarEvent } from "@/features/shared/hooks/useCalendarEvents";
+import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
+import { useDeleteCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 

@@ -713,12 +713,6 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
         <input value={sessions[editingSession]?.name||""} onChange={e=>renameSession(editingSession,"name",e.target.value)} placeholder="Nom complet" style={{padding:"7px 10px",borderRadius:7,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit"}}/>
         <input value={sessions[editingSession]?.short||""} onChange={e=>renameSession(editingSession,"short",e.target.value)} placeholder="Court" style={{padding:"7px 10px",borderRadius:7,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit"}}/>
       </div>
-      <div style={{marginBottom:8}}>
-        <div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:5}}>Jour assigné</div>
-        <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-          {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((d,i)=>{const sel=sessions[editingSession]?.day_of_week===i;return(<button key={i} onClick={()=>renameSession(editingSession,"day_of_week",sel?null:i)} style={{padding:"4px 7px",borderRadius:6,border:"1px solid "+(sel?C.coach:C.brdL),background:sel?C.coachS:"transparent",color:sel?C.coach:C.tx3,fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{d}</button>);})}
-        </div>
-      </div>
       <div style={{display:"flex",gap:6}}>
         <button onClick={()=>setEditingSession(null)} style={{flex:1,padding:"7px 0",borderRadius:7,border:"none",background:C.coach,color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>OK</button>
         <button onClick={()=>{duplicateSession(editingSession);setEditingSession(null);}} style={{padding:"7px 12px",borderRadius:7,border:"1px solid "+C.ac+"40",background:C.acS,color:C.ac,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>Copier</button>
@@ -842,19 +836,6 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
 
     <div style={{display:"flex",gap:3,marginBottom:6,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWeek(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===week?"2px solid "+C.coach:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===week?C.coachS:(w===dw?C.bS:"transparent"),color:w===week?C.coach:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>
     {dw>0&&<div style={{fontSize:10,color:C.b,marginBottom:6,display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:"50%",background:C.b,display:"inline-block"}}/> S{dw} = Deload (-{deloadPct}% charge, volume reduit)</div>}
-
-    {safeSessions.length>0&&setWeekSchedule&&<div style={{marginBottom:10,background:C.s1,borderRadius:9,padding:"8px 10px",border:"1px solid "+C.brdL}}>
-      <div style={{fontSize:9,fontWeight:600,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.4px",marginBottom:6}}>Jours séances — S{week}</div>
-      {safeSessions.map(s=>{
-        const curDay=weekSchedule?.sessions?.[week]?.[s.id]??s.day_of_week??null;
-        const setDay=(i)=>{const prev=weekSchedule||{};const prevSess=prev.sessions||{};const wMap={...(prevSess[week]||{})};if(curDay===i){delete wMap[s.id];}else{wMap[s.id]=i;}setWeekSchedule({...prev,sessions:{...prevSess,[week]:wMap}});};
-        return(<div key={s.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-          <span style={{fontSize:10,fontWeight:700,color:C.coach,minWidth:46,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.short}</span>
-          <div style={{display:"flex",gap:2}}>
-            {["L","Ma","Me","J","V","S","D"].map((d,i)=>{const sel=curDay===i;return(<button key={i} onClick={()=>setDay(i)} style={{padding:"3px 5px",borderRadius:5,border:"1px solid "+(sel?C.coach:C.brdL),background:sel?C.coachS:"transparent",color:sel?C.coach:C.tx3,fontSize:9,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{d}</button>);})}
-          </div>
-        </div>);})}
-    </div>}
 
     <button onClick={autoFillProgression} style={{width:"100%",padding:"9px 0",borderRadius:8,border:"1px solid "+C.o+"50",background:C.oS,color:C.o,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
       ↗ Surcharge progressive — tout le bloc (S1→S{tw})

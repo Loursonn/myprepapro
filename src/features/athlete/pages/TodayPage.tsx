@@ -4,14 +4,11 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
-import { useTodayWorkout } from "@/features/shared/hooks/useTodayWorkout";
 import { useTodayWellness } from "@/features/shared/hooks/useTodayWellness";
 import { useReadinessScore } from "@/features/shared/hooks/useReadinessScore";
 import { useUpcomingCompetition } from "@/features/shared/hooks/useUpcomingCompetition";
-import { useLogWellness } from "@/features/shared/hooks/useLogWellness";
-import { useWeekProgram } from "@/features/shared/hooks/useWeekProgram";
+import { useWeekSchedule } from "@/features/shared/hooks/useWeekSchedule";
 import { COMPETITION_META } from "@/types/planning";
-import type { WellnessData } from "@/features/shared/types/athlete";
 import type { DayProgram } from "@/features/shared/hooks/useWeekProgram";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -68,95 +65,17 @@ function ReadinessCircle({ score, color }: { score: number; color: string }) {
   );
 }
 
-// ── Wellness BottomSheet ──────────────────────────────────────────────────────
 
-const WELL_FIELDS: Array<{ key: keyof WellnessData; label: string; icon: string; inv?: boolean }> = [
-  { key: "fatigue", label: "Fatigue",  icon: "😴", inv: true },
-  { key: "sommeil", label: "Sommeil",  icon: "🌙"              },
-  { key: "stress",  label: "Stress",   icon: "😰", inv: true   },
-  { key: "energie", label: "Énergie",  icon: "⚡"              },
-  { key: "doms",    label: "DOMS",     icon: "💪", inv: true   },
+
+// ── Wellness field labels (for readiness display) ─────────────────────────────
+
+const WELL_FIELDS = [
+  { key: "fatigue", label: "Fatigue",  icon: "😴", inv: true  },
+  { key: "sommeil", label: "Sommeil",  icon: "🌙", inv: false },
+  { key: "stress",  label: "Stress",   icon: "😰", inv: true  },
+  { key: "energie", label: "Énergie",  icon: "⚡", inv: false },
+  { key: "doms",    label: "DOMS",     icon: "💪", inv: true  },
 ];
-
-interface WellnessSheetProps {
-  open: boolean;
-  onClose: () => void;
-  existing: WellnessData | null;
-  onSave: (d: WellnessData) => void;
-}
-
-function WellnessSheet({ open, onClose, existing, onSave }: WellnessSheetProps) {
-  const [vals, setVals] = useState<Record<string, number>>(() => ({
-    fatigue: existing?.fatigue ?? 5,
-    sommeil: existing?.sommeil ?? 7,
-    stress:  existing?.stress  ?? 4,
-    energie: existing?.energie ?? 6,
-    doms:    existing?.doms    ?? 3,
-  }));
-
-  function handleSubmit() {
-    const today = new Date().toISOString().split("T")[0];
-    onSave({ ...vals, date: today } as WellnessData);
-    haptic();
-    onClose();
-  }
-
-  return (
-    <Drawer open={open} onOpenChange={(v) => !v && onClose()}>
-      <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: "0 0 24px" }}>
-        <DrawerHeader style={{ padding: "16px 20px 8px" }}>
-          <DrawerTitle style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
-            Bilan wellness du jour
-          </DrawerTitle>
-        </DrawerHeader>
-
-        <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 20 }}>
-          {WELL_FIELDS.map((f) => {
-            const v = vals[f.key as string] as number;
-            const inv = f.inv;
-            const trackColor = inv
-              ? (v >= 7 ? "#EF4B4B" : v <= 3 ? "#22C993" : C.o)
-              : (v >= 7 ? "#22C993" : v <= 3 ? "#EF4B4B" : C.o);
-            return (
-              <div key={f.key as string}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span>{f.icon}</span> {f.label}
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: trackColor, minWidth: 20, textAlign: "right" }}>{v}</div>
-                </div>
-                <input
-                  type="range" min={1} max={10} value={v}
-                  onChange={(e) => setVals(prev => ({ ...prev, [f.key as string]: Number(e.target.value) }))}
-                  style={{
-                    width: "100%", accentColor: trackColor,
-                    height: 6, cursor: "pointer",
-                  }}
-                />
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                  <span style={{ fontSize: 9, color: C.tx3 }}>1</span>
-                  <span style={{ fontSize: 9, color: C.tx3 }}>10</span>
-                </div>
-              </div>
-            );
-          })}
-
-          <button
-            onClick={handleSubmit}
-            style={{
-              width: "100%", padding: "14px 0", borderRadius: 14,
-              border: "none", background: C.coach, color: "#fff",
-              fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-              marginTop: 4, minHeight: 44,
-            }}
-          >
-            Enregistrer mon bilan
-          </button>
-        </div>
-      </DrawerContent>
-    </Drawer>
-  );
-}
 
 // ── Day preview bottom sheet ──────────────────────────────────────────────────
 
@@ -338,30 +257,33 @@ function getFormeAdvice(wellness: Record<string, number> | null): Array<{ icon: 
 
 export default function TodayPage() {
   const navigate = useNavigate();
-  const [wellnessOpen,  setWellnessOpen]  = useState(false);
-  const [selectedDay,   setSelectedDay]   = useState<DayProgram | null>(null);
+  const [selectedDay, setSelectedDay] = useState<DayProgram | null>(null);
 
   const {
     athleteId, athleteProfile, wellnessHistory,
-    currentWeek, sessions, exos, completedSessions,
+    setShowWellness,
   } = useAthleteContext();
 
   const wellness        = useTodayWellness();
   const readiness       = useReadinessScore(wellness);
-  const { workouts, nextWorkout, allDoneToday, todayTests } = useTodayWorkout();
   const { data: nextComp } = useUpcomingCompetition(athleteId);
-  const weekDays = useWeekProgram(null);
+  const weekDays = useWeekSchedule(null);
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
-  const { mutate: logWellness } = useLogWellness();
+
+  // Derive today's workouts from the date-based week schedule
+  const todayDay = weekDays.find((d) => d.date === today);
+  const workouts = todayDay?.sessions ?? [];
+  const todayTests = todayDay?.tests ?? [];
+  const nextWorkout = workouts.find((w) => !w.isCompleted) ?? null;
+  const allDoneToday = workouts.length > 0 && workouts.every((w) => w.isCompleted);
 
   // ── Yesterday's recap ─────────────────────────────────────────────────────
   const yesterdayISO = new Date(Date.now() - 86400000).toISOString().split("T")[0];
   const yesterdayWellness = wellnessHistory?.[yesterdayISO] ?? null;
-  const yesterdayDow = (new Date(Date.now() - 86400000).getDay() + 6) % 7;
-  const doneLastWeek = new Set<string>();
-  const yesterdaySessName = sessions.find(
-    (s) => s.day_of_week === yesterdayDow && (exos[s.id] ?? []).length > 0 && doneLastWeek.has(s.id),
-  )?.name ?? null;
+  const yesterdayDay = weekDays.find((d) => d.date === yesterdayISO);
+  const yesterdaySessName = yesterdayDay?.sessions.find((s) => s.isCompleted)?.session.name
+    ?? yesterdayDay?.sessions[0]?.session.name
+    ?? null;
 
   // ── Wellness trend (last 14 days) ────────────────────────────────────────
   const wellnessTrend = Array.from({ length: 14 }, (_, i) => {
@@ -446,7 +368,7 @@ export default function TodayPage() {
             </div>
           ) : (
             <button
-              onClick={() => { setWellnessOpen(true); haptic(); }}
+              onClick={() => { setShowWellness(true); haptic(); }}
               style={{
                 width: "100%", padding: "16px", borderRadius: 20,
                 border: "1.5px dashed " + C.coach + "60", background: C.coachS,
@@ -461,7 +383,7 @@ export default function TodayPage() {
 
           {readiness && (
             <button
-              onClick={() => { setWellnessOpen(true); haptic(); }}
+              onClick={() => { setShowWellness(true); haptic(); }}
               style={{
                 marginTop: 8, fontSize: 11, color: C.tx3,
                 background: "none", border: "none", cursor: "pointer",
@@ -842,14 +764,6 @@ export default function TodayPage() {
           </div>
         )}
       </div>
-
-      {/* Wellness BottomSheet */}
-      <WellnessSheet
-        open={wellnessOpen}
-        onClose={() => setWellnessOpen(false)}
-        existing={wellness}
-        onSave={logWellness}
-      />
 
       {/* Day preview BottomSheet */}
       <DayPreviewSheet

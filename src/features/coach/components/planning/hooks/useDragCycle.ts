@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, differenceInDays, parseISO, addDays } from "date-fns";
+import { format, differenceInDays, parseISO, addDays, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Macrocycle, Mesocycle, Cycle, Microcycle, TimelineData } from "./useTimelineData";
@@ -81,6 +81,28 @@ export function useDragCycle() {
         })
         .eq("id", vars.item.id);
       if (error) throw error;
+
+      // When dragging a cycle, regenerate microcycles aligned to new ISO weeks
+      if (vars.level === "cycles") {
+        await supabase.from("microcycles").delete().eq("cycle_id", vars.item.id);
+        const rows: { cycle_id: string; week_number: number; start_date: string; end_date: string; is_deload: boolean }[] = [];
+        let weekMon = startOfISOWeek(vars.newStart);
+        let week = 1;
+        while (weekMon <= vars.newEnd) {
+          rows.push({
+            cycle_id: vars.item.id,
+            week_number: week,
+            start_date: format(weekMon, "yyyy-MM-dd"),
+            end_date: format(endOfISOWeek(weekMon), "yyyy-MM-dd"),
+            is_deload: false,
+          });
+          weekMon = addWeeks(weekMon, 1);
+          week++;
+        }
+        if (rows.length > 0) {
+          await supabase.from("microcycles").insert(rows);
+        }
+      }
     },
 
     // ── Rollback on error ──────────────────────────────────────────────────
@@ -92,9 +114,8 @@ export function useDragCycle() {
     },
 
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({
-        queryKey: ["timeline-data", vars.athleteId],
-      });
+      qc.invalidateQueries({ queryKey: ["timeline-data",    vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["planning-summary", vars.athleteId] });
     },
   });
 }

@@ -167,19 +167,20 @@ interface TimelineRowProps {
   level:    TLLevel;
   items:    TLRowItem[];
   calc:     CalcPos;
-  // Shared range strings for optimistic update query key
   rangeStart: string;
   rangeEnd:   string;
   athleteId:  string;
   onOpen:   (id: string) => void;
   onAdd?:   (id: string) => void;
   onNewRow?: () => void;
-  onDrag:   (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
-  onResize: (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
+  onDrag?:  (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
+  onResize?: (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
+  /** Render items as static chips — no drag, no resize */
+  readOnly?: boolean;
 }
 
 export function TimelineRow({
-  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onNewRow, onDrag, onResize,
+  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onNewRow, onDrag, onResize, readOnly,
 }: TimelineRowProps) {
   const color = LEVEL_COLOR[level];
   const bg    = LEVEL_BG[level];
@@ -248,8 +249,43 @@ export function TimelineRow({
 
         {items.map((item) => {
           const { x, width } = calc.position(item.startDate, item.endDate);
-          const dur = differenceInDays(parseISO(item.endDate), parseISO(item.startDate));
 
+          // ── Static chip (microcycles) ────────────────────────────────────
+          if (readOnly) {
+            const CHIP_H = 20;
+            const CHIP_Y = (ROW_H - CHIP_H) / 2;
+            return (
+              <div
+                key={item.id}
+                onClick={() => onOpen(item.id)}
+                title={item.label}
+                style={{
+                  position: "absolute",
+                  left: x + 1, top: CHIP_Y,
+                  width: Math.max(width - 2, 6),
+                  height: CHIP_H,
+                  background: bg,
+                  border: `1px solid ${color}60`,
+                  borderLeft: `3px solid ${color}`,
+                  borderRadius: 5,
+                  display: "flex", alignItems: "center",
+                  paddingLeft: 5, overflow: "hidden",
+                  cursor: "pointer", zIndex: 2,
+                  userSelect: "none",
+                }}
+              >
+                {item.isDeload && (
+                  <div style={{ position: "absolute", inset: 0, borderRadius: 4, background: `repeating-linear-gradient(45deg,transparent,transparent 4px,${C.b}18 4px,${C.b}18 8px)`, pointerEvents: "none" }} />
+                )}
+                <span style={{ fontSize: 8, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>
+                  {item.isDeload ? "⟳ " : ""}{item.label}
+                </span>
+              </div>
+            );
+          }
+
+          // ── Interactive item (Rnd) ───────────────────────────────────────
+          const dur = differenceInDays(parseISO(item.endDate), parseISO(item.startDate));
           return (
             <TLItem
               key={item.id}
@@ -275,7 +311,7 @@ export function TimelineRow({
                   new Date(parseISO(newStart).getTime() + dur * 86400000),
                   "yyyy-MM-dd",
                 );
-                onDrag(item.id, newStart, newEnd, item.parentStart, item.parentEnd);
+                onDrag?.(item.id, newStart, newEnd, item.parentStart, item.parentEnd);
               }}
               onResizeStop={(newX, newW) => {
                 let fx = newX, fw = newW;
@@ -288,7 +324,7 @@ export function TimelineRow({
                 }
                 const newStart = calc.xToDateStr(fx);
                 const newEnd   = calc.xToDateStr(fx + fw);
-                onResize(item.id, newStart, newEnd, item.parentStart, item.parentEnd);
+                onResize?.(item.id, newStart, newEnd, item.parentStart, item.parentEnd);
               }}
             />
           );

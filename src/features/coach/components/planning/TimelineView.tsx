@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
-import { startOfMonth, addMonths, subMonths, format, parseISO } from "date-fns";
+import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, Plus } from "lucide-react";
 import { C } from "@/lib/theme";
@@ -174,6 +174,30 @@ function DrawerShell({
   );
 }
 
+// ── Microcycle auto-generation helper ─────────────────────────────────────────
+
+// Generates one microcycle per ISO week (Mon→Sun) covering the cycle range.
+// First week = Monday of the week containing startDate.
+// Last week = week whose Monday is still ≤ endDate.
+function buildMicrocycles(cycleId: string, startDate: string, endDate: string) {
+  const rows: { cycle_id: string; week_number: number; start_date: string; end_date: string; is_deload: boolean }[] = [];
+  const ed = parseISO(endDate);
+  let weekMon = startOfISOWeek(parseISO(startDate)); // always Monday
+  let week = 1;
+  while (weekMon <= ed) {
+    rows.push({
+      cycle_id:    cycleId,
+      week_number: week,
+      start_date:  format(weekMon,                 "yyyy-MM-dd"),
+      end_date:    format(endOfISOWeek(weekMon),   "yyyy-MM-dd"), // always Sunday
+      is_deload:   false,
+    });
+    weekMon = addWeeks(weekMon, 1);
+    week++;
+  }
+  return rows;
+}
+
 // ── Create modal ──────────────────────────────────────────────────────────────
 
 type CreateLevel = "macrocycle" | "mesocycle" | "cycle" | "microcycle";
@@ -231,12 +255,22 @@ function CreateModal({
           start_date: startDate, end_date: endDate,
         }));
         break;
-      case "cycle":
-        ({ error } = await supabase.from("cycles").insert({
-          mesocycle_id: state.parentId!, name: name.trim(),
-          start_date: startDate, end_date: endDate,
-        }));
+      case "cycle": {
+        const { data: newCycle, error: cycleErr } = await supabase
+          .from("cycles")
+          .insert({ mesocycle_id: state.parentId!, name: name.trim(), start_date: startDate, end_date: endDate })
+          .select("id")
+          .single();
+        error = cycleErr;
+        if (!cycleErr && newCycle) {
+          const micros = buildMicrocycles(newCycle.id, startDate, endDate);
+          if (micros.length > 0) {
+            const { error: microErr } = await supabase.from("microcycles").insert(micros);
+            if (microErr) console.error("[auto-microcycles]", microErr.message);
+          }
+        }
         break;
+      }
       case "microcycle":
         ({ error } = await supabase.from("microcycles").insert({
           cycle_id: state.parentId!, week_number: weekNum,
@@ -246,7 +280,8 @@ function CreateModal({
     }
     setSaving(false);
     if (error) { toast.error("Erreur lors de la création"); return; }
-    qc.invalidateQueries({ queryKey: ["timeline-data", athleteId, rangeStart, rangeEnd] });
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
     toast.success(`${LEVEL_LABEL[state.level]} créé`);
     onClose();
   }
@@ -543,16 +578,13 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                 />
                 <TimelineRow level="cycle" items={cycleRows} {...sharedRowProps}
                   onOpen={(id) => open("cycle", id)}
-                  onAdd={makeAddHandler("microcycle", "cycles")}
                   onNewRow={() => openCreate("cycle", data?.mesocycles[0]?.id, data?.mesocycles[0]?.start_date, data?.mesocycles[0]?.end_date)}
                   onDrag={makeDragHandler("cycles")}
                   onResize={makeResizeHandler("cycles")}
                 />
                 <TimelineRow level="microcycle" items={microRows} {...sharedRowProps}
+                  readOnly
                   onOpen={(id) => open("microcycle", id)}
-                  onNewRow={() => openCreate("microcycle", data?.cycles[0]?.id, data?.cycles[0]?.start_date, data?.cycles[0]?.end_date)}
-                  onDrag={makeDragHandler("microcycles")}
-                  onResize={makeResizeHandler("microcycles")}
                 />
 
                 {/* Vertical markers (position absolute over all rows) */}
