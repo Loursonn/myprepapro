@@ -42,6 +42,7 @@ const StatsPage         = lazy(() => import("./features/coach/pages/StatsPage.ts
 const DonneesPage       = lazy(() => import("./features/coach/pages/DonneesPage.tsx"));
 const RetoursPage       = lazy(() => import("./features/coach/pages/RetoursPage.tsx"));
 const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx"));
+const AthleteViewPage   = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -116,6 +117,7 @@ function AnimatedRoutes() {
               <Route path="donnees"       element={<DonneesPage />} />
               <Route path="retours"       element={<RetoursPage />} />
               <Route path="tests"         element={<CoachTestPage />} />
+              <Route path="athlete-view"  element={<AthleteViewPage />} />
             </Route>
           </Route>
 
