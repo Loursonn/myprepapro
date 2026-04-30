@@ -34,7 +34,19 @@
       "Bash(git diff:*)",
       "Bash(grep:*)",
       "Skill(update-config)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(rtk grep:*)",
+      "Bash(rtk ls:*)",
+      "Bash(rtk npm:*)",
+      "Bash(rtk npx:*)",
+      "Bash(supabase db:*)",
+      "Bash(supabase migration:*)",
+      "Bash(rtk read:*)",
+      "Bash(supabase status:*)",
+      "Bash(yes)",
+      "Bash(rtk tsc:*)",
+      "Bash(supabase gen:*)",
+      "Bash(rtk git:*)"
     ]
   }
 }

@@ -18,6 +18,7 @@ export interface Profile {
   body_fat_pct: number | null;
   base_metabolism: number | null;
   is_admin: boolean;
+  is_certified_coach: boolean;
 }
 
 interface AuthContextType {

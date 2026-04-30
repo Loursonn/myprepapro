@@ -2,6 +2,7 @@
 -- Without this policy, linkToCoach() always returns "Code coach invalide" because
 -- the athlete can't SELECT a coach profile they don't already belong to.
 
+DROP POLICY IF EXISTS "profiles_select_coaches" ON public.profiles;
 CREATE POLICY "profiles_select_coaches"
 ON public.profiles
 FOR SELECT

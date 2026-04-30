@@ -13,6 +13,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       app_data: {
@@ -40,6 +65,94 @@ export type Database = {
             columns: ["athlete_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_test_results: {
+        Row: {
+          athlete_id: string
+          created_at: string | null
+          id: string
+          notes: string | null
+          performed_at: string
+          test_definition_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          performed_at?: string
+          test_definition_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          performed_at?: string
+          test_definition_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_test_results_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_test_results_test_definition_id_fkey"
+            columns: ["test_definition_id"]
+            isOneToOne: false
+            referencedRelation: "test_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_test_values: {
+        Row: {
+          id: string
+          result_id: string
+          value: number
+          variable_id: string
+        }
+        Insert: {
+          id?: string
+          result_id: string
+          value: number
+          variable_id: string
+        }
+        Update: {
+          id?: string
+          result_id?: string
+          value?: number
+          variable_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_test_values_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_test_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_test_values_variable_id_fkey"
+            columns: ["variable_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_current_values"
+            referencedColumns: ["variable_id"]
+          },
+          {
+            foreignKeyName: "athlete_test_values_variable_id_fkey"
+            columns: ["variable_id"]
+            isOneToOne: false
+            referencedRelation: "test_variables"
             referencedColumns: ["id"]
           },
         ]
@@ -123,33 +236,53 @@ export type Database = {
       }
       cycles: {
         Row: {
+          athlete_id: string | null
+          coach_id: string | null
           created_at: string
           end_date: string
           id: string
-          mesocycle_id: string
+          mesocycle_id: string | null
           name: string
           objective: string | null
           start_date: string
         }
         Insert: {
+          athlete_id?: string | null
+          coach_id?: string | null
           created_at?: string
           end_date: string
           id?: string
-          mesocycle_id: string
+          mesocycle_id?: string | null
           name: string
           objective?: string | null
           start_date: string
         }
         Update: {
+          athlete_id?: string | null
+          coach_id?: string | null
           created_at?: string
           end_date?: string
           id?: string
-          mesocycle_id?: string
+          mesocycle_id?: string | null
           name?: string
           objective?: string | null
           start_date?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "cycles_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cycles_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cycles_mesocycle_id_fkey"
             columns: ["mesocycle_id"]
@@ -899,6 +1032,7 @@ export type Database = {
           height_cm: number | null
           id: string
           is_admin: boolean
+          is_certified_coach: boolean
           last_name: string | null
           role: string
           weight_kg: number | null
@@ -918,6 +1052,7 @@ export type Database = {
           height_cm?: number | null
           id: string
           is_admin?: boolean
+          is_certified_coach?: boolean
           last_name?: string | null
           role: string
           weight_kg?: number | null
@@ -937,6 +1072,7 @@ export type Database = {
           height_cm?: number | null
           id?: string
           is_admin?: boolean
+          is_certified_coach?: boolean
           last_name?: string | null
           role?: string
           weight_kg?: number | null
@@ -1058,6 +1194,50 @@ export type Database = {
           {
             foreignKeyName: "seasons_coach_id_fkey"
             columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_definitions: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_global: boolean
+          kind: string
+          name: string
+          protocol: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_global?: boolean
+          kind?: string
+          name: string
+          protocol?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_global?: boolean
+          kind?: string
+          name?: string
+          protocol?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_definitions_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1197,6 +1377,47 @@ export type Database = {
             columns: ["planning_block_id"]
             isOneToOne: false
             referencedRelation: "planning_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_variables: {
+        Row: {
+          better_when: string
+          created_at: string | null
+          id: string
+          key: string
+          label: string
+          test_definition_id: string
+          unit: string
+          value_type: string
+        }
+        Insert: {
+          better_when?: string
+          created_at?: string | null
+          id?: string
+          key: string
+          label: string
+          test_definition_id: string
+          unit: string
+          value_type?: string
+        }
+        Update: {
+          better_when?: string
+          created_at?: string | null
+          id?: string
+          key?: string
+          label?: string
+          test_definition_id?: string
+          unit?: string
+          value_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_variables_test_definition_id_fkey"
+            columns: ["test_definition_id"]
+            isOneToOne: false
+            referencedRelation: "test_definitions"
             referencedColumns: ["id"]
           },
         ]
@@ -1353,6 +1574,28 @@ export type Database = {
       }
     }
     Views: {
+      athlete_current_values: {
+        Row: {
+          athlete_id: string | null
+          best_performed_at: string | null
+          better_when: string | null
+          current_value: number | null
+          key: string | null
+          label: string | null
+          unit: string | null
+          value_type: string | null
+          variable_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_test_results_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pg_all_foreign_keys: {
         Row: {
           fk_columns: unknown[] | null
@@ -1472,6 +1715,18 @@ export type Database = {
       finish: { Args: { exception_on_failure?: boolean }; Returns: string[] }
       format_type_string: { Args: { "": string }; Returns: string }
       get_coach_overview: { Args: { coach_uuid: string }; Returns: Json }
+      get_coaches_list: {
+        Args: never
+        Returns: {
+          athlete_count: number
+          coach_code: string
+          created_at: string
+          full_name: string
+          id: string
+          is_admin: boolean
+          is_certified_coach: boolean
+        }[]
+      }
       has_unique: { Args: { "": string }; Returns: string }
       in_todo: { Args: never; Returns: boolean }
       is_coach_of: { Args: { athlete_uuid: string }; Returns: boolean }
@@ -1523,6 +1778,10 @@ export type Database = {
       todo_start:
         | { Args: never; Returns: boolean[] }
         | { Args: { "": string }; Returns: boolean[] }
+      toggle_coach_certification: {
+        Args: { p_certified: boolean; p_target_id: string }
+        Returns: undefined
+      }
       unlink_athlete: { Args: { athlete_id: string }; Returns: undefined }
     }
     Enums: {
@@ -1654,6 +1913,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
