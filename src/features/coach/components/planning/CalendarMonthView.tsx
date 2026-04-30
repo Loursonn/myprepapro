@@ -353,9 +353,10 @@ export function CalendarMonthView({
       const sessId = e.raw.session_id as string;
       const weekNum = Math.floor((parseISO(e.date).getTime() - blockStart.getTime()) / MS_WEEK) + 1;
       if (weekNum < 1) return e;
-      if ((completedSessions[weekNum] ?? []).includes(sessId)) return { ...e, status: "completed" };
-      if (weekNum < currentWeek) return { ...e, status: "missed" };
-      return e;
+      const raw = { ...e.raw, week: weekNum };
+      if ((completedSessions[weekNum] ?? []).includes(sessId)) return { ...e, status: "completed", raw };
+      if (weekNum < currentWeek) return { ...e, status: "missed", raw };
+      return { ...e, raw };
     });
   }, [realEvents, blockConfig, completedSessions, currentWeek]);
 

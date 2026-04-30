@@ -118,7 +118,43 @@ function WorkoutDetailView({
           <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12 }}>
             Chargement…
           </div>
-        ) : sets.length === 0 ? (
+        ) : sets.length === 0 && week && localSets && plannedExos.length > 0 ? (() => {
+          // DB set_logs empty → fall back to app_data local sets
+          const exosWithSets = plannedExos
+            .map(ex => ({
+              ex,
+              rows: ((localSets[ex.id + "_" + week] ?? []) as Array<{ done?: boolean; kg?: number; reps?: number; rir?: number; method?: string }>)
+                .filter(r => r.done),
+            }))
+            .filter(({ rows }) => rows.length > 0);
+          if (exosWithSets.length === 0) return (
+            <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12, background: C.s2, borderRadius: 10 }}>
+              Séance validée — séries non enregistrées
+            </div>
+          );
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {exosWithSets.map(({ ex, rows }) => (
+                <div key={ex.id} style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
+                  <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>{ex.name ?? "Exercice"}</div>
+                  <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                    {rows.map((s, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx2 }}>
+                        <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
+                        {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
+                        {s.reps != null && <span>× {s.reps} rép.</span>}
+                        {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>}
+                        {s.method && s.method !== "normal" && (
+                          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600 }}>{s.method}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })() : sets.length === 0 ? (
           <div style={{
             textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12,
             background: C.s2, borderRadius: 10,
