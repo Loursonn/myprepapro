@@ -41,13 +41,17 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 function WorkoutDetailView({
   event,
   exos,
+  sets,
 }: {
   event: CalEvent;
   exos?: Record<string, unknown[]>;
+  sets?: Record<string, unknown[]>;
 }) {
   const sessionId    = event.raw?.session_id as string | undefined;
   const isProjected  = event.raw?.source === "block_plan";
   const isCompleted  = event.status === "completed";
+  const week         = event.raw?.week as number | undefined;
+  // Real DB workout: show set_logs. Projected+completed: use local sets from app_data.
   const workoutLogId = !isProjected && isCompleted ? event.id : null;
 
   // Fetch set_logs for completed real workouts
@@ -176,8 +180,47 @@ function WorkoutDetailView({
         })()
       )}
 
+      {/* Projected + completed: show local sets from app_data */}
+      {!workoutLogId && isProjected && isCompleted && week && sets && plannedExos.length > 0 && (() => {
+        const exosWithSets = plannedExos.map(ex => ({
+          ex,
+          rows: ((sets[ex.id + "_" + week] ?? []) as Array<{done?:boolean;kg?:number;reps?:number;rir?:number;method?:string}>)
+            .filter(r => r.done),
+        })).filter(({ rows }) => rows.length > 0);
+
+        return exosWithSets.length === 0 ? null : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.g, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+              Séance réalisée
+            </div>
+            {exosWithSets.map(({ ex, rows }) => (
+              <div key={ex.id} style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
+                <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>
+                  {ex.name ?? "Exercice"}
+                </div>
+                <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {rows.map((s, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx2 }}>
+                      <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
+                      {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
+                      {s.reps != null && <span>× {s.reps} rép.</span>}
+                      {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>}
+                      {s.method && s.method !== "normal" && (
+                        <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600 }}>
+                          {s.method}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Planned / projected: show exercises from exos */}
-      {!workoutLogId && (
+      {!workoutLogId && !(isProjected && isCompleted) && (
         plannedExos.length === 0 ? (
           <div style={{
             textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12,
@@ -297,6 +340,7 @@ interface DayDetailsDrawerProps {
   athleteId: string;
   onQuickAdd: (day: Date) => void;
   exos?: Record<string, unknown[]>;
+  sets?: Record<string, unknown[]>;
 }
 
 export function DayDetailsDrawer({
@@ -307,6 +351,7 @@ export function DayDetailsDrawer({
   athleteId,
   onQuickAdd,
   exos,
+  sets,
 }: DayDetailsDrawerProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
 
@@ -396,7 +441,7 @@ export function DayDetailsDrawer({
           display: "flex", flexDirection: "column", gap: 20,
         }}>
           {selectedEvent ? (
-            <WorkoutDetailView event={selectedEvent} exos={exos} />
+            <WorkoutDetailView event={selectedEvent} exos={exos} sets={sets} />
           ) : (
             <>
               {dayEvents.length === 0 && (

@@ -313,6 +313,7 @@ interface CalendarMonthViewProps {
   blockConfig?: BlockConfig;
   setBlockConfig?: (fn: (prev: BlockConfig) => BlockConfig) => void;
   exos?: Record<string, unknown[]>;
+  sets?: Record<string, unknown[]>;
   completedSessions?: Record<number, string[]>;
   currentWeek?: number;
 }
@@ -324,6 +325,7 @@ export function CalendarMonthView({
   blockConfig,
   setBlockConfig,
   exos,
+  sets,
   completedSessions = {},
   currentWeek = 1,
 }: CalendarMonthViewProps) {
@@ -341,6 +343,22 @@ export function CalendarMonthView({
   const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
   const { mutate: assignWorkout }           = useAssignWorkout();
 
+  // ── Enrich realEvents: override status from completedSessions (source of truth) ──
+  const enrichedRealEvents = useMemo(() => {
+    if (!blockConfig?.startDate) return realEvents;
+    const blockStart = startOfWeek(parseISO(blockConfig.startDate), { weekStartsOn: 1 });
+    const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
+    return realEvents.map(e => {
+      if (e.type !== "workout" || !e.raw?.session_id) return e;
+      const sessId = e.raw.session_id as string;
+      const weekNum = Math.floor((parseISO(e.date).getTime() - blockStart.getTime()) / MS_WEEK) + 1;
+      if (weekNum < 1) return e;
+      if ((completedSessions[weekNum] ?? []).includes(sessId)) return { ...e, status: "completed" };
+      if (weekNum < currentWeek) return { ...e, status: "missed" };
+      return e;
+    });
+  }, [realEvents, blockConfig, completedSessions, currentWeek]);
+
   // ── Project block sessions onto calendar dates ────────────────────────────
   const projectedEvents = useMemo<CalEvent[]>(() => {
     if (!blockConfig?.startDate || !sessions.length) return [];
@@ -352,7 +370,7 @@ export function CalendarMonthView({
 
     // Build set of already-logged session_id:date to avoid duplication
     const logged = new Set(
-      realEvents
+      enrichedRealEvents
         .filter((e) => e.type === "workout" && e.raw?.session_id)
         .map((e) => `${e.raw.session_id}:${e.date}`),
     );
@@ -386,11 +404,11 @@ export function CalendarMonthView({
       }
     }
     return out;
-  }, [blockConfig, sessions, month, realEvents, completedSessions, currentWeek]);
+  }, [blockConfig, sessions, month, enrichedRealEvents, completedSessions, currentWeek]);
 
   const events = useMemo(
-    () => [...realEvents, ...projectedEvents],
-    [realEvents, projectedEvents],
+    () => [...enrichedRealEvents, ...projectedEvents],
+    [enrichedRealEvents, projectedEvents],
   );
 
   // Sensors : require 8px of movement before drag starts (prevent accidental drags)
@@ -647,6 +665,7 @@ export function CalendarMonthView({
         athleteId={athleteId}
         onQuickAdd={(day) => setQuickAddDay(day)}
         exos={exos}
+        sets={sets}
       />
 
       {/* Quick-add dialog (also from empty slot click) */}
