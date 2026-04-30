@@ -519,7 +519,7 @@ export function CalendarMonthView({
                 fontSize: 11, flexWrap: "wrap",
               }}
             >
-              <span style={{ color: C.tx3, fontWeight: 600 }}>📋 Bloc :</span>
+              <span style={{ color: C.tx3, fontWeight: 600 }}>📋 Cycle :</span>
               {blockConfig.blockName && (
                 <span style={{ color: C.tx, fontWeight: 600 }}>{blockConfig.blockName}</span>
               )}
