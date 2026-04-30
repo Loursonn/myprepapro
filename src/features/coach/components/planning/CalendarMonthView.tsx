@@ -187,7 +187,7 @@ function DroppableDay({
         flexDirection: "column",
         gap: 3,
         position: "relative",
-        opacity: isCurrentMonth ? 1 : 0.3,
+        opacity: 1,
       }}
     >
       {/* Day number */}
@@ -334,10 +334,17 @@ export function CalendarMonthView({
   const [quickAddDay, setQuickAddDay] = useState<Date | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
-  const monthRange = useMemo(() => ({
-    start: format(startOfMonth(month), "yyyy-MM-dd"),
-    end:   format(endOfMonth(month),   "yyyy-MM-dd"),
-  }), [month]);
+  const { monthRange, gridStartDate, gridEndDate } = useMemo(() => {
+    const monthStart = startOfMonth(month);
+    const monthEnd   = endOfMonth(month);
+    const gs = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const ge = endOfWeek(monthEnd,   { weekStartsOn: 1 });
+    return {
+      monthRange:   { start: format(gs, "yyyy-MM-dd"), end: format(ge, "yyyy-MM-dd") },
+      gridStartDate: gs,
+      gridEndDate:   ge,
+    };
+  }, [month]);
 
   const { data: rawEvents = [], isLoading } = useUnifiedCalendar(athleteId, monthRange);
   const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
@@ -366,8 +373,6 @@ export function CalendarMonthView({
 
     // Snap to Monday of the week containing startDate
     const blockStart = startOfWeek(parseISO(blockConfig.startDate), { weekStartsOn: 1 });
-    const mStart = startOfMonth(month);
-    const mEnd   = endOfMonth(month);
 
     // Build set of already-logged session_id:date to avoid duplication
     const logged = new Set(
@@ -384,7 +389,7 @@ export function CalendarMonthView({
         if (dow == null) continue;
 
         const d    = addDays(blockStart, w * 7 + dow);
-        if (d < mStart || d > mEnd) continue;
+        if (d < gridStartDate || d > gridEndDate) continue;
 
         const dateStr = format(d, "yyyy-MM-dd");
         if (logged.has(`${sess.id}:${dateStr}`)) continue;
@@ -405,7 +410,7 @@ export function CalendarMonthView({
       }
     }
     return out;
-  }, [blockConfig, sessions, month, enrichedRealEvents, completedSessions, currentWeek]);
+  }, [blockConfig, sessions, gridStartDate, gridEndDate, enrichedRealEvents, completedSessions, currentWeek]);
 
   const events = useMemo(
     () => [...enrichedRealEvents, ...projectedEvents],
@@ -417,12 +422,8 @@ export function CalendarMonthView({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
-  // Build calendar grid (6 weeks max, Mon-first)
-  const monthStart = startOfMonth(month);
-  const monthEnd   = endOfMonth(month);
-  const gridStart  = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const gridEnd    = endOfWeek(monthEnd,   { weekStartsOn: 1 });
-  const gridDays   = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  // Build calendar grid — includes days from adjacent months to complete the ISO weeks
+  const gridDays = eachDayOfInterval({ start: gridStartDate, end: gridEndDate });
 
   // Group events by date
   const eventsByDate = events.reduce<Record<string, CalEvent[]>>((acc, ev) => {
