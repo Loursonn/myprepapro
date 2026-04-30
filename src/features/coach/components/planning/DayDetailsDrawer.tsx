@@ -22,6 +22,9 @@ interface SetRow {
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
+function rpeColor(v: number) { return v <= 4 ? C.g : v <= 7 ? C.o : C.r; }
+function rpeBg(v: number)    { return v <= 4 ? C.gS : v <= 7 ? C.oS : C.rS; }
+
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
   workout:     C.ac,
   test:        C.o,
@@ -97,7 +100,7 @@ function WorkoutDetailView({
         {event.rpe != null && (
           <span style={{
             fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
-            background: C.acS, color: C.ac,
+            background: rpeBg(event.rpe), color: rpeColor(event.rpe),
           }}>
             RPE {event.rpe}/10
           </span>
@@ -347,7 +350,7 @@ function EventCard({
             {event.rpe != null && (
               <span style={{
                 fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 8,
-                background: C.acS, color: C.ac,
+                background: rpeBg(event.rpe), color: rpeColor(event.rpe),
               }}>
                 RPE {event.rpe}/10
               </span>
