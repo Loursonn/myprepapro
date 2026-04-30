@@ -52,9 +52,11 @@ interface Props {
 export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testSubTab, setTestSubTab }: Props) {
   const [tests, setTests] = useState<TestSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<"list" | "create" | "view" | "fill">("list");
+  const [step, setStep] = useState<"list" | "create" | "view" | "fill" | "edit">("list");
   const [selectedTest, setSelectedTest] = useState<TestSession | null>(null);
   const [fileUploading, setFileUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Formulaire création
@@ -97,14 +99,31 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
 
   const handleFileUpload = async (file: File) => {
     setFileUploading(true);
+    setUploadError("");
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      const type = ext === "pdf" ? "pdf" : "image";
-      const path = `${athleteId}/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from("test-files").upload(path, file);
-      if (error) throw error;
-      const { data: signed } = await supabase.storage.from("test-files").createSignedUrl(path, 60 * 60 * 24 * 365);
-      setCreateForm(f => ({ ...f, reference_file_url: signed?.signedUrl || "", reference_file_type: type }));
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const isPdf = ext === "pdf";
+
+      if (!isPdf) {
+        // Images : stockage base64 dans la BDD (pas besoin de bucket Storage)
+        if (file.size > 3 * 1024 * 1024) throw new Error("Image trop grande (max 3 Mo)");
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target?.result as string);
+          reader.onerror = () => reject(new Error("Erreur lecture fichier"));
+          reader.readAsDataURL(file);
+        });
+        setCreateForm(f => ({ ...f, reference_file_url: dataUrl, reference_file_type: "image" }));
+      } else {
+        // PDFs : bucket Supabase Storage requis
+        const path = `${athleteId}/${Date.now()}.pdf`;
+        const { error } = await supabase.storage.from("test-media").upload(path, file);
+        if (error) throw new Error("Bucket 'test-media' manquant. Créez-le dans Supabase Storage > New bucket (private).");
+        const { data: signed } = await supabase.storage.from("test-media").createSignedUrl(path, 60 * 60 * 24 * 365);
+        setCreateForm(f => ({ ...f, reference_file_url: signed?.signedUrl || "", reference_file_type: "pdf" }));
+      }
+    } catch (e: any) {
+      setUploadError(e?.message || "Erreur upload");
     } finally {
       setFileUploading(false);
     }
@@ -148,9 +167,47 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
     setStep("fill");
   };
 
+  const startEdit = () => {
+    if (!selectedTest) return;
+    setCreateForm({
+      type: selectedTest.type,
+      custom_type: selectedTest.custom_type || "",
+      title: selectedTest.title,
+      description: selectedTest.description || "",
+      reference_file_url: selectedTest.reference_file_url || "",
+      reference_file_type: selectedTest.reference_file_type || "",
+      date: selectedTest.date,
+    });
+    setUploadError("");
+    setStep("edit");
+  };
+
+  const handleEditSave = async () => {
+    if (!selectedTest || !createForm.title.trim() || saving) return;
+    setSaving(true);
+    try {
+      const payload = {
+        type: createForm.type,
+        custom_type: createForm.type === "custom" ? createForm.custom_type : null,
+        title: createForm.title.trim(),
+        description: createForm.description || null,
+        reference_file_url: createForm.reference_file_url || null,
+        reference_file_type: createForm.reference_file_type || null,
+        date: createForm.date,
+      };
+      await supabase.from("test_sessions").update(payload).eq("id", selectedTest.id);
+      setSelectedTest(prev => prev ? { ...prev, ...payload, custom_type: payload.custom_type ?? undefined, description: payload.description ?? undefined, reference_file_url: payload.reference_file_url ?? undefined, reference_file_type: payload.reference_file_type ?? undefined } : null);
+      loadTests();
+      setStep("view");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSaveResults = async () => {
     if (!selectedTest || saving) return;
     setSaving(true);
+    setSaveError("");
     try {
       const validMetrics = metrics.filter(m => m.name.trim() && m.value.trim());
       const payload = {
@@ -159,51 +216,49 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
         results_structured: validMetrics.length ? { metrics: validMetrics } : {},
         updated_at: new Date().toISOString(),
       };
-      await supabase.from("test_sessions").update(payload).eq("id", selectedTest.id);
+      const { error: updateErr } = await supabase.from("test_sessions").update(payload).eq("id", selectedTest.id);
+      if (updateErr) throw updateErr;
 
-      // Proposer de sauvegarder comme performance si métriques renseignées
+      // Sauvegarder comme performance (optionnel — table peut ne pas exister)
       if (validMetrics.length > 0) {
-        for (const m of validMetrics) {
-          const numVal = parseFloat(m.value);
-          if (!isNaN(numVal)) {
-            await supabase.from("performance_logs").insert({
-              athlete_id: athleteId,
-              metric_type: guessMetricType(m.name),
-              metric_name: m.name,
-              value: numVal,
-              unit: m.unit || "custom",
-              date: selectedTest.date,
-              test_session_id: selectedTest.id,
-              is_active_reference: false,
-              created_by: athleteId,
-            });
-
-            // Notifier coach
-            const { data: prof } = await supabase.from("profiles").select("coach_id").eq("id", athleteId).single();
-            if (prof?.coach_id) {
-              const { data: perfLog } = await supabase.from("performance_logs")
-                .select("id")
-                .eq("athlete_id", athleteId)
-                .eq("metric_name", m.name)
-                .eq("date", selectedTest.date)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .single();
-              if (perfLog) {
-                await supabase.from("performance_notifications").insert({
-                  coach_id: prof.coach_id,
-                  athlete_id: athleteId,
-                  performance_log_id: perfLog.id,
-                  status: "pending",
-                });
-              }
+        try {
+          for (const m of validMetrics) {
+            const numVal = parseFloat(m.value);
+            if (!isNaN(numVal)) {
+              await supabase.from("performance_logs").insert({
+                athlete_id: athleteId,
+                metric_type: guessMetricType(m.name),
+                metric_name: m.name,
+                value: numVal,
+                unit: m.unit || "custom",
+                date: selectedTest.date,
+                test_session_id: selectedTest.id,
+                is_active_reference: false,
+                created_by: athleteId,
+              });
             }
           }
-        }
+        } catch (_) { /* performance_logs optionnel */ }
+
+        // Notifier coach (optionnel)
+        try {
+          const { data: prof } = await supabase.from("profiles").select("coach_id").eq("id", athleteId).single();
+          if (prof?.coach_id) {
+            await supabase.from("performance_notifications").insert({
+              coach_id: prof.coach_id,
+              athlete_id: athleteId,
+              test_session_id: selectedTest.id,
+              status: "pending",
+            });
+          }
+        } catch (_) { /* performance_notifications optionnel */ }
       }
 
+      setSelectedTest(prev => prev ? { ...prev, completed: true, results_note: resultsNote || undefined, results_structured: validMetrics.length ? { metrics: validMetrics } : {} } : prev);
       setStep("list");
       loadTests();
+    } catch (e: any) {
+      setSaveError(e?.message || "Erreur lors de l'enregistrement des résultats.");
     } finally {
       setSaving(false);
     }
@@ -355,10 +410,10 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
                     style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: "rgba(239,75,75,0.12)", color: "#EF4B4B", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Supprimer</button>
                 </div>
               ) : (
-                <label style={{ display: "block", padding: "20px", borderRadius: 9, border: "1px dashed " + C.brdL, background: C.s2, textAlign: "center", cursor: fileUploading ? "default" : "pointer" }}>
+                <label style={{ display: "block", padding: "20px", borderRadius: 9, border: "1px dashed " + (uploadError ? "#EF4B4B" : C.brdL), background: C.s2, textAlign: "center", cursor: fileUploading ? "default" : "pointer" }}>
                   <div style={{ fontSize: 24, marginBottom: 6 }}>📎</div>
-                  <div style={{ fontSize: 12, color: C.tx3 }}>{fileUploading ? "Upload en cours…" : "Photo, PNG, JPG ou PDF"}</div>
-                  <input type="file" accept="image/*,application/pdf" onChange={e => e.target.files?.[0] && handleFileUpload(e.target.files[0])} style={{ display: "none" }} />
+                  <div style={{ fontSize: 12, color: uploadError ? "#EF4B4B" : C.tx3 }}>{fileUploading ? "Upload en cours…" : uploadError || "Photo, PNG, JPG ou PDF"}</div>
+                  <input type="file" accept="image/*,application/pdf" onChange={e => { setUploadError(""); if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); }} style={{ display: "none" }} />
                 </label>
               )}
             </div>
@@ -394,7 +449,9 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
           {selectedTest.reference_file_url && (
             <div style={{ marginBottom: 14 }}>
               {selectedTest.reference_file_type === "image" ? (
-                <img src={selectedTest.reference_file_url} alt="Référence" style={{ width: "100%", borderRadius: 12, border: "1px solid " + C.brdL, maxHeight: 280, objectFit: "contain", background: C.s2 }} />
+                <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid " + C.brdL, background: C.s2, maxWidth: "100%" }}>
+                  <img src={selectedTest.reference_file_url} alt="Référence" style={{ width: "100%", display: "block", maxHeight: 320, objectFit: "contain" }} />
+                </div>
               ) : (
                 <a href={selectedTest.reference_file_url} target="_blank" rel="noreferrer"
                   style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderRadius: 12, border: "1px solid " + C.brdL, background: C.s1, color: C.ac, textDecoration: "none" }}>
@@ -432,12 +489,102 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
             </div>
           )}
 
-          {!viewOnly && (
-            <button onClick={startFill}
-              style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: selectedTest.completed ? C.s2 : (tInfo?.color || C.ac), color: selectedTest.completed ? C.tx3 : "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-              {selectedTest.completed ? "Modifier les résultats" : "▶ Remplir les résultats"}
-            </button>
+          {(!viewOnly || isCoach) && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button onClick={startFill}
+                style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: selectedTest.completed ? C.s2 : (tInfo?.color || C.ac), color: selectedTest.completed ? C.tx3 : "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                {selectedTest.completed ? "Modifier les résultats" : "▶ Remplir les résultats"}
+              </button>
+              <button onClick={startEdit}
+                style={{ width: "100%", padding: "11px 0", borderRadius: 14, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                ✏ Modifier le test
+              </button>
+            </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vue édition du test ───────────────────────────────────────────────────────
+  if (step === "edit" && selectedTest) {
+    const editTypeInfo = TEST_TYPES.find(t => t.id === createForm.type);
+    return (
+      <div>
+        <SubTabs />
+        <div style={{ padding: "16px 16px 40px" }}>
+          <button onClick={() => setStep("view")} style={{ background: "none", border: "none", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 14 }}>‹ Retour</button>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.tx, marginBottom: 16 }}>Modifier le test</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Type */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>Type de test</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {TEST_TYPES.map(t => (
+                  <button key={t.id} onClick={() => setCreateForm(f => ({ ...f, type: t.id }))}
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: "1px solid " + (createForm.type === t.id ? t.color : C.brdL), background: createForm.type === t.id ? t.color + "20" : "transparent", color: createForm.type === t.id ? t.color : C.tx3, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    <span>{t.emoji}</span> {t.label}
+                  </button>
+                ))}
+              </div>
+              {createForm.type === "custom" && (
+                <input value={createForm.custom_type} onChange={e => setCreateForm(f => ({ ...f, custom_type: e.target.value }))} placeholder="Préciser le type de test…"
+                  style={{ marginTop: 10, width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+              )}
+            </div>
+
+            {/* Titre */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Titre *</div>
+              <input value={createForm.title} onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Test VMA Cooper — 12 min"
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </div>
+
+            {/* Date */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Date du test</div>
+              <input type="date" value={createForm.date} onChange={e => setCreateForm(f => ({ ...f, date: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </div>
+
+            {/* Description */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>Instructions / Description</div>
+              <textarea value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Décris le protocole du test, les consignes pour l'athlète…"
+                rows={4}
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+            </div>
+
+            {/* Fichier de référence */}
+            <div style={{ background: C.s1, borderRadius: 12, padding: 14, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Fichier de référence (optionnel)</div>
+              <div style={{ fontSize: 10, color: C.tx3, marginBottom: 10 }}>Photo, schéma, PDF de protocole</div>
+              {createForm.reference_file_url ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {createForm.reference_file_type === "image" ? (
+                    <img src={createForm.reference_file_url} alt="Ref" style={{ height: 80, borderRadius: 8, objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ padding: "10px 16px", borderRadius: 8, background: C.s2, color: C.ac, fontSize: 12, fontWeight: 600 }}>📄 PDF chargé</div>
+                  )}
+                  <button onClick={() => setCreateForm(f => ({ ...f, reference_file_url: "", reference_file_type: "" }))}
+                    style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: "rgba(239,75,75,0.12)", color: "#EF4B4B", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Supprimer</button>
+                </div>
+              ) : (
+                <label style={{ display: "block", padding: "20px", borderRadius: 9, border: "1px dashed " + (uploadError ? "#EF4B4B" : C.brdL), background: C.s2, textAlign: "center", cursor: fileUploading ? "default" : "pointer" }}>
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>📎</div>
+                  <div style={{ fontSize: 12, color: uploadError ? "#EF4B4B" : C.tx3 }}>{fileUploading ? "Upload en cours…" : uploadError || "Photo, PNG, JPG ou PDF"}</div>
+                  <input type="file" accept="image/*,application/pdf" onChange={e => { setUploadError(""); if (e.target.files?.[0]) handleFileUpload(e.target.files[0]); }} style={{ display: "none" }} />
+                </label>
+              )}
+            </div>
+          </div>
+
+          <button onClick={handleEditSave} disabled={!createForm.title.trim() || saving}
+            style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: (createForm.title.trim() && !saving) ? (editTypeInfo?.color || C.ac) : C.s2, color: (createForm.title.trim() && !saving) ? "#fff" : C.tx3, fontSize: 14, fontWeight: 800, cursor: (createForm.title.trim() && !saving) ? "pointer" : "default", fontFamily: "inherit", marginTop: 20 }}>
+            {saving ? "Enregistrement…" : "Enregistrer les modifications"}
+          </button>
         </div>
       </div>
     );
@@ -489,9 +636,11 @@ export default function TestSessionView({ athleteId, viewOnly, isCoach, C, testS
               style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
           </div>
 
-          <div style={{ background: "rgba(59,141,240,0.08)", borderRadius: 10, padding: "10px 14px", border: "1px solid rgba(59,141,240,0.2)", marginBottom: 16, fontSize: 11, color: "#3B8DF0" }}>
-            💡 Les mesures seront automatiquement ajoutées aux performances de l'athlète. Le coach recevra une notification pour valider.
-          </div>
+          {saveError && (
+            <div style={{ background: "rgba(239,75,75,0.08)", borderRadius: 10, padding: "10px 14px", border: "1px solid rgba(239,75,75,0.2)", marginBottom: 16, fontSize: 11, color: "#EF4B4B" }}>
+              ⚠️ {saveError}
+            </div>
+          )}
 
           <button onClick={handleSaveResults} disabled={saving}
             style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: saving ? C.s2 : (tInfo?.color || C.g), color: saving ? C.tx3 : "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>
