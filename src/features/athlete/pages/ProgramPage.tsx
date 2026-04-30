@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { C } from "@/lib/theme";
-import { useWeekSchedule } from "@/features/shared/hooks/useWeekSchedule";
+import { useWeekProgram } from "@/features/shared/hooks/useWeekProgram";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const MONTHS_FR  = ["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
@@ -27,7 +27,7 @@ export default function ProgramPage() {
   const navigate = useNavigate();
   const [weekStart, setWeekStart] = useState<string>(() => isoDate(toMonday(new Date())));
 
-  const days = useWeekSchedule(weekStart);
+  const days = useWeekProgram(weekStart);
 
   const currentMonday = new Date(weekStart);
   const today = isoDate(new Date());

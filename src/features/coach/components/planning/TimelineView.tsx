@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Eye } from "lucide-react";
 import { C } from "@/lib/theme";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -106,6 +106,7 @@ function DrawerShell({
           athleteId={athleteId}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
+          onClose={onClose}
         />
       );
       break;
@@ -398,11 +399,12 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const [windowStart, setWindowStart] = useState(() => startOfMonth(new Date()));
   const [drawer,      setDrawer]      = useState<DrawerState | null>(null);
   const [createModal, setCreateModal] = useState<CreateState | null>(null);
+  const [zoomMacro,   setZoomMacro]   = useState<{ start: Date; end: Date; label: string } | null>(null);
 
   const { user } = useAuth();
 
-  const rangeStart = windowStart;
-  const rangeEnd   = addMonths(windowStart, MONTHS_SHOWN);
+  const rangeStart = zoomMacro ? zoomMacro.start : windowStart;
+  const rangeEnd   = zoomMacro ? zoomMacro.end   : addMonths(windowStart, MONTHS_SHOWN);
   const rsStr      = format(rangeStart, "yyyy-MM-dd");
   const reStr      = format(rangeEnd,   "yyyy-MM-dd");
 
@@ -490,33 +492,53 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
         {/* ── Header ── */}
         <div style={{ padding: "12px 20px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={() => setWindowStart((d) => subMonths(d, 6))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <ChevronLeft size={16} />
-            </button>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, minWidth: 160, textAlign: "center" }}>
-              {format(rangeStart, "MMM yyyy", { locale: fr })} — {format(rangeEnd, "MMM yyyy", { locale: fr })}
-            </div>
-            <button onClick={() => setWindowStart((d) => addMonths(d, 6))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <ChevronRight size={16} />
-            </button>
-            <button
-              onClick={() => setWindowStart(startOfMonth(new Date()))}
-              style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              Auj.
-            </button>
-            <button
-              onClick={() => openCreate("macrocycle", undefined, rsStr, reStr)}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "5px 12px", borderRadius: 8,
-                border: "1px solid " + C.ac + "50", background: C.acS,
-                color: C.ac, fontSize: 11, fontWeight: 600,
-                cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              <Plus size={11} /> Macrocycle
-            </button>
+            {zoomMacro ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, background: C.acS, border: "1px solid " + C.ac + "50" }}>
+                  <Eye size={12} color={C.ac} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.ac }}>MACROCYCLE EN COURS</span>
+                  <span style={{ fontSize: 11, color: C.tx3 }}>·</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.tx }}>{zoomMacro.label}</span>
+                </div>
+                <button
+                  onClick={() => setZoomMacro(null)}
+                  title="Quitter le zoom"
+                  style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  <X size={13} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setWindowStart((d) => subMonths(d, 6))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ChevronLeft size={16} />
+                </button>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, minWidth: 160, textAlign: "center" }}>
+                  {format(rangeStart, "MMM yyyy", { locale: fr })} — {format(rangeEnd, "MMM yyyy", { locale: fr })}
+                </div>
+                <button onClick={() => setWindowStart((d) => addMonths(d, 6))} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <ChevronRight size={16} />
+                </button>
+                <button
+                  onClick={() => setWindowStart(startOfMonth(new Date()))}
+                  style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Auj.
+                </button>
+                <button
+                  onClick={() => openCreate("macrocycle", undefined, rsStr, reStr)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    padding: "5px 12px", borderRadius: 8,
+                    border: "1px solid " + C.ac + "50", background: C.acS,
+                    color: C.ac, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  <Plus size={11} /> Macrocycle
+                </button>
+              </>
+            )}
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {(["macrocycle", "mesocycle", "cycle", "microcycle"] as const).map((lvl) => (
@@ -565,6 +587,10 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                 <TimelineRow level="macrocycle" items={macroRows} {...sharedRowProps}
                   onOpen={(id) => open("macrocycle", id)}
                   onAdd={makeAddHandler("mesocycle", "macrocycles")}
+                  onZoom={(id) => {
+                    const macro = data?.macrocycles.find((m) => m.id === id);
+                    if (macro) setZoomMacro({ start: parseISO(macro.start_date), end: parseISO(macro.end_date), label: macro.name });
+                  }}
                   onNewRow={() => openCreate("macrocycle", undefined, rsStr, reStr)}
                   onDrag={makeDragHandler("macrocycles")}
                   onResize={makeResizeHandler("macrocycles")}

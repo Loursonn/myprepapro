@@ -445,11 +445,11 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
   </div>);
 }
 
-function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={},weekSchedule={},setWeekSchedule}){
+function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={},weekSchedule={},setWeekSchedule,defaultWeek,hideWeekNav,lockedSessId}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;const progPct=blockConfig?.progressionPct||2.5;const deloadPct=blockConfig?.deloadPct||40;
   const blockStarted=!blockConfig?.startDate||Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000)>=0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
-  const[sess,setSess]=useState(0);const[week,setWeek]=useState(1);const[openEx,setOpenEx]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
+  const[_sess,setSess]=useState(0);const[week,setWeek]=useState(defaultWeek||currentWeek||1);const[openEx,setOpenEx]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
   const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#7B6FFF",e:"NEW"});
   const dropRef=useRef(null);
   const[showAI,setShowAI]=useState(false);
@@ -501,7 +501,9 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const[showEditorModal,setShowEditorModal]=useState(false);
 
   const safeSessions=Array.isArray(sessions)?sessions:[];
-  const safeSess=sess<safeSessions.length?sess:0;
+  const lockedIdx=lockedSessId?safeSessions.findIndex(s=>s.id===lockedSessId):-1;
+  const sess=lockedIdx>=0?lockedIdx:(_sess<safeSessions.length?_sess:0);
+  const safeSess=sess;
   const sid=safeSessions[safeSess]?.id;const exList=exos[sid]||[];
   const sessBlocs=getSessionBlocs(safeSessions[safeSess],exList);
   const getBlocById=id=>sessBlocs.find(b=>b.id===id)||null;
@@ -654,7 +656,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   return(<div>
 
     {/* ── CALENDRIER SEMAINES ── */}
-    {(()=>{
+    {!lockedSessId&&(()=>{
       const weeks=Array.from({length:tw},(_,i)=>i+1);
       return(<div style={{marginBottom:18,background:C.s1,borderRadius:14,overflow:"hidden",border:"1px solid "+C.brd}}>
         {/* Nav semaine */}
@@ -696,16 +698,16 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
       </div>);
     })()}
 
-    {showAI&&<AIGeneratorModal onGenerate={applyAI} onClose={()=>setShowAI(false)} allMethods={allMethods} existingExos={exos} sessions={safeSessions}/>}
-    <button onClick={()=>setShowAI(true)} style={{width:"100%",padding:"11px 0",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+    {!lockedSessId&&showAI&&<AIGeneratorModal onGenerate={applyAI} onClose={()=>setShowAI(false)} allMethods={allMethods} existingExos={exos} sessions={safeSessions}/>}
+    {!lockedSessId&&<button onClick={()=>setShowAI(true)} style={{width:"100%",padding:"11px 0",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
       <span style={{fontSize:14}}>*</span> Generer une base avec l IA
-    </button>
+    </button>}
 
     {/* Session tabs */}
-    <div style={{display:"flex",gap:4,marginBottom:8,overflowX:"auto",scrollbarWidth:"none",alignItems:"center"}}>
+    {!lockedSessId&&(<div style={{display:"flex",gap:4,marginBottom:8,overflowX:"auto",scrollbarWidth:"none",alignItems:"center"}}>
       {safeSessions.map((s,i)=><button key={s.id} onClick={()=>{setSess(i);setOpenEx(null);}} onDoubleClick={()=>setEditingSession(i)} style={{flexShrink:0,padding:"7px 12px",borderRadius:8,border:"1px solid "+(i===safeSess?C.coach:C.brdL),background:i===safeSess?C.coachS:"transparent",color:i===safeSess?C.coach:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{s.short}</button>)}
       <button onClick={()=>setNewSessForm(o=>!o)} style={{flexShrink:0,width:28,height:28,borderRadius:7,border:"1px dashed "+C.coach+"50",background:"transparent",color:C.coach,fontSize:14,cursor:"pointer",fontFamily:"inherit"}}>+</button>
-    </div>
+    </div>)}
 
     {editingSession!==null&&(<div style={{background:C.s1,borderRadius:10,padding:"10px 12px",border:"1px solid "+C.coach+"40",marginBottom:8}}>
       <div style={{fontSize:10,fontWeight:600,color:C.coach,marginBottom:8}}>Renommer la seance</div>
@@ -734,19 +736,19 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
 
     <div style={{fontSize:10,color:C.tx3,marginBottom:10}}>Double-cliquer sur un onglet pour renommer</div>
 
-    {safeSessions.length>0&&<button onClick={()=>setShowEditorModal(true)} style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>✎ Éditer le contenu des séances</button>}
+    {!lockedSessId&&safeSessions.length>0&&<button onClick={()=>setShowEditorModal(true)} style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>✎ Éditer le contenu des séances</button>}
 
-    {showEditorModal&&(<div style={{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
-      <div style={{position:"sticky",top:0,zIndex:5,background:C.bg,borderBottom:"1px solid "+C.brd,padding:"10px 16px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+    {(showEditorModal||!!lockedSessId)&&(<div style={lockedSessId?{display:"flex",flexDirection:"column"}:{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+      {!lockedSessId&&<div style={{position:"sticky",top:0,zIndex:5,background:C.bg,borderBottom:"1px solid "+C.brd,padding:"10px 16px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
         <button onClick={()=>{setShowEditorModal(false);setOpenEx(null);}} style={{width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:14,fontWeight:800,color:C.tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{safeSessions[safeSess]?.name||"Séance"}</div>
           <div style={{fontSize:10,color:C.tx3}}>Semaine {week} / {tw}{week===dw?" · Deload":""}</div>
         </div>
-        <div style={{display:"flex",gap:3,flexShrink:0,overflowX:"auto",scrollbarWidth:"none",maxWidth:"40%"}}>
+        {!lockedSessId&&<div style={{display:"flex",gap:3,flexShrink:0,overflowX:"auto",scrollbarWidth:"none",maxWidth:"40%"}}>
           {safeSessions.map((s,i)=><button key={s.id} onClick={()=>{setSess(i);setOpenEx(null);}} style={{flexShrink:0,padding:"5px 10px",borderRadius:7,border:"1px solid "+(i===safeSess?C.coach:C.brdL),background:i===safeSess?C.coachS:"transparent",color:i===safeSess?C.coach:C.tx2,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{s.short}</button>)}
-        </div>
-      </div>
+        </div>}
+      </div>}
       <div style={{padding:"16px",maxWidth:900,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
 
     {/* Bloc management per session */}
@@ -834,8 +836,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
       </div>)}
     </div>
 
-    <div style={{display:"flex",gap:3,marginBottom:6,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWeek(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===week?"2px solid "+C.coach:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===week?C.coachS:(w===dw?C.bS:"transparent"),color:w===week?C.coach:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>
-    {dw>0&&<div style={{fontSize:10,color:C.b,marginBottom:6,display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:"50%",background:C.b,display:"inline-block"}}/> S{dw} = Deload (-{deloadPct}% charge, volume reduit)</div>}
+    {!hideWeekNav&&<div style={{display:"flex",gap:3,marginBottom:6,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWeek(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===week?"2px solid "+C.coach:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===week?C.coachS:(w===dw?C.bS:"transparent"),color:w===week?C.coach:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>}
+    {!hideWeekNav&&dw>0&&<div style={{fontSize:10,color:C.b,marginBottom:6,display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:"50%",background:C.b,display:"inline-block"}}/> S{dw} = Deload (-{deloadPct}% charge, volume reduit)</div>}
 
     <button onClick={autoFillProgression} style={{width:"100%",padding:"9px 0",borderRadius:8,border:"1px solid "+C.o+"50",background:C.oS,color:C.o,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
       ↗ Surcharge progressive — tout le bloc (S1→S{tw})

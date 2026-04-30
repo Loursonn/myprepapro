@@ -306,6 +306,9 @@ interface CalendarMonthViewProps {
   sessions: Session[];
   blockConfig?: BlockConfig;
   setBlockConfig?: (fn: (prev: BlockConfig) => BlockConfig) => void;
+  exos?: Record<string, unknown[]>;
+  completedSessions?: Record<number, string[]>;
+  currentWeek?: number;
 }
 
 export function CalendarMonthView({
@@ -314,6 +317,9 @@ export function CalendarMonthView({
   sessions,
   blockConfig,
   setBlockConfig,
+  exos,
+  completedSessions = {},
+  currentWeek = 1,
 }: CalendarMonthViewProps) {
   const [month, setMonth]             = useState(new Date());
   const [drawerDay, setDrawerDay]     = useState<Date | null>(null);
@@ -358,13 +364,18 @@ export function CalendarMonthView({
         const dateStr = format(d, "yyyy-MM-dd");
         if (logged.has(`${sess.id}:${dateStr}`)) continue;
 
+        const weekNum = w + 1;
+        const isDone = (completedSessions[weekNum] ?? []).includes(sess.id);
+        const isPast = weekNum < currentWeek;
+        const projStatus = isDone ? "completed" : isPast ? "missed" : "planned";
+
         out.push({
-          id:     `block-${sess.id}-w${w + 1}`,
+          id:     `block-${sess.id}-w${weekNum}`,
           title:  sess.name,
           date:   dateStr,
           type:   "workout",
-          status: "planned",
-          raw:    { session_id: sess.id, source: "block_plan" },
+          status: projStatus,
+          raw:    { session_id: sess.id, source: "block_plan", week: weekNum },
         });
       }
     }
@@ -629,6 +640,7 @@ export function CalendarMonthView({
         events={events}
         athleteId={athleteId}
         onQuickAdd={(day) => setQuickAddDay(day)}
+        exos={exos}
       />
 
       {/* Quick-add dialog (also from empty slot click) */}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { e1rm, roundHalf, parseReps, DEF_TIER_CONFIG, getExTier } from "@/lib/exercises";
 import { todayKey } from "@/lib/date";
 import { checkMilestone } from "@/lib/date";
@@ -53,6 +54,7 @@ interface LogicDeps {
 }
 
 export function useAthleteLogic(d: LogicDeps) {
+  const qc = useQueryClient();
   const {
     athleteId, exos, sets, sessions, blockConfig, goals, completedSessions,
     wellnessHistory, bodyWeight, weightLog, weightMilestones, injuries, blockHistory,
@@ -162,6 +164,54 @@ export function useAthleteLogic(d: LogicDeps) {
     if (anyChanged) { setExos(current); setAutoProgNotif('Progression synchronisée depuis le réel'); setTimeout(() => setAutoProgNotif(null), 3500); }
   }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Calcule la date exacte planifiée pour une séance dans une semaine donnée
+  const sessionScheduledDate = useCallback((sessId: string, week: number): string | null => {
+    if (!blockConfig?.startDate) return null;
+    const sess = sessions.find(s => s.id === sessId);
+    const dow = (sess?.weekDays?.[String(week)] ?? sess?.day_of_week) as number | undefined;
+    if (dow == null) return null;
+    const d0 = new Date(blockConfig.startDate + "T12:00:00");
+    const weekDow = d0.getDay();
+    // Snap to Monday of block start week, then add (week-1)*7 + dow
+    d0.setDate(d0.getDate() + (weekDow === 0 ? -6 : 1 - weekDow) + (week - 1) * 7 + dow);
+    return d0.toISOString().split("T")[0];
+  }, [blockConfig?.startDate, sessions]);
+
+  const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned") => {
+    if (!athleteId) return;
+    const scheduledDate = sessionScheduledDate(sessId, week);
+    if (!scheduledDate) return;
+    const sess = sessions.find(s => s.id === sessId);
+
+    (async () => {
+      const { data: existing } = await supabase
+        .from("workout_logs")
+        .select("id")
+        .eq("session_id", sessId)
+        .eq("athlete_id", athleteId)
+        .eq("scheduled_date", scheduledDate)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from("workout_logs")
+          .update({ status })
+          .eq("id", existing.id);
+      } else if (status === "completed") {
+        await supabase
+          .from("workout_logs")
+          .insert({
+            athlete_id:     athleteId,
+            session_id:     sessId,
+            session_name:   sess?.name ?? "Séance",
+            scheduled_date: scheduledDate,
+            status:         "completed",
+          });
+      }
+      qc.invalidateQueries({ queryKey: ["cal", athleteId] });
+    })();
+  }, [sessionScheduledDate, sessions, athleteId, qc]);
+
   const completeSession = useCallback((sessId: string, week: number) => {
     const prev = completedSessions[week] || [];
     if (prev.includes(sessId)) return;
@@ -173,11 +223,13 @@ export function useAthleteLogic(d: LogicDeps) {
       setWeekJustCompleted(week);
       setTimeout(() => { setWeekJustCompleted(null); if (week >= tw) setShowBilan(true); else setAW(week + 1); }, 2800);
     }
-  }, [completedSessions, weeklyTarget, goals.sessionsPerWeek, tw, setCompletedSessions, autoProgressOnComplete, setWeekJustCompleted, setShowBilan, setAW]);
+    syncWorkoutLogStatus(sessId, week, "completed");
+  }, [completedSessions, weeklyTarget, goals.sessionsPerWeek, tw, setCompletedSessions, autoProgressOnComplete, setWeekJustCompleted, setShowBilan, setAW, syncWorkoutLogStatus]);
 
   const uncompleteSession = useCallback((sessId: string, week: number) => {
     setCompletedSessions({ ...completedSessions, [week]: (completedSessions[week] || []).filter(s => s !== sessId) });
-  }, [completedSessions, setCompletedSessions]);
+    syncWorkoutLogStatus(sessId, week, "planned");
+  }, [completedSessions, setCompletedSessions, syncWorkoutLogStatus]);
 
   const archiveAndNewBlock = useCallback((opts: NewBlockOpts) => {
     const hasData = Object.values(exos).flat().length > 0 || Object.values(completedSessions).flat().length > 0;

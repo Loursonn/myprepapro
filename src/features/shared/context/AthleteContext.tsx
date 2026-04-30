@@ -221,6 +221,7 @@ export function AthleteProvider({ athleteId, viewOnly = false, athleteProfile = 
     showTierModal, setShowTierModal, chatHistory, setChatHistory,
     aiChatOpen, setAiChatOpen, aW, setAW,
     ...logic,
+    completeSession: (sessId: string, week: number) => { timerStop(); logic.completeSession(sessId, week); },
   };
 
   return <AthleteCtx.Provider value={value}>{children}</AthleteCtx.Provider>;

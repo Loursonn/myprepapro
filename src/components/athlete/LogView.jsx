@@ -257,7 +257,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
       exercisesSorted.forEach(ex=>{rGroups.push({ss:false,ex});});
       // ── Helper : rendu d'une carte exercice ───────────────────────────────
       const exCard=(ex,inSS,isLastInSS)=>{
-        const wd=ex.weeks[wk];const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};
+        const wd=ex.weeks[wk];const sessB=sessBlocs?.find(b=>b.id===ex.bloc)||null;const bt=BT[ex.bloc]||(sessB?{c:sessB.color,l:sessB.label}:{c:C.tx3,l:ex.bloc});
         const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;
         const rows=sets[sk]||[];const done=rows.filter(r=>r.done||r.skipped).length;
         const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;
@@ -293,9 +293,9 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
       // ── Rendu des groupes ─────────────────────────────────────────────────
       const sessBlocs=getSessionBlocs(selectedSess,exercises);
       return rGroups.map((item)=>{
-        const ex=item.ex;const bt=BT[ex.bloc]||{c:C.tx3,l:ex.bloc};
+        const ex=item.ex;const dynBloc=sessBlocs.find(b=>b.id===ex.bloc)||null;
+        const bt=BT[ex.bloc]||(dynBloc?{c:dynBloc.color,l:dynBloc.label}:{c:C.tx3,l:ex.bloc});
         const showH=ex.bloc!==lb;lb=ex.bloc;
-        const dynBloc=sessBlocs.find(b=>b.id===ex.bloc)||null;
         const blocMethodLabel=dynBloc?.method?(BLOC_METHODS.find(m=>m.v===dynBloc.method)||{l:dynBloc.method}).l:null;
         return(<div key={ex.id}>{showH&&<div style={{margin:"14px 0 0",borderRadius:"8px 8px 0 0",background:bt.c+"18",border:"1px solid "+bt.c+"35",borderBottom:"none"}}><div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px"}}><div style={{width:4,height:16,borderRadius:2,background:bt.c,flexShrink:0}}/><span style={{fontSize:10,fontWeight:700,color:bt.c,textTransform:"uppercase",letterSpacing:"0.8px"}}>{bt.l}</span>{blocMethodLabel&&<span style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:bt.c+"30",color:bt.c,fontWeight:700,letterSpacing:"0.3px"}}>{blocMethodLabel}{dynBloc?.departureInterval?(" "+dynBloc.departureInterval+"s"):""}</span>}{dynBloc?.sets&&<span style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:bt.c+"20",color:bt.c,fontWeight:600}}>{dynBloc.sets} séries</span>}</div>{dynBloc?.instructions&&<div style={{padding:"0 12px 8px",fontSize:11,color:bt.c,lineHeight:1.5,fontStyle:"italic"}}>{dynBloc.instructions}</div>}</div>}{exCard(ex,false,false)}</div>);
       });

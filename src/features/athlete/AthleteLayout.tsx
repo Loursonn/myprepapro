@@ -33,7 +33,7 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
     viewOnly, saveStatus, activeInjuries,
     showWellness, setShowWellness, showAppFeedback, setShowAppFeedback,
     showBilan, setShowBilan, showNewBlock, setShowNewBlock,
-    weekJustCompleted, tw, milestoneNotif, autoProgNotif,
+    weekJustCompleted, tw, milestoneNotif,
     timerActive, timerFinished, timerLeft, timerDur, timerStop,
     showBlockHistory, setShowBlockHistory, blockHistory, setBlockHistory,
     exos, sessions, prs, combinedData, totalDone,
@@ -166,16 +166,6 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
         </div>
       )}
 
-      {/* ── AutoProg notif ── */}
-      {autoProgNotif && (
-        <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 251, background: C.s1, border: "1px solid " + C.coach + "50", borderRadius: 14, padding: "10px 18px", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }}>
-          <span style={{ fontSize: 18 }}>↗</span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.coach }}>Surcharge progressive mise à jour</div>
-            <div style={{ fontSize: 11, color: C.tx2 }}>{autoProgNotif}</div>
-          </div>
-        </div>
-      )}
 
       {/* ── Week completed overlay ── */}
       {weekJustCompleted && (
