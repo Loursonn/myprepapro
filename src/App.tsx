@@ -33,6 +33,7 @@ const CoachHomePage      = lazy(() => import("./features/coach/pages/CoachHomePa
 const AthletesListPage   = lazy(() => import("./features/coach/pages/AthletesListPage.tsx"));
 const LibraryPage        = lazy(() => import("./features/coach/pages/LibraryPage.tsx"));
 const CoachTestsBankPage = lazy(() => import("./features/coach/pages/CoachTestsBankPage.tsx"));
+const CoachesListPage    = lazy(() => import("./features/coach/pages/CoachesListPage.tsx"));
 const SettingsPage       = lazy(() => import("./features/coach/pages/SettingsPage.tsx"));
 
 // Pages coach par athlète (lazy)
@@ -105,6 +106,7 @@ function AnimatedRoutes() {
             <Route path="athletes" element={<AthletesListPage />} />
             <Route path="library"  element={<LibraryPage />} />
             <Route path="tests"    element={<CoachTestsBankPage />} />
+            <Route path="coaches"  element={<CoachesListPage />} />
             <Route path="settings" element={<SettingsPage />} />
 
             {/* Vue par athlète (ContextBar + AthleteProvider) */}

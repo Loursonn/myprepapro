@@ -4,6 +4,7 @@
  * All use shadcn Skeleton (animate-pulse) with dark theme colors.
  */
 import { Skeleton } from "@/components/ui/skeleton";
+import { C } from "@/lib/theme";
 
 // ── PageSkeleton ──────────────────────────────────────────────────────────────
 /** Full-page loading state — header + 3 content blocks */
