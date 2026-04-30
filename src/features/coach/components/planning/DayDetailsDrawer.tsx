@@ -41,11 +41,11 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 function WorkoutDetailView({
   event,
   exos,
-  sets,
+  localSets,
 }: {
   event: CalEvent;
   exos?: Record<string, unknown[]>;
-  sets?: Record<string, unknown[]>;
+  localSets?: Record<string, unknown[]>;
 }) {
   const sessionId    = event.raw?.session_id as string | undefined;
   const isProjected  = event.raw?.source === "block_plan";
@@ -118,7 +118,43 @@ function WorkoutDetailView({
           <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12 }}>
             Chargement…
           </div>
-        ) : sets.length === 0 ? (
+        ) : sets.length === 0 && week && localSets && plannedExos.length > 0 ? (() => {
+          // DB set_logs empty → fall back to app_data local sets
+          const exosWithSets = plannedExos
+            .map(ex => ({
+              ex,
+              rows: ((localSets[ex.id + "_" + week] ?? []) as Array<{ done?: boolean; kg?: number; reps?: number; rir?: number; method?: string }>)
+                .filter(r => r.done),
+            }))
+            .filter(({ rows }) => rows.length > 0);
+          if (exosWithSets.length === 0) return (
+            <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12, background: C.s2, borderRadius: 10 }}>
+              Séance validée — séries non enregistrées
+            </div>
+          );
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {exosWithSets.map(({ ex, rows }) => (
+                <div key={ex.id} style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
+                  <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>{ex.name ?? "Exercice"}</div>
+                  <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                    {rows.map((s, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx2 }}>
+                        <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
+                        {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
+                        {s.reps != null && <span>× {s.reps} rép.</span>}
+                        {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>}
+                        {s.method && s.method !== "normal" && (
+                          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600 }}>{s.method}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })() : sets.length === 0 ? (
           <div style={{
             textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12,
             background: C.s2, borderRadius: 10,
@@ -180,74 +216,86 @@ function WorkoutDetailView({
         })()
       )}
 
-      {/* Projected + completed: show local sets from app_data */}
-      {!workoutLogId && isProjected && isCompleted && week && sets && plannedExos.length > 0 && (() => {
-        const exosWithSets = plannedExos.map(ex => ({
-          ex,
-          rows: ((sets[ex.id + "_" + week] ?? []) as Array<{done?:boolean;kg?:number;reps?:number;rir?:number;method?:string}>)
-            .filter(r => r.done),
-        })).filter(({ rows }) => rows.length > 0);
-
-        return exosWithSets.length === 0 ? null : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.g, textTransform: "uppercase", letterSpacing: "0.4px" }}>
-              Séance réalisée
+      {/* Non-DB: projected or missing workout log */}
+      {!workoutLogId && (() => {
+        if (plannedExos.length === 0) {
+          return (
+            <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12, background: C.s2, borderRadius: 10 }}>
+              Programme non chargé — ouvre la vue Programmation
             </div>
-            {exosWithSets.map(({ ex, rows }) => (
-              <div key={ex.id} style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
-                <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>
+          );
+        }
+
+        // Completed projected: try local sets first
+        if (isProjected && isCompleted) {
+          const exosWithSets = week && localSets
+            ? plannedExos
+                .map(ex => ({
+                  ex,
+                  rows: ((localSets[ex.id + "_" + week] ?? []) as Array<{ done?: boolean; kg?: number; reps?: number; rir?: number; method?: string }>)
+                    .filter(r => r.done),
+                }))
+                .filter(({ rows }) => rows.length > 0)
+            : [];
+
+          if (exosWithSets.length > 0) {
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {exosWithSets.map(({ ex, rows }) => (
+                  <div key={ex.id} style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
+                    <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>
+                      {ex.name ?? "Exercice"}
+                    </div>
+                    <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {rows.map((s, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx2 }}>
+                          <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
+                          {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
+                          {s.reps != null && <span>× {s.reps} rép.</span>}
+                          {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>}
+                          {s.method && s.method !== "normal" && (
+                            <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600 }}>
+                              {s.method}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          }
+
+          // Completed but no individual sets logged → show planned exercises
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4, fontStyle: "italic" }}>
+                Séance validée — séries non enregistrées
+              </div>
+              {plannedExos.map((ex, i) => (
+                <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd, fontSize: 12, fontWeight: 600, color: C.tx }}>
                   {ex.name ?? "Exercice"}
                 </div>
-                <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                  {rows.map((s, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx2 }}>
-                      <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
-                      {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
-                      {s.reps != null && <span>× {s.reps} rép.</span>}
-                      {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>}
-                      {s.method && s.method !== "normal" && (
-                        <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600 }}>
-                          {s.method}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+              ))}
+            </div>
+          );
+        }
+
+        // Planned (not completed): show exercise list
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 2 }}>
+              Exercices prévus
+            </div>
+            {plannedExos.map((ex, i) => (
+              <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd, fontSize: 12, fontWeight: 600, color: C.tx }}>
+                {ex.name ?? "Exercice"}
               </div>
             ))}
           </div>
         );
       })()}
-
-      {/* Planned / projected: show exercises from exos */}
-      {!workoutLogId && !(isProjected && isCompleted) && (
-        plannedExos.length === 0 ? (
-          <div style={{
-            textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12,
-            background: C.s2, borderRadius: 10,
-          }}>
-            Programme non chargé — ouvre la vue Programmation
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{
-              fontSize: 10, fontWeight: 700, color: C.tx3,
-              textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 2,
-            }}>
-              Exercices prévus
-            </div>
-            {plannedExos.map((ex, i) => (
-              <div key={ex.id ?? i} style={{
-                padding: "8px 12px", borderRadius: 8,
-                background: C.s2, border: "1px solid " + C.brd,
-                fontSize: 12, fontWeight: 600, color: C.tx,
-              }}>
-                {ex.name ?? "Exercice"}
-              </div>
-            ))}
-          </div>
-        )
-      )}
     </div>
   );
 }
@@ -441,7 +489,7 @@ export function DayDetailsDrawer({
           display: "flex", flexDirection: "column", gap: 20,
         }}>
           {selectedEvent ? (
-            <WorkoutDetailView event={selectedEvent} exos={exos} sets={sets} />
+            <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
           ) : (
             <>
               {dayEvents.length === 0 && (
