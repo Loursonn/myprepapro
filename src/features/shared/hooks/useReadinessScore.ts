@@ -8,35 +8,18 @@ export interface ReadinessScore {
 }
 
 /**
- * Computes the readiness score (0-100) from wellness data using the formula:
- *
- *   readiness = round(
- *     (10 - fatigue)  * 10 * 0.25 +
- *      sommeil        * 10 * 0.25 +
- *     (10 - stress)   * 10 * 0.15 +
- *      energie        * 10 * 0.20 +
- *     (10 - doms)     * 10 * 0.15
- *   )
- *
- * All inputs on a 0-10 scale.
+ * Computes the readiness score (0-100) from wellness data.
+ * Uses stored score when available, otherwise recomputes from fields (scale 1-5, all fields: high = good).
+ * Formula mirrors calcScore in lib/wellness.ts: sum(5 fields) / 25 * 100
  * Returns null when wellness is not yet logged.
  */
 export function useReadinessScore(wellness: WellnessData | null): ReadinessScore | null {
   return useMemo(() => {
     if (!wellness) return null;
 
-    const fatigue = wellness.fatigue ?? 5;
-    const sommeil = wellness.sommeil ?? 5;
-    const stress  = wellness.stress  ?? 5;
-    const energie = wellness.energie ?? 5;
-    const doms    = wellness.doms    ?? 5;
-
-    const score = Math.min(100, Math.max(0, Math.round(
-      (10 - fatigue) * 10 * 0.25 +
-       sommeil        * 10 * 0.25 +
-      (10 - stress)  * 10 * 0.15 +
-       energie        * 10 * 0.20 +
-      (10 - doms)    * 10 * 0.15,
+    const score = wellness.score ?? Math.min(100, Math.max(0, Math.round(
+      ((wellness.fatigue ?? 3) + (wellness.sommeil ?? 3) + (wellness.stress ?? 3) +
+       (wellness.energie ?? 3) + (wellness.doms ?? 3)) / 25 * 100
     )));
 
     let color: string;
