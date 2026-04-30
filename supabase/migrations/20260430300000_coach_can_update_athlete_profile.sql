@@ -1,4 +1,5 @@
 -- Permet à un coach de modifier le profil de ses athlètes
+DROP POLICY IF EXISTS "coaches_can_update_athlete_profiles" ON profiles;
 CREATE POLICY "coaches_can_update_athlete_profiles"
 ON profiles
 FOR UPDATE
