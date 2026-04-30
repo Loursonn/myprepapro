@@ -27,7 +27,7 @@ export default function PlanningPage() {
   const view = (searchParams.get("view") as PlanView) ?? "season";
 
   const { user } = useAuth();
-  const { athleteId, loaded, sessions, blockConfig, setBlockConfig } = useAthleteContext();
+  const { athleteId, loaded, sessions, blockConfig, setBlockConfig, exos, sets, completedSessions, currentWeek } = useAthleteContext();
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
@@ -59,6 +59,10 @@ export default function PlanningPage() {
           sessions={sessions}
           blockConfig={blockConfig}
           setBlockConfig={setBlockConfig}
+          exos={exos as Record<string, unknown[]>}
+          sets={sets as Record<string, unknown[]>}
+          completedSessions={completedSessions}
+          currentWeek={currentWeek}
         />
       )}
 

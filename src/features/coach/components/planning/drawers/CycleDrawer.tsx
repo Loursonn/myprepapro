@@ -77,9 +77,10 @@ interface Props {
   athleteId:      string;
   rangeStart:     string;
   rangeEnd:       string;
+  onClose?:       () => void;
 }
 
-export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd }: Props) {
+export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd, onClose }: Props) {
   const qc = useQueryClient();
   const { data: sessions = [], isLoading: loadingSessions } = useCycleSessions(
     athleteId, cycle.start_date, cycle.end_date,
@@ -91,6 +92,8 @@ export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd
   const [startDate,    setStartDate]    = useState(cycle.start_date);
   const [endDate,      setEndDate]      = useState(cycle.end_date);
   const [savingDates,  setSavingDates]  = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting,      setDeleting]      = useState(false);
 
   const numWeeks = Math.max(1, differenceInWeeks(parseISO(endDate), parseISO(startDate)) + 1);
 
@@ -126,6 +129,28 @@ export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd
     qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
     setEditingDates(false);
     toast.success("Dates mises à jour · microcycles régénérés");
+  }
+
+  async function deleteCycle() {
+    setDeleting(true);
+    // 1. Supprimer les workout_logs liés aux microcycles du cycle
+    const { data: micros } = await supabase
+      .from("microcycles").select("id").eq("cycle_id", cycle.id);
+    const microIds = (micros ?? []).map((m: { id: string }) => m.id);
+    if (microIds.length > 0) {
+      await supabase.from("workout_logs").delete().in("microcycle_id", microIds);
+    }
+    // 2. Supprimer les microcycles
+    await supabase.from("microcycles").delete().eq("cycle_id", cycle.id);
+    // 3. Supprimer le cycle
+    const { error } = await supabase.from("cycles").delete().eq("id", cycle.id);
+    setDeleting(false);
+    if (error) { toast.error("Erreur suppression : " + error.message); return; }
+    toast.success("Cycle supprimé");
+    qc.invalidateQueries({ queryKey: ["timeline-data"] });
+    qc.invalidateQueries({ queryKey: ["active-cycle"] });
+    qc.invalidateQueries({ queryKey: ["cal-range"] });
+    onClose?.();
   }
 
   // Month for calendar link
@@ -279,6 +304,49 @@ export function CycleDrawer({ cycle, parentMeso, athleteId, rangeStart, rangeEnd
       >
         → Ouvrir Calendrier Mois {format(parseISO(cycle.start_date), "MMMM yyyy", { locale: fr })}
       </a>
+
+      {/* Supprimer */}
+      <div style={{ paddingTop: 8, borderTop: "1px solid " + C.brd }}>
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            style={{
+              width: "100%", padding: "11px 0", borderRadius: 10,
+              border: "1px solid " + C.r + "40", background: "transparent",
+              color: C.r, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >Supprimer ce cycle</button>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 12, color: C.r, fontWeight: 600, textAlign: "center" }}>
+              Supprimer définitivement ? Les séances planifiées seront effacées.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 10,
+                  border: "1px solid " + C.brdL, background: "transparent",
+                  color: C.tx2, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >Annuler</button>
+              <button
+                onClick={deleteCycle}
+                disabled={deleting}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 10,
+                  border: "none", background: C.r,
+                  color: "#fff", fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit",
+                  opacity: deleting ? 0.6 : 1,
+                }}
+              >{deleting ? "Suppression…" : "Confirmer"}</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

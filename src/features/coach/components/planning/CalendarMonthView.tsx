@@ -61,34 +61,40 @@ function EventChip({
   event: CalEvent;
   compact?: boolean;
 }) {
-  const color = TYPE_COLOR[event.type];
-  const bg    = TYPE_BG[event.type];
-  const opacity = event.status ? STATUS_OPACITY[event.status] ?? 1 : 1;
-
   const isProjected = event.raw?.source === "block_plan";
+  const st = event.status;
+
+  // Status overrides base type color for completed/missed
+  const color = st === "completed" ? C.g
+              : st === "missed"    ? C.r
+              : TYPE_COLOR[event.type];
+  const bg    = st === "completed" ? C.gS
+              : st === "missed"    ? C.rS
+              : TYPE_BG[event.type];
 
   return (
     <div
       style={{
-        background: isProjected ? "transparent" : bg,
-        borderLeft: `2px ${isProjected ? "dashed" : "solid"} ${color}`,
+        background: isProjected ? (st === "completed" ? C.gS : st === "missed" ? C.rS : "transparent") : bg,
+        borderLeft: `2px ${isProjected && st !== "completed" && st !== "missed" ? "dashed" : "solid"} ${color}`,
         borderRadius: "0 4px 4px 0",
         padding: compact ? "1px 5px" : "2px 6px",
         fontSize: compact ? 9 : 10,
         fontWeight: isProjected ? 400 : 600,
         color: color,
-        opacity: isProjected ? 0.6 : opacity,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
         cursor: "pointer",
         maxWidth: "100%",
-        fontStyle: isProjected ? "italic" : "normal",
+        fontStyle: isProjected && st !== "completed" && st !== "missed" ? "italic" : "normal",
       }}
     >
       {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : ""}
       {event.title}
-      {isProjected && <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>}
+      {isProjected && st !== "completed" && st !== "missed" && (
+        <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
+      )}
       {event.rpe != null && (
         <span style={{ opacity: 0.7, marginLeft: 3 }}>RPE{event.rpe}</span>
       )}
@@ -306,6 +312,10 @@ interface CalendarMonthViewProps {
   sessions: Session[];
   blockConfig?: BlockConfig;
   setBlockConfig?: (fn: (prev: BlockConfig) => BlockConfig) => void;
+  exos?: Record<string, unknown[]>;
+  sets?: Record<string, unknown[]>;
+  completedSessions?: Record<number, string[]>;
+  currentWeek?: number;
 }
 
 export function CalendarMonthView({
@@ -314,6 +324,10 @@ export function CalendarMonthView({
   sessions,
   blockConfig,
   setBlockConfig,
+  exos,
+  sets,
+  completedSessions = {},
+  currentWeek = 1,
 }: CalendarMonthViewProps) {
   const [month, setMonth]             = useState(new Date());
   const [drawerDay, setDrawerDay]     = useState<Date | null>(null);
@@ -329,6 +343,22 @@ export function CalendarMonthView({
   const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
   const { mutate: assignWorkout }           = useAssignWorkout();
 
+  // ── Enrich realEvents: override status from completedSessions (source of truth) ──
+  const enrichedRealEvents = useMemo(() => {
+    if (!blockConfig?.startDate) return realEvents;
+    const blockStart = startOfWeek(parseISO(blockConfig.startDate), { weekStartsOn: 1 });
+    const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
+    return realEvents.map(e => {
+      if (e.type !== "workout" || !e.raw?.session_id) return e;
+      const sessId = e.raw.session_id as string;
+      const weekNum = Math.floor((parseISO(e.date).getTime() - blockStart.getTime()) / MS_WEEK) + 1;
+      if (weekNum < 1) return e;
+      if ((completedSessions[weekNum] ?? []).includes(sessId)) return { ...e, status: "completed" };
+      if (weekNum < currentWeek) return { ...e, status: "missed" };
+      return e;
+    });
+  }, [realEvents, blockConfig, completedSessions, currentWeek]);
+
   // ── Project block sessions onto calendar dates ────────────────────────────
   const projectedEvents = useMemo<CalEvent[]>(() => {
     if (!blockConfig?.startDate || !sessions.length) return [];
@@ -340,7 +370,7 @@ export function CalendarMonthView({
 
     // Build set of already-logged session_id:date to avoid duplication
     const logged = new Set(
-      realEvents
+      enrichedRealEvents
         .filter((e) => e.type === "workout" && e.raw?.session_id)
         .map((e) => `${e.raw.session_id}:${e.date}`),
     );
@@ -358,22 +388,27 @@ export function CalendarMonthView({
         const dateStr = format(d, "yyyy-MM-dd");
         if (logged.has(`${sess.id}:${dateStr}`)) continue;
 
+        const weekNum = w + 1;
+        const isDone = (completedSessions[weekNum] ?? []).includes(sess.id);
+        const isPast = weekNum < currentWeek;
+        const projStatus = isDone ? "completed" : isPast ? "missed" : "planned";
+
         out.push({
-          id:     `block-${sess.id}-w${w + 1}`,
+          id:     `block-${sess.id}-w${weekNum}`,
           title:  sess.name,
           date:   dateStr,
           type:   "workout",
-          status: "planned",
-          raw:    { session_id: sess.id, source: "block_plan" },
+          status: projStatus,
+          raw:    { session_id: sess.id, source: "block_plan", week: weekNum },
         });
       }
     }
     return out;
-  }, [blockConfig, sessions, month, realEvents]);
+  }, [blockConfig, sessions, month, enrichedRealEvents, completedSessions, currentWeek]);
 
   const events = useMemo(
-    () => [...realEvents, ...projectedEvents],
-    [realEvents, projectedEvents],
+    () => [...enrichedRealEvents, ...projectedEvents],
+    [enrichedRealEvents, projectedEvents],
   );
 
   // Sensors : require 8px of movement before drag starts (prevent accidental drags)
@@ -629,6 +664,8 @@ export function CalendarMonthView({
         events={events}
         athleteId={athleteId}
         onQuickAdd={(day) => setQuickAddDay(day)}
+        exos={exos}
+        sets={sets}
       />
 
       {/* Quick-add dialog (also from empty slot click) */}

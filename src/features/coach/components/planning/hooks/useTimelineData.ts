@@ -17,7 +17,8 @@ export interface Mesocycle {
   frequency?: number | null; deload_week?: number | null;
 }
 export interface Cycle {
-  id: string; mesocycle_id: string;
+  id: string; mesocycle_id: string | null;
+  athlete_id?: string; coach_id?: string;
   name: string; start_date: string; end_date: string;
   objective?: string | null;
 }
@@ -93,11 +94,27 @@ export function useTimelineData(athleteId: string, range: { start: Date; end: Da
         }
       }
 
+      // Cycles standalone (sans mésocycle parent)
+      const saRes = await supabase.from("cycles").select("*")
+        .eq("athlete_id", athleteId)
+        .is("mesocycle_id", null)
+        .or(`start_date.lte.${end},end_date.gte.${start}`)
+        .order("start_date");
+      const standaloneCycles = (saRes.data ?? []) as Cycle[];
+      const saIds = standaloneCycles.map((c) => c.id);
+
+      let standaloneMicros: Microcycle[] = [];
+      if (saIds.length > 0) {
+        const smRes = await supabase.from("microcycles").select("*")
+          .in("cycle_id", saIds).order("start_date");
+        standaloneMicros = (smRes.data ?? []) as Microcycle[];
+      }
+
       return {
         macrocycles:  macros,
         mesocycles:   mesos,
-        cycles,
-        microcycles:  micros,
+        cycles:       [...cycles, ...standaloneCycles],
+        microcycles:  [...micros, ...standaloneMicros],
         competitions: (compRes.data ?? []) as Competition[],
         tests:        (testRes.data ?? []) as TLTestSession[],
       };

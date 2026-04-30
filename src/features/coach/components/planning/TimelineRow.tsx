@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Rnd } from "react-rnd";
-import { Plus } from "lucide-react";
+import { Plus, Eye } from "lucide-react";
 import { format, differenceInDays, parseISO, eachMonthOfInterval, getMonth } from "date-fns";
 import { C } from "@/lib/theme";
 import type { useCalculatePosition } from "./hooks/useCalculatePosition";
@@ -46,11 +46,12 @@ interface TLItemProps {
   bg:         string;
   onOpen:     () => void;
   onAdd?:     () => void;
+  onZoom?:    () => void;
   onDragStop: (newX: number) => void;
   onResizeStop: (newX: number, newWidth: number) => void;
 }
 
-function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onDragStop, onResizeStop }: TLItemProps) {
+function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoom, onDragStop, onResizeStop }: TLItemProps) {
   const [dragging, setDragging] = useState(false);
 
   return (
@@ -130,6 +131,21 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onDra
           {isDeload && <span style={{ color: C.b, marginRight: 3 }}>⟳</span>}
           {label}
         </span>
+        {onZoom && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onZoom(); }}
+            title="Zoomer sur ce macrocycle"
+            style={{
+              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+              border: `1px solid ${color}60`, background: "transparent",
+              color, cursor: "pointer", fontFamily: "inherit",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginLeft: 4,
+            }}
+          >
+            <Eye size={10} />
+          </button>
+        )}
         {onAdd && (
           <button
             onClick={(e) => { e.stopPropagation(); onAdd(); }}
@@ -172,6 +188,7 @@ interface TimelineRowProps {
   athleteId:  string;
   onOpen:   (id: string) => void;
   onAdd?:   (id: string) => void;
+  onZoom?:  (id: string) => void;
   onNewRow?: () => void;
   onDrag?:  (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
   onResize?: (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
@@ -180,7 +197,7 @@ interface TimelineRowProps {
 }
 
 export function TimelineRow({
-  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onNewRow, onDrag, onResize, readOnly,
+  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onZoom, onNewRow, onDrag, onResize, readOnly,
 }: TimelineRowProps) {
   const color = LEVEL_COLOR[level];
   const bg    = LEVEL_BG[level];
@@ -298,6 +315,7 @@ export function TimelineRow({
               bg={bg}
               onOpen={() => onOpen(item.id)}
               onAdd={onAdd ? () => onAdd(item.id) : undefined}
+              onZoom={onZoom ? () => onZoom(item.id) : undefined}
               onDragStop={(newX) => {
                 let fx = newX;
                 if (item.parentStart && item.parentEnd) {

@@ -7,7 +7,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useTodayWellness } from "@/features/shared/hooks/useTodayWellness";
 import { useReadinessScore } from "@/features/shared/hooks/useReadinessScore";
 import { useUpcomingCompetition } from "@/features/shared/hooks/useUpcomingCompetition";
-import { useWeekSchedule } from "@/features/shared/hooks/useWeekSchedule";
+import { useWeekProgram } from "@/features/shared/hooks/useWeekProgram";
 import { COMPETITION_META } from "@/types/planning";
 import type { DayProgram } from "@/features/shared/hooks/useWeekProgram";
 
@@ -267,7 +267,7 @@ export default function TodayPage() {
   const wellness        = useTodayWellness();
   const readiness       = useReadinessScore(wellness);
   const { data: nextComp } = useUpcomingCompetition(athleteId);
-  const weekDays = useWeekSchedule(null);
+  const weekDays = useWeekProgram(null);
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
 
   // Derive today's workouts from the date-based week schedule
