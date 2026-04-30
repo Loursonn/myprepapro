@@ -380,7 +380,7 @@ export function CalendarMonthView({
       }
     }
     return out;
-  }, [blockConfig, sessions, month, realEvents]);
+  }, [blockConfig, sessions, month, realEvents, completedSessions, currentWeek]);
 
   const events = useMemo(
     () => [...realEvents, ...projectedEvents],
