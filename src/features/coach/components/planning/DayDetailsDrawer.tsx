@@ -492,6 +492,36 @@ export function DayDetailsDrawer({
             <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
           ) : (
             <>
+              {/* Competition banner — always at top if present */}
+              {competitions.map((e) => (
+                <div
+                  key={e.id}
+                  style={{
+                    borderRadius: 14, overflow: "hidden",
+                    border: "1px solid " + C.coach + "40",
+                    background: "linear-gradient(135deg, rgba(244,114,182,0.12) 0%, rgba(244,114,182,0.05) 100%)",
+                  }}
+                >
+                  <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 22, flexShrink: 0 }}>🏆</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: C.tx }}>{e.title}</div>
+                      {e.raw?.location && (
+                        <div style={{ fontSize: 11, color: C.tx3, marginTop: 1 }}>{String(e.raw.location)}</div>
+                      )}
+                    </div>
+                    {e.raw?.priority && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+                        background: "#F5A62320", color: "#F5A623",
+                      }}>
+                        Priorité {String(e.raw.priority)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+
               {dayEvents.length === 0 && (
                 <div style={{ textAlign: "center", padding: "40px 0", color: C.tx3, fontSize: 13 }}>
                   Journée libre
@@ -518,19 +548,6 @@ export function DayDetailsDrawer({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {tests.map((e) => (
-                      <EventCard key={e.id} event={e} athleteId={athleteId} onSelect={setSelectedEvent} />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {competitions.length > 0 && (
-                <section>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.coach, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-                    Compétitions
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {competitions.map((e) => (
                       <EventCard key={e.id} event={e} athleteId={athleteId} onSelect={setSelectedEvent} />
                     ))}
                   </div>
