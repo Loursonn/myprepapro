@@ -169,6 +169,14 @@ export interface FreeSession {
   id: string;
   name: string;
   completed?: boolean;
+  date?: string;
+  sport?: string;
+  sportEmoji?: string;
+  duration?: number;
+  intensity?: number;
+  note?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  exercises?: any[];
 }
 
 // ─── Block History ───────────────────────────────────────────────────────────

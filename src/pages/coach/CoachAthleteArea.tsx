@@ -1,8 +1,10 @@
-import { useParams, useNavigate, Outlet } from "react-router-dom";
+import { useState } from "react";
+import { useParams, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { AthleteProvider } from "@/features/shared/context/AthleteContext";
 import { SelectedAthleteProvider } from "@/features/coach/context/SelectedAthleteContext";
 import ContextBar from "@/features/coach/components/ContextBar";
+import AthleteProfileForm from "@/components/coach/AthleteProfileForm";
 
 /**
  * Wrapper monté sur /coach/athletes/:athleteId/*.
@@ -12,7 +14,7 @@ import ContextBar from "@/features/coach/components/ContextBar";
 export default function CoachAthleteArea() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const { user, profile, athletes } = useAuth();
-  const navigate = useNavigate();
+  const [showEditProfile, setShowEditProfile] = useState(false);
 
   if (!athleteId || !user) return null;
 
@@ -28,13 +30,19 @@ export default function CoachAthleteArea() {
         viewOnly={!isOwnView}
         athleteProfile={selectedAthlete}
         userName={profile?.full_name}
-        onEditProfile={() => navigate(`/coach/athletes/${athleteId}/donnees`)}
+        onEditProfile={() => setShowEditProfile(true)}
       >
         <ContextBar />
         <div style={{ flex: 1 }}>
           <Outlet />
         </div>
       </AthleteProvider>
+      {showEditProfile && selectedAthlete && (
+        <AthleteProfileForm
+          athlete={selectedAthlete}
+          onClose={() => setShowEditProfile(false)}
+        />
+      )}
     </SelectedAthleteProvider>
   );
 }

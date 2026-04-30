@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -10,6 +10,7 @@ import { useUpcomingCompetition } from "@/features/shared/hooks/useUpcomingCompe
 import { useWeekProgram } from "@/features/shared/hooks/useWeekProgram";
 import { COMPETITION_META } from "@/types/planning";
 import type { DayProgram } from "@/features/shared/hooks/useWeekProgram";
+import type { FreeSession } from "@/features/shared/types/athlete";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,225 @@ const WELL_FIELDS = [
   { key: "doms",    label: "DOMS",     icon: "💪", inv: true  },
 ];
 
+// ── Sports list ───────────────────────────────────────────────────────────────
+
+const SPORTS = [
+  { key: "course",    emoji: "🏃", label: "Course"       },
+  { key: "velo",      emoji: "🚴", label: "Vélo"         },
+  { key: "natation",  emoji: "🏊", label: "Natation"     },
+  { key: "muscu",     emoji: "💪", label: "Muscu"        },
+  { key: "marche",    emoji: "🚶", label: "Marche"       },
+  { key: "yoga",      emoji: "🧘", label: "Yoga"         },
+  { key: "football",  emoji: "⚽", label: "Football"     },
+  { key: "tennis",    emoji: "🎾", label: "Tennis"       },
+  { key: "boxe",      emoji: "🥊", label: "Boxe"         },
+  { key: "escalade",  emoji: "🧗", label: "Escalade"     },
+  { key: "ski",       emoji: "⛷️", label: "Ski"          },
+  { key: "autre",     emoji: "🏅", label: "Autre"        },
+];
+
+// ── Free activity modal ───────────────────────────────────────────────────────
+
+interface FreeActivityModalProps {
+  date: string | null;
+  existing?: FreeSession | null;
+  onClose: () => void;
+  onSave: (session: FreeSession) => void;
+  onDelete?: (id: string) => void;
+}
+
+function FreeActivityModal({ date, existing, onClose, onSave, onDelete }: FreeActivityModalProps) {
+  const isEdit = !!existing;
+  const [sport, setSport] = useState(SPORTS[0]);
+  const [customLabel, setCustomLabel] = useState("");
+  const [duration, setDuration] = useState("");
+  const [intensity, setIntensity] = useState(5);
+  const [note, setNote] = useState("");
+  const labelRef = useRef<HTMLInputElement>(null);
+
+  // Pre-fill when editing
+  useEffect(() => {
+    if (existing) {
+      const found = SPORTS.find((s) => s.key === existing.sport) ?? SPORTS[SPORTS.length - 1];
+      setSport(found);
+      setCustomLabel(found.key === "autre" ? existing.name : "");
+      setDuration(existing.duration?.toString() ?? "");
+      setIntensity(existing.intensity ?? 5);
+      setNote(existing.note ?? "");
+    } else {
+      setSport(SPORTS[0]);
+      setCustomLabel("");
+      setDuration("");
+      setIntensity(5);
+      setNote("");
+    }
+  }, [existing, date]);
+
+  const open = !!date;
+  const activeDate = date ?? existing?.date ?? "";
+  const d = activeDate ? new Date(activeDate + "T12:00:00") : new Date();
+  const dateLabel = activeDate
+    ? `${DAYS_FULL_FR[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS_FR[d.getMonth()]}`
+    : "";
+
+  function handleSave() {
+    const name = sport.key === "autre" && customLabel.trim() ? customLabel.trim() : sport.label;
+    onSave({
+      ...(isEdit ? existing : {}),
+      id: existing?.id ?? "free_" + Date.now(),
+      name,
+      sport: sport.key,
+      sportEmoji: sport.emoji,
+      date: activeDate,
+      duration: parseInt(duration) || undefined,
+      intensity,
+      note: note.trim() || undefined,
+      completed: true,
+      exercises: existing?.exercises ?? [],
+    });
+    onClose();
+  }
+
+  const intensityColor = intensity <= 3 ? C.g : intensity <= 6 ? C.o : C.r;
+
+  return (
+    <Drawer open={open} onOpenChange={(v) => !v && onClose()}>
+      <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: "0 0 32px" }}>
+        <DrawerHeader style={{ padding: "16px 20px 12px", display: "flex", alignItems: "center" }}>
+          <div style={{ flex: 1 }}>
+            <DrawerTitle style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
+              {isEdit ? "Modifier l'activité" : "Activité libre"}
+              {dateLabel ? <span style={{ fontSize: 13, fontWeight: 400, color: C.tx3, marginLeft: 8 }}>{dateLabel}</span> : null}
+            </DrawerTitle>
+          </div>
+          {isEdit && onDelete && existing && (
+            <button
+              onClick={() => { onDelete(existing.id); onClose(); }}
+              style={{
+                padding: "5px 12px", borderRadius: 8,
+                border: "1px solid " + C.r + "50", background: "rgba(239,75,75,0.08)",
+                color: C.r, fontSize: 11, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Supprimer
+            </button>
+          )}
+        </DrawerHeader>
+
+        <div style={{ padding: "0 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Sport picker */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              Sport
+            </div>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 4 }}>
+              {SPORTS.map((s) => {
+                const active = sport.key === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    onClick={() => { setSport(s); if (s.key === "autre") setTimeout(() => labelRef.current?.focus(), 50); }}
+                    style={{
+                      flexShrink: 0, padding: "8px 12px", borderRadius: 10,
+                      border: "1px solid " + (active ? C.ac + "80" : C.brd),
+                      background: active ? C.acS : C.s2,
+                      cursor: "pointer", fontFamily: "inherit",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                      minWidth: 52,
+                    }}
+                  >
+                    <span style={{ fontSize: 20 }}>{s.emoji}</span>
+                    <span style={{ fontSize: 9, fontWeight: 600, color: active ? C.ac : C.tx3 }}>{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {sport.key === "autre" && (
+              <input
+                ref={labelRef}
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+                placeholder="Nom de l'activité…"
+                style={{
+                  marginTop: 8, width: "100%", padding: "9px 12px",
+                  borderRadius: 8, border: "1px solid " + C.brdL,
+                  background: C.s2, color: C.tx, fontSize: 13,
+                  fontFamily: "inherit", boxSizing: "border-box" as const, outline: "none",
+                }}
+              />
+            )}
+          </div>
+
+          {/* Duration + intensity */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+                Durée (min)
+              </div>
+              <input
+                type="number"
+                min={1}
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder="ex: 45"
+                style={{
+                  width: "100%", padding: "9px 12px", borderRadius: 8,
+                  border: "1px solid " + C.brdL, background: C.s2,
+                  color: C.tx, fontSize: 14, fontWeight: 700,
+                  fontFamily: "inherit", boxSizing: "border-box" as const, outline: "none",
+                }}
+              />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+                Intensité — <span style={{ color: intensityColor, fontWeight: 700 }}>{intensity}/10</span>
+              </div>
+              <input
+                type="range"
+                min={1} max={10} value={intensity}
+                onChange={(e) => setIntensity(Number(e.target.value))}
+                style={{ width: "100%", accentColor: intensityColor, marginTop: 6 }}
+              />
+            </div>
+          </div>
+
+          {/* Note */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+              Note (optionnel)
+            </div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Comment tu t'es senti…"
+              rows={2}
+              style={{
+                width: "100%", padding: "9px 12px", borderRadius: 8,
+                border: "1px solid " + C.brdL, background: C.s2,
+                color: C.tx, fontSize: 13, fontFamily: "inherit",
+                resize: "none", outline: "none", boxSizing: "border-box" as const,
+              }}
+            />
+          </div>
+
+          <button
+            onClick={handleSave}
+            style={{
+              width: "100%", padding: "13px 0", borderRadius: 12,
+              border: "none", background: C.ac, color: "#fff",
+              fontSize: 14, fontWeight: 700, cursor: "pointer",
+              fontFamily: "inherit", minHeight: 44,
+            }}
+          >
+            {isEdit ? "Enregistrer les modifications ✓" : "Enregistrer ✓"}
+          </button>
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
 // ── Day preview bottom sheet ──────────────────────────────────────────────────
 
 const DAYS_FULL_FR = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
@@ -85,15 +305,20 @@ interface DayPreviewSheetProps {
   day: DayProgram | null;
   onClose: () => void;
   onStartSession: (sess: DayProgram["sessions"][number]["session"]) => void;
+  freeSessions: FreeSession[];
+  onAddActivity: (date: string) => void;
+  onEditActivity: (session: FreeSession) => void;
 }
 
-function DayPreviewSheet({ day, onClose, onStartSession }: DayPreviewSheetProps) {
+function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, onAddActivity, onEditActivity }: DayPreviewSheetProps) {
   if (!day) return null;
   const date = new Date(day.date + "T12:00:00");
   const dateLabel = `${DAYS_FULL_FR[day.dow]} ${date.getDate()} ${MONTHS_FR[date.getMonth()]}`;
   const isToday = day.date === new Date().toISOString().split("T")[0];
   const isPast  = day.date < new Date().toISOString().split("T")[0];
+  const isFuture = day.date > new Date().toISOString().split("T")[0];
   const empty   = day.sessions.length === 0 && day.tests.length === 0;
+  const dayFreeActivities = freeSessions.filter((f) => f.date === day.date && f.sport);
 
   return (
     <Drawer open={!!day} onOpenChange={(v) => !v && onClose()}>
@@ -218,6 +443,57 @@ function DayPreviewSheet({ day, onClose, onStartSession }: DayPreviewSheetProps)
               })}
             </>
           )}
+
+          {/* Free activities logged for this day */}
+          {dayFreeActivities.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: empty ? 0 : 4 }}>
+              {dayFreeActivities.map((f) => {
+                const intColor = f.intensity != null
+                  ? (f.intensity <= 3 ? C.g : f.intensity <= 6 ? C.o : C.r)
+                  : C.tx3;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => { onEditActivity(f); onClose(); haptic(); }}
+                    style={{
+                      width: "100%", background: C.gS, borderRadius: 14, padding: "12px 14px",
+                      border: "1px solid " + C.g + "40",
+                      display: "flex", alignItems: "center", gap: 12,
+                      cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+                    }}
+                  >
+                    <div style={{ fontSize: 24 }}>{f.sportEmoji ?? "🏅"}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{f.name}</div>
+                      <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>
+                        {f.duration ? `${f.duration} min` : ""}
+                        {f.duration && f.intensity != null ? " · " : ""}
+                        {f.intensity != null ? <span style={{ color: intColor }}>Intensité {f.intensity}/10</span> : null}
+                        {f.note ? ` · "${f.note}"` : ""}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, color: C.tx3 }}>✎</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Add free activity button (today + past only) */}
+          {!isFuture && (
+            <button
+              onClick={() => { onAddActivity(day.date); onClose(); haptic(); }}
+              style={{
+                width: "100%", padding: "11px 0", borderRadius: 10,
+                border: "1px dashed " + C.brdL, background: "transparent",
+                color: C.tx3, fontSize: 13, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+                marginTop: (empty && dayFreeActivities.length === 0) ? 0 : 4,
+              }}
+            >
+              + Activité libre
+            </button>
+          )}
         </div>
       </DrawerContent>
     </Drawer>
@@ -258,10 +534,12 @@ function getFormeAdvice(wellness: Record<string, number> | null): Array<{ icon: 
 export default function TodayPage() {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState<DayProgram | null>(null);
+  const [activityDate, setActivityDate] = useState<string | null>(null);
+  const [editActivity, setEditActivity] = useState<FreeSession | null>(null);
 
   const {
     athleteId, athleteProfile, wellnessHistory,
-    setShowWellness,
+    setShowWellness, freeSessions, setFreeSessions,
   } = useAthleteContext();
 
   const wellness        = useTodayWellness();
@@ -512,6 +790,7 @@ export default function TodayPage() {
               const isToday = day.date === today;
               const hasSess = day.sessions.length > 0;
               const hasTest = day.tests.length > 0;
+              const dayFree = freeSessions.filter((f) => f.date === day.date && f.sport);
               const allDone = hasSess && day.sessions.every(s => s.isCompleted);
               const DOW_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
               return (
@@ -540,12 +819,12 @@ export default function TodayPage() {
                       background: isToday ? C.coach : "transparent",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 12, fontWeight: 700,
-                      color: isToday ? "#fff" : (hasSess || hasTest) ? C.tx : C.tx3,
+                      color: isToday ? "#fff" : (hasSess || hasTest || dayFree.length > 0) ? C.tx : C.tx3,
                     }}
                   >
                     {new Date(day.date + "T12:00:00").getDate()}
                   </div>
-                  {/* Dots: sessions + tests */}
+                  {/* Dots: sessions + tests + free activities */}
                   <div style={{ display: "flex", gap: 3, height: 6, alignItems: "center" }}>
                     {day.sessions.map((s) => (
                       <div
@@ -565,11 +844,20 @@ export default function TodayPage() {
                         }}
                       />
                     ))}
+                    {dayFree.map((f) => (
+                      <div
+                        key={f.id}
+                        style={{
+                          width: 5, height: 5, borderRadius: "50%",
+                          background: "#22C993",
+                        }}
+                      />
+                    ))}
                   </div>
                   {/* "Repos" label or done check */}
                   {allDone ? (
                     <div style={{ fontSize: 8, color: "#22C993", fontWeight: 700 }}>✓</div>
-                  ) : !hasSess && !hasTest ? (
+                  ) : !hasSess && !hasTest && dayFree.length === 0 ? (
                     <div style={{ fontSize: 8, color: C.tx3 }}>—</div>
                   ) : null}
                 </button>
@@ -770,6 +1058,25 @@ export default function TodayPage() {
         day={selectedDay}
         onClose={() => setSelectedDay(null)}
         onStartSession={(sess) => navigate("/athlete/log", { state: { initialSess: sess } })}
+        freeSessions={freeSessions}
+        onAddActivity={(date) => setActivityDate(date)}
+        onEditActivity={(f) => setEditActivity(f)}
+      />
+
+      {/* Free activity create modal */}
+      <FreeActivityModal
+        date={activityDate}
+        onClose={() => setActivityDate(null)}
+        onSave={(session) => setFreeSessions((prev) => [...prev, session])}
+      />
+
+      {/* Free activity edit modal */}
+      <FreeActivityModal
+        date={editActivity?.date ?? null}
+        existing={editActivity}
+        onClose={() => setEditActivity(null)}
+        onSave={(session) => setFreeSessions((prev) => prev.map((f) => f.id === session.id ? session : f))}
+        onDelete={(id) => setFreeSessions((prev) => prev.filter((f) => f.id !== id))}
       />
     </>
   );
