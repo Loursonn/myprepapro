@@ -884,7 +884,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           {/* Exercises */}
           <div style={{padding:bloc?"6px 8px":"0"}}>
           {groupExs.map(ex=>{
-            const exIdx=exList.indexOf(ex);const wd=ex.weeks[week]||{};const isOpen=openEx===ex.id;const sk=ex.id+"_"+week;const aNote=athleteNotes[sk]||"";const curM=allMethods[wd.method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";const exTier=getExTier(ex.name,ex);const exTc=tierCfg[exTier]||tierCfg[3];const typeLabels={muscu:"Muscu",plio:"Plio",mobilite:"Mobilité",halterophilie:"Halté."};const typeColors={muscu:C.tx3,plio:C.o,mobilite:C.b,halterophilie:"#8b5cf6"};
+            const exIdx=exList.indexOf(ex);const wd=ex.weeks[week]||{};const isOpen=openEx===ex.id;const nameOccurrences=exList.filter(x=>normalizeExName(x.name)===normalizeExName(ex.name)).length;const occIndex=nameOccurrences>1?(exList.slice(0,exIdx).filter(x=>normalizeExName(x.name)===normalizeExName(ex.name)).length+1):0;const sk=ex.id+"_"+week;const aNote=athleteNotes[sk]||"";const curM=allMethods[wd.method];const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";const exTier=getExTier(ex.name,ex);const exTc=tierCfg[exTier]||tierCfg[3];const typeLabels={muscu:"Muscu",plio:"Plio",mobilite:"Mobilité",halterophilie:"Halté."};const typeColors={muscu:C.tx3,plio:C.o,mobilite:C.b,halterophilie:"#8b5cf6"};
             const bankEx=supabaseExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
             const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
             return(<div key={ex.id} data-exid={ex.id} draggable={true} onDragStart={e=>{setDragId(ex.id);e.dataTransfer.effectAllowed="move";}} onDragOver={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();setDragOverId(ex.id);if(dragId)setDragOverBloc(ex.bloc||null);}} onDrop={e=>{e.preventDefault();if(dragBlocId){return;}e.stopPropagation();if(dragId&&dragId!==ex.id)moveExToBloc(dragId,ex.id,ex.bloc);setDragId(null);setDragOverId(null);setDragOverBloc(null);}} onDragEnd={()=>{setDragId(null);setDragOverId(null);setDragOverBloc(null);}}
@@ -896,7 +896,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 <div style={{width:3,height:28,borderRadius:2,background:blocC,flexShrink:0,position:"relative"}}><span style={{position:"absolute",top:-6,left:-3,fontSize:7,fontWeight:800,color:exTc.c,background:exTc.c+"20",padding:"0 3px",borderRadius:3}}>{isFlex?"":("T"+exTier)}</span></div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:13,fontWeight:600}}>{ex.name}</span>
+                    <span style={{fontSize:13,fontWeight:600}}>{ex.name}</span>{occIndex>0&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:C.bS,color:C.b,fontWeight:700,flexShrink:0}}>({occIndex})</span>}
                     {eType!=="muscu"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:typeColors[eType]+"20",color:typeColors[eType],fontWeight:600}}>{typeLabels[eType]}</span>}
                   </div>
                   {!isFlex&&(wd.pdc||wd.kg)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(wd.method,wd.methodParams,wd.sets,wd.repsRange)}{(!wd.method||wd.method==="dropset"||wd.method==="restpause")?" - ":""}{(!wd.method||wd.method==="dropset"||wd.method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>
@@ -991,18 +991,18 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
               const inThisSession=exList.some(x=>normalizeExName(x.name).toLowerCase()===typed);
               const otherSessions=safeSessions.filter(s=>s.id!==sid&&(exos[s.id]||[]).some(x=>normalizeExName(x.name).toLowerCase()===typed));
               if(!inThisSession&&!otherSessions.length)return null;
-              return(<div style={{marginTop:4,padding:"6px 10px",borderRadius:7,border:"1px solid "+(inThisSession?C.o:C.g)+"50",background:inThisSession?C.oS:C.gS,display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:10,color:inThisSession?C.o:C.g}}>{inThisSession?"⚠ Déjà dans cette séance":"✓ Présent dans : "+otherSessions.map(s=>s.short).join(", ")+" → progression liée"}</span>
+              return(<div style={{marginTop:4,padding:"6px 10px",borderRadius:7,border:"1px solid "+(inThisSession?C.b:C.g)+"50",background:inThisSession?C.bS:C.gS,display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:10,color:inThisSession?C.b:C.g}}>{inThisSession?"ℹ Déjà dans cette séance — sera ajouté en double":"✓ Présent dans : "+otherSessions.map(s=>s.short).join(", ")+" → progression liée"}</span>
               </div>);
             })()}
             {showExDropdown&&(()=>{const matches=exoDB.filter(e=>e.name.toLowerCase().includes((exSearch||"").toLowerCase()));const exact=matches.some(e=>e.name.toLowerCase()===(exSearch||"").toLowerCase());return(<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:20,background:C.s1,border:"1px solid "+C.brdL,borderRadius:8,maxHeight:200,overflowY:"auto",marginTop:2}}>
-              {matches.slice(0,10).map(e=>{const mc=getMC(e.target||"Pecs");const normE=normalizeExName(e.name).toLowerCase();const inThisSess=exList.some(x=>normalizeExName(x.name).toLowerCase()===normE);const usedIn=safeSessions.filter(s=>(exos[s.id]||[]).some(x=>normalizeExName(x.name).toLowerCase()===normE)).map(s=>s.short);return(<div key={e.name} onClick={()=>{if(!inThisSess)pickExFromDB(e);}} style={{padding:"8px 12px",cursor:inThisSess?"default":"pointer",display:"flex",alignItems:"center",gap:8,opacity:inThisSess?0.4:1,borderBottom:"1px solid "+C.brd}}>
+              {matches.slice(0,10).map(e=>{const mc=getMC(e.target||"Pecs");const normE=normalizeExName(e.name).toLowerCase();const inThisSess=exList.some(x=>normalizeExName(x.name).toLowerCase()===normE);const usedIn=safeSessions.filter(s=>(exos[s.id]||[]).some(x=>normalizeExName(x.name).toLowerCase()===normE)).map(s=>s.short);return(<div key={e.name} onClick={()=>{pickExFromDB(e);}} style={{padding:"8px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:8,opacity:1,borderBottom:"1px solid "+C.brd}}>
                 <span style={{width:3,height:16,borderRadius:2,background:mc,flexShrink:0}}/>
                 <div style={{flex:1}}>
                   <span style={{fontSize:12}}>{e.name}</span>
                   {usedIn.length>0&&<div style={{fontSize:8,color:C.g,marginTop:1}}>↔ {usedIn.join(", ")}</div>}
                 </div>
-                {inThisSess&&<span style={{fontSize:9,color:C.tx3}}>déjà ajouté</span>}
+                {inThisSess&&<span style={{fontSize:9,color:C.b}}>+1</span>}
                 <span style={{fontSize:9,color:mc}}>{mL(e.target||"Pecs")}</span>
                 {e.fromDB&&<span style={{fontSize:8,padding:"1px 4px",borderRadius:3,background:C.b+"30",color:C.b,fontWeight:700,flexShrink:0}}>DB</span>}
               </div>);})}

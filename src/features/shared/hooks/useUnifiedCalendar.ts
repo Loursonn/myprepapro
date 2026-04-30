@@ -71,7 +71,7 @@ export function useUnifiedCalendar(
       const [wRes, tRes, cRes] = await Promise.all([
         supabase
           .from("workout_logs")
-          .select("id, session_id, session_name, scheduled_date, status, workout_rpe(rpe_score)")
+          .select("id, session_id, session_name, scheduled_date, status, rpe_score")
           .eq("athlete_id", athleteId)
           .gte("scheduled_date", start)
           .lte("scheduled_date", end)
@@ -134,9 +134,7 @@ export function useUnifiedCalendar(
       const events: UnifiedCalendarEvent[] = [];
 
       for (const w of logs) {
-        const rpe = Array.isArray(w.workout_rpe) && w.workout_rpe.length > 0
-          ? (w.workout_rpe[0] as { rpe_score: number }).rpe_score
-          : null;
+        const rpe = (w as Record<string, unknown>).rpe_score as number | null ?? null;
         events.push({
           id:        w.id,
           type:      "workout",

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { C } from "@/lib/theme";
 import { useWorkoutDetail } from "@/features/shared/hooks/useWorkoutDetail";
 import { useUpdateSet } from "@/features/shared/hooks/useUpdateSet";
 import { useCompleteWorkout } from "@/features/shared/hooks/useCompleteWorkout";
 import type { SetRow } from "@/features/shared/types/athlete";
+import { RpeSheet } from "../components/RpeSheet";
 
 function haptic() {
   if (navigator.vibrate) navigator.vibrate(10);
@@ -102,6 +104,7 @@ export default function WorkoutDetailPage() {
   const { session, exercises, isCompleted } = useWorkoutDetail(id ?? "");
   const { mutate: updateSet } = useUpdateSet();
   const { mutate: completeWorkout } = useCompleteWorkout();
+  const [showRpe, setShowRpe] = useState(false);
 
   if (!session) {
     return (
@@ -204,8 +207,10 @@ export default function WorkoutDetailPage() {
       >
         <button
           onClick={() => {
-            completeWorkout(session.id);
-            navigate(-1);
+            if (!isCompleted) {
+              completeWorkout(session.id);
+              setShowRpe(true);
+            }
           }}
           disabled={isCompleted}
           style={{
@@ -221,6 +226,13 @@ export default function WorkoutDetailPage() {
           {isCompleted ? "Séance déjà complétée ✓" : "Terminer la séance 🏁"}
         </button>
       </div>
+
+      {showRpe && session && (
+        <RpeSheet
+          sessionId={session.id}
+          onClose={() => { setShowRpe(false); navigate(-1); }}
+        />
+      )}
     </div>
   );
 }

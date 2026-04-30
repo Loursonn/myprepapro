@@ -89,7 +89,7 @@ function SessionEndModal({duration,onSave,C}){
   </div></>);
 }
 
-function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions,onAddExercise,weekSchedule={}}){
+function LogView({exos,sets,updSets,completedSessions,completeSession,uncompleteSession,goals,weeklyTarget={},currentWeek,allMethods,athleteNotes,setAthleteNotes,sessions,blockConfig,initialSess=null,timerLeft,timerDur,timerActive,timerFinished,onTimerSetDur,onTimerStart,onTimerStop,viewOnly=false,sessionLogs={},setSessionLogs,freeSessions=[],setFreeSessions,onAddExercise,weekSchedule={},onSessionCompleted}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
   const[step,setStep]=useState(initialSess?1:0);const[wk,setWk]=useState(currentWeek);
@@ -116,7 +116,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const startFree=()=>{const at=Date.now();localStorage.setItem('mpp:free_start',JSON.stringify({id:selectedFree.id,startedAt:at}));setFreeStartedAt(at);};
   const endSess=()=>{const dur=sessStartedAt?Math.floor((Date.now()-sessStartedAt)/1000):0;setEndDuration(dur);setShowEndModal(true);};
   const endFree=()=>{const dur=freeStartedAt?Math.floor((Date.now()-freeStartedAt)/1000):0;setFreeEndDuration(dur);setShowFreeEndModal(true);};
-  const onSessValidate=(note,forme)=>{completeSession(sid,wk);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);};
+  const onSessValidate=(note,forme)=>{completeSession(sid,wk);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);if(onSessionCompleted)onSessionCompleted(sid);};
   const onFreeValidate=(note,forme)=>{const updFn=(patch)=>{const updated={...selectedFree,...patch};setSelectedFree(updated);setFreeSessions(prev=>prev.map(f=>f.id===selectedFree.id?updated:f));};updFn({completed:true,duration:freeEndDuration,note,forme});localStorage.removeItem('mpp:free_start');setFreeStartedAt(null);setShowFreeEndModal(false);};
   const exosMap=useMemo(()=>exercises.reduce((a,e)=>({...a,[e.id]:e.name}),{}),[exercises]);
   const[addBankModal,setAddBankModal]=useState(false);

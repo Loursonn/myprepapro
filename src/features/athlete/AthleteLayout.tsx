@@ -73,10 +73,18 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {onSwitchMode && (
-              <div style={{ display: "flex", background: C.s1, borderRadius: 8, padding: 2, border: "1px solid " + C.brdL }}>
-                <button onClick={onSwitchMode} style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: "transparent", color: C.tx3, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Coach</button>
-                <button style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: C.ac, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", pointerEvents: "none" }}>Athlète</button>
-              </div>
+              <button
+                onClick={onSwitchMode}
+                style={{
+                  padding: "5px 12px", borderRadius: 20,
+                  border: "1px solid " + C.ac + "40",
+                  background: C.acS, color: C.ac,
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", whiteSpace: "nowrap",
+                }}
+              >
+                👨‍🏫 Mode Coach
+              </button>
             )}
             <button onClick={() => setDrawerOpen(true)} title="Mon profil" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>☰</button>
             {userName && (

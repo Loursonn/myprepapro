@@ -46,7 +46,11 @@
       "Bash(yes)",
       "Bash(rtk tsc:*)",
       "Bash(supabase gen:*)",
-      "Bash(rtk git:*)"
+      "Bash(rtk git:*)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080)",
+      "Bash(curl *)",
+      "Bash(taskkill /F /IM node.exe)"
     ]
   }
 }
