@@ -240,16 +240,12 @@ function CoachShellInner() {
             <button
               onClick={() => navigate("/athlete")}
               style={{
-                marginLeft: "auto",
-                padding: "5px 12px", borderRadius: 20,
+                marginLeft: "auto", padding: "5px 12px", borderRadius: 20,
                 border: "1px solid " + C.coach + "40",
                 background: C.coach + "15", color: C.coach,
                 fontSize: 11, fontWeight: 700, cursor: "pointer",
-                fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5,
-                transition: "background 150ms", whiteSpace: "nowrap",
+                fontFamily: "inherit", whiteSpace: "nowrap",
               }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = C.coach + "28")}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = C.coach + "15")}
             >
               🏃 Mode Athlète
             </button>

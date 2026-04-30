@@ -7,24 +7,45 @@ export function useUpsertWorkoutRpe(athleteId: string, sessionId: string) {
 
   return useMutation({
     mutationFn: async (rpeScore: number) => {
-      // Find the most recent workout_log for this session+athlete
-      const { data: log } = await supabase
-        .from("workout_logs")
-        .select("id")
-        .eq("athlete_id", athleteId)
-        .eq("session_id", sessionId)
-        .order("scheduled_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const today = new Date().toISOString().split("T")[0];
 
-      if (!log) return; // No planned log found, skip silently
+      // Find the most recent workout_log for this session+athlete.
+      // Retry up to 3x — syncWorkoutLogStatus is async and may not have committed yet.
+      let logId: string | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 600));
+        const { data } = await supabase
+          .from("workout_logs")
+          .select("id")
+          .eq("athlete_id", athleteId)
+          .eq("session_id", sessionId)
+          .order("scheduled_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) { logId = data.id; break; }
+      }
+
+      // Fallback: syncWorkoutLogStatus may have been skipped (missing scheduledDate).
+      if (!logId) {
+        const { data: newLog } = await supabase
+          .from("workout_logs")
+          .insert({
+            athlete_id:     athleteId,
+            session_id:     sessionId,
+            session_name:   "Séance",
+            scheduled_date: today,
+            status:         "completed",
+          })
+          .select("id")
+          .single();
+        if (!newLog) return;
+        logId = newLog.id;
+      }
 
       const { error } = await supabase
-        .from("workout_rpe")
-        .upsert(
-          { workout_id: log.id, athlete_id: athleteId, rpe_score: rpeScore },
-          { onConflict: "workout_id" },
-        );
+        .from("workout_logs")
+        .update({ rpe_score: rpeScore })
+        .eq("id", logId);
       if (error) throw error;
     },
     onSuccess: () => {

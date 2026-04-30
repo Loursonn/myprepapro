@@ -4,11 +4,13 @@ import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import LogView from "@/components/athlete/LogView";
 import EnergySessionLog from "@/components/athlete/EnergySessionLog";
+import { RpeSheet } from "@/features/athlete/components/RpeSheet";
 
 export default function LogSeancePage() {
   const location = useLocation();
   const initialSess = (location.state as { initialSess?: unknown } | null)?.initialSess ?? null;
   const [logSubTab, setLogSubTab] = useState("muscu");
+  const [rpeSessionId, setRpeSessionId] = useState<string | null>(null);
 
   const {
     athleteId, viewOnly, exos, sets, updSets, completedSessions, completeSession,
@@ -43,11 +45,16 @@ export default function LogSeancePage() {
           freeSessions={freeSessions} setFreeSessions={setFreeSessions}
           onAddExercise={(sessId: string, ex: unknown) => setExos(prev => ({ ...prev, [sessId]: [...(prev[sessId] || []), ex] }))}
           weekSchedule={weekSchedule}
+          onSessionCompleted={(sid: string) => setRpeSessionId(sid)}
         />
       )}
 
       {logSubTab === "energie" && (
         <EnergySessionLog athleteId={athleteId} viewOnly={viewOnly} C={C} />
+      )}
+
+      {rpeSessionId && (
+        <RpeSheet sessionId={rpeSessionId} onClose={() => setRpeSessionId(null)} />
       )}
 
       {logSubTab === "specifique" && (

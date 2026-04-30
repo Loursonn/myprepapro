@@ -96,7 +96,7 @@ function EventChip({
         <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
       )}
       {event.rpe != null && (
-        <span style={{ opacity: 0.7, marginLeft: 3 }}>RPE{event.rpe}</span>
+        <span style={{ opacity: 0.85, marginLeft: 4, fontWeight: 700 }}>{event.rpe}/10</span>
       )}
     </div>
   );
