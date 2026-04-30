@@ -61,34 +61,40 @@ function EventChip({
   event: CalEvent;
   compact?: boolean;
 }) {
-  const color = TYPE_COLOR[event.type];
-  const bg    = TYPE_BG[event.type];
-  const opacity = event.status ? STATUS_OPACITY[event.status] ?? 1 : 1;
-
   const isProjected = event.raw?.source === "block_plan";
+  const st = event.status;
+
+  // Status overrides base type color for completed/missed
+  const color = st === "completed" ? C.g
+              : st === "missed"    ? C.r
+              : TYPE_COLOR[event.type];
+  const bg    = st === "completed" ? C.gS
+              : st === "missed"    ? C.rS
+              : TYPE_BG[event.type];
 
   return (
     <div
       style={{
-        background: isProjected ? "transparent" : bg,
-        borderLeft: `2px ${isProjected ? "dashed" : "solid"} ${color}`,
+        background: isProjected ? (st === "completed" ? C.gS : st === "missed" ? C.rS : "transparent") : bg,
+        borderLeft: `2px ${isProjected && st !== "completed" && st !== "missed" ? "dashed" : "solid"} ${color}`,
         borderRadius: "0 4px 4px 0",
         padding: compact ? "1px 5px" : "2px 6px",
         fontSize: compact ? 9 : 10,
         fontWeight: isProjected ? 400 : 600,
         color: color,
-        opacity: isProjected ? 0.6 : opacity,
         overflow: "hidden",
         textOverflow: "ellipsis",
         whiteSpace: "nowrap",
         cursor: "pointer",
         maxWidth: "100%",
-        fontStyle: isProjected ? "italic" : "normal",
+        fontStyle: isProjected && st !== "completed" && st !== "missed" ? "italic" : "normal",
       }}
     >
       {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : ""}
       {event.title}
-      {isProjected && <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>}
+      {isProjected && st !== "completed" && st !== "missed" && (
+        <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
+      )}
       {event.rpe != null && (
         <span style={{ opacity: 0.7, marginLeft: 3 }}>RPE{event.rpe}</span>
       )}
