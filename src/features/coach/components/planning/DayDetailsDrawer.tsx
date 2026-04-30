@@ -41,11 +41,11 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 function WorkoutDetailView({
   event,
   exos,
-  sets,
+  localSets,
 }: {
   event: CalEvent;
   exos?: Record<string, unknown[]>;
-  sets?: Record<string, unknown[]>;
+  localSets?: Record<string, unknown[]>;
 }) {
   const sessionId    = event.raw?.session_id as string | undefined;
   const isProjected  = event.raw?.source === "block_plan";
@@ -181,10 +181,10 @@ function WorkoutDetailView({
       )}
 
       {/* Projected + completed: show local sets from app_data */}
-      {!workoutLogId && isProjected && isCompleted && week && sets && plannedExos.length > 0 && (() => {
+      {!workoutLogId && isProjected && isCompleted && week && localSets && plannedExos.length > 0 && (() => {
         const exosWithSets = plannedExos.map(ex => ({
           ex,
-          rows: ((sets[ex.id + "_" + week] ?? []) as Array<{done?:boolean;kg?:number;reps?:number;rir?:number;method?:string}>)
+          rows: ((localSets[ex.id + "_" + week] ?? []) as Array<{done?:boolean;kg?:number;reps?:number;rir?:number;method?:string}>)
             .filter(r => r.done),
         })).filter(({ rows }) => rows.length > 0);
 
@@ -441,7 +441,7 @@ export function DayDetailsDrawer({
           display: "flex", flexDirection: "column", gap: 20,
         }}>
           {selectedEvent ? (
-            <WorkoutDetailView event={selectedEvent} exos={exos} sets={sets} />
+            <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
           ) : (
             <>
               {dayEvents.length === 0 && (
