@@ -27,6 +27,7 @@ const TABS = [
   { key: "donnees",       label: "Données"       },
   { key: "retours",       label: "Retours"       },
   { key: "tests",         label: "Tests"         },
+  { key: "athlete-view",  label: "👁 Vue athlète" },
 ] as const;
 
 const SUB_TABS: Record<string, { key: string; label: string }[]> = {
