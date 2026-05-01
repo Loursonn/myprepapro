@@ -235,8 +235,8 @@ function CoachShellInner() {
             <span>Rechercher</span>
             <kbd style={{ fontSize: 10, opacity: 0.5, marginLeft: 2, fontFamily: "inherit" }}>⌘K</kbd>
           </button>
-          {/* Mode switch — visible uniquement pour profils hybrides coach_athlete */}
-          {profile?.role === "coach_athlete" && (
+          {/* Mode switch — visible pour coach et coach_athlete */}
+          {(profile?.role === "coach_athlete" || profile?.role === "coach") && (
             <button
               onClick={() => navigate("/athlete")}
               style={{
