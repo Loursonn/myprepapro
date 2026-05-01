@@ -29,6 +29,8 @@ export interface Microcycle {
 export interface Competition {
   id: string; name: string; date: string;
   priority?: string | null; location?: string | null; notes?: string | null;
+  coach_id?: string; athlete_id?: string;
+  type?: string | null; season_id?: string | null;
 }
 export interface TLTestSession {
   id: string; title: string; date: string; type: string; completed: boolean;

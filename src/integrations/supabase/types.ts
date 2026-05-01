@@ -292,188 +292,137 @@ export type Database = {
           },
         ]
       }
-      energy_exercises: {
+      energy_session_assignments: {
         Row: {
-          created_at: string | null
-          created_by: string | null
-          custom_type: string | null
-          description: string | null
+          athlete_id: string
+          coach_id: string | null
+          created_at: string
+          energy_session_id: string
           id: string
-          is_official: boolean | null
-          name: string
-          photo_url: string | null
-          type: string
+          microcycle_id: string | null
+          notes: string | null
+          scheduled_date: string
+          status: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          custom_type?: string | null
-          description?: string | null
+          athlete_id: string
+          coach_id?: string | null
+          created_at?: string
+          energy_session_id: string
           id?: string
-          is_official?: boolean | null
-          name: string
-          photo_url?: string | null
-          type: string
+          microcycle_id?: string | null
+          notes?: string | null
+          scheduled_date: string
+          status?: string
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
-          created_by?: string | null
-          custom_type?: string | null
-          description?: string | null
+          athlete_id?: string
+          coach_id?: string | null
+          created_at?: string
+          energy_session_id?: string
           id?: string
-          is_official?: boolean | null
+          microcycle_id?: string | null
+          notes?: string | null
+          scheduled_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_session_assignments_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_session_assignments_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_session_assignments_energy_session_id_fkey"
+            columns: ["energy_session_id"]
+            isOneToOne: false
+            referencedRelation: "energy_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_session_assignments_microcycle_id_fkey"
+            columns: ["microcycle_id"]
+            isOneToOne: false
+            referencedRelation: "microcycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      energy_sessions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          custom_kind: string | null
+          id: string
+          intervals: Json
+          is_verified: boolean
+          name: string
+          notes: string | null
+          session_kind: string
+          structure_type: string
+          total_distance_m: number | null
+          total_duration_s: number | null
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          custom_kind?: string | null
+          id?: string
+          intervals?: Json
+          is_verified?: boolean
+          name: string
+          notes?: string | null
+          session_kind: string
+          structure_type: string
+          total_distance_m?: number | null
+          total_duration_s?: number | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          custom_kind?: string | null
+          id?: string
+          intervals?: Json
+          is_verified?: boolean
           name?: string
-          photo_url?: string | null
-          type?: string
+          notes?: string | null
+          session_kind?: string
+          structure_type?: string
+          total_distance_m?: number | null
+          total_duration_s?: number | null
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "energy_exercises_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      energy_session_config: {
-        Row: {
-          appareil_types: string[]
-          athlete_id: string
-          blocks: Json
-          created_at: string | null
-          created_by: string | null
-          custom_appareils: string[] | null
-          custom_modalite: string | null
-          energy_exercise_id: string | null
-          id: string
-          modalite: string
-          note_coach: string | null
-          photo_url: string | null
-          session_key: string
-          session_label: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          appareil_types?: string[]
-          athlete_id: string
-          blocks?: Json
-          created_at?: string | null
-          created_by?: string | null
-          custom_appareils?: string[] | null
-          custom_modalite?: string | null
-          energy_exercise_id?: string | null
-          id?: string
-          modalite?: string
-          note_coach?: string | null
-          photo_url?: string | null
-          session_key: string
-          session_label?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          appareil_types?: string[]
-          athlete_id?: string
-          blocks?: Json
-          created_at?: string | null
-          created_by?: string | null
-          custom_appareils?: string[] | null
-          custom_modalite?: string | null
-          energy_exercise_id?: string | null
-          id?: string
-          modalite?: string
-          note_coach?: string | null
-          photo_url?: string | null
-          session_key?: string
-          session_label?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "energy_session_config_athlete_id_fkey"
-            columns: ["athlete_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "energy_session_config_created_by_fkey"
+            foreignKeyName: "energy_sessions_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "energy_session_config_energy_exercise_id_fkey"
-            columns: ["energy_exercise_id"]
-            isOneToOne: false
-            referencedRelation: "energy_exercises"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      energy_workout_logs: {
-        Row: {
-          athlete_id: string
-          completed: boolean | null
-          created_at: string | null
-          date: string
-          distance_m: number | null
-          duration_min: number | null
-          garmin_expires_at: string | null
-          garmin_url: string | null
-          id: string
-          interval_logs: Json | null
-          lieu: string | null
-          lieu_custom: string | null
-          meteo: string[] | null
-          note: string | null
-          respected: boolean | null
-          session_key: string
-          session_label: string | null
-        }
-        Insert: {
-          athlete_id: string
-          completed?: boolean | null
-          created_at?: string | null
-          date?: string
-          distance_m?: number | null
-          duration_min?: number | null
-          garmin_expires_at?: string | null
-          garmin_url?: string | null
-          id?: string
-          interval_logs?: Json | null
-          lieu?: string | null
-          lieu_custom?: string | null
-          meteo?: string[] | null
-          note?: string | null
-          respected?: boolean | null
-          session_key: string
-          session_label?: string | null
-        }
-        Update: {
-          athlete_id?: string
-          completed?: boolean | null
-          created_at?: string | null
-          date?: string
-          distance_m?: number | null
-          duration_min?: number | null
-          garmin_expires_at?: string | null
-          garmin_url?: string | null
-          id?: string
-          interval_logs?: Json | null
-          lieu?: string | null
-          lieu_custom?: string | null
-          meteo?: string[] | null
-          note?: string | null
-          respected?: boolean | null
-          session_key?: string
-          session_label?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "energy_workout_logs_athlete_id_fkey"
-            columns: ["athlete_id"]
+            foreignKeyName: "energy_sessions_verified_by_fkey"
+            columns: ["verified_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1470,6 +1419,7 @@ export type Database = {
           id: string
           microcycle_id: string | null
           notes: string | null
+          rpe_score: number | null
           scheduled_date: string
           session_id: string
           session_name: string
@@ -1486,6 +1436,7 @@ export type Database = {
           id?: string
           microcycle_id?: string | null
           notes?: string | null
+          rpe_score?: number | null
           scheduled_date?: string
           session_id: string
           session_name: string
@@ -1502,6 +1453,7 @@ export type Database = {
           id?: string
           microcycle_id?: string | null
           notes?: string | null
+          rpe_score?: number | null
           scheduled_date?: string
           session_id?: string
           session_name?: string

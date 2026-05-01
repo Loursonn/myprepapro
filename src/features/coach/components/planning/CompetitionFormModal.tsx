@@ -2,9 +2,9 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { C } from "@/lib/theme";
-import { useCreateCompetition } from "@/hooks/useCompetitions";
+import { useCreateCompetition, useUpdateCompetition } from "@/hooks/useCompetitions";
 import { useSeasons } from "@/hooks/usePlanningBlocks";
-import { COMPETITION_META, type CompetitionType, type CompetitionPriority } from "@/types/planning";
+import { COMPETITION_META, type CompetitionType, type CompetitionPriority, type Competition } from "@/types/planning";
 
 const PRIORITIES: { value: CompetitionPriority; label: string }[] = [
   { value: "A", label: "A — Internationale" },
@@ -21,18 +21,22 @@ const TYPES = Object.entries(COMPETITION_META).map(([key, meta]) => ({
 interface Props {
   athleteId: string;
   coachId: string;
+  existing?: Competition | null;
   onClose: () => void;
 }
 
-export function CompetitionFormModal({ athleteId, coachId, onClose }: Props) {
+export function CompetitionFormModal({ athleteId, coachId, existing, onClose }: Props) {
+  const isEdit = !!existing;
   const { data: seasons = [] } = useSeasons(athleteId);
-  const { mutate: create, isPending } = useCreateCompetition();
+  const { mutate: create, isPending: creating } = useCreateCompetition();
+  const { mutate: update, isPending: updating } = useUpdateCompetition();
+  const isPending = creating || updating;
 
-  const [name,     setName]     = useState("");
-  const [date,     setDate]     = useState("");
-  const [location, setLocation] = useState("");
-  const [priority, setPriority] = useState<CompetitionPriority>("A");
-  const [type,     setType]     = useState<CompetitionType>("competition");
+  const [name,     setName]     = useState(existing?.name     ?? "");
+  const [date,     setDate]     = useState(existing?.date     ?? "");
+  const [location, setLocation] = useState(existing?.location ?? "");
+  const [priority, setPriority] = useState<CompetitionPriority>(existing?.priority ?? "A");
+  const [type,     setType]     = useState<CompetitionType>(existing?.type ?? "competition");
 
   // Find the current active season, if any
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -42,27 +46,37 @@ export function CompetitionFormModal({ athleteId, coachId, onClose }: Props) {
     e.preventDefault();
     if (!name.trim() || !date) return;
 
-    create(
-      {
-        coach_id:         coachId,
-        athlete_id:       athleteId,
-        season_id:        activeSeason?.id ?? null,
-        planning_block_id: null,
-        name:             name.trim(),
-        type,
-        date,
-        location:         location.trim() || null,
-        notes:            null,
-        priority,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Compétition ajoutée");
-          onClose();
+    if (isEdit && existing) {
+      update(
+        {
+          id: existing.id,
+          updates: { name: name.trim(), type, date, location: location.trim() || null, priority },
         },
-        onError: () => toast.error("Erreur lors de l'ajout"),
-      },
-    );
+        {
+          onSuccess: () => { toast.success("Compétition modifiée"); onClose(); },
+          onError:   () => toast.error("Erreur lors de la modification"),
+        },
+      );
+    } else {
+      create(
+        {
+          coach_id:          coachId,
+          athlete_id:        athleteId,
+          season_id:         activeSeason?.id ?? null,
+          planning_block_id: null,
+          name:              name.trim(),
+          type,
+          date,
+          location:          location.trim() || null,
+          notes:             null,
+          priority,
+        },
+        {
+          onSuccess: () => { toast.success("Compétition ajoutée"); onClose(); },
+          onError:   () => toast.error("Erreur lors de l'ajout"),
+        },
+      );
+    }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -102,8 +116,8 @@ export function CompetitionFormModal({ athleteId, coachId, onClose }: Props) {
         {/* Header */}
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>Nouvelle compétition</div>
-            {activeSeason && (
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>{isEdit ? "Modifier la compétition" : "Nouvelle compétition"}</div>
+            {!isEdit && activeSeason && (
               <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>Saison : {activeSeason.name}</div>
             )}
           </div>
@@ -212,7 +226,7 @@ export function CompetitionFormModal({ athleteId, coachId, onClose }: Props) {
               boxShadow: name.trim() && date ? "0 4px 16px rgba(244,114,182,0.3)" : "none",
             }}
           >
-            {isPending ? "Ajout en cours…" : "Ajouter la compétition"}
+            {isPending ? (isEdit ? "Modification…" : "Ajout en cours…") : (isEdit ? "Enregistrer les modifications" : "Ajouter la compétition")}
           </button>
         </form>
       </div>

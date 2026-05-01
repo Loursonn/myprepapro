@@ -11,10 +11,12 @@ create table if not exists workout_rpe (
 alter table workout_rpe enable row level security;
 
 -- Athlète : lire/écrire son propre RPE
+drop policy if exists "athlete_own_rpe" on workout_rpe;
 create policy "athlete_own_rpe" on workout_rpe
   for all using (athlete_id = auth.uid());
 
 -- Coach : lire RPE de ses athlètes
+drop policy if exists "coach_read_athlete_rpe" on workout_rpe;
 create policy "coach_read_athlete_rpe" on workout_rpe
   for select using (
     exists (
