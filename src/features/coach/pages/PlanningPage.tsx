@@ -12,7 +12,7 @@ import { PlanningOverview } from "@/components/coach/PlanningOverview";
 // Vue Frise
 import { TimelineView } from "@/features/coach/components/planning/TimelineView";
 
-// Vue Mois
+// Vue Mois (unified: muscu + energy)
 import { CalendarMonthView } from "@/features/coach/components/planning/CalendarMonthView";
 
 // Vue Synthèse
@@ -25,7 +25,7 @@ type PlanView = "season" | "timeline" | "month" | "summary";
 // ── PlanningPage ──────────────────────────────────────────────────────────────
 
 export default function PlanningPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const view = (searchParams.get("view") as PlanView) ?? "season";
 
   const { user } = useAuth();
@@ -44,61 +44,62 @@ export default function PlanningPage() {
 
   return (
     <>
-    <div style={{ padding: "16px 24px 60px" }}>
-      {/* ── SAISON ────────────────────────────────────────────────────────── */}
-      {view === "season" && (
-        <>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-            <button
-              onClick={() => setShowCompForm(true)}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 14px", borderRadius: 10,
-                border: "1px solid " + C.coach + "50",
-                background: C.coachS, color: C.coach,
-                fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              🏆 + Compétition
-            </button>
-          </div>
-          <PlanningOverview athleteId={athleteId} C={C} />
-        </>
-      )}
+      <div style={{ padding: "16px 24px 60px" }}>
 
-      {/* ── FRISE ─────────────────────────────────────────────────────────── */}
-      {view === "timeline" && (
-        <TimelineView athleteId={athleteId} />
-      )}
+        {/* ── SAISON ────────────────────────────────────────────────────── */}
+        {view === "season" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              <button
+                onClick={() => setShowCompForm(true)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 14px", borderRadius: 10,
+                  border: "1px solid " + C.coach + "50",
+                  background: C.coachS, color: C.coach,
+                  fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                🏆 + Compétition
+              </button>
+            </div>
+            <PlanningOverview athleteId={athleteId} C={C} />
+          </>
+        )}
 
-      {/* ── MOIS ──────────────────────────────────────────────────────────── */}
-      {view === "month" && (
-        <CalendarMonthView
+        {/* ── FRISE ─────────────────────────────────────────────────────── */}
+        {view === "timeline" && (
+          <TimelineView athleteId={athleteId} />
+        )}
+
+        {/* ── MOIS (unifié muscu + énergie) ──────────────────────────── */}
+        {view === "month" && (
+          <CalendarMonthView
+            athleteId={athleteId}
+            coachId={user?.id ?? ""}
+            sessions={sessions}
+            blockConfig={blockConfig}
+            setBlockConfig={setBlockConfig}
+            exos={exos as Record<string, unknown[]>}
+            sets={sets as Record<string, unknown[]>}
+            completedSessions={completedSessions}
+            currentWeek={currentWeek}
+          />
+        )}
+
+        {/* ── SYNTHÈSE ──────────────────────────────────────────────────── */}
+        {view === "summary" && (
+          <SummaryView athleteId={athleteId} />
+        )}
+      </div>
+
+      {showCompForm && (
+        <CompetitionFormModal
           athleteId={athleteId}
           coachId={user?.id ?? ""}
-          sessions={sessions}
-          blockConfig={blockConfig}
-          setBlockConfig={setBlockConfig}
-          exos={exos as Record<string, unknown[]>}
-          sets={sets as Record<string, unknown[]>}
-          completedSessions={completedSessions}
-          currentWeek={currentWeek}
+          onClose={() => setShowCompForm(false)}
         />
       )}
-
-      {/* ── SYNTHÈSE ──────────────────────────────────────────────────────── */}
-      {view === "summary" && (
-        <SummaryView athleteId={athleteId} />
-      )}
-    </div>
-
-    {showCompForm && (
-      <CompetitionFormModal
-        athleteId={athleteId}
-        coachId={user?.id ?? ""}
-        onClose={() => setShowCompForm(false)}
-      />
-    )}
     </>
   );
 }
