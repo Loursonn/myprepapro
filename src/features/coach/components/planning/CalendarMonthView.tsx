@@ -665,6 +665,7 @@ export function CalendarMonthView({
         day={drawerDay}
         events={events}
         athleteId={athleteId}
+        coachId={coachId}
         onQuickAdd={(day) => setQuickAddDay(day)}
         exos={exos}
         sets={sets}

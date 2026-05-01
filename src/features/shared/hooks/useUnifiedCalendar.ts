@@ -262,12 +262,36 @@ export function useDeleteCalendarEvent() {
     mutationFn: async ({
       id,
       type,
+      athleteId,
+      coachId,
+      sessionId,
+      sessionName,
+      date,
     }: {
       id: string;
       type: UCEventType;
       athleteId: string;
+      coachId?: string;
+      sessionId?: string;
+      sessionName?: string;
+      date?: string;
     }) => {
       if (type === "competition") return;
+
+      // Projected block-plan event: suppress by inserting a skipped workout_log
+      if (type === "workout" && id.startsWith("block-") && sessionId && date) {
+        const { error } = await supabase.from("workout_logs").insert({
+          athlete_id:     athleteId,
+          coach_id:       coachId ?? null,
+          session_id:     sessionId,
+          session_name:   sessionName ?? "Séance",
+          scheduled_date: date,
+          status:         "skipped",
+        });
+        if (error) throw error;
+        return;
+      }
+
       const table = type === "workout" ? "workout_logs" : "test_sessions";
       const { error } = await supabase.from(table).delete().eq("id", id);
       if (error) throw error;
@@ -276,6 +300,7 @@ export function useDeleteCalendarEvent() {
       qc.invalidateQueries({ queryKey: calBaseKey(vars.athleteId) });
       qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week", vars.athleteId] });
       toast.success("Supprimé");
     },
   });
