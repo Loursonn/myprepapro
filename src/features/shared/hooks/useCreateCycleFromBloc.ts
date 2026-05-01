@@ -37,6 +37,10 @@ export function useCreateCycleFromBloc() {
     mutationFn: async ({ blockConfig, sessions, athleteId, coachId }: Params) => {
       if (!blockConfig.startDate) throw new Error("Le bloc n'a pas de date de début.");
 
+      const scheduledSessions = sessions.filter((s) => s.day_of_week != null);
+      if (scheduledSessions.length === 0)
+        throw new Error("Aucune séance n'a de jour assigné. Double-clique sur chaque séance pour définir son jour.");
+
       const tw       = blockConfig.totalWeeks || 6;
       const monday   = toMonday(blockConfig.startDate);
       const endDate  = addDays(monday, tw * 7 - 1);
