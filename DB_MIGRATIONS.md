@@ -198,3 +198,44 @@ psql <connection_string> -f supabase/tests/rpc_coach_overview.sql
 
 Aucune variable supplémentaire requise pour les migrations PROMPT 6.
 Les migrations utilisent uniquement `auth.uid()` et les tables existantes.
+
+---
+
+## Migration 20260501000000 — Refonte module énergie (2026-05-01)
+
+### Ce qu'elle fait
+
+1. **DROP** `energy_session_config`, `energy_workout_logs`, `energy_exercises` (CASCADE)
+2. **DELETE** clés `app_data` liées au planning énergie legacy
+3. **ADD COLUMN IF NOT EXISTS** `profiles.is_certified_coach` (idempotent)
+4. **CREATE** `energy_sessions` — banque partagée de séances énergétiques
+5. **CREATE** `energy_session_assignments` — planning d'une session pour un athlète/date
+
+### Commandes déployées
+
+```bash
+supabase db push
+supabase gen types typescript --linked > src/integrations/supabase/types.ts
+```
+
+### Types associés
+
+`src/types/energy.ts` — types stricts pour le JSONB `intervals` :
+- `EnergyStep` = `EnergyInterval | EnergyGroup` (union discriminée)
+- `EnergyTarget` — 11 variantes (hr_zone, hr_pct, pace, pace_test_pct, power, cadence, x_per_y, text…)
+- `EnergyDuration` — time / distance / calories / lap_button
+
+### Rollback
+
+```sql
+DROP TABLE IF EXISTS public.energy_session_assignments CASCADE;
+DROP TABLE IF EXISTS public.energy_sessions CASCADE;
+-- Les anciennes tables (energy_session_config etc.) ne peuvent pas être restaurées
+-- automatiquement — restaurer depuis un backup Supabase si nécessaire.
+```
+
+### Notes
+
+- `is_coach_of(athlete_uuid uuid)` prend **un seul argument** (auth.uid() est implicite)
+- `set_updated_at()` existait déjà — utilisé pour les deux nouveaux triggers
+- `is_certified_coach` protégé par trigger `trg_prevent_flag_update` (pas de RLS séparée)
