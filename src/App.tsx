@@ -43,7 +43,9 @@ const StatsPage         = lazy(() => import("./features/coach/pages/StatsPage.ts
 const DonneesPage       = lazy(() => import("./features/coach/pages/DonneesPage.tsx"));
 const RetoursPage       = lazy(() => import("./features/coach/pages/RetoursPage.tsx"));
 const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx"));
-const AthleteViewPage   = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
+const AthleteViewPage        = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
+// TEMP — démo SessionPreview (à retirer en fin de prompt 8)
+const EnergyPreviewDemoPage  = lazy(() => import("./features/coach/pages/EnergyPreviewDemoPage.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -108,7 +110,9 @@ function AnimatedRoutes() {
             <Route path="library"  element={<LibraryPage />} />
             <Route path="tests"    element={<CoachTestsBankPage />} />
             <Route path="coaches"  element={<CoachesListPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings"     element={<SettingsPage />} />
+            {/* TEMP — à retirer en fin de prompt 8 */}
+            <Route path="energy-demo" element={<EnergyPreviewDemoPage />} />
 
             {/* Vue par athlète (ContextBar + AthleteProvider) */}
             <Route path="athletes/:athleteId" element={<CoachAthleteArea />}>
