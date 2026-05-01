@@ -311,10 +311,12 @@ function WorkoutDetailView({
 function EventCard({
   event,
   athleteId,
+  coachId,
   onSelect,
 }: {
   event: CalEvent;
   athleteId: string;
+  coachId: string;
   onSelect: (e: CalEvent) => void;
 }) {
   const color = TYPE_COLOR[event.type];
@@ -366,7 +368,18 @@ function EventCard({
 
         {event.type !== "competition" && (
           <button
-            onClick={(ev) => { ev.stopPropagation(); del({ id: event.id, type: event.type, athleteId }); }}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              del({
+                id:          event.id,
+                type:        event.type,
+                athleteId,
+                coachId,
+                sessionId:   event.raw?.session_id as string | undefined,
+                sessionName: event.title,
+                date:        event.date,
+              });
+            }}
             style={{
               width: 28, height: 28, borderRadius: 8,
               border: "1px solid " + C.r + "30", background: "transparent",
@@ -392,6 +405,7 @@ interface DayDetailsDrawerProps {
   day: Date | null;
   events: CalEvent[];
   athleteId: string;
+  coachId: string;
   onQuickAdd: (day: Date) => void;
   exos?: Record<string, unknown[]>;
   sets?: Record<string, unknown[]>;
@@ -403,6 +417,7 @@ export function DayDetailsDrawer({
   day,
   events,
   athleteId,
+  coachId,
   onQuickAdd,
   exos,
   sets,
@@ -546,7 +561,7 @@ export function DayDetailsDrawer({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {workouts.map((e) => (
-                      <EventCard key={e.id} event={e} athleteId={athleteId} onSelect={setSelectedEvent} />
+                      <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} />
                     ))}
                   </div>
                 </section>
@@ -559,7 +574,7 @@ export function DayDetailsDrawer({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {tests.map((e) => (
-                      <EventCard key={e.id} event={e} athleteId={athleteId} onSelect={setSelectedEvent} />
+                      <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} />
                     ))}
                   </div>
                 </section>

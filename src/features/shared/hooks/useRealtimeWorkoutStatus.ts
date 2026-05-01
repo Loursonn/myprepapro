@@ -30,6 +30,7 @@ export function useRealtimeWorkoutStatus(athleteId: string) {
           // Invalidate all queries that depend on workout status for this athlete.
           // This covers: useTodayWorkout, useWeekProgram, useWorkoutDetail, useCoachOverview.
           qc.invalidateQueries({ queryKey: QK.athleteData(athleteId) });
+          qc.invalidateQueries({ queryKey: ["workout-logs-week", athleteId] });
           qc.invalidateQueries({ queryKey: ["coach_kpi"] });
           qc.invalidateQueries({ queryKey: ["coach_overview_rpc"] });
           qc.invalidateQueries({ queryKey: ["coach_missed"] });
