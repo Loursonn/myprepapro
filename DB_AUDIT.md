@@ -132,34 +132,48 @@
 | active_calories / total_calories_consumed / macros_* | INTEGER |
 | UNIQUE(athlete_id, date) | |
 
-### `energy_exercises`
-| Colonne | Type |
-|---|---|
-| id | UUID PK |
-| name / type / description | TEXT |
-| is_official | BOOLEAN |
-| created_by | UUID FK |
+### ~~`energy_exercises`~~ ~~`energy_session_config`~~ ~~`energy_workout_logs`~~
+> **SUPPRIMÉES** — migration `20260501000000_energy_sessions_refonte.sql`
 
-### `energy_session_config`
-| Colonne | Type |
-|---|---|
-| id | UUID PK |
-| athlete_id | UUID FK |
-| session_key | TEXT |
-| appareil_types | TEXT[] |
-| blocks | JSONB |
-| UNIQUE(athlete_id, session_key) | |
+### `energy_sessions` *(nouveau — 2026-05-01)*
+| Colonne | Type | Contraintes |
+|---|---|---|
+| id | UUID | PK |
+| name | TEXT | NOT NULL |
+| session_kind | TEXT | NOT NULL CHECK IN ('vo2','tempo','seuil','footing','fartlek','autre','custom') |
+| custom_kind | TEXT | NULL (obligatoire si kind='custom') |
+| structure_type | TEXT | NOT NULL CHECK IN ('continu','fractionne') |
+| intervals | JSONB | NOT NULL DEFAULT '[]' — voir src/types/energy.ts |
+| total_duration_s | INTEGER | NULL |
+| total_distance_m | INTEGER | NULL |
+| notes | TEXT | NULL |
+| created_by | UUID | FK → profiles(id) SET NULL |
+| is_verified | BOOLEAN | NOT NULL DEFAULT false |
+| verified_by | UUID | FK → profiles(id) SET NULL |
+| verified_at | TIMESTAMPTZ | NULL |
+| created_at / updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 
-### `energy_workout_logs`
-| Colonne | Type |
-|---|---|
-| id | UUID PK |
-| athlete_id | UUID FK |
-| session_key | TEXT |
-| sets_data | JSONB |
-| duration_seconds | INT |
-| date | DATE |
-| created_at | TIMESTAMPTZ |
+**RLS :**
+- SELECT : `authenticated` (banque partagée)
+- INSERT : `role IN ('coach','coach_athlete')` + `is_verified = false` forcé
+- UPDATE (auteur) : `created_by = auth.uid()` + session non-vérifiée seulement
+- UPDATE (certifié) : `is_certified_coach = true OR is_admin = true` (peut set is_verified=true)
+- DELETE : auteur (non-vérifiée) ou admin
+
+### `energy_session_assignments` *(nouveau — 2026-05-01)*
+| Colonne | Type | Contraintes |
+|---|---|---|
+| id | UUID | PK |
+| athlete_id | UUID | NOT NULL FK → profiles(id) CASCADE |
+| coach_id | UUID | FK → profiles(id) SET NULL |
+| energy_session_id | UUID | NOT NULL FK → energy_sessions(id) RESTRICT |
+| scheduled_date | DATE | NOT NULL |
+| status | TEXT | DEFAULT 'planned' CHECK IN ('planned','in_progress','completed','missed','skipped') |
+| microcycle_id | UUID | FK → microcycles(id) SET NULL |
+| notes | TEXT | NULL |
+| created_at / updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
+
+**RLS :** `athlete_id = auth.uid()` OR `is_coach_of(athlete_id)` OR `is_admin`
 
 ### `test_sessions`
 | Colonne | Type |
@@ -343,8 +357,8 @@ Le readiness score est calculé côté client dans `useReadinessScore.ts` — pa
 | `habits` | (athlete_id) | filtre unique |
 | `habit_logs` | (athlete_id, date DESC) | suivi journalier |
 | `retours` | (athlete_id, created_at DESC) | vue coach |
-| `energy_session_config` | (athlete_id) | config par athlète |
-| `energy_workout_logs` | (athlete_id, date DESC) | historique énergie |
+| `energy_sessions` | (created_by), (session_kind), (is_verified) | banque partagée |
+| `energy_session_assignments` | (athlete_id, scheduled_date), (energy_session_id) | planning énergie |
 
 ---
 
@@ -362,7 +376,7 @@ Points d'attention :
 
 | Risque | Sévérité | Tables concernées |
 |---|---|---|
-| Coach voit les données d'athlètes d'autres coachs | 🔴 CRITIQUE | energy_session_config, energy_workout_logs, performance_logs, habits, habit_logs |
+| Coach voit les données d'athlètes d'autres coachs | 🔴 CRITIQUE | performance_logs, habits, habit_logs (energy_session_config/workout_logs supprimées) |
 | Tous les utilisateurs voient tous les retours | 🟡 MODÉRÉ | retours |
 | Backfill workout status impossible sans table dédiée | 🟡 MODÉRÉ | — |
 | Données JSONB non structurées → migration future | 🟡 MODÉRÉ | app_data |
