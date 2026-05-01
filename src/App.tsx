@@ -45,6 +45,7 @@ const RetoursPage       = lazy(() => import("./features/coach/pages/RetoursPage.
 const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx"));
 const AthleteViewPage           = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
 const EnergySessionEditorPage   = lazy(() => import("./features/coach/pages/EnergySessionEditorPage.tsx"));
+const EnergyLibraryPage         = lazy(() => import("./features/coach/pages/EnergyLibraryPage.tsx"));
 // TEMP — démo SessionPreview (à retirer en fin de prompt 8)
 const EnergyPreviewDemoPage     = lazy(() => import("./features/coach/pages/EnergyPreviewDemoPage.tsx"));
 
@@ -116,6 +117,7 @@ function AnimatedRoutes() {
             <Route path="energy-demo" element={<EnergyPreviewDemoPage />} />
 
             {/* Banque séances énergie (sans contexte athlète) */}
+            <Route path="energy-library"                  element={<EnergyLibraryPage />} />
             <Route path="energy-library/new"              element={<EnergySessionEditorPage />} />
             <Route path="energy-library/:sessionId/edit"  element={<EnergySessionEditorPage />} />
 

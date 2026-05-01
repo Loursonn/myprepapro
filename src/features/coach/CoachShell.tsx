@@ -24,8 +24,9 @@ import { Search } from "lucide-react";
 const NAV_ITEMS = [
   { icon: "🏠", label: "Home",       path: "/coach",          exact: true,  certified: false },
   { icon: "👥", label: "Athlètes",   path: "/coach/athletes", exact: false, certified: false },
-  { icon: "📚", label: "Banque",     path: "/coach/library",  exact: false, certified: false },
-  { icon: "🧪", label: "Tests",      path: "/coach/tests",    exact: false, certified: false },
+  { icon: "📚", label: "Banque",     path: "/coach/library",         exact: false, certified: false },
+  { icon: "⚡", label: "Énergie",    path: "/coach/energy-library",  exact: false, certified: false },
+  { icon: "🧪", label: "Tests",      path: "/coach/tests",           exact: false, certified: false },
   { icon: "🎖️", label: "Coachs",    path: "/coach/coaches",  exact: false, certified: true  },
   { icon: "⚙️", label: "Paramètres", path: "/coach/settings", exact: false, certified: false },
 ] as const;
