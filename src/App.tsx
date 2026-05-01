@@ -43,9 +43,10 @@ const StatsPage         = lazy(() => import("./features/coach/pages/StatsPage.ts
 const DonneesPage       = lazy(() => import("./features/coach/pages/DonneesPage.tsx"));
 const RetoursPage       = lazy(() => import("./features/coach/pages/RetoursPage.tsx"));
 const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx"));
-const AthleteViewPage        = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
+const AthleteViewPage           = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
+const EnergySessionEditorPage   = lazy(() => import("./features/coach/pages/EnergySessionEditorPage.tsx"));
 // TEMP — démo SessionPreview (à retirer en fin de prompt 8)
-const EnergyPreviewDemoPage  = lazy(() => import("./features/coach/pages/EnergyPreviewDemoPage.tsx"));
+const EnergyPreviewDemoPage     = lazy(() => import("./features/coach/pages/EnergyPreviewDemoPage.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -114,6 +115,10 @@ function AnimatedRoutes() {
             {/* TEMP — à retirer en fin de prompt 8 */}
             <Route path="energy-demo" element={<EnergyPreviewDemoPage />} />
 
+            {/* Banque séances énergie (sans contexte athlète) */}
+            <Route path="energy-library/new"              element={<EnergySessionEditorPage />} />
+            <Route path="energy-library/:sessionId/edit"  element={<EnergySessionEditorPage />} />
+
             {/* Vue par athlète (ContextBar + AthleteProvider) */}
             <Route path="athletes/:athleteId" element={<CoachAthleteArea />}>
               <Route index element={<Navigate to="planning" replace />} />
@@ -125,6 +130,10 @@ function AnimatedRoutes() {
               <Route path="tests"         element={<CoachTestPage />} />
               <Route path="athlete-view"  element={<AthleteViewPage />} />
             </Route>
+
+            {/* Éditeur séances énergie par athlète (hors ContextBar) */}
+            <Route path="athletes/:athleteId/energy/new"              element={<EnergySessionEditorPage />} />
+            <Route path="athletes/:athleteId/energy/:sessionId/edit"  element={<EnergySessionEditorPage />} />
           </Route>
 
           {/* 404 */}
