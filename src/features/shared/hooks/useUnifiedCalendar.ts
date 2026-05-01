@@ -15,7 +15,7 @@ import type { Exercise, WeekConfig } from "@/features/shared/types/athlete";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type UCEventType = "workout" | "test" | "competition";
+export type UCEventType = "workout" | "test" | "competition" | "energy";
 
 export interface UnifiedCalendarEvent {
   id: string;
@@ -33,6 +33,9 @@ export interface UnifiedCalendarEvent {
   // Competition-specific
   priority?: string;
   location?: string;
+  // Energy-specific
+  sessionKind?: string;        // vo2 | tempo | seuil | footing | fartlek | autre | custom
+  energySessionId?: string;    // energy_sessions.id
   /** Raw DB row for fields not promoted to typed fields */
   raw: Record<string, unknown>;
 }
@@ -67,8 +70,8 @@ export function useUnifiedCalendar(
     enabled: !!athleteId && !!start && !!end,
     staleTime,
     queryFn: async (): Promise<UnifiedCalendarEvent[]> => {
-      // ── 1. Parallel fetch: workouts + tests + competitions ─────────────────
-      const [wRes, tRes, cRes] = await Promise.all([
+      // ── 1. Parallel fetch: workouts + tests + competitions + energy ───────
+      const [wRes, tRes, cRes, eRes] = await Promise.all([
         supabase
           .from("workout_logs")
           .select("id, session_id, session_name, scheduled_date, status, rpe_score")
@@ -92,11 +95,20 @@ export function useUnifiedCalendar(
           .gte("date", start)
           .lte("date", end)
           .order("date"),
+
+        supabase
+          .from("energy_session_assignments")
+          .select("id, athlete_id, energy_session_id, scheduled_date, status, notes, energy_sessions(id, name, session_kind)")
+          .eq("athlete_id", athleteId)
+          .gte("scheduled_date", start)
+          .lte("scheduled_date", end)
+          .order("scheduled_date"),
       ]);
 
-      const logs  = wRes.data ?? [];
-      const tests = tRes.data ?? [];
-      const comps = cRes.data ?? [];
+      const logs         = wRes.data ?? [];
+      const tests        = tRes.data ?? [];
+      const comps        = cRes.data ?? [];
+      const energyAssign = eRes.data ?? [];
 
       // ── 2. Optionally fetch exercises ──────────────────────────────────────
       const exercisesBySession: Record<string, Exercise[]> = {};
@@ -170,6 +182,22 @@ export function useUnifiedCalendar(
           priority: c.priority ?? undefined,
           location: c.location ?? undefined,
           raw:      c as Record<string, unknown>,
+        });
+      }
+
+      for (const ea of energyAssign) {
+        const session = (ea as Record<string, unknown>).energy_sessions as {
+          id: string; name: string; session_kind: string;
+        } | null;
+        events.push({
+          id:              ea.id,
+          type:            "energy",
+          date:            ea.scheduled_date,
+          title:           session?.name ?? "Séance énergie",
+          status:          ea.status ?? "planned",
+          sessionKind:     session?.session_kind,
+          energySessionId: ea.energy_session_id,
+          raw:             ea as Record<string, unknown>,
         });
       }
 
@@ -278,7 +306,14 @@ export function useDeleteCalendarEvent() {
     }) => {
       if (type === "competition") return;
 
-      // Projected block-plan event: suppress by inserting a skipped workout_log
+      // Energy session assignment: hard delete
+      if (type === "energy") {
+        const { error } = await supabase.from("energy_session_assignments").delete().eq("id", id);
+        if (error) throw error;
+        return;
+      }
+
+      // Projected block-plan workout: suppress by inserting a skipped workout_log
       if (type === "workout" && id.startsWith("block-") && sessionId && date) {
         const { error } = await supabase.from("workout_logs").insert({
           athlete_id:     athleteId,
@@ -300,6 +335,7 @@ export function useDeleteCalendarEvent() {
         if (error) throw error;
         return;
       }
+
       const { error } = await supabase.from("test_sessions").delete().eq("id", id);
       if (error) throw error;
     },
@@ -383,17 +419,21 @@ export interface CalEvent {
   type: UCEventType;
   status?: string;
   rpe?: number | null;
+  sessionKind?: string;
+  energySessionId?: string;
   raw: Record<string, unknown>;
 }
 
 export function toCalEvent(e: UnifiedCalendarEvent): CalEvent {
   return {
-    id:     e.id,
-    title:  e.title,
-    date:   e.date,
-    type:   e.type,
-    status: e.status,
-    rpe:    e.rpe,
-    raw:    e.raw,
+    id:              e.id,
+    title:           e.title,
+    date:            e.date,
+    type:            e.type,
+    status:          e.status,
+    rpe:             e.rpe,
+    sessionKind:     e.sessionKind,
+    energySessionId: e.energySessionId,
+    raw:             e.raw,
   };
 }

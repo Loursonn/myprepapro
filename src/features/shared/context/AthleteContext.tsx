@@ -4,7 +4,9 @@ import { useAthletePersistedState } from "../hooks/useAthletePersistedState";
 import { useAthleteComputations } from "../hooks/useAthleteComputations";
 import { useAthleteLogic } from "../hooks/useAthleteLogic";
 import { useHabits } from "../hooks/useHabits";
-import { useEnergySessions } from "../hooks/useEnergySessions";
+// NOTE: useEnergySessions was rewritten for the energy-refonte (coach library).
+// AthleteContext maintains legacy energy state as empty defaults since
+// energy_session_config / app_data energy keys were dropped in the DB migration.
 import { useFeedbacks } from "../hooks/useFeedbacks";
 import { SKEYS } from "@/lib/storage";
 import { sSave } from "@/lib/storage";
@@ -192,7 +194,21 @@ export function AthleteProvider({ athleteId, viewOnly = false, athleteProfile = 
 
   const persisted = useAthletePersistedState(athleteId);
   const computations = useAthleteComputations({ ...persisted });
-  const energy = useEnergySessions(athleteId);
+  // Legacy energy state — tables (energy_session_config, app_data energy keys) were
+  // dropped in the energy-refonte DB migration. Provide empty defaults so old
+  // consumers (ProgPage, ProgrammationPage, RetoursPage, DashboardPage) don't crash.
+  const [energySessions, setEnergySessions] = useState<EnergySession[]>([]);
+  const [energySessionsLoaded, setEnergySessionsLoaded] = useState(true);
+  const [energyWeekPlan, setEnergyWeekPlan] = useState<Record<string, unknown>>({});
+  const [energyDayPlan, setEnergyDayPlan] = useState<Record<string, unknown>>({});
+  const [energyEditorKey, setEnergyEditorKey] = useState<string | null>(null);
+  const energy = {
+    energySessions, setEnergySessions,
+    energySessionsLoaded, setEnergySessionsLoaded,
+    energyWeekPlan, setEnergyWeekPlan,
+    energyDayPlan, setEnergyDayPlan,
+    energyEditorKey, setEnergyEditorKey,
+  };
   const habits = useHabits(athleteId);
   const feedbacks = useFeedbacks(athleteId);
 
