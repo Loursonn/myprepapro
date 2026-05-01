@@ -33,16 +33,32 @@ import { QuickAddDialog } from "./QuickAddDialog";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
+const ENERGY_KIND_COLOR: Record<string, string> = {
+  vo2:     "#A855F7",
+  tempo:   "#3B8DF0",
+  seuil:   "#F59E0B",
+  footing: "#10B981",
+  fartlek: "#EF4444",
+  autre:   "#6B7280",
+  custom:  "#6B7280",
+};
+
+function energyChipColor(event: CalEvent): string {
+  return ENERGY_KIND_COLOR[event.sessionKind ?? ""] ?? "#A855F7";
+}
+
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
   workout:     C.ac,
   test:        C.o,
   competition: C.coach,
+  energy:      "#A855F7",
 };
 
 const TYPE_BG: Record<CalEvent["type"], string> = {
   workout:     C.acS,
   test:        C.oS,
   competition: C.coachS,
+  energy:      "#A855F720",
 };
 
 const STATUS_OPACITY: Record<string, number> = {
@@ -65,13 +81,17 @@ function EventChip({
   const isProjected = event.raw?.source === "block_plan";
   const st = event.status;
 
+  // Energy events use session_kind color
+  const baseColor = event.type === "energy" ? energyChipColor(event) : TYPE_COLOR[event.type];
+  const baseBg    = event.type === "energy" ? energyChipColor(event) + "20" : TYPE_BG[event.type];
+
   // Status overrides base type color for completed/missed
   const color = st === "completed" ? C.g
               : st === "missed"    ? C.r
-              : TYPE_COLOR[event.type];
+              : baseColor;
   const bg    = st === "completed" ? C.gS
               : st === "missed"    ? C.rS
-              : TYPE_BG[event.type];
+              : baseBg;
 
   return (
     <div
@@ -91,7 +111,7 @@ function EventChip({
         fontStyle: isProjected && st !== "completed" && st !== "missed" ? "italic" : "normal",
       }}
     >
-      {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : ""}
+      {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : ""}
       {event.title}
       {isProjected && st !== "completed" && st !== "missed" && (
         <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
@@ -528,11 +548,12 @@ export function CalendarMonthView({
               <div style={{ fontSize: 16, fontWeight: 800, color: C.tx, textTransform: "capitalize" }}>
                 {format(month, "MMMM yyyy", { locale: fr })}
               </div>
-              <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 4 }}>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 4, flexWrap: "wrap" }}>
                 {[
-                  { label: "Séance", color: C.ac },
-                  { label: "Test",   color: C.o  },
-                  { label: "Compét", color: C.coach },
+                  { label: "Séance",  color: C.ac      },
+                  { label: "Énergie", color: "#A855F7"  },
+                  { label: "Test",    color: C.o        },
+                  { label: "Compét",  color: C.coach    },
                 ].map(({ label, color }) => (
                   <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
@@ -666,11 +687,12 @@ export function CalendarMonthView({
               }}
             >
               {[
-                { label: "Séances",      count: events.filter((e) => e.type === "workout").length,     color: C.ac    },
-                { label: "Complétées",   count: events.filter((e) => e.status === "completed").length, color: C.g     },
-                { label: "Manquées",     count: events.filter((e) => e.status === "missed").length,    color: C.r     },
-                { label: "Tests",        count: events.filter((e) => e.type === "test").length,        color: C.o     },
-                { label: "Compétitions", count: events.filter((e) => e.type === "competition").length, color: C.coach },
+                { label: "Séances",      count: events.filter((e) => e.type === "workout").length,     color: C.ac       },
+                { label: "Énergie",      count: events.filter((e) => e.type === "energy").length,      color: "#A855F7"  },
+                { label: "Complétées",   count: events.filter((e) => e.status === "completed").length, color: C.g        },
+                { label: "Manquées",     count: events.filter((e) => e.status === "missed").length,    color: C.r        },
+                { label: "Tests",        count: events.filter((e) => e.type === "test").length,        color: C.o        },
+                { label: "Compétitions", count: events.filter((e) => e.type === "competition").length, color: C.coach    },
               ].map(({ label, count, color }) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 15, fontWeight: 800, color }}>{count}</span>

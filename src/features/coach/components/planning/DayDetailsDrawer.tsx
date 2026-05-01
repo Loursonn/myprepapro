@@ -28,10 +28,24 @@ interface SetRow {
 function rpeColor(v: number) { return v <= 4 ? C.g : v <= 7 ? C.o : C.r; }
 function rpeBg(v: number)    { return v <= 4 ? C.gS : v <= 7 ? C.oS : C.rS; }
 
+const ENERGY_KIND_COLOR: Record<string, string> = {
+  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+};
+const ENERGY_KIND_LABEL: Record<string, string> = {
+  vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
+  footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+};
+
+function energyColor(event: CalEvent): string {
+  return ENERGY_KIND_COLOR[event.sessionKind ?? ""] ?? "#A855F7";
+}
+
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
   workout:     C.ac,
   test:        C.o,
   competition: C.coach,
+  energy:      "#A855F7",
 };
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -319,13 +333,21 @@ function EventCard({
   coachId: string;
   onSelect: (e: CalEvent) => void;
 }) {
-  const color = TYPE_COLOR[event.type];
+  const isEnergy  = event.type === "energy";
+  const color = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
   const { mutate: del } = useDeleteCalendarEvent();
   const statusInfo = event.status ? STATUS_LABEL[event.status] : null;
+  const isClickable = event.type === "workout" || event.type === "energy";
+
+  const typeLabel =
+    event.type === "workout"     ? "Séance"
+    : event.type === "test"      ? "Test"
+    : event.type === "energy"    ? (ENERGY_KIND_LABEL[event.sessionKind ?? ""] ?? "Énergie")
+    : "Compétition";
 
   return (
     <div
-      onClick={() => event.type === "workout" && onSelect(event)}
+      onClick={() => isClickable && onSelect(event)}
       style={{
         background: C.s2,
         borderRadius: 12,
@@ -334,7 +356,7 @@ function EventCard({
         display: "flex",
         flexDirection: "column",
         gap: 6,
-        cursor: event.type === "workout" ? "pointer" : "default",
+        cursor: isClickable ? "pointer" : "default",
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -347,7 +369,7 @@ function EventCard({
               fontSize: 9, fontWeight: 700, letterSpacing: "0.4px",
               textTransform: "uppercase", color,
             }}>
-              {event.type === "workout" ? "Séance" : event.type === "test" ? "Test" : "Compétition"}
+              {typeLabel}
             </span>
             {statusInfo && (
               <span style={{ fontSize: 10, color: statusInfo.color }}>{statusInfo.label}</span>
@@ -360,7 +382,7 @@ function EventCard({
                 RPE {event.rpe}/10
               </span>
             )}
-            {event.type === "workout" && (
+            {isClickable && (
               <span style={{ fontSize: 9, color: C.tx3, marginLeft: "auto" }}>Voir →</span>
             )}
           </div>
@@ -432,6 +454,7 @@ export function DayDetailsDrawer({
   const workouts     = dayEvents.filter((e) => e.type === "workout");
   const tests        = dayEvents.filter((e) => e.type === "test");
   const competitions = dayEvents.filter((e) => e.type === "competition");
+  const energyEvents = dayEvents.filter((e) => e.type === "energy");
 
   const handleClose = () => {
     setSelectedEvent(null);
@@ -512,7 +535,41 @@ export function DayDetailsDrawer({
           display: "flex", flexDirection: "column", gap: 20,
         }}>
           {selectedEvent ? (
-            <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
+            selectedEvent.type === "energy" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  {selectedEvent.status && STATUS_LABEL[selectedEvent.status] && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+                      background: STATUS_LABEL[selectedEvent.status].color + "20",
+                      color: STATUS_LABEL[selectedEvent.status].color,
+                      textTransform: "uppercase", letterSpacing: "0.4px",
+                    }}>
+                      {STATUS_LABEL[selectedEvent.status].label}
+                    </span>
+                  )}
+                  {selectedEvent.sessionKind && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+                      background: energyColor(selectedEvent) + "20",
+                      color: energyColor(selectedEvent),
+                    }}>
+                      {ENERGY_KIND_LABEL[selectedEvent.sessionKind] ?? selectedEvent.sessionKind}
+                    </span>
+                  )}
+                </div>
+                {selectedEvent.raw?.notes && (
+                  <div style={{ fontSize: 12, color: C.tx2, background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
+                    {String(selectedEvent.raw.notes)}
+                  </div>
+                )}
+                <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12 }}>
+                  Séance énergétique — voir le planning calendrier pour les détails
+                </div>
+              </div>
+            ) : (
+              <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
+            )
           ) : (
             <>
               {/* Competition banner — clickable to edit */}
@@ -575,6 +632,19 @@ export function DayDetailsDrawer({
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {tests.map((e) => (
                       <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {energyEvents.length > 0 && (
+                <section>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#A855F7", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+                    Séances énergétiques
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {energyEvents.map((e) => (
+                      <EventCard key={e.id} event={e} athleteId={athleteId} onSelect={setSelectedEvent} />
                     ))}
                   </div>
                 </section>

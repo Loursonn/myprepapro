@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronRight, Zap, Plus, Calendar } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,8 +12,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
-import { CoachEnergyProgram } from "@/components/coach/CoachComponents";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
+import { useEnergyAssignments } from "@/features/shared/hooks/useEnergyAssignments";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { TierConfigModal } from "@/components/coach/CoachComponents";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
@@ -18,17 +21,181 @@ import { SessionWeekDrawer } from "@/features/coach/components/SessionWeekDrawer
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
+const KIND_LABEL: Record<string, string> = {
+  vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
+  footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+};
+const KIND_COLOR: Record<string, string> = {
+  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+};
+
+// ── EnergyAssignmentList ───────────────────────────────────────────────────────
+
+interface EnergyAssignmentListProps {
+  athleteId: string;
+  onNew: () => void;
+  onEdit: (sessionId: string) => void;
+  onCalendar: () => void;
+}
+
+function EnergyAssignmentList({ athleteId, onNew, onEdit, onCalendar }: EnergyAssignmentListProps) {
+  const { data: assignments = [], isLoading } = useEnergyAssignments(athleteId);
+
+  // Sort by scheduled_date descending (most recent first)
+  const sorted = [...assignments].sort(
+    (a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime()
+  );
+
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} style={{ height: 64, borderRadius: 12, background: C.s1 }} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
+          Séances énergétiques
+          {assignments.length > 0 && (
+            <span style={{ fontSize: 11, color: C.tx3, fontWeight: 400, marginLeft: 8 }}>
+              {assignments.length} assignée{assignments.length > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onCalendar}
+            title="Voir sur le calendrier"
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 12px", borderRadius: 9,
+              border: "1px solid " + C.brdL, background: "transparent",
+              color: C.tx3, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Calendar size={13} />
+            Calendrier
+          </button>
+          <button
+            onClick={onNew}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 14px", borderRadius: 9,
+              border: "none", background: C.coach, color: "#fff",
+              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Plus size={13} />
+            Nouvelle séance
+          </button>
+        </div>
+      </div>
+
+      {/* Empty state */}
+      {sorted.length === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px" }}>
+          <Zap size={36} style={{ color: C.tx3, margin: "0 auto 12px" }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>
+            Aucune séance énergétique
+          </div>
+          <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>
+            Crée une séance et planifie-la pour cet athlète.
+          </div>
+          <button
+            onClick={onNew}
+            style={{
+              padding: "10px 20px", borderRadius: 10,
+              border: "none", background: C.coach, color: "#fff",
+              fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            + Nouvelle séance
+          </button>
+        </div>
+      )}
+
+      {/* Assignment list */}
+      {sorted.map((a) => {
+        const session = (a as Record<string, unknown>).energy_sessions as {
+          id: string; name: string; session_kind: string;
+          total_duration_s?: number | null; total_distance_m?: number | null;
+        } | null;
+        if (!session) return null;
+
+        const kind = session.session_kind;
+        const kindColor = KIND_COLOR[kind] ?? C.tx3;
+        const dateStr = a.scheduled_date
+          ? format(new Date(a.scheduled_date + "T12:00:00"), "EEE d MMM", { locale: fr })
+          : "—";
+        const statusColors: Record<string, string> = {
+          planned: C.tx3, completed: C.g, missed: C.r, skipped: C.o,
+        };
+        const statusColor = statusColors[a.status ?? "planned"] ?? C.tx3;
+
+        return (
+          <div
+            key={a.id}
+            style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 14px", borderRadius: 12, marginBottom: 8,
+              border: "1px solid " + C.brdL, background: C.s1,
+              cursor: "pointer",
+            }}
+            onClick={() => onEdit(session.id)}
+          >
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+              background: kindColor + "20",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Zap size={16} color={kindColor} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 2 }}>
+                {session.name}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5,
+                  background: kindColor + "20", color: kindColor,
+                }}>
+                  {KIND_LABEL[kind] ?? kind}
+                </span>
+                <span style={{ fontSize: 10, color: C.tx3 }}>{dateStr}</span>
+                {session.total_duration_s != null && (
+                  <span style={{ fontSize: 10, color: C.tx3 }}>
+                    {Math.round(session.total_duration_s / 60)} min
+                  </span>
+                )}
+              </div>
+            </div>
+            <span style={{ fontSize: 11, color: statusColor, fontWeight: 600 }}>
+              {a.status === "completed" ? "✓" : a.status === "missed" ? "✗" : ""}
+            </span>
+            <ChevronRight size={14} style={{ color: C.tx3, flexShrink: 0 }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ProgrammationPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const {
     athleteId, loaded, viewOnly,
     exos, setExos, sessions, setSessions, blockConfig, setBlockConfig,
     completedSessions, currentWeek, tw, dw, allMethods,
     customMethods, setCustomMethods, exMeta, setExMeta, sets,
     athleteNotes, weekSchedule, setWeekSchedule,
-    energySessions, setEnergySessions, energyWeekPlan, setEnergyWeekPlan,
-    energyDayPlan, setEnergyDayPlan, energyEditorKey, setEnergyEditorKey,
-    energySessionsLoaded, setEnergySessionsLoaded,
     showNewBlock, setShowNewBlock, showBlockHistory, setShowBlockHistory,
     showTierModal, setShowTierModal, blockHistory, setBlockHistory,
     archiveAndNewBlock, updateSessionDay,
@@ -194,7 +361,7 @@ export default function ProgrammationPage() {
         ].map((t) => (
           <button
             key={t.k}
-            onClick={() => { setSubTab(t.k); setEnergyEditorKey(null); }}
+            onClick={() => setSubTab(t.k)}
             style={{
               padding: "9px 18px", border: "none",
               borderBottom: "2px solid " + (subTab === t.k ? C.coach : "transparent"),
@@ -313,15 +480,11 @@ export default function ProgrammationPage() {
 
       {/* ── Énergétique ── */}
       {subTab === "energie" && (
-        <CoachEnergyProgram
+        <EnergyAssignmentList
           athleteId={athleteId}
-          energyEditorKey={energyEditorKey} setEnergyEditorKey={setEnergyEditorKey}
-          energySessions={energySessions} setEnergySessions={setEnergySessions}
-          energySessionsLoaded={energySessionsLoaded}
-          setEnergySessionsLoaded={setEnergySessionsLoaded}
-          C={C} blockConfig={blockConfig} currentWeek={currentWeek}
-          weekPlan={energyWeekPlan} setWeekPlan={setEnergyWeekPlan}
-          dayPlan={energyDayPlan} setDayPlan={setEnergyDayPlan}
+          onNew={() => navigate(`/coach/athletes/${athleteId}/energy/new`)}
+          onEdit={(sessionId) => navigate(`/coach/athletes/${athleteId}/energy/${sessionId}/edit`)}
+          onCalendar={() => navigate(`/coach/athletes/${athleteId}/planning?view=month`)}
         />
       )}
 

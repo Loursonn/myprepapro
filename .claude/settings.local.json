@@ -50,7 +50,18 @@
       "Bash(npx tsc *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080)",
       "Bash(curl *)",
-      "Bash(taskkill /F /IM node.exe)"
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(rtk find:*)",
+      "Bash(rtk wc:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\); print\\('---'\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if 'test' in k.lower\\(\\) or 'vitest' in k.lower\\(\\)}, indent=2\\)\\)\")",
+      "Bash(npm list:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(npm ls:*)",
+      "Bash(node -e \"console.log\\(crypto.randomUUID\\(\\)\\)\")",
+      "Bash(node -e \"const { isPast } = require\\('date-fns'\\); console.log\\(typeof isPast\\);\")",
+      "Bash(rtk lint:*)",
+      "Bash(git rm:*)",
+      "Bash(git rebase:*)"
     ]
   }
 }
