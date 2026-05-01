@@ -1,5 +1,7 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
+import { supabase } from "@/integrations/supabase/client";
 import type { Session, Exercise } from "../types/athlete";
 
 export interface TestSess {
@@ -19,6 +21,7 @@ export interface DayProgram {
     session: Session;
     exercises: Exercise[];
     isCompleted: boolean;
+    workoutLogId?: string;
   }>;
   tests: TestSess[];
 }
@@ -31,21 +34,53 @@ function localISO(d: Date): string {
 /**
  * Returns the 7-day programme for a given ISO week start (Monday).
  * Falls back to current week if weekStart is null.
+ *
+ * Primary source: workout_logs (created by coach when assigning a cycle).
+ * Fallback: day_of_week sessions from app_data (legacy).
  */
 export function useWeekProgram(weekStart: string | null): DayProgram[] {
-  const { sessions, exos, completedSessions, currentWeek, blockConfig, testSessions } =
+  const { sessions, exos, completedSessions, currentWeek, blockConfig, testSessions, athleteId } =
     useAthleteContext();
 
-  return useMemo(() => {
-    // Derive the week's Monday in local time
-    const monday = (() => {
-      const d = weekStart ? new Date(weekStart + "T12:00:00") : new Date();
-      d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-      d.setHours(0, 0, 0, 0);
-      return d;
-    })();
+  // Compute week boundaries
+  const { monday, sundayISO, mondayISO } = useMemo(() => {
+    const d = weekStart ? new Date(weekStart + "T12:00:00") : new Date();
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    d.setHours(0, 0, 0, 0);
+    const mon = new Date(d);
+    const sun = new Date(d);
+    sun.setDate(d.getDate() + 6);
+    return { monday: mon, mondayISO: localISO(mon), sundayISO: localISO(sun) };
+  }, [weekStart]);
 
-    // Compute which block week this calendar week corresponds to
+  // Fetch workout_logs for this week from Supabase
+  const { data: workoutLogs = [] } = useQuery({
+    queryKey: ["workout-logs-week", athleteId, mondayISO],
+    enabled: !!athleteId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("workout_logs")
+        .select("id, session_id, session_name, scheduled_date, status")
+        .eq("athlete_id", athleteId)
+        .gte("scheduled_date", mondayISO)
+        .lte("scheduled_date", sundayISO);
+      return data ?? [];
+    },
+  });
+
+  return useMemo(() => {
+    // Index workout_logs by date
+    const logsByDate = new Map<string, typeof workoutLogs>();
+    for (const wl of workoutLogs) {
+      const arr = logsByDate.get(wl.scheduled_date) ?? [];
+      arr.push(wl);
+      logsByDate.set(wl.scheduled_date, arr);
+    }
+
+    const hasWorkoutLogs = workoutLogs.length > 0;
+
+    // Compute block week for legacy completed check
     let blockWeek = currentWeek;
     if (blockConfig?.startDate) {
       const tw = blockConfig.totalWeeks || 6;
@@ -66,17 +101,43 @@ export function useWeekProgram(weekStart: string | null): DayProgram[] {
       const dow = i; // 0=Mon … 6=Sun
       const isoDate = localISO(dayDate);
 
-      const daysSessions = sessions
-        .filter((s) => s.day_of_week === dow && (exos[s.id] ?? []).length > 0)
-        .map((s) => ({
-          session:     s,
-          exercises:   exos[s.id] ?? [],
-          isCompleted: doneThisWeek.has(s.id),
-        }));
+      let daySessions: DayProgram["sessions"];
+
+      if (hasWorkoutLogs) {
+        // Primary path: sessions from workout_logs
+        const logsForDay = logsByDate.get(isoDate) ?? [];
+        daySessions = logsForDay
+          .map((wl) => {
+            const exercises: Exercise[] = exos[wl.session_id] ?? [];
+            // Look up full session object or build minimal one
+            const session: Session = sessions.find((s) => s.id === wl.session_id) ?? {
+              id: wl.session_id,
+              name: wl.session_name,
+              short: wl.session_name.slice(0, 3).toUpperCase(),
+              day_of_week: dow,
+            };
+            return {
+              session,
+              exercises,
+              isCompleted: wl.status === "completed" || doneThisWeek.has(wl.session_id),
+              workoutLogId: wl.id,
+            };
+          })
+          .filter((s) => s.exercises.length > 0);
+      } else {
+        // Fallback: legacy day_of_week sessions from app_data
+        daySessions = sessions
+          .filter((s) => s.day_of_week === dow && (exos[s.id] ?? []).length > 0)
+          .map((s) => ({
+            session:      s,
+            exercises:    exos[s.id] ?? [],
+            isCompleted:  doneThisWeek.has(s.id),
+          }));
+      }
 
       const dayTests = (testSessions as TestSess[]).filter((t) => t.date === isoDate);
 
-      return { date: isoDate, dow, sessions: daysSessions, tests: dayTests };
+      return { date: isoDate, dow, sessions: daySessions, tests: dayTests };
     });
-  }, [sessions, exos, completedSessions, currentWeek, blockConfig, weekStart, testSessions]);
+  }, [sessions, exos, completedSessions, currentWeek, blockConfig, monday, testSessions, workoutLogs]);
 }

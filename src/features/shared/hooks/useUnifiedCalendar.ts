@@ -262,22 +262,114 @@ export function useDeleteCalendarEvent() {
     mutationFn: async ({
       id,
       type,
+      athleteId,
+      coachId,
+      sessionId,
+      sessionName,
+      date,
     }: {
       id: string;
       type: UCEventType;
       athleteId: string;
+      coachId?: string;
+      sessionId?: string;
+      sessionName?: string;
+      date?: string;
     }) => {
       if (type === "competition") return;
-      const table = type === "workout" ? "workout_logs" : "test_sessions";
-      const { error } = await supabase.from(table).delete().eq("id", id);
+
+      // Projected block-plan event: suppress by inserting a skipped workout_log
+      if (type === "workout" && id.startsWith("block-") && sessionId && date) {
+        const { error } = await supabase.from("workout_logs").insert({
+          athlete_id:     athleteId,
+          coach_id:       coachId ?? null,
+          session_id:     sessionId,
+          session_name:   sessionName ?? "Séance",
+          scheduled_date: date,
+          status:         "skipped",
+        });
+        if (error) throw error;
+        return;
+      }
+
+      if (type === "workout") {
+        // Mark as skipped instead of deleting — keeps event in `logged` set
+        // so projected block-plan event doesn't reappear on the calendar.
+        const { error } = await supabase.from("workout_logs")
+          .update({ status: "skipped" }).eq("id", id);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.from("test_sessions").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: calBaseKey(vars.athleteId) });
       qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week", vars.athleteId] });
       toast.success("Supprimé");
     },
+  });
+}
+
+export function useRescheduleWorkout() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      event,
+      newDate,
+      athleteId,
+      coachId,
+    }: {
+      event: CalEvent;
+      newDate: string;
+      athleteId: string;
+      coachId: string;
+    }) => {
+      const sessionId   = event.raw?.session_id as string | undefined;
+      const sessionName = event.title;
+      const isProjected = event.raw?.source === "block_plan";
+
+      if (!sessionId) return;
+
+      // 1. Mark old slot as skipped
+      if (isProjected) {
+        const { error } = await supabase.from("workout_logs").insert({
+          athlete_id:     athleteId,
+          coach_id:       coachId,
+          session_id:     sessionId,
+          session_name:   sessionName,
+          scheduled_date: event.date,
+          status:         "skipped",
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("workout_logs")
+          .update({ status: "skipped" }).eq("id", event.id);
+        if (error) throw error;
+      }
+
+      // 2. Create / update planned log on new date
+      const { error } = await supabase.from("workout_logs").upsert({
+        athlete_id:     athleteId,
+        coach_id:       coachId,
+        session_id:     sessionId,
+        session_name:   sessionName,
+        scheduled_date: newDate,
+        status:         "planned",
+      }, { onConflict: "athlete_id,session_id,scheduled_date" });
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: calBaseKey(vars.athleteId) });
+      qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week", vars.athleteId] });
+      toast.success("Séance déplacée");
+    },
+    onError: () => toast.error("Erreur lors du déplacement"),
   });
 }
 
