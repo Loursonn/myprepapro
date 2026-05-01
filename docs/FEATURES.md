@@ -54,6 +54,26 @@ Statuts : ✅ Fait — 🔄 En cours — ⬜ À faire — ❌ Abandonné
 
 ---
 
+## Module Séances Énergétiques (cardio structuré)
+
+### Coach
+
+| Fonctionnalité | Statut | Notes |
+|----------------|--------|-------|
+| Banque partagée de séances énergétiques | ✅ | `/coach/energy-library` |
+| Éditeur visuel d'intervalles (EnergyGroup JSONB) | ✅ | Drag & drop, groupes imbriqués, répétitions |
+| 7 types de séance : VO₂max / Tempo / Seuil / Footing / Fartlek / Autres / Custom | ✅ | |
+| 11 variantes de cible d'intensité | ✅ | Zone FC, % FCmax, FC bpm, allure, % test, puissance, cadence, texte… |
+| Aperçu graphique SVG (largeur proportionnelle, couleur intensité) | ✅ | `SessionPreview.tsx` |
+| Répartition zones Z1-Z5 + durée estimée + distance | ✅ | |
+| Vérification séances par coachs certifiés | ✅ | Badge "✓ Vérifiée", RLS protégée |
+| Planification séance → athlète sur date | ✅ | Calendrier mensuel onglet Énergétique de PlanningPage |
+| Drag & drop event vers autre date (calendrier) | ✅ | |
+| Drawer assignation : reschedule, duplicate, delete | ✅ | `EnergyAssignmentDrawer` |
+| Picker séance depuis calendrier (clic sur date vide) | ✅ | `SessionPickerDialog` |
+
+---
+
 ## Phase 2 — Refactorisation + Multi-coachs
 
 | Fonctionnalité | Statut | Notes |
