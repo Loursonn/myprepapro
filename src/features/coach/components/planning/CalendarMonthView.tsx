@@ -22,6 +22,7 @@ import { C } from "@/lib/theme";
 import {
   useUnifiedCalendar,
   useAssignWorkout,
+  useRescheduleWorkout,
   toCalEvent,
 } from "@/features/shared/hooks/useUnifiedCalendar";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
@@ -98,6 +99,31 @@ function EventChip({
       {event.rpe != null && (
         <span style={{ opacity: 0.85, marginLeft: 4, fontWeight: 700 }}>{event.rpe}/10</span>
       )}
+    </div>
+  );
+}
+
+// ── DraggableEventChip ───────────────────────────────────────────────────────
+
+function DraggableEventChip({ event, compact = false }: { event: CalEvent; compact?: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `cal-event-${event.id}`,
+    data: { type: "calendar_event", event },
+    disabled: event.type !== "workout",
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{
+        opacity: isDragging ? 0.35 : 1,
+        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
+        cursor: event.type === "workout" ? "grab" : "pointer",
+      }}
+    >
+      <EventChip event={event} compact={compact} />
     </div>
   );
 }
@@ -208,7 +234,7 @@ function DroppableDay({
       {/* Events */}
       <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
         {events.slice(0, maxVisible).map((ev) => (
-          <EventChip key={ev.id} event={ev} compact />
+          <DraggableEventChip key={ev.id} event={ev} compact />
         ))}
         {overflow > 0 && (
           <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 4 }}>
@@ -329,10 +355,11 @@ export function CalendarMonthView({
   completedSessions = {},
   currentWeek = 1,
 }: CalendarMonthViewProps) {
-  const [month, setMonth]             = useState(new Date());
-  const [drawerDay, setDrawerDay]     = useState<Date | null>(null);
-  const [quickAddDay, setQuickAddDay] = useState<Date | null>(null);
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [month, setMonth]               = useState(new Date());
+  const [drawerDay, setDrawerDay]       = useState<Date | null>(null);
+  const [quickAddDay, setQuickAddDay]   = useState<Date | null>(null);
+  const [activeDragId, setActiveDragId]     = useState<string | null>(null);
+  const [activeDragEvent, setActiveDragEvent] = useState<CalEvent | null>(null);
 
   const { monthRange, gridStartDate, gridEndDate } = useMemo(() => {
     const monthStart = startOfMonth(month);
@@ -348,7 +375,8 @@ export function CalendarMonthView({
 
   const { data: rawEvents = [], isLoading } = useUnifiedCalendar(athleteId, monthRange);
   const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
-  const { mutate: assignWorkout }           = useAssignWorkout();
+  const { mutate: assignWorkout }   = useAssignWorkout();
+  const { mutate: reschedule }      = useRescheduleWorkout();
 
   // ── Enrich realEvents: override status from completedSessions (source of truth) ──
   const enrichedRealEvents = useMemo(() => {
@@ -413,7 +441,7 @@ export function CalendarMonthView({
   }, [blockConfig, sessions, gridStartDate, gridEndDate, enrichedRealEvents, completedSessions, currentWeek]);
 
   const events = useMemo(
-    () => [...enrichedRealEvents, ...projectedEvents],
+    () => [...enrichedRealEvents.filter(e => e.status !== "skipped"), ...projectedEvents],
     [enrichedRealEvents, projectedEvents],
   );
 
@@ -432,19 +460,36 @@ export function CalendarMonthView({
   }, {});
 
   const handleDragStart = useCallback((e: DragStartEvent) => {
-    setActiveDragId(String(e.active.id));
+    const data = e.active.data.current as Record<string, unknown> | undefined;
+    if (data?.type === "calendar_event") {
+      setActiveDragEvent(data.event as CalEvent);
+      setActiveDragId(null);
+    } else {
+      setActiveDragId(String(e.active.id));
+      setActiveDragEvent(null);
+    }
   }, []);
 
   const handleDragEnd = useCallback(
     (e: DragEndEvent) => {
-      setActiveDragId(null);
       const { active, over } = e;
+      setActiveDragId(null);
+      setActiveDragEvent(null);
       if (!over) return;
 
-      const dateStr = String(over.id);          // "yyyy-MM-dd"
-      const sess    = active.data.current as { id: string; name?: string; label?: string };
-      if (!sess) return;
+      const dateStr = String(over.id); // "yyyy-MM-dd"
+      const data    = active.data.current as Record<string, unknown> | undefined;
 
+      if (data?.type === "calendar_event") {
+        const event = data.event as CalEvent;
+        if (event.date === dateStr) return;
+        reschedule({ event, newDate: dateStr, athleteId, coachId });
+        return;
+      }
+
+      // Session bank drag
+      const sess = active.data.current as { id: string; name?: string; label?: string };
+      if (!sess) return;
       assignWorkout({
         sessionId: sess.id,
         sessionName: sess.name ?? sess.label ?? "Séance",
@@ -453,7 +498,7 @@ export function CalendarMonthView({
         date: dateStr,
       });
     },
-    [assignWorkout, athleteId, coachId],
+    [assignWorkout, reschedule, athleteId, coachId],
   );
 
   const activeDragSession = sessions.find((s) => s.id === activeDragId) ?? null;
@@ -642,7 +687,20 @@ export function CalendarMonthView({
 
       {/* Drag overlay — ghost of the dragged item */}
       <DragOverlay dropAnimation={null}>
-        {activeDragSession && (
+        {activeDragEvent ? (
+          <div
+            style={{
+              padding: "4px 10px", borderRadius: 6,
+              border: "1px solid " + TYPE_COLOR[activeDragEvent.type] + "60",
+              background: TYPE_COLOR[activeDragEvent.type], color: "#fff",
+              fontSize: 11, fontWeight: 600,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+              pointerEvents: "none",
+            }}
+          >
+            ↕ {activeDragEvent.title}
+          </div>
+        ) : activeDragSession ? (
           <div
             style={{
               padding: "7px 10px", borderRadius: 8,
@@ -655,7 +713,7 @@ export function CalendarMonthView({
           >
             ⠿ {activeDragSession.name ?? activeDragSession.label ?? "Séance"}
           </div>
-        )}
+        ) : null}
       </DragOverlay>
 
       {/* Day details drawer */}

@@ -250,12 +250,21 @@ export default function ProgrammationPage() {
                       position: "relative" as const,
                     }}
                   >
-                    {sess.day_of_week != null && (
+                    {sess.day_of_week != null ? (
                       <span style={{
                         fontSize: 10, fontWeight: 700, color: C.coach,
                         background: C.coachS, padding: "2px 7px", borderRadius: 5,
                         alignSelf: "flex-start",
                       }}>{DOW[sess.day_of_week]}</span>
+                    ) : (
+                      <span
+                        title="Double-clic pour assigner un jour"
+                        style={{
+                          fontSize: 10, fontWeight: 700, color: C.o,
+                          background: C.oS, padding: "2px 7px", borderRadius: 5,
+                          alignSelf: "flex-start",
+                        }}
+                      >⚠ Jour non défini</span>
                     )}
                     <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, paddingRight: 20 }}>
                       {sess.name || sess.short || "Séance"}
