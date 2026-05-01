@@ -3,10 +3,14 @@ import { C } from "@/lib/theme";
 import TodayPage from "@/features/athlete/pages/TodayPage";
 import ProgramPage from "@/features/athlete/pages/ProgramPage";
 import ProfilPage from "@/features/athlete/pages/ProfilPage";
+import AthleteTestPage from "@/features/athlete/pages/AthleteTestPage";
+import AlimPage from "@/features/athlete/pages/AlimPage";
 
 const INNER_TABS = [
   { key: "today",   label: "Aujourd'hui" },
   { key: "program", label: "Programme"   },
+  { key: "test",    label: "Tests"       },
+  { key: "alim",    label: "Nutrition"   },
   { key: "profil",  label: "Profil"      },
 ] as const;
 
@@ -51,6 +55,8 @@ export default function AthleteViewPage() {
 
       {tab === "today"   && <TodayPage />}
       {tab === "program" && <ProgramPage />}
+      {tab === "test"    && <AthleteTestPage />}
+      {tab === "alim"    && <AlimPage />}
       {tab === "profil"  && <ProfilPage />}
     </div>
   );

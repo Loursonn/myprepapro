@@ -7,6 +7,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useDeleteCompetition } from "@/hooks/useCompetitions";
+import { CompetitionFormModal } from "./CompetitionFormModal";
 
 import { useTimelineData }      from "./hooks/useTimelineData";
 import { useCalculatePosition } from "./hooks/useCalculatePosition";
@@ -52,14 +54,16 @@ interface DrawerState {
 }
 
 function DrawerShell({
-  state, onClose, data, athleteId, rangeStart, rangeEnd,
+  state, onClose, data, athleteId, rangeStart, rangeEnd, onEditComp, onDeleteComp,
 }: {
-  state:      DrawerState;
-  onClose:    () => void;
-  data:       ReturnType<typeof useTimelineData>["data"];
-  athleteId:  string;
-  rangeStart: string;
-  rangeEnd:   string;
+  state:          DrawerState;
+  onClose:        () => void;
+  data:           ReturnType<typeof useTimelineData>["data"];
+  athleteId:      string;
+  rangeStart:     string;
+  rangeEnd:       string;
+  onEditComp?:    (comp: Competition) => void;
+  onDeleteComp?:  (comp: Competition) => void;
 }) {
   if (!data) return null;
 
@@ -130,7 +134,13 @@ function DrawerShell({
       if (!c) return null;
       title    = c.name;
       subtitle = format(parseISO(c.date), "d MMMM yyyy", { locale: fr });
-      content  = <CompetitionDrawer comp={c} />;
+      content  = (
+        <CompetitionDrawer
+          comp={c}
+          onEdit={onEditComp ? () => onEditComp(c) : undefined}
+          onDelete={onDeleteComp ? () => { onDeleteComp(c); onClose(); } : undefined}
+        />
+      );
       break;
     }
   }
@@ -400,8 +410,10 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const [drawer,      setDrawer]      = useState<DrawerState | null>(null);
   const [createModal, setCreateModal] = useState<CreateState | null>(null);
   const [zoomMacro,   setZoomMacro]   = useState<{ start: Date; end: Date; label: string } | null>(null);
+  const [editingComp, setEditingComp] = useState<Competition | null>(null);
 
   const { user } = useAuth();
+  const { mutate: deleteComp } = useDeleteCompetition();
 
   const rangeStart = zoomMacro ? zoomMacro.start : windowStart;
   const rangeEnd   = zoomMacro ? zoomMacro.end   : addMonths(windowStart, MONTHS_SHOWN);
@@ -657,6 +669,29 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           athleteId={athleteId}
           rangeStart={rsStr}
           rangeEnd={reStr}
+          onEditComp={(c) => { setEditingComp(c); setDrawer(null); }}
+          onDeleteComp={(c) => deleteComp({ id: c.id, athlete_id: c.athlete_id ?? athleteId })}
+        />
+      )}
+
+      {/* Competition edit modal */}
+      {editingComp && (
+        <CompetitionFormModal
+          athleteId={editingComp.athlete_id ?? athleteId}
+          coachId={user?.id ?? ""}
+          existing={{
+            ...editingComp,
+            coach_id:          editingComp.coach_id          ?? user?.id ?? "",
+            athlete_id:        editingComp.athlete_id        ?? athleteId,
+            type:              (editingComp.type as import("@/types/planning").CompetitionType) ?? "competition",
+            priority:          (editingComp.priority as import("@/types/planning").CompetitionPriority) ?? "C",
+            planning_block_id: null,
+            season_id:         editingComp.season_id         ?? null,
+            notes:             editingComp.notes             ?? null,
+            location:          editingComp.location          ?? null,
+            created_at:        "",
+          }}
+          onClose={() => setEditingComp(null)}
         />
       )}
     </>

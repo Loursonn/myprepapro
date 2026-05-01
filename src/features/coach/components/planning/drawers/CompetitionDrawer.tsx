@@ -7,9 +7,13 @@ import type { Competition } from "../hooks/useTimelineData";
 const PRIORITY_COLOR: Record<string, string> = { A: C.coach, B: C.ac, C: C.tx3 };
 const PRIORITY_LABEL: Record<string, string> = { A: "Priorité A", B: "Priorité B", C: "Priorité C" };
 
-interface Props { comp: Competition }
+interface Props {
+  comp: Competition;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}
 
-export function CompetitionDrawer({ comp }: Props) {
+export function CompetitionDrawer({ comp, onEdit, onDelete }: Props) {
   const color = PRIORITY_COLOR[comp.priority ?? "C"] ?? C.tx3;
 
   return (
@@ -52,6 +56,38 @@ export function CompetitionDrawer({ comp }: Props) {
         <div style={{ background: C.s2, borderRadius: 10, padding: "12px 14px", border: "1px solid " + C.brd }}>
           <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>Notes</div>
           <div style={{ fontSize: 13, color: C.tx2, lineHeight: 1.5 }}>{comp.notes}</div>
+        </div>
+      )}
+
+      {/* Actions */}
+      {(onEdit || onDelete) && (
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              style={{
+                flex: 1, padding: "11px 0", borderRadius: 10,
+                border: "1px solid " + C.coach + "50", background: C.coachS,
+                color: C.coach, fontSize: 13, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              ✎ Modifier
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              style={{
+                padding: "11px 16px", borderRadius: 10,
+                border: "1px solid " + C.r + "40", background: "rgba(239,75,75,0.08)",
+                color: C.r, fontSize: 13, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Supprimer
+            </button>
+          )}
         </div>
       )}
     </div>

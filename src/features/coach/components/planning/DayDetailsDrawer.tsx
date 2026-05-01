@@ -7,6 +7,9 @@ import { C } from "@/lib/theme";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { useDeleteCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import type { Competition } from "@/types/planning";
+import { CompetitionFormModal } from "./CompetitionFormModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -405,6 +408,8 @@ export function DayDetailsDrawer({
   sets,
 }: DayDetailsDrawerProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
+  const [editingComp,   setEditingComp]   = useState<Competition | null>(null);
+  const { user } = useAuth();
 
   if (!open || !day) return null;
 
@@ -495,14 +500,16 @@ export function DayDetailsDrawer({
             <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
           ) : (
             <>
-              {/* Competition banner — always at top if present */}
+              {/* Competition banner — clickable to edit */}
               {competitions.map((e) => (
-                <div
+                <button
                   key={e.id}
+                  onClick={() => setEditingComp(e.raw as unknown as Competition)}
                   style={{
-                    borderRadius: 14, overflow: "hidden",
+                    width: "100%", borderRadius: 14, overflow: "hidden",
                     border: "1px solid " + C.coach + "40",
                     background: "linear-gradient(135deg, rgba(244,114,182,0.12) 0%, rgba(244,114,182,0.05) 100%)",
+                    cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
                   }}
                 >
                   <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
@@ -521,8 +528,9 @@ export function DayDetailsDrawer({
                         Priorité {String(e.raw.priority)}
                       </span>
                     )}
+                    <span style={{ fontSize: 11, color: C.tx3 }}>✎</span>
                   </div>
-                </div>
+                </button>
               ))}
 
               {dayEvents.length === 0 && (
@@ -579,6 +587,16 @@ export function DayDetailsDrawer({
           </div>
         )}
       </div>
+
+      {/* Competition edit modal */}
+      {editingComp && (
+        <CompetitionFormModal
+          athleteId={editingComp.athlete_id ?? athleteId}
+          coachId={editingComp.coach_id ?? user?.id ?? ""}
+          existing={editingComp}
+          onClose={() => setEditingComp(null)}
+        />
+      )}
     </>
   );
 }
