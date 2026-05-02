@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Zap, Plus, Calendar } from "lucide-react";
+import { ChevronRight, Zap, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -13,7 +13,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
-import { useEnergyAssignments, useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
 import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { TierConfigModal } from "@/components/coach/CoachComponents";
@@ -32,52 +31,21 @@ const KIND_COLOR: Record<string, string> = {
 };
 
 // ── EnergyPanel ────────────────────────────────────────────────────────────────
-// Combine bank picker + existing assignments in one panel.
+// Banque de séances énergétiques personnelle du coach.
+// Pas d'assignation ici — les assignations se font depuis Planning > Mois.
 
 interface EnergyPanelProps {
-  athleteId: string;
   coachId: string;
   onNew: () => void;
   onEdit: (sessionId: string) => void;
 }
 
-function EnergyPanel({ athleteId, coachId, onNew, onEdit }: EnergyPanelProps) {
-  const { data: assignments = [], isLoading: assignLoading } = useEnergyAssignments(athleteId);
-  const { data: bankSessions = [], isLoading: bankLoading } = useEnergySessions({ created_by: coachId });
-  const { mutate: assign, isPending: assigning } = useAssignEnergySession();
-
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
+  const { data: sessions = [], isLoading } = useEnergySessions({ created_by: coachId });
   const [search, setSearch] = useState("");
 
-  const filtered = bankSessions.filter((s) =>
+  const filtered = sessions.filter((s) =>
     !search || s.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  function handleAssign() {
-    if (!selectedId || !selectedDate) return;
-    const session = bankSessions.find((s) => s.id === selectedId);
-    assign(
-      {
-        energy_session_id: selectedId,
-        athlete_id: athleteId,
-        coach_id: coachId,
-        scheduled_date: selectedDate,
-        status: "planned",
-      },
-      {
-        onSuccess: () => {
-          setPickerOpen(false);
-          setSelectedId("");
-        },
-      }
-    );
-    void session; // keep reference for potential future use
-  }
-
-  const sorted = [...assignments].sort(
-    (a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime()
   );
 
   return (
@@ -85,221 +53,135 @@ function EnergyPanel({ athleteId, coachId, onNew, onEdit }: EnergyPanelProps) {
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
-          Séances énergétiques
-          {assignments.length > 0 && (
+          Ma banque énergétique
+          {sessions.length > 0 && (
             <span style={{ fontSize: 11, color: C.tx3, fontWeight: 400, marginLeft: 8 }}>
-              {assignments.length} planifiée{assignments.length > 1 ? "s" : ""}
+              {sessions.length} séance{sessions.length > 1 ? "s" : ""}
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setPickerOpen((v) => !v)}
-            style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "7px 14px", borderRadius: 9,
-              border: "1px solid " + C.coach + "50",
-              background: pickerOpen ? C.coach + "20" : "transparent",
-              color: C.coach, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <Calendar size={13} />
-            Planifier
-          </button>
-          <button
-            onClick={onNew}
-            style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "7px 14px", borderRadius: 9,
-              border: "none", background: C.coach, color: "#fff",
-              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            <Plus size={13} />
-            Nouvelle
-          </button>
-        </div>
+        <button
+          onClick={onNew}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "7px 14px", borderRadius: 9,
+            border: "none", background: C.coach, color: "#fff",
+            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          <Plus size={13} />
+          Nouvelle séance
+        </button>
       </div>
 
-      {/* ── Bank picker (collapsible) ── */}
-      {pickerOpen && (
-        <div style={{
-          background: C.s1, border: "1px solid " + C.brdL,
-          borderRadius: 14, padding: "14px 16px", marginBottom: 16,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, marginBottom: 10 }}>
-            Choisir dans la banque
-          </div>
+      {/* Info banner */}
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        padding: "10px 14px", borderRadius: 10, marginBottom: 16,
+        background: C.ac + "10", border: "1px solid " + C.ac + "30",
+        fontSize: 11, color: C.tx2, lineHeight: 1.5,
+      }}>
+        <span style={{ fontSize: 14, flexShrink: 0 }}>📅</span>
+        <span>
+          Pour planifier une séance sur un athlète, glisse-la depuis{" "}
+          <strong style={{ color: C.ac }}>Planning → Mois → Banque Énergie</strong> vers le jour voulu.
+        </span>
+      </div>
 
-          {/* Search */}
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher une séance…"
-            style={{
-              width: "100%", padding: "8px 10px", borderRadius: 8,
-              border: "1px solid " + C.brdL, background: C.s2,
-              color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
-              boxSizing: "border-box", marginBottom: 8,
-            }}
-          />
-
-          {/* Session list */}
-          <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginBottom: 10, scrollbarWidth: "none" }}>
-            {bankLoading ? (
-              <div style={{ color: C.tx3, fontSize: 12, padding: "8px 0" }}>Chargement…</div>
-            ) : filtered.length === 0 ? (
-              <div style={{ color: C.tx3, fontSize: 12, textAlign: "center", padding: "16px 0" }}>
-                Aucune séance dans la banque.{" "}
-                <span
-                  style={{ color: C.coach, cursor: "pointer", textDecoration: "underline" }}
-                  onClick={onNew}
-                >
-                  Créer une séance →
-                </span>
-              </div>
-            ) : (
-              filtered.map((s) => {
-                const kc = KIND_COLOR[s.session_kind] ?? "#6B7280";
-                const active = selectedId === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => setSelectedId(active ? "" : s.id)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8,
-                      padding: "8px 10px", borderRadius: 8, border: "none",
-                      background: active ? kc + "20" : C.s2,
-                      cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                      outline: active ? "1.5px solid " + kc : "none",
-                    }}
-                  >
-                    <Zap size={13} color={kc} style={{ flexShrink: 0 }} />
-                    <span style={{ fontSize: 12, fontWeight: active ? 700 : 400, color: active ? kc : C.tx, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {active && "✓ "}{s.name}
-                    </span>
-                    <span style={{
-                      fontSize: 9, padding: "1px 5px", borderRadius: 4,
-                      background: kc + "25", color: kc, fontWeight: 700, flexShrink: 0,
-                    }}>
-                      {KIND_LABEL[s.session_kind] ?? s.session_kind}
-                    </span>
-                    {s.total_duration_s != null && (
-                      <span style={{ fontSize: 10, color: C.tx3, flexShrink: 0 }}>
-                        {Math.round(s.total_duration_s / 60)} min
-                      </span>
-                    )}
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          {/* Date + confirm */}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              style={{
-                flex: 1, padding: "7px 10px", borderRadius: 8,
-                border: "1px solid " + C.brdL, background: C.s2,
-                color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
-              }}
-            />
-            <button
-              onClick={handleAssign}
-              disabled={!selectedId || !selectedDate || assigning}
-              style={{
-                padding: "7px 16px", borderRadius: 8, border: "none",
-                background: selectedId && selectedDate ? C.coach : C.s2,
-                color: selectedId && selectedDate ? "#fff" : C.tx3,
-                fontSize: 12, fontWeight: 700, cursor: selectedId && selectedDate ? "pointer" : "default",
-                fontFamily: "inherit", whiteSpace: "nowrap", opacity: assigning ? 0.7 : 1,
-              }}
-            >
-              {assigning ? "…" : "Planifier"}
-            </button>
-          </div>
-        </div>
+      {/* Search */}
+      {sessions.length > 4 && (
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher…"
+          style={{
+            width: "100%", padding: "8px 10px", borderRadius: 8,
+            border: "1px solid " + C.brdL, background: C.s2,
+            color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
+            boxSizing: "border-box", marginBottom: 12,
+          }}
+        />
       )}
 
-      {/* ── Existing assignments ── */}
-      {assignLoading ? (
+      {/* ── Session list ── */}
+      {isLoading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} style={{ height: 64, borderRadius: 12, background: C.s1 }} />
           ))}
         </div>
-      ) : sorted.length === 0 ? (
-        !pickerOpen && (
-          <div style={{ textAlign: "center", padding: "40px 20px" }}>
-            <Zap size={36} style={{ color: C.tx3, margin: "0 auto 12px" }} />
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucune séance planifiée</div>
-            <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>
-              Sélectionne une séance dans la banque ou crée-en une nouvelle.
-            </div>
-            <button
-              onClick={() => setPickerOpen(true)}
-              style={{
-                padding: "10px 20px", borderRadius: 10,
-                border: "1px solid " + C.coach + "50", background: C.coach + "20",
-                color: C.coach, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              Planifier depuis la banque
-            </button>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px 20px" }}>
+          <Zap size={36} style={{ color: C.tx3, margin: "0 auto 12px" }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>
+            {search ? "Aucun résultat" : "Banque vide"}
           </div>
-        )
-      ) : (
-        sorted.map((a) => {
-          const session = (a as unknown as Record<string, unknown>).energy_sessions as {
-            id: string; name: string; session_kind: string;
-            total_duration_s?: number | null;
-          } | null;
-          if (!session) return null;
-          const kc = KIND_COLOR[session.session_kind] ?? C.tx3;
-          const dateStr = a.scheduled_date
-            ? format(new Date(a.scheduled_date + "T12:00:00"), "EEE d MMM", { locale: fr })
-            : "—";
-          const statusColors: Record<string, string> = {
-            planned: C.tx3, completed: C.g, missed: C.r, skipped: C.o,
-          };
-          return (
-            <div
-              key={a.id}
+          <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>
+            {search
+              ? "Modifie ta recherche."
+              : "Crée ta première séance énergétique ou copie-en une depuis la banque générale."}
+          </div>
+          {!search && (
+            <button
+              onClick={onNew}
               style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "12px 14px", borderRadius: 12, marginBottom: 8,
-                border: "1px solid " + C.brdL, background: C.s1, cursor: "pointer",
+                padding: "10px 20px", borderRadius: 10, border: "none",
+                background: C.coach, color: "#fff",
+                fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
               }}
-              onClick={() => onEdit(session.id)}
             >
-              <div style={{
-                width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-                background: kc + "20", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Zap size={16} color={kc} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 2 }}>{session.name}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5, background: kc + "20", color: kc }}>
-                    {KIND_LABEL[session.session_kind] ?? session.session_kind}
-                  </span>
-                  <span style={{ fontSize: 10, color: C.tx3 }}>{dateStr}</span>
-                  {session.total_duration_s != null && (
-                    <span style={{ fontSize: 10, color: C.tx3 }}>{Math.round(session.total_duration_s / 60)} min</span>
-                  )}
+              + Créer une séance
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtered.map((s) => {
+            const kc = KIND_COLOR[s.session_kind] ?? "#6B7280";
+            return (
+              <div
+                key={s.id}
+                onClick={() => onEdit(s.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "12px 14px", borderRadius: 12,
+                  border: "1px solid " + C.brdL, background: C.s1,
+                  cursor: "pointer", transition: "border-color 120ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = kc + "50")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.brdL)}
+              >
+                {/* Icon */}
+                <div style={{
+                  width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                  background: kc + "20", display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Zap size={16} color={kc} />
                 </div>
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s.name}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: kc + "20", color: kc }}>
+                      {KIND_LABEL[s.session_kind] ?? s.session_kind}
+                    </span>
+                    {s.total_duration_s != null && (
+                      <span style={{ fontSize: 10, color: C.tx3 }}>
+                        {Math.round(s.total_duration_s / 60)} min
+                      </span>
+                    )}
+                    {s.is_verified && (
+                      <span style={{ fontSize: 9, color: C.g, fontWeight: 700 }}>✓ vérifiée</span>
+                    )}
+                  </div>
+                </div>
+                <ChevronRight size={14} style={{ color: C.tx3, flexShrink: 0 }} />
               </div>
-              <span style={{ fontSize: 11, color: statusColors[a.status ?? "planned"] ?? C.tx3, fontWeight: 600 }}>
-                {a.status === "completed" ? "✓" : a.status === "missed" ? "✗" : ""}
-              </span>
-              <ChevronRight size={14} style={{ color: C.tx3, flexShrink: 0 }} />
-            </div>
-          );
-        })
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -599,10 +481,9 @@ export default function ProgrammationPage() {
       {/* ── Énergétique ── */}
       {subTab === "energie" && (
         <EnergyPanel
-          athleteId={athleteId}
           coachId={user?.id ?? ""}
-          onNew={() => navigate(`/coach/athletes/${athleteId}/energy/new`)}
-          onEdit={(sessionId: string) => navigate(`/coach/athletes/${athleteId}/energy/${sessionId}/edit`)}
+          onNew={() => navigate("/coach/library?tab=energetique")}
+          onEdit={(sessionId: string) => navigate(`/coach/energy-library/${sessionId}/edit`)}
         />
       )}
 
