@@ -43,7 +43,7 @@ interface EnergyPanelProps {
 
 function EnergyPanel({ athleteId, coachId, onNew, onEdit }: EnergyPanelProps) {
   const { data: assignments = [], isLoading: assignLoading } = useEnergyAssignments(athleteId);
-  const { data: bankSessions = [], isLoading: bankLoading } = useEnergySessions();
+  const { data: bankSessions = [], isLoading: bankLoading } = useEnergySessions({ created_by: coachId });
   const { mutate: assign, isPending: assigning } = useAssignEnergySession();
 
   const [pickerOpen, setPickerOpen] = useState(false);

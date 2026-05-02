@@ -6,7 +6,7 @@ import {
 } from "date-fns";
 import type { BlockConfig, Session } from "@/features/shared/types/athlete";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Dumbbell, Zap } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -26,6 +26,9 @@ import {
   toCalEvent,
 } from "@/features/shared/hooks/useUnifiedCalendar";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
+import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
+import { useAssignEnergySession, useUpdateEnergyAssignment } from "@/features/shared/hooks/useEnergyAssignments";
+import type { EnergySessionRow } from "@/types/energy";
 import { DayDetailsDrawer } from "./DayDetailsDrawer";
 import { QuickAddDialog } from "./QuickAddDialog";
 
@@ -126,10 +129,11 @@ function EventChip({
 // ── DraggableEventChip ───────────────────────────────────────────────────────
 
 function DraggableEventChip({ event, compact = false }: { event: CalEvent; compact?: boolean }) {
+  const draggable = event.type === "workout" || event.type === "energy";
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `cal-event-${event.id}`,
     data: { type: "calendar_event", event },
-    disabled: event.type !== "workout",
+    disabled: !draggable,
   });
 
   return (
@@ -140,7 +144,7 @@ function DraggableEventChip({ event, compact = false }: { event: CalEvent; compa
       style={{
         opacity: isDragging ? 0.35 : 1,
         transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
-        cursor: event.type === "workout" ? "grab" : "pointer",
+        cursor: draggable ? "grab" : "pointer",
       }}
     >
       <EventChip event={event} compact={compact} />
@@ -150,16 +154,23 @@ function DraggableEventChip({ event, compact = false }: { event: CalEvent; compa
 
 // ── DraggableSession ─────────────────────────────────────────────────────────
 
+type BankItemType = "workout" | "energy";
+
 function DraggableSession({
   session,
+  sessionType,
   isDragging,
 }: {
   session: { id: string; name?: string; label?: string };
+  sessionType: BankItemType;
   isDragging: boolean;
 }) {
+  const color  = sessionType === "energy" ? "#A855F7" : C.ac;
+  const colorS = sessionType === "energy" ? "#A855F720" : C.acS;
+
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: session.id,
-    data: session,
+    data: { ...session, sessionType },
   });
   const name = session.name ?? session.label ?? "Séance";
 
@@ -171,9 +182,9 @@ function DraggableSession({
       style={{
         padding: "7px 10px",
         borderRadius: 8,
-        border: "1px solid " + C.ac + "40",
-        background: isDragging ? C.ac : C.acS,
-        color: isDragging ? "#fff" : C.ac,
+        border: "1px solid " + color + "40",
+        background: isDragging ? color : colorS,
+        color: isDragging ? "#fff" : color,
         fontSize: 11, fontWeight: 600,
         cursor: "grab",
         userSelect: "none",
@@ -182,9 +193,11 @@ function DraggableSession({
         transform: transform
           ? `translate(${transform.x}px, ${transform.y}px)`
           : undefined,
+        display: "flex", alignItems: "center", gap: 6,
       }}
     >
-      ⠿ {name}
+      {sessionType === "energy" ? <Zap size={11} /> : <Dumbbell size={11} />}
+      {name}
     </div>
   );
 }
@@ -279,18 +292,50 @@ function DroppableDay({
 
 // ── Session bank sidebar ──────────────────────────────────────────────────────
 
+const ENERGY_KIND_LABEL: Record<string, string> = {
+  vo2: "VO₂", tempo: "Tempo", seuil: "Seuil",
+  footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+};
+
 function SessionBank({
   sessions,
+  energySessions,
   activeDragId,
 }: {
   sessions: Array<{ id: string; name?: string; label?: string }>;
+  energySessions: EnergySessionRow[];
   activeDragId: string | null;
 }) {
+  const [tab, setTab]     = useState<BankItemType>("workout");
   const [search, setSearch] = useState("");
-  const filtered = sessions.filter((s) => {
+
+  const filteredMuscu = sessions.filter((s) => {
     const name = s.name ?? s.label ?? "";
     return name.toLowerCase().includes(search.toLowerCase());
   });
+
+  const filteredEnergy = energySessions.filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const tabBtn = (t: BankItemType, label: string, icon: React.ReactNode, color: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+        padding: "5px 0", borderRadius: 7, border: "none",
+        background: tab === t ? color + "25" : "transparent",
+        color: tab === t ? color : C.tx3,
+        fontSize: 10, fontWeight: tab === t ? 700 : 500,
+        cursor: "pointer", fontFamily: "inherit",
+        outline: tab === t ? "1.5px solid " + color + "50" : "none",
+        transition: "all 120ms",
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
 
   return (
     <div
@@ -304,9 +349,15 @@ function SessionBank({
         maxHeight: "100%",
       }}
     >
-      <div style={{ padding: "10px 12px", borderBottom: "1px solid " + C.brd }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.ac, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-          Banque séances
+      {/* Header */}
+      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+          Banque de séances
+        </div>
+        {/* Tab switcher */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 8, background: C.s2, borderRadius: 9, padding: 3 }}>
+          {tabBtn("workout", "Muscu", <Dumbbell size={10} />, C.ac)}
+          {tabBtn("energy", "Énergie", <Zap size={10} />, "#A855F7")}
         </div>
         <input
           value={search}
@@ -320,6 +371,8 @@ function SessionBank({
           }}
         />
       </div>
+
+      {/* List */}
       <div
         style={{
           flex: 1, overflowY: "auto", padding: "8px",
@@ -327,20 +380,45 @@ function SessionBank({
           scrollbarWidth: "none",
         }}
       >
-        {filtered.length === 0 ? (
-          <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>
-            Aucune séance
-          </div>
+        {tab === "workout" ? (
+          filteredMuscu.length === 0 ? (
+            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucune séance</div>
+          ) : (
+            filteredMuscu.map((s) => (
+              <DraggableSession
+                key={s.id}
+                session={s}
+                sessionType="workout"
+                isDragging={activeDragId === s.id}
+              />
+            ))
+          )
         ) : (
-          filtered.map((s) => (
-            <DraggableSession
-              key={s.id}
-              session={s}
-              isDragging={activeDragId === s.id}
-            />
-          ))
+          filteredEnergy.length === 0 ? (
+            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucune séance énergétique</div>
+          ) : (
+            filteredEnergy.map((s) => {
+              const kc = ENERGY_KIND_COLOR[s.session_kind] ?? "#A855F7";
+              return (
+                <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <DraggableSession
+                    session={{ id: s.id, name: s.name }}
+                    sessionType="energy"
+                    isDragging={activeDragId === s.id}
+                  />
+                  {s.total_duration_s != null && (
+                    <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ color: kc, fontWeight: 700 }}>{ENERGY_KIND_LABEL[s.session_kind] ?? s.session_kind}</span>
+                      <span>{Math.round(s.total_duration_s / 60)} min</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )
         )}
       </div>
+
       <div style={{ padding: "8px 10px", borderTop: "1px solid " + C.brd }}>
         <div style={{ fontSize: 9, color: C.tx3, textAlign: "center" }}>
           ↕ Glisser sur le calendrier
@@ -395,8 +473,11 @@ export function CalendarMonthView({
 
   const { data: rawEvents = [], isLoading } = useUnifiedCalendar(athleteId, monthRange);
   const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
-  const { mutate: assignWorkout }   = useAssignWorkout();
-  const { mutate: reschedule }      = useRescheduleWorkout();
+  const { mutate: assignWorkout }       = useAssignWorkout();
+  const { mutate: reschedule }          = useRescheduleWorkout();
+  const { data: energySessions = [] }   = useEnergySessions({ created_by: coachId });
+  const { mutate: assignEnergy }        = useAssignEnergySession();
+  const { mutate: rescheduleEnergy }    = useUpdateEnergyAssignment();
 
   // ── Enrich realEvents: override status from completedSessions (source of truth) ──
   const enrichedRealEvents = useMemo(() => {
@@ -500,28 +581,49 @@ export function CalendarMonthView({
       const dateStr = String(over.id); // "yyyy-MM-dd"
       const data    = active.data.current as Record<string, unknown> | undefined;
 
+      // ── Reschedule existing calendar event ────────────────────────────────
       if (data?.type === "calendar_event") {
         const event = data.event as CalEvent;
         if (event.date === dateStr) return;
-        reschedule({ event, newDate: dateStr, athleteId, coachId });
+
+        if (event.type === "energy") {
+          // event.id is the energy_session_assignment id
+          rescheduleEnergy({ id: event.id, athleteId, scheduled_date: dateStr });
+        } else {
+          reschedule({ event, newDate: dateStr, athleteId, coachId });
+        }
         return;
       }
 
-      // Session bank drag
-      const sess = active.data.current as { id: string; name?: string; label?: string };
+      // ── Bank drag → assign ─────────────────────────────────────────────────
+      const sess = active.data.current as { id: string; name?: string; label?: string; sessionType?: BankItemType };
       if (!sess) return;
-      assignWorkout({
-        sessionId: sess.id,
-        sessionName: sess.name ?? sess.label ?? "Séance",
-        athleteId,
-        coachId,
-        date: dateStr,
-      });
+
+      if (sess.sessionType === "energy") {
+        assignEnergy({
+          energy_session_id: sess.id,
+          athlete_id: athleteId,
+          coach_id: coachId,
+          scheduled_date: dateStr,
+          status: "planned",
+        });
+      } else {
+        assignWorkout({
+          sessionId: sess.id,
+          sessionName: sess.name ?? sess.label ?? "Séance",
+          athleteId,
+          coachId,
+          date: dateStr,
+        });
+      }
     },
-    [assignWorkout, reschedule, athleteId, coachId],
+    [assignWorkout, assignEnergy, reschedule, rescheduleEnergy, athleteId, coachId],
   );
 
-  const activeDragSession = sessions.find((s) => s.id === activeDragId) ?? null;
+  const activeDragSession = activeDragId
+    ? (sessions.find((s) => s.id === activeDragId) ?? energySessions.find((s) => s.id === activeDragId) ?? null)
+    : null;
+  const activeDragIsEnergy = activeDragId ? energySessions.some((s) => s.id === activeDragId) : false;
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -704,7 +806,7 @@ export function CalendarMonthView({
         </div>
 
         {/* ── Session Bank ── */}
-        <SessionBank sessions={sessions} activeDragId={activeDragId} />
+        <SessionBank sessions={sessions} energySessions={energySessions} activeDragId={activeDragId} />
       </div>
 
       {/* Drag overlay — ghost of the dragged item */}
@@ -726,14 +828,17 @@ export function CalendarMonthView({
           <div
             style={{
               padding: "7px 10px", borderRadius: 8,
-              border: "1px solid " + C.ac + "60",
-              background: C.ac, color: "#fff",
+              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : C.ac) + "60",
+              background: activeDragIsEnergy ? "#A855F7" : C.ac,
+              color: "#fff",
               fontSize: 11, fontWeight: 600,
-              boxShadow: "0 8px 24px rgba(168,85,247,0.4)",
+              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : "rgba(59,141,240,0.4)"}`,
               pointerEvents: "none",
+              display: "flex", alignItems: "center", gap: 6,
             }}
           >
-            ⠿ {activeDragSession.name ?? activeDragSession.label ?? "Séance"}
+            {activeDragIsEnergy ? <Zap size={12} /> : <Dumbbell size={12} />}
+            {activeDragSession.name ?? (activeDragSession as Session).label ?? "Séance"}
           </div>
         ) : null}
       </DragOverlay>
