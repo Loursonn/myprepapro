@@ -43,6 +43,7 @@ export interface Session {
   short: string;
   day_of_week?: number;
   weekDays?: Record<string, number>;
+  recurrence?: "weekly" | "once";
 }
 
 export interface BlockConfig {

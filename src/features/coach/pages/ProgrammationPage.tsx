@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Zap, Plus, Library, X, Check } from "lucide-react";
+import { ChevronRight, Zap, Plus, Library, X, Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -14,9 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
 import { useEnergySessions, useCreateEnergySession } from "@/features/shared/hooks/useEnergySessions";
-import SessionPreview from "@/features/coach/components/energy/SessionPreview";
-import type { EnergySessionRow, EnergyStep, EnergyGroup } from "@/types/energy";
-import { formatTarget, formatS } from "@/lib/energy/formatTarget";
+import type { EnergySessionRow } from "@/types/energy";
+import { SessionPreviewModal, KIND_COLOR, KIND_LABEL } from "@/features/coach/components/energy/SessionPreviewModal";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { TierConfigModal } from "@/components/coach/CoachComponents";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
@@ -24,195 +23,133 @@ import { SessionWeekDrawer } from "@/features/coach/components/SessionWeekDrawer
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-const KIND_LABEL: Record<string, string> = {
-  vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
-  footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
-};
-const KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
-  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
-};
 
-// ── SessionPreviewModal ────────────────────────────────────────────────────────
+// SessionPreviewModal, StepTree, buildRootGroup, ROLE_COLOR, ROLE_LABEL_FR imported from shared module
 
-function buildRootGroup(session: EnergySessionRow): EnergyGroup {
-  return { type: "group", id: "__root__", role: "open", repeat: 1, children: session.intervals ?? [] };
-}
+// ── AddMuscuSessionModal ───────────────────────────────────────────────────────
 
-const ROLE_COLOR: Record<string, string> = {
-  warmup:   "#F59E0B",
-  work:     "#EF4444",
-  recovery: "#3B8DF0",
-  rest:     "#6B7280",
-  cooldown: "#10B981",
-  open:     "#A855F7",
-};
-const ROLE_LABEL_FR: Record<string, string> = {
-  warmup:   "Écho",
-  work:     "Effort",
-  recovery: "Récup",
-  rest:     "Repos",
-  cooldown: "Retour",
-  open:     "Libre",
-};
-
-/** Rendu récursif des steps (intervalles + groupes). */
-function StepTree({ steps, depth = 0 }: { steps: EnergyStep[]; depth?: number }) {
-  return (
-    <>
-      {steps.map((step, i) => {
-        if (step.type === "interval") {
-          const rc = ROLE_COLOR[step.role] ?? "#6B7280";
-          const dur = step.duration.kind === "time"
-            ? formatS(step.duration.value ?? 0)
-            : step.duration.kind === "distance"
-            ? `${step.duration.value ?? 0} m`
-            : step.duration.kind === "calories"
-            ? `${step.duration.value ?? 0} kcal`
-            : "Lap";
-          const tgt = formatTarget(step.target);
-          return (
-            <div
-              key={step.id ?? i}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "5px 8px",
-                marginLeft: depth * 14,
-                borderRadius: 6,
-                background: depth > 0 ? "rgba(255,255,255,0.02)" : "transparent",
-              }}
-            >
-              <div style={{ width: 3, height: 20, borderRadius: 2, background: rc, flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: rc, minWidth: 36 }}>
-                {ROLE_LABEL_FR[step.role] ?? step.role}
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.tx, minWidth: 40 }}>{dur}</span>
-              {tgt && tgt !== "Libre" && (
-                <span style={{ fontSize: 10, color: C.tx3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {tgt}
-                </span>
-              )}
-              {step.notes && (
-                <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginLeft: "auto", flexShrink: 0 }}>
-                  {step.notes}
-                </span>
-              )}
-            </div>
-          );
-        }
-        // Group
-        return (
-          <div key={step.id ?? i} style={{ marginLeft: depth * 14, marginBottom: 2 }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "4px 8px", borderRadius: 6,
-              background: "rgba(255,255,255,0.04)",
-              borderLeft: "2px solid rgba(255,255,255,0.1)",
-              marginBottom: 2,
-            }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: C.ac }}>
-                × {step.repeat}
-              </span>
-              {step.repeat > 1 && (
-                <span style={{ fontSize: 9, color: C.tx3 }}>répétitions</span>
-              )}
-            </div>
-            <StepTree steps={step.children} depth={depth + 1} />
-            {step.rest_between && (
-              <div style={{ marginLeft: (depth + 1) * 14 }}>
-                <StepTree steps={[step.rest_between]} depth={depth + 1} />
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-function SessionPreviewModal({
-  session, athleteId, onEdit, onClose,
-}: {
-  session: EnergySessionRow;
-  athleteId?: string;
-  onEdit: () => void;
+function AddMuscuSessionModal({ onAdd, onClose }: {
+  onAdd: (name: string, short: string, dayOfWeek: number | undefined, recurrence: "weekly" | "once") => void;
   onClose: () => void;
 }) {
-  const kc = KIND_COLOR[session.session_kind] ?? "#6B7280";
-  const rootGroup = buildRootGroup(session);
+  const [name, setName]         = useState("");
+  const [short, setShort]       = useState("");
+  const [recurrence, setRecurrence] = useState<"weekly" | "once">("weekly");
+  const [selectedDay, setSelectedDay] = useState<number | undefined>(undefined);
+
+  function handleSubmit() {
+    if (!name.trim()) { toast.error("Nom requis"); return; }
+    const day = recurrence === "weekly" ? selectedDay : undefined;
+    onAdd(name.trim(), short.trim() || name.trim().slice(0, 3).toUpperCase(), day, recurrence);
+    onClose();
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "8px 10px", borderRadius: 8,
+    border: "1px solid " + C.brdL, background: C.s2,
+    color: C.tx, fontSize: 13, fontFamily: "inherit",
+    outline: "none", boxSizing: "border-box",
+  };
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.6)" }} />
       <div
         style={{
-          position: "fixed", top: "50%", left: "50%", zIndex: 61,
+          position: "fixed", top: "50%", left: "50%", zIndex: 71,
           transform: "translate(-50%, -50%)",
-          width: 780, maxWidth: "96vw", maxHeight: "88vh",
-          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
-          display: "flex", flexDirection: "column",
+          width: 400, maxWidth: "94vw",
+          background: C.s1, borderRadius: 14, border: "1px solid " + C.brd,
+          padding: "20px 22px",
           animation: "fadeScaleIn 150ms ease-out",
         }}
       >
         <style>{`@keyframes fadeScaleIn { from { opacity:0; transform:translate(-50%,-50%) scale(0.96) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }`}</style>
-
-        {/* Header */}
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: kc + "25", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Zap size={16} color={kc} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {session.name}
-            </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: kc + "20", color: kc }}>
-                {KIND_LABEL[session.session_kind] ?? session.session_kind}
-              </span>
-              {session.total_duration_s != null && (
-                <span style={{ fontSize: 11, color: C.tx3 }}>{Math.round(session.total_duration_s / 60)} min</span>
-              )}
-              {session.is_verified && <span style={{ fontSize: 9, color: C.g, fontWeight: 700 }}>✓ vérifiée</span>}
-            </div>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <div style={{ flex: 1, fontSize: 15, fontWeight: 800, color: C.tx }}>Nouvelle séance</div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <X size={13} />
           </button>
         </div>
-
-        {/* Body — 2 colonnes */}
-        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-
-          {/* Gauche : graphe SessionPreview */}
-          <div style={{ flex: "0 0 55%", padding: "16px 18px", borderRight: "1px solid " + C.brd, overflowY: "auto", scrollbarWidth: "none" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
-              Aperçu
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Nom */}
+          <div>
+            <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>Nom complet</label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              placeholder="ex. Haut du corps A, Jambes…"
+              style={inputStyle}
+            />
+          </div>
+          {/* Abréviation */}
+          <div>
+            <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>Abréviation <span style={{ fontWeight: 400 }}>(optionnel)</span></label>
+            <input
+              value={short}
+              onChange={(e) => setShort(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              placeholder="ex. HCA, JAM…"
+              maxLength={6}
+              style={{ ...inputStyle, textTransform: "uppercase" as const }}
+            />
+          </div>
+          {/* Récurrence */}
+          <div>
+            <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 6 }}>Type de séance</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {(["weekly", "once"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRecurrence(r)}
+                  style={{
+                    flex: 1, padding: "8px 0", borderRadius: 8,
+                    border: "1px solid " + (recurrence === r ? C.coach : C.brdL),
+                    background: recurrence === r ? C.coachS : "transparent",
+                    color: recurrence === r ? C.coach : C.tx2,
+                    fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    transition: "all 120ms",
+                  }}
+                >
+                  {r === "weekly" ? "🔁 Récurrente" : "📅 Ponctuelle"}
+                </button>
+              ))}
             </div>
-            <SessionPreview intervals={rootGroup} athleteId={athleteId} />
-            {session.notes && (
-              <div style={{ marginTop: 14, padding: "9px 12px", borderRadius: 9, background: C.s2, border: "1px solid " + C.brd, fontSize: 11, color: C.tx2, lineHeight: 1.6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 3 }}>Notes</span>
-                {session.notes}
+          </div>
+          {/* Jour (récurrente seulement) */}
+          {recurrence === "weekly" && (
+            <div>
+              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 6 }}>
+                Jour de la semaine <span style={{ fontWeight: 400 }}>(optionnel)</span>
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+                {DOW.map((label, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedDay(selectedDay === idx ? undefined : idx)}
+                    style={{
+                      padding: "7px 2px", borderRadius: 7,
+                      border: "1px solid " + (selectedDay === idx ? C.coach : C.brdL),
+                      background: selectedDay === idx ? C.coachS : "transparent",
+                      color: selectedDay === idx ? C.coach : C.tx2,
+                      fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-            )}
-          </div>
-
-          {/* Droite : déroulé */}
-          <div style={{ flex: 1, padding: "16px 16px", overflowY: "auto", scrollbarWidth: "none" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
-              Déroulé
             </div>
-            <StepTree steps={session.intervals ?? []} />
-          </div>
+          )}
         </div>
-
-        {/* Footer */}
-        <div style={{ padding: "10px 18px", borderTop: "1px solid " + C.brd, display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
-          <button onClick={onClose} style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-            Fermer
+        <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            Annuler
           </button>
-          <button onClick={onEdit} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            Modifier la séance
+          <button onClick={handleSubmit} style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            Créer
           </button>
         </div>
       </div>
@@ -576,6 +513,7 @@ export default function ProgrammationPage() {
 
   const [subTab, setSubTab] = useState("muscu");
   const [showExoParams, setShowExoParams] = useState(false);
+  const [showAddMuscu, setShowAddMuscu] = useState(false);
   const [openDrawer, setOpenDrawer] = useState<{ sessId: string; sessName: string } | null>(null);
   const [dayPicker, setDayPicker] = useState<{ sessId: string; sessName: string; currentDay: number } | null>(null);
   const autoCreateAttempted = useRef(false);
@@ -753,102 +691,144 @@ export default function ProgrammationPage() {
 
       {/* ── Musculation ── */}
       {subTab === "muscu" && (
-        sortedSessions.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 20px" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucun cycle actif</div>
-            <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>Crée un nouveau cycle pour commencer.</div>
-            {!viewOnly && (
+        <>
+          {/* Header avec bouton créer (toujours visible si pas viewOnly) */}
+          {!viewOnly && sortedSessions.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
               <button
-                onClick={() => setShowNewBlock(true)}
+                onClick={() => setShowAddMuscu(true)}
                 style={{
-                  padding: "12px 24px", borderRadius: 12, border: "none",
-                  background: C.coach, color: "#fff", fontSize: 13, fontWeight: 700,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}
-              >Créer un cycle</button>
-            )}
-          </div>
-        ) : (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 16 }}>
-              {sortedSessions.map(sess => {
-                const exoCount = ((exos as Record<string, unknown[]>)[sess.id] || []).length;
-                return (
-                  <button
-                    key={sess.id}
-                    onClick={() => setOpenDrawer({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" })}
-                    onDoubleClick={(e) => {
-                      e.preventDefault();
-                      setDayPicker({ sessId: sess.id, sessName: sess.name || sess.short || "Séance", currentDay: sess.day_of_week ?? 0 });
-                    }}
-                    style={{
-                      padding: "12px 14px", borderRadius: 12,
-                      border: "1px solid " + C.brdL, background: C.s1,
-                      cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
-                      display: "flex", flexDirection: "column" as const, gap: 6,
-                      position: "relative" as const,
-                    }}
-                  >
-                    {sess.day_of_week != null ? (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, color: C.coach,
-                        background: C.coachS, padding: "2px 7px", borderRadius: 5,
-                        alignSelf: "flex-start",
-                      }}>{DOW[sess.day_of_week]}</span>
-                    ) : (
-                      <span
-                        title="Double-clic pour assigner un jour"
-                        style={{
-                          fontSize: 10, fontWeight: 700, color: C.o,
-                          background: C.oS, padding: "2px 7px", borderRadius: 5,
-                          alignSelf: "flex-start",
-                        }}
-                      >⚠ Jour non défini</span>
-                    )}
-                    <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, paddingRight: 20 }}>
-                      {sess.name || sess.short || "Séance"}
-                    </div>
-                    <div style={{ fontSize: 10, color: C.tx3 }}>
-                      {exoCount} exercice{exoCount !== 1 ? "s" : ""}
-                    </div>
-                    <ChevronRight
-                      size={14}
-                      style={{
-                        position: "absolute", right: 12,
-                        top: "50%", transform: "translateY(-50%)", color: C.tx3,
-                      }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ paddingTop: 14, borderTop: "1px solid " + C.brd }}>
-              <button
-                onClick={() => setShowExoParams((p) => !p)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 14px", borderRadius: 10,
-                  border: "1px solid " + C.brdL,
-                  background: showExoParams ? C.acS : "transparent",
-                  color: showExoParams ? C.ac : C.tx2,
-                  fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                  marginBottom: showExoParams ? 12 : 0,
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "7px 14px", borderRadius: 9,
+                  border: "none", background: C.coach, color: "#fff",
+                  fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                 }}
               >
-                ⚙ Paramètres exercices{showExoParams ? " ∧" : " ∨"}
+                <Plus size={13} />
+                Créer une séance
               </button>
-              {showExoParams && (
-                <CoachExoParams
-                  exMeta={exMeta} setExMeta={setExMeta}
-                  exos={exos} setExos={setExos}
-                  blockConfig={blockConfig}
-                />
+            </div>
+          )}
+
+          {sortedSessions.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucune séance</div>
+              <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>Crée ta première séance ou un nouveau cycle.</div>
+              {!viewOnly && (
+                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                  <button
+                    onClick={() => setShowAddMuscu(true)}
+                    style={{
+                      padding: "10px 20px", borderRadius: 10, border: "none",
+                      background: C.coach, color: "#fff", fontSize: 13, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit",
+                      display: "flex", alignItems: "center", gap: 6,
+                    }}
+                  >
+                    <Plus size={14} /> Créer une séance
+                  </button>
+                  <button
+                    onClick={() => setShowNewBlock(true)}
+                    style={{
+                      padding: "10px 20px", borderRadius: 10,
+                      border: "1px solid " + C.brdL, background: "transparent", color: C.tx2,
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    Nouveau cycle
+                  </button>
+                </div>
               )}
             </div>
-          </>
-        )
+          ) : (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 16 }}>
+                {sortedSessions.map(sess => {
+                  const exoCount = ((exos as Record<string, unknown[]>)[sess.id] || []).length;
+                  const isPonctuelle = sess.recurrence === "once";
+                  return (
+                    <button
+                      key={sess.id}
+                      onClick={() => setOpenDrawer({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" })}
+                      onDoubleClick={(e) => {
+                        e.preventDefault();
+                        if (!isPonctuelle) setDayPicker({ sessId: sess.id, sessName: sess.name || sess.short || "Séance", currentDay: sess.day_of_week ?? 0 });
+                      }}
+                      style={{
+                        padding: "12px 14px", borderRadius: 12,
+                        border: "1px solid " + C.brdL, background: C.s1,
+                        cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+                        display: "flex", flexDirection: "column" as const, gap: 6,
+                        position: "relative" as const,
+                      }}
+                    >
+                      {isPonctuelle ? (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, color: C.b,
+                          background: C.bS, padding: "2px 7px", borderRadius: 5,
+                          alignSelf: "flex-start",
+                        }}>📅 Ponctuelle</span>
+                      ) : sess.day_of_week != null ? (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, color: C.coach,
+                          background: C.coachS, padding: "2px 7px", borderRadius: 5,
+                          alignSelf: "flex-start",
+                        }}>{DOW[sess.day_of_week]}</span>
+                      ) : (
+                        <span
+                          title="Double-clic pour assigner un jour"
+                          style={{
+                            fontSize: 10, fontWeight: 700, color: C.o,
+                            background: C.oS, padding: "2px 7px", borderRadius: 5,
+                            alignSelf: "flex-start",
+                          }}
+                        >⚠ Jour non défini</span>
+                      )}
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, paddingRight: 20 }}>
+                        {sess.name || sess.short || "Séance"}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.tx3 }}>
+                        {exoCount} exercice{exoCount !== 1 ? "s" : ""}
+                      </div>
+                      <ChevronRight
+                        size={14}
+                        style={{
+                          position: "absolute", right: 12,
+                          top: "50%", transform: "translateY(-50%)", color: C.tx3,
+                        }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ paddingTop: 14, borderTop: "1px solid " + C.brd }}>
+                <button
+                  onClick={() => setShowExoParams((p) => !p)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "8px 14px", borderRadius: 10,
+                    border: "1px solid " + C.brdL,
+                    background: showExoParams ? C.acS : "transparent",
+                    color: showExoParams ? C.ac : C.tx2,
+                    fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    marginBottom: showExoParams ? 12 : 0,
+                  }}
+                >
+                  ⚙ Paramètres exercices{showExoParams ? " ∧" : " ∨"}
+                </button>
+                {showExoParams && (
+                  <CoachExoParams
+                    exMeta={exMeta} setExMeta={setExMeta}
+                    exos={exos} setExos={setExos}
+                    blockConfig={blockConfig}
+                  />
+                )}
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* ── Énergétique ── */}
@@ -868,6 +848,24 @@ export default function ProgrammationPage() {
           <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>Séances Spécifiques</div>
           <div style={{ fontSize: 12, color: C.tx3, marginTop: 4 }}>Disponible prochainement.</div>
         </div>
+      )}
+
+      {/* ── AddMuscuSessionModal ── */}
+      {showAddMuscu && (
+        <AddMuscuSessionModal
+          onAdd={(name, short, dayOfWeek, recurrence) => {
+            const newSess = {
+              id:          crypto.randomUUID(),
+              name,
+              short,
+              day_of_week: dayOfWeek,
+              recurrence,
+            };
+            setSessions((prev) => [...prev, newSess]);
+            toast.success(`Séance "${name}" créée`);
+          }}
+          onClose={() => setShowAddMuscu(false)}
+        />
       )}
 
       {/* ── Modals ── */}
