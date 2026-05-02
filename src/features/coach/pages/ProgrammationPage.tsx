@@ -14,6 +14,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
 import { useEnergySessions, useCreateEnergySession } from "@/features/shared/hooks/useEnergySessions";
+import SessionPreview from "@/features/coach/components/energy/SessionPreview";
+import type { EnergySessionRow } from "@/types/energy";
+import type { EnergyGroup } from "@/types/energy";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { TierConfigModal } from "@/components/coach/CoachComponents";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
@@ -29,6 +32,105 @@ const KIND_COLOR: Record<string, string> = {
   vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
+
+// ── SessionPreviewModal ────────────────────────────────────────────────────────
+
+function buildRootGroup(session: EnergySessionRow): EnergyGroup {
+  return {
+    type: "group",
+    id: "__root__",
+    role: "open",
+    repeat: 1,
+    children: session.intervals ?? [],
+  };
+}
+
+function SessionPreviewModal({
+  session, athleteId, onEdit, onClose,
+}: {
+  session: EnergySessionRow;
+  athleteId?: string;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const kc = KIND_COLOR[session.session_kind] ?? "#6B7280";
+  const rootGroup = buildRootGroup(session);
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
+      <div
+        style={{
+          position: "fixed", top: "50%", left: "50%", zIndex: 61,
+          transform: "translate(-50%, -50%)",
+          width: 600, maxWidth: "96vw", maxHeight: "85vh",
+          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+          display: "flex", flexDirection: "column",
+          animation: "fadeScaleIn 150ms ease-out",
+        }}
+      >
+        <style>{`@keyframes fadeScaleIn { from { opacity:0; transform:translate(-50%,-50%) scale(0.96) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }`}</style>
+
+        {/* Header */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "flex-start", gap: 12, flexShrink: 0 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: kc + "25", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Zap size={18} color={kc} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {session.name}
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 3, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: kc + "20", color: kc }}>
+                {KIND_LABEL[session.session_kind] ?? session.session_kind}
+              </span>
+              {session.total_duration_s != null && (
+                <span style={{ fontSize: 11, color: C.tx3 }}>{Math.round(session.total_duration_s / 60)} min</span>
+              )}
+              {session.is_verified && (
+                <span style={{ fontSize: 10, color: C.g, fontWeight: 700 }}>✓ vérifiée</span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Preview */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px", scrollbarWidth: "none" }}>
+          <SessionPreview intervals={rootGroup} athleteId={athleteId} />
+
+          {session.notes && (
+            <div style={{ marginTop: 16, padding: "10px 14px", borderRadius: 10, background: C.s2, border: "1px solid " + C.brd, fontSize: 12, color: C.tx2, lineHeight: 1.6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 4 }}>Notes</span>
+              {session.notes}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "12px 20px", borderTop: "1px solid " + C.brd, display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            style={{ padding: "8px 16px", borderRadius: 9, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Fermer
+          </button>
+          <button
+            onClick={onEdit}
+            style={{ padding: "8px 18px", borderRadius: 9, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+          >
+            Modifier la séance
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
 
 // ── BankPickerModal ────────────────────────────────────────────────────────────
 // Modale pour piocher une séance de la banque générale et la copier dans sa banque perso.
@@ -178,14 +280,16 @@ function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () =>
 
 interface EnergyPanelProps {
   coachId: string;
+  athleteId?: string;
   onNew: () => void;
   onEdit: (sessionId: string) => void;
 }
 
-function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
+function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
   const { data: sessions = [], isLoading } = useEnergySessions({ created_by: coachId });
   const [search, setSearch] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [previewSession, setPreviewSession] = useState<EnergySessionRow | null>(null);
 
   const filtered = sessions.filter((s) =>
     !search || s.name.toLowerCase().includes(search.toLowerCase())
@@ -214,7 +318,7 @@ function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
             }}
           >
             <Library size={13} />
-            Banque générale
+            Choisir une séance existante
           </button>
           <button
             onClick={onNew}
@@ -226,12 +330,21 @@ function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
             }}
           >
             <Plus size={13} />
-            Nouvelle séance
+            Créer une séance
           </button>
         </div>
       </div>
 
       {showPicker && <BankPickerModal coachId={coachId} onClose={() => setShowPicker(false)} />}
+
+      {previewSession && (
+        <SessionPreviewModal
+          session={previewSession}
+          athleteId={athleteId}
+          onEdit={() => { setPreviewSession(null); onEdit(previewSession.id); }}
+          onClose={() => setPreviewSession(null)}
+        />
+      )}
 
       {/* Info banner */}
       <div style={{
@@ -291,7 +404,7 @@ function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
                   display: "flex", alignItems: "center", gap: 6,
                 }}
               >
-                <Library size={14} /> Banque générale
+                <Library size={14} /> Choisir une séance existante
               </button>
               <button
                 onClick={onNew}
@@ -301,7 +414,7 @@ function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
                   fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                 }}
               >
-                + Créer une séance
+                Créer une séance
               </button>
             </div>
           )}
@@ -313,7 +426,7 @@ function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
             return (
               <div
                 key={s.id}
-                onClick={() => onEdit(s.id)}
+                onClick={() => setPreviewSession(s)}
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "12px 14px", borderRadius: 12,
@@ -654,6 +767,7 @@ export default function ProgrammationPage() {
       {subTab === "energie" && (
         <EnergyPanel
           coachId={user?.id ?? ""}
+          athleteId={athleteId ?? undefined}
           onNew={() => navigate("/coach/library?tab=energetique")}
           onEdit={(sessionId: string) => navigate(`/coach/energy-library/${sessionId}/edit`)}
         />
