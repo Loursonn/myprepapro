@@ -35,7 +35,8 @@ const METRICS: MetricDef[] = [
   { key: "FCmax",   label: "FC max",   unit: "bpm",       description: "Fréquence cardiaque maximale",      min: 100, max: 230, step: 1,   category: "cardio"    },
   { key: "FCseuil", label: "FC seuil", unit: "bpm",       description: "FC au seuil lactique (~85% FCmax)", min: 80,  max: 220, step: 1,   category: "cardio"    },
   { key: "FCrepos", label: "FC repos", unit: "bpm",       description: "Fréquence cardiaque de repos",      min: 30,  max: 100, step: 1,   category: "cardio"    },
-  { key: "VMA",     label: "VMA",      unit: "km/h",      description: "Vitesse Maximale Aérobie",          min: 8,   max: 25,  step: 0.1, category: "vitesse"   },
+  { key: "VMA",     label: "VMA",      unit: "km/h",      description: "Vitesse Maximale Aérobie",          min: 8,   max: 30,  step: 0.1, category: "vitesse"   },
+  { key: "Vmax",    label: "Vmax",     unit: "km/h",      description: "Vitesse maximale atteinte (sprint)", min: 10,  max: 45,  step: 0.1, category: "vitesse"   },
   { key: "VO2max",  label: "VO₂max",   unit: "mL/kg/min", description: "Consommation maximale d'oxygène",   min: 20,  max: 90,  step: 0.1, category: "vitesse"   },
   { key: "FTP",     label: "FTP",      unit: "W",         description: "Functional Threshold Power (vélo)", min: 50,  max: 600, step: 5,   category: "puissance" },
   { key: "PMA",     label: "PMA",      unit: "W",         description: "Puissance Maximale Aérobie",        min: 50,  max: 900, step: 5,   category: "puissance" },
@@ -352,6 +353,46 @@ function WeightDerivedCard({ athleteId }: { athleteId: string }) {
       ) : (
         <div style={{ fontSize: 12, color: C.tx3, fontStyle: "italic" }}>
           {isLoading ? "…" : "Aucune saisie de poids dans le wellness"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── VraDerivedCard ────────────────────────────────────────────────────────────
+
+function VraDerivedCard({ vmax, vma }: { vmax?: number; vma?: number }) {
+  const color = CATEGORY_COLOR.vitesse;
+  const vra = vmax != null && vma != null ? Math.round((vmax - vma) * 10) / 10 : null;
+
+  return (
+    <div
+      style={{
+        background: C.s1, border: "1px solid " + C.brd, borderRadius: 12,
+        padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = color + "50")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.brd)}
+    >
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+          VRA
+        </div>
+        <div style={{ fontSize: 10, color: C.tx3 }}>Vitesse de Réserve Anaérobie — Vmax − VMA</div>
+      </div>
+      {vra != null ? (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontSize: 24, fontWeight: 800, color: C.tx }}>{vra}</span>
+          <span style={{ fontSize: 12, color: C.tx3 }}>km/h</span>
+          <span style={{ fontSize: 10, color: C.tx3, marginLeft: "auto" }}>
+            {vmax} − {vma}
+          </span>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: C.tx3, fontStyle: "italic" }}>
+          {vmax == null && vma == null
+            ? "Renseigne Vmax et VMA"
+            : vmax == null ? "Renseigne Vmax" : "Renseigne VMA"}
         </div>
       )}
     </div>
@@ -675,6 +716,7 @@ export default function ProfilSportifPage() {
   const fcmax  = refs["FCmax"]?.value;
   const fcrep  = refs["FCrepos"]?.value;
   const vma    = refs["VMA"]?.value;
+  const vmax   = refs["Vmax"]?.value;
   const ftp    = refs["FTP"]?.value;
 
   const storedFcZones: Record<string, number> = {};
@@ -729,6 +771,8 @@ export default function ProfilSportifPage() {
                   ))}
                   {/* Corporel : poids dérivé du wellness */}
                   {cat === "corpo" && <WeightDerivedCard athleteId={athleteId!} />}
+                  {/* Vitesse : VRA calculée depuis Vmax − VMA */}
+                  {cat === "vitesse" && <VraDerivedCard vmax={vmax} vma={vma} />}
                 </div>
               </div>
             );
