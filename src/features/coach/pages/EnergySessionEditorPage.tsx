@@ -9,6 +9,7 @@
  */
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -94,6 +95,7 @@ function AssignModal({
 export default function EnergySessionEditorPage() {
   const { athleteId, sessionId } = useParams<{ athleteId?: string; sessionId?: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const isEdit = !!sessionId;
 
   // Load existing session when editing
@@ -142,6 +144,7 @@ export default function EnergySessionEditorPage() {
       custom_kind: sessionKind === "custom" ? customKind : null,
       structure_type: structureType,
       intervals: root.children,
+      created_by: user?.id ?? null,
     };
 
     if (isEdit && sessionId) {
