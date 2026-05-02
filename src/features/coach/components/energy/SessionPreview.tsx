@@ -18,6 +18,7 @@ import {
 import type { EnergyGroup } from "@/types/energy";
 import HatchPattern from "./HatchPattern";
 import { formatTarget, formatS, formatSLong } from "@/lib/energy/formatTarget";
+import { useAthleteReferences } from "@/features/shared/hooks/useAthleteReferences";
 
 // ── Zone colors (anchors) ─────────────────────────────────────────────────────
 const ZONE_COLORS = {
@@ -68,11 +69,14 @@ interface Props {
   compact?: boolean;
 }
 
-export default function SessionPreview({ intervals, compact = false }: Props) {
+export default function SessionPreview({ intervals, athleteId, compact = false }: Props) {
   const svgRef  = useRef<SVGSVGElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [svgW, setSvgW] = useState(600);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+
+  const { data: refs } = useAthleteReferences(athleteId);
+  const calcOptions = refs && Object.keys(refs).length > 0 ? { athleteReferences: refs } : undefined;
 
   // Measure container width (ResizeObserver)
   useLayoutEffect(() => {
@@ -87,16 +91,16 @@ export default function SessionPreview({ intervals, compact = false }: Props) {
   }, []);
 
   // ── Compute data ────────────────────────────────────────────────────────────
-  const flat   = expandIntervals(intervals);
-  const totals = computeTotals(flat);
-  const zones  = computeZoneDistribution(flat);
+  const flat     = expandIntervals(intervals);
+  const totals   = computeTotals(flat, calcOptions);
+  const zones    = computeZoneDistribution(flat, calcOptions);
   const totalDur = totals.durationS;
 
   // Build bar list with cumulative start times
   let cumul = 0;
   const bars = flat.map((fi) => {
-    const dur   = estimateIntervalDuration(fi.interval);
-    const pct   = targetToIntensityPct(fi.interval.target);
+    const dur   = estimateIntervalDuration(fi.interval, calcOptions);
+    const pct   = targetToIntensityPct(fi.interval.target, refs);
     const start = cumul;
     cumul += dur;
     return { fi, dur, pct, start };
@@ -167,12 +171,23 @@ export default function SessionPreview({ intervals, compact = false }: Props) {
                 onMouseEnter={(e) => {
                   const svgRect = svgRef.current?.getBoundingClientRect();
                   if (!svgRect) return;
+                  const p = pct;
+                  const zone = p === null ? null
+                    : p <= 30 ? "Zone 1"
+                    : p <= 50 ? "Zone 2"
+                    : p <= 70 ? "Zone 3"
+                    : p <= 85 ? "Zone 4"
+                    : "Zone 5";
+                  const targetStr = formatTarget(fi.interval.target);
+                  const pctLabel = p !== null ? ` ${Math.round(p)}%` : "";
                   setTooltip({
                     x: e.clientX - svgRect.left,
                     y: barY,
                     role: ROLE_LABEL[fi.interval.role] ?? fi.interval.role,
                     duration: formatS(dur),
-                    target: formatTarget(fi.interval.target),
+                    target: zone
+                      ? `${zone}${pctLabel}${targetStr && targetStr !== "Libre" ? ` · ${targetStr}` : ""}`
+                      : (targetStr || "Libre"),
                     notes: fi.interval.notes,
                   });
                 }}
@@ -206,11 +221,29 @@ export default function SessionPreview({ intervals, compact = false }: Props) {
         {/* Baseline */}
         <line x1={0} y1={BAR_AREA} x2={svgW} y2={BAR_AREA} stroke={C.brd} strokeWidth={1} />
 
-        {/* Y gridlines at 25/50/75% */}
-        {[25, 50, 75].map((p) => {
-          const y = BAR_AREA - (p / 100) * BAR_AREA;
+        {/* Zone reference lines at intensity thresholds */}
+        {[
+          { pct: 30, label: "Z2" },
+          { pct: 50, label: "Z3" },
+          { pct: 70, label: "Z4" },
+          { pct: 85, label: "Z5" },
+        ].map(({ pct, label: zLabel }) => {
+          const y = BAR_AREA - (pct / 100) * BAR_AREA;
           return (
-            <line key={p} x1={0} y1={y} x2={svgW} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth={1} />
+            <g key={pct}>
+              <line
+                x1={0} y1={y} x2={svgW - 24} y2={y}
+                stroke="rgba(255,255,255,0.10)" strokeWidth={0.8}
+                strokeDasharray="3 3"
+              />
+              <text
+                x={svgW - 20} y={y + 3}
+                fontSize={8} fill="rgba(255,255,255,0.30)"
+                fontFamily="inherit" fontWeight={600}
+              >
+                {zLabel}
+              </text>
+            </g>
           );
         })}
 
