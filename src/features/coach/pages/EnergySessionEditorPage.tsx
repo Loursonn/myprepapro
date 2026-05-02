@@ -167,7 +167,7 @@ export default function EnergySessionEditorPage() {
     if (athleteId) {
       navigate(`/coach/athletes/${athleteId}/programmation`);
     } else {
-      navigate("/coach/energy-library");
+      navigate("/coach/library?tab=energetique");
     }
   }
 
