@@ -21,13 +21,14 @@ import {
 // ── Navigation tabs ────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: "planning",      label: "Planning"      },
-  { key: "programmation", label: "Programmation" },
-  { key: "stats",         label: "Stats"         },
-  { key: "donnees",       label: "Données"       },
-  { key: "retours",       label: "Retours"       },
-  { key: "tests",         label: "Tests"         },
-  { key: "athlete-view",  label: "👁 Vue athlète" },
+  { key: "planning",        label: "Planning"        },
+  { key: "programmation",   label: "Programmation"   },
+  { key: "profil-sportif",  label: "Profil sportif"  },
+  { key: "stats",           label: "Stats"           },
+  { key: "donnees",         label: "Données"         },
+  { key: "retours",         label: "Retours"         },
+  { key: "tests",           label: "Tests"           },
+  { key: "athlete-view",    label: "👁 Vue athlète"  },
 ] as const;
 
 const SUB_TABS: Record<string, { key: string; label: string }[]> = {
