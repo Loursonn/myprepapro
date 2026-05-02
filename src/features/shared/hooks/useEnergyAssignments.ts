@@ -95,6 +95,8 @@ export function useAssignEnergySession() {
     },
     onSuccess: (_data, input) => {
       qc.invalidateQueries({ queryKey: QK.energyAssignments(input.athlete_id) });
+      // Invalide aussi le calendrier unifié pour que la vue mois se rafraîchisse
+      qc.invalidateQueries({ queryKey: ["cal", input.athlete_id] });
       toast.success("Séance assignée");
     },
   });
@@ -135,6 +137,7 @@ export function useUpdateEnergyAssignment() {
     },
     onSuccess: (_data, { athleteId }) => {
       qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
+      qc.invalidateQueries({ queryKey: ["cal", athleteId] });
       toast.success("Assignation mise à jour");
     },
   });
@@ -169,6 +172,7 @@ export function useUnassignEnergySession() {
     },
     onSuccess: (_data, { athleteId }) => {
       qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
+      qc.invalidateQueries({ queryKey: ["cal", athleteId] });
       toast.success("Assignation supprimée");
     },
   });
