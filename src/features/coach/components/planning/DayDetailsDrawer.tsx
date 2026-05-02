@@ -6,10 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { C } from "@/lib/theme";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { useDeleteCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
+import { useEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Competition } from "@/types/planning";
 import { CompetitionFormModal } from "./CompetitionFormModal";
+import { SessionPreviewModal } from "@/features/coach/components/energy/SessionPreviewModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -327,17 +329,19 @@ function EventCard({
   athleteId,
   coachId,
   onSelect,
+  onPreview,
 }: {
   event: CalEvent;
   athleteId: string;
   coachId: string;
   onSelect: (e: CalEvent) => void;
+  onPreview?: (e: CalEvent) => void;
 }) {
   const isEnergy  = event.type === "energy";
   const color = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
   const { mutate: del } = useDeleteCalendarEvent();
   const statusInfo = event.status ? STATUS_LABEL[event.status] : null;
-  const isClickable = event.type === "workout" || event.type === "energy";
+  const isClickable = event.type === "workout" || (event.type === "energy" && !!onPreview);
 
   const typeLabel =
     event.type === "workout"     ? "Séance"
@@ -347,7 +351,11 @@ function EventCard({
 
   return (
     <div
-      onClick={() => isClickable && onSelect(event)}
+      onClick={() => {
+        if (!isClickable) return;
+        if (event.type === "energy" && onPreview) { onPreview(event); return; }
+        onSelect(event);
+      }}
       style={{
         background: C.s2,
         borderRadius: 12,
@@ -433,6 +441,31 @@ interface DayDetailsDrawerProps {
   sets?: Record<string, unknown[]>;
 }
 
+/** Fetches full EnergySessionRow when an energy event is selected. */
+function EnergyEventPreview({ event, athleteId, onClose }: { event: CalEvent; athleteId: string; onClose: () => void }) {
+  const sessionId = event.energySessionId ?? (event.raw?.energy_session_id as string | undefined);
+  const { data: session, isLoading } = useEnergySession(sessionId);
+
+  if (isLoading) {
+    return (
+      <>
+        <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
+        <div style={{
+          position: "fixed", top: "50%", left: "50%", zIndex: 61,
+          transform: "translate(-50%, -50%)",
+          width: 780, maxWidth: "96vw",
+          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+          padding: "40px", textAlign: "center", color: C.tx3, fontSize: 13,
+        }}>
+          Chargement…
+        </div>
+      </>
+    );
+  }
+  if (!session) return null;
+  return <SessionPreviewModal session={session} athleteId={athleteId} onClose={onClose} />;
+}
+
 export function DayDetailsDrawer({
   open,
   onClose,
@@ -446,6 +479,7 @@ export function DayDetailsDrawer({
 }: DayDetailsDrawerProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
   const [editingComp,   setEditingComp]   = useState<Competition | null>(null);
+  const [energyPreview, setEnergyPreview] = useState<CalEvent | null>(null);
   const { user } = useAuth();
 
   if (!open || !day) return null;
@@ -458,6 +492,7 @@ export function DayDetailsDrawer({
 
   const handleClose = () => {
     setSelectedEvent(null);
+    setEnergyPreview(null);
     onClose();
   };
 
@@ -644,7 +679,7 @@ export function DayDetailsDrawer({
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {energyEvents.map((e) => (
-                      <EventCard key={e.id} event={e} athleteId={athleteId} onSelect={setSelectedEvent} />
+                      <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} onPreview={setEnergyPreview} />
                     ))}
                   </div>
                 </section>
@@ -680,6 +715,15 @@ export function DayDetailsDrawer({
           coachId={editingComp.coach_id ?? user?.id ?? ""}
           existing={editingComp}
           onClose={() => setEditingComp(null)}
+        />
+      )}
+
+      {/* Energy session preview modal */}
+      {energyPreview && (
+        <EnergyEventPreview
+          event={energyPreview}
+          athleteId={athleteId}
+          onClose={() => setEnergyPreview(null)}
         />
       )}
     </>

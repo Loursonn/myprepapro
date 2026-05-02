@@ -45,6 +45,7 @@ const RetoursPage       = lazy(() => import("./features/coach/pages/RetoursPage.
 const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx"));
 const AthleteViewPage           = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
 const EnergySessionEditorPage   = lazy(() => import("./features/coach/pages/EnergySessionEditorPage.tsx"));
+const ProfilSportifPage         = lazy(() => import("./features/coach/pages/ProfilSportifPage.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -116,9 +117,10 @@ function AnimatedRoutes() {
             {/* Vue par athlète (ContextBar + AthleteProvider) */}
             <Route path="athletes/:athleteId" element={<CoachAthleteArea />}>
               <Route index element={<Navigate to="planning" replace />} />
-              <Route path="planning"      element={<PlanningPage />} />
-              <Route path="programmation" element={<ProgrammationPage />} />
-              <Route path="stats"         element={<StatsPage />} />
+              <Route path="planning"       element={<PlanningPage />} />
+              <Route path="programmation"  element={<ProgrammationPage />} />
+              <Route path="profil-sportif" element={<ProfilSportifPage />} />
+              <Route path="stats"          element={<StatsPage />} />
               <Route path="donnees"       element={<DonneesPage />} />
               <Route path="retours"       element={<RetoursPage />} />
               <Route path="tests"         element={<CoachTestPage />} />

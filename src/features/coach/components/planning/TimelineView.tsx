@@ -1,7 +1,7 @@
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X, Plus, Eye } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Eye, Pencil, Trash2, Check } from "lucide-react";
 import { C } from "@/lib/theme";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,7 +65,76 @@ function DrawerShell({
   onEditComp?:    (comp: Competition) => void;
   onDeleteComp?:  (comp: Competition) => void;
 }) {
+  const qc = useQueryClient();
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [working, setWorking] = useState(false);
+
   if (!data) return null;
+
+  const canRename = state.type !== "competition" && state.type !== "microcycle";
+  const canDelete = state.type !== "competition";
+
+  const TABLE_MAP: Partial<Record<DrawerType, string>> = {
+    macrocycle: "macrocycles",
+    mesocycle:  "mesocycles",
+    cycle:      "cycles",
+    microcycle: "microcycles",
+  };
+
+  async function handleRename() {
+    if (!renameDraft.trim() || !canRename) return;
+    setWorking(true);
+    const table = TABLE_MAP[state.type];
+    if (!table) { setWorking(false); return; }
+    const { error } = await supabase.from(table as never).update({ name: renameDraft.trim() }).eq("id", state.id);
+    setWorking(false);
+    if (error) { toast.error("Erreur lors du renommage"); return; }
+    qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] });
+    toast.success("Renommé");
+    setRenaming(false);
+  }
+
+  async function handleDelete() {
+    setWorking(true);
+    try {
+      if (state.type === "macrocycle") {
+        const mesoIds = data.mesocycles.filter((m) => m.macrocycle_id === state.id).map((m) => m.id);
+        const cycleIds = data.cycles.filter((c) => mesoIds.includes(c.mesocycle_id)).map((c) => c.id);
+        if (cycleIds.length > 0) {
+          await supabase.from("microcycles").delete().in("cycle_id", cycleIds);
+          await supabase.from("cycles").delete().in("id", cycleIds);
+        }
+        if (mesoIds.length > 0) await supabase.from("mesocycles").delete().in("id", mesoIds);
+        const { error } = await supabase.from("macrocycles").delete().eq("id", state.id);
+        if (error) throw error;
+      } else if (state.type === "mesocycle") {
+        const cycleIds = data.cycles.filter((c) => c.mesocycle_id === state.id).map((c) => c.id);
+        if (cycleIds.length > 0) {
+          await supabase.from("microcycles").delete().in("cycle_id", cycleIds);
+          await supabase.from("cycles").delete().in("id", cycleIds);
+        }
+        const { error } = await supabase.from("mesocycles").delete().eq("id", state.id);
+        if (error) throw error;
+      } else if (state.type === "cycle") {
+        await supabase.from("microcycles").delete().eq("cycle_id", state.id);
+        const { error } = await supabase.from("cycles").delete().eq("id", state.id);
+        if (error) throw error;
+      } else if (state.type === "microcycle") {
+        const { error } = await supabase.from("microcycles").delete().eq("id", state.id);
+        if (error) throw error;
+      }
+      qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] });
+      qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+      toast.success("Supprimé");
+      onClose();
+    } catch {
+      toast.error("Erreur lors de la suppression");
+    } finally {
+      setWorking(false);
+    }
+  }
 
   const LEVEL_COLOR: Record<DrawerType, string> = {
     macrocycle:  C.ac,
@@ -118,7 +187,6 @@ function DrawerShell({
     case "microcycle": {
       const mi = data.microcycles.find((x) => x.id === state.id);
       if (!mi) return null;
-      // Find siblings for S-1
       const siblings = data.microcycles
         .filter((m) => m.cycle_id === mi.cycle_id)
         .sort((a, b) => a.week_number - b.week_number);
@@ -145,6 +213,14 @@ function DrawerShell({
     }
   }
 
+  const btnBase: React.CSSProperties = {
+    width: 32, height: 32, borderRadius: 8,
+    border: "1px solid " + C.brdL, background: "transparent",
+    color: C.tx3, cursor: "pointer", fontFamily: "inherit",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    flexShrink: 0,
+  };
+
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }} />
@@ -162,19 +238,92 @@ function DrawerShell({
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
           <div style={{ width: 6, height: 36, borderRadius: 4, background: color, flexShrink: 0 }} />
+
+          {/* Title / rename area */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 9, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.5px" }}>
               {state.type === "competition" ? "Compétition" : state.type.charAt(0).toUpperCase() + state.type.slice(1)}
             </div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {title}
-            </div>
+            {renaming ? (
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2 }}>
+                <input
+                  autoFocus
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") setRenaming(false); }}
+                  style={{
+                    flex: 1, padding: "5px 9px", borderRadius: 7,
+                    border: "1px solid " + color + "60", background: C.s2,
+                    color: C.tx, fontSize: 14, fontWeight: 700, fontFamily: "inherit", outline: "none",
+                  }}
+                />
+                <button onClick={handleRename} disabled={working} style={{ ...btnBase, border: "none", background: color, color: "#fff" }}>
+                  {working ? "…" : <Check size={14} />}
+                </button>
+                <button onClick={() => setRenaming(false)} style={btnBase}>
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {title}
+                </div>
+                {canRename && (
+                  <button
+                    onClick={() => { setRenameDraft(title); setRenaming(true); setDeleteConfirm(false); }}
+                    title="Renommer"
+                    style={{ ...btnBase, width: 22, height: 22, border: "none", background: "transparent", color: C.tx3, flexShrink: 0 }}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                )}
+              </div>
+            )}
             <div style={{ fontSize: 10, color: C.tx3 }}>{subtitle}</div>
           </div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <X size={16} />
-          </button>
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+            {canDelete && !renaming && (
+              <button
+                onClick={() => { setDeleteConfirm((v) => !v); setRenaming(false); }}
+                title="Supprimer"
+                style={{ ...btnBase, color: deleteConfirm ? C.r : C.tx3, borderColor: deleteConfirm ? C.r + "60" : C.brdL }}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+            <button onClick={onClose} style={btnBase}>
+              <X size={16} />
+            </button>
+          </div>
         </div>
+
+        {/* Delete confirm banner */}
+        {deleteConfirm && (
+          <div style={{
+            padding: "10px 20px", borderBottom: "1px solid " + C.r + "30",
+            background: C.r + "12", display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span style={{ fontSize: 12, color: C.tx2, flex: 1 }}>
+              Supprimer ce bloc et tous ses sous-blocs ?
+            </span>
+            <button
+              onClick={() => setDeleteConfirm(false)}
+              style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={working}
+              style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: C.r, color: "#fff", fontSize: 11, fontWeight: 700, cursor: working ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: working ? 0.7 : 1 }}
+            >
+              {working ? "…" : "Supprimer"}
+            </button>
+          </div>
+        )}
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px", scrollbarWidth: "none" }}>

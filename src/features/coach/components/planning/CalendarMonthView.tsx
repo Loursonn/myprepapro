@@ -6,7 +6,7 @@ import {
 } from "date-fns";
 import type { BlockConfig, Session } from "@/features/shared/types/athlete";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Dumbbell, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Dumbbell, Zap, X as XIcon } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +28,7 @@ import {
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession, useUpdateEnergyAssignment } from "@/features/shared/hooks/useEnergyAssignments";
+import { useDeleteCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import type { EnergySessionRow } from "@/types/energy";
 import { DayDetailsDrawer } from "./DayDetailsDrawer";
 import { QuickAddDialog } from "./QuickAddDialog";
@@ -128,8 +129,18 @@ function EventChip({
 
 // ── DraggableEventChip ───────────────────────────────────────────────────────
 
-function DraggableEventChip({ event, compact = false }: { event: CalEvent; compact?: boolean }) {
+function DraggableEventChip({
+  event, compact = false, athleteId = "", coachId = "",
+}: {
+  event: CalEvent;
+  compact?: boolean;
+  athleteId?: string;
+  coachId?: string;
+}) {
+  const [hovered, setHovered] = useState(false);
   const draggable = event.type === "workout" || event.type === "energy";
+  const deletable = event.type === "workout" || event.type === "energy";
+  const { mutate: del } = useDeleteCalendarEvent();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `cal-event-${event.id}`,
     data: { type: "calendar_event", event },
@@ -138,16 +149,51 @@ function DraggableEventChip({ event, compact = false }: { event: CalEvent; compa
 
   return (
     <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      style={{
-        opacity: isDragging ? 0.35 : 1,
-        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
-        cursor: draggable ? "grab" : "pointer",
-      }}
+      style={{ position: "relative" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <EventChip event={event} compact={compact} />
+      <div
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
+        style={{
+          opacity: isDragging ? 0.35 : 1,
+          transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
+          cursor: draggable ? "grab" : "pointer",
+          paddingRight: hovered && deletable ? 14 : 0,
+        }}
+      >
+        <EventChip event={event} compact={compact} />
+      </div>
+      {hovered && deletable && !isDragging && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            del({
+              id:          event.id,
+              type:        event.type,
+              athleteId,
+              coachId,
+              sessionId:   event.raw?.session_id as string | undefined,
+              sessionName: event.title,
+              date:        event.date,
+            });
+          }}
+          style={{
+            position: "absolute", top: 0, right: 0,
+            width: 14, height: "100%", minHeight: 14,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: C.r + "cc", border: "none",
+            borderRadius: "0 4px 4px 0",
+            cursor: "pointer", padding: 0,
+            color: "#fff",
+            zIndex: 1,
+          }}
+        >
+          <XIcon size={8} />
+        </button>
+      )}
     </div>
   );
 }
@@ -210,12 +256,16 @@ function DroppableDay({
   isCurrentMonth,
   isActive,
   onClick,
+  athleteId,
+  coachId,
 }: {
   date: Date;
   events: CalEvent[];
   isCurrentMonth: boolean;
   isActive: boolean;
   onClick: () => void;
+  athleteId: string;
+  coachId: string;
 }) {
   const dateStr = format(date, "yyyy-MM-dd");
   const { setNodeRef, isOver } = useDroppable({ id: dateStr });
@@ -267,7 +317,7 @@ function DroppableDay({
       {/* Events */}
       <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
         {events.slice(0, maxVisible).map((ev) => (
-          <DraggableEventChip key={ev.id} event={ev} compact />
+          <DraggableEventChip key={ev.id} event={ev} compact athleteId={athleteId} coachId={coachId} />
         ))}
         {overflow > 0 && (
           <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 4 }}>
@@ -772,6 +822,8 @@ export function CalendarMonthView({
                       isCurrentMonth={isSameMonth(day, month)}
                       isActive={!!(drawerDay && isSameDay(day, drawerDay))}
                       onClick={() => setDrawerDay(day)}
+                      athleteId={athleteId}
+                      coachId={coachId}
                     />
                   );
                 })}

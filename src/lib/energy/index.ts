@@ -214,6 +214,19 @@ export function computeTotals(flat: FlatInterval[], options?: EnergyCalcOptions)
  *   power + refs.FTP (W)      → (avg_watts / FTP) * 100
  *   power + refs.PMA (W)      → (avg_watts / PMA) * 100 (fallback)
  */
+/**
+ * Intensité de fallback basée sur le rôle de l'intervalle.
+ * Utilisée quand les références athlète ne sont pas disponibles.
+ */
+export const ROLE_FALLBACK_PCT: Record<string, number> = {
+  warmup:   35,
+  work:     80,
+  recovery: 45,
+  rest:     15,
+  cooldown: 30,
+  open:     55,
+};
+
 export function targetToIntensityPct(
   target: EnergyTarget,
   refs?: Record<string, number>,
@@ -240,16 +253,53 @@ export function targetToIntensityPct(
         const speedKmh = 3600 / avgSPerKm;
         return Math.min(120, (speedKmh / refs.VMA) * 100);
       }
+      // Sans VMA : estimation depuis la plage d'allure typique (2:30–8:00 /km)
+      // 2:30 = 150 s/km (sprint élite) → 100%, 8:00 = 480 s/km (footing doux) → 30%
+      const avgSPerKm = (target.min_s_per_unit + target.max_s_per_unit) / 2;
+      if (avgSPerKm > 0) {
+        const normalized = Math.max(0, Math.min(1, (480 - avgSPerKm) / (480 - 150)));
+        return Math.round(30 + normalized * 70); // 30% → 100%
+      }
       return null;
     }
 
     case 'hr_bpm': {
-      const fcmax = refs?.FCmax ?? refs?.['FCmax'] ?? null;
+      const avg = (target.min + target.max) / 2;
+      if (avg <= 0) return null;
+
+      // Bornes de zones personnalisées (FCzone_Z1_max … FCzone_Z4_max)
+      const z1max = refs?.FCzone_Z1_max;
+      const z2max = refs?.FCzone_Z2_max;
+      const z3max = refs?.FCzone_Z3_max;
+      const z4max = refs?.FCzone_Z4_max;
+      const fcmax = refs?.FCmax ?? null;
+
+      if (z1max && z2max && z3max && z4max) {
+        // Interpolation dans les bornes de zone stockées
+        // Zones → [0-30%] [30-50%] [50-70%] [70-85%] [85-100%]
+        const z0min = refs?.FCzone_Z0_min ?? 0;
+        const zones = [
+          { lo: z0min, hi: z1max, pctLo: 0,  pctHi: 30 },
+          { lo: z1max, hi: z2max, pctLo: 30, pctHi: 50 },
+          { lo: z2max, hi: z3max, pctLo: 50, pctHi: 70 },
+          { lo: z3max, hi: z4max, pctLo: 70, pctHi: 85 },
+          { lo: z4max, hi: fcmax ?? z4max * 1.08, pctLo: 85, pctHi: 100 },
+        ];
+        for (const z of zones) {
+          if (avg <= z.hi || z === zones[zones.length - 1]) {
+            const t = z.hi > z.lo ? Math.max(0, Math.min(1, (avg - z.lo) / (z.hi - z.lo))) : 0.5;
+            return Math.round(z.pctLo + t * (z.pctHi - z.pctLo));
+          }
+        }
+      }
+
+      // Fallback FCmax seule
       if (fcmax && fcmax > 0) {
-        const avg = (target.min + target.max) / 2;
         return Math.min(100, (avg / fcmax) * 100);
       }
-      return null;
+      // Estimation générique 100–200 bpm
+      const normalized = Math.max(0, Math.min(1, (avg - 100) / 100));
+      return Math.round(20 + normalized * 80);
     }
 
     case 'power': {
@@ -258,6 +308,7 @@ export function targetToIntensityPct(
         const avg = (target.min + target.max) / 2;
         return Math.min(150, (avg / ref) * 100);
       }
+      // Sans FTP/PMA : pas d'estimation universelle possible sans context
       return null;
     }
 
