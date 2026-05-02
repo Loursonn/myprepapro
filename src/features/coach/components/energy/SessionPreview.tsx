@@ -14,6 +14,7 @@ import {
   intensityToColor,
   computeZoneDistribution,
   estimateIntervalDuration,
+  ROLE_FALLBACK_PCT,
 } from "@/lib/energy";
 import type { EnergyGroup } from "@/types/energy";
 import HatchPattern from "./HatchPattern";
@@ -99,11 +100,16 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
   // Build bar list with cumulative start times
   let cumul = 0;
   const bars = flat.map((fi) => {
-    const dur   = estimateIntervalDuration(fi.interval, calcOptions);
-    const pct   = targetToIntensityPct(fi.interval.target, refs);
-    const start = cumul;
+    const dur        = estimateIntervalDuration(fi.interval, calcOptions);
+    const pctFromRef = targetToIntensityPct(fi.interval.target, refs);
+    // Fallback : estimation depuis le rôle si pas de référence ni valeur calculable
+    const roleFallback = ROLE_FALLBACK_PCT[fi.interval.role] ?? 50;
+    const pct      = pctFromRef;
+    const displayPct = pctFromRef ?? roleFallback;
+    const isFallback = pctFromRef === null;
+    const start    = cumul;
     cumul += dur;
-    return { fi, dur, pct, start };
+    return { fi, dur, pct, displayPct, isFallback, start };
   });
 
   // ── SVG layout constants ────────────────────────────────────────────────────
@@ -139,22 +145,21 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
         style={{ display: "block", overflow: "visible" }}
         onMouseLeave={() => setTooltip(null)}
       >
-        <defs>
-          <HatchPattern id="hatch-gray" />
-        </defs>
+        <defs />
 
         {/* Background */}
         <rect x={0} y={0} width={svgW} height={BAR_AREA} fill="rgba(255,255,255,0.03)" rx={4} />
 
         {/* Intensity bars */}
-        {bars.map(({ fi, dur, pct, start }, i) => {
+        {bars.map(({ fi, dur, pct, displayPct, isFallback, start }, i) => {
           if (dur === 0) return null;
           const x      = xOf(start);
           const x2     = xOf(start + dur);
           const w      = Math.max(1, x2 - x);
-          const intPct = pct ?? 30;
-          const barH   = Math.max(2, (intPct / 100) * BAR_AREA);
-          const fill   = pct !== null ? intensityToColor(pct) : "url(#hatch-gray)";
+          const barH   = Math.max(2, (displayPct / 100) * BAR_AREA);
+          // Couleur : vraie intensité = solid, fallback rôle = même couleur mais légèrement désaturée
+          const fill   = intensityToColor(displayPct);
+          const opacity = isFallback ? 0.55 : 0.85;
           const barY   = BAR_AREA - barH;
 
           return (
@@ -165,29 +170,26 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
                 width={w}
                 height={barH}
                 fill={fill}
-                opacity={0.85}
+                opacity={opacity}
                 rx={1}
                 style={{ cursor: "crosshair" }}
                 onMouseEnter={(e) => {
                   const svgRect = svgRef.current?.getBoundingClientRect();
                   if (!svgRect) return;
-                  const p = pct;
-                  const zone = p === null ? null
-                    : p <= 30 ? "Zone 1"
+                  const p = displayPct;
+                  const zone = p <= 30 ? "Zone 1"
                     : p <= 50 ? "Zone 2"
                     : p <= 70 ? "Zone 3"
                     : p <= 85 ? "Zone 4"
                     : "Zone 5";
                   const targetStr = formatTarget(fi.interval.target);
-                  const pctLabel = p !== null ? ` ${Math.round(p)}%` : "";
+                  const pctLabel = ` ${Math.round(p)}%${isFallback ? " (estimé)" : ""}`;
                   setTooltip({
                     x: e.clientX - svgRect.left,
                     y: barY,
                     role: ROLE_LABEL[fi.interval.role] ?? fi.interval.role,
                     duration: formatS(dur),
-                    target: zone
-                      ? `${zone}${pctLabel}${targetStr && targetStr !== "Libre" ? ` · ${targetStr}` : ""}`
-                      : (targetStr || "Libre"),
+                    target: `${zone}${pctLabel}${targetStr && targetStr !== "Libre" ? ` · ${targetStr}` : ""}`,
                     notes: fi.interval.notes,
                   });
                 }}
@@ -223,23 +225,26 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
 
         {/* Zone reference lines at intensity thresholds */}
         {[
-          { pct: 30, label: "Z2" },
-          { pct: 50, label: "Z3" },
-          { pct: 70, label: "Z4" },
-          { pct: 85, label: "Z5" },
-        ].map(({ pct, label: zLabel }) => {
-          const y = BAR_AREA - (pct / 100) * BAR_AREA;
+          { pct: 30, label: "Z2", color: intensityToColor(30) },
+          { pct: 50, label: "Z3", color: intensityToColor(50) },
+          { pct: 70, label: "Z4", color: intensityToColor(70) },
+          { pct: 85, label: "Z5", color: intensityToColor(85) },
+        ].map(({ pct: zonePct, label: zLabel, color }) => {
+          const y = BAR_AREA - (zonePct / 100) * BAR_AREA;
           return (
-            <g key={pct}>
+            <g key={zonePct}>
               <line
-                x1={0} y1={y} x2={svgW - 24} y2={y}
-                stroke="rgba(255,255,255,0.10)" strokeWidth={0.8}
-                strokeDasharray="3 3"
+                x1={0} y1={y} x2={svgW - 28} y2={y}
+                stroke={color} strokeWidth={0.8} opacity={0.35}
+                strokeDasharray="4 3"
               />
+              <rect x={svgW - 26} y={y - 7} width={24} height={13} rx={3}
+                fill={color} opacity={0.18} />
               <text
-                x={svgW - 20} y={y + 3}
-                fontSize={8} fill="rgba(255,255,255,0.30)"
-                fontFamily="inherit" fontWeight={600}
+                x={svgW - 14} y={y + 3}
+                textAnchor="middle"
+                fontSize={8} fill={color} opacity={0.85}
+                fontFamily="inherit" fontWeight={700}
               >
                 {zLabel}
               </text>

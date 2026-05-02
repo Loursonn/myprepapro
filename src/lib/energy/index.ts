@@ -214,6 +214,19 @@ export function computeTotals(flat: FlatInterval[], options?: EnergyCalcOptions)
  *   power + refs.FTP (W)      → (avg_watts / FTP) * 100
  *   power + refs.PMA (W)      → (avg_watts / PMA) * 100 (fallback)
  */
+/**
+ * Intensité de fallback basée sur le rôle de l'intervalle.
+ * Utilisée quand les références athlète ne sont pas disponibles.
+ */
+export const ROLE_FALLBACK_PCT: Record<string, number> = {
+  warmup:   35,
+  work:     80,
+  recovery: 45,
+  rest:     15,
+  cooldown: 30,
+  open:     55,
+};
+
 export function targetToIntensityPct(
   target: EnergyTarget,
   refs?: Record<string, number>,
@@ -240,14 +253,27 @@ export function targetToIntensityPct(
         const speedKmh = 3600 / avgSPerKm;
         return Math.min(120, (speedKmh / refs.VMA) * 100);
       }
+      // Sans VMA : estimation depuis la plage d'allure typique (2:30–8:00 /km)
+      // 2:30 = 150 s/km (sprint élite) → 100%, 8:00 = 480 s/km (footing doux) → 30%
+      const avgSPerKm = (target.min_s_per_unit + target.max_s_per_unit) / 2;
+      if (avgSPerKm > 0) {
+        const normalized = Math.max(0, Math.min(1, (480 - avgSPerKm) / (480 - 150)));
+        return Math.round(30 + normalized * 70); // 30% → 100%
+      }
       return null;
     }
 
     case 'hr_bpm': {
-      const fcmax = refs?.FCmax ?? refs?.['FCmax'] ?? null;
+      const fcmax = refs?.FCmax ?? null;
       if (fcmax && fcmax > 0) {
         const avg = (target.min + target.max) / 2;
         return Math.min(100, (avg / fcmax) * 100);
+      }
+      // Sans FCmax : estimation depuis plage typique 100–200 bpm
+      const avg = (target.min + target.max) / 2;
+      if (avg > 0) {
+        const normalized = Math.max(0, Math.min(1, (avg - 100) / 100));
+        return Math.round(20 + normalized * 80); // 20% → 100%
       }
       return null;
     }
@@ -258,6 +284,7 @@ export function targetToIntensityPct(
         const avg = (target.min + target.max) / 2;
         return Math.min(150, (avg / ref) * 100);
       }
+      // Sans FTP/PMA : pas d'estimation universelle possible sans context
       return null;
     }
 
