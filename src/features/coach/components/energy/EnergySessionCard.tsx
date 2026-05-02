@@ -89,13 +89,16 @@ interface Props {
   canEdit: boolean;
   canVerify: boolean;
   canDelete: boolean;
+  userId?: string;
 }
 
-export default function EnergySessionCard({ session, canEdit, canVerify, canDelete }: Props) {
+export default function EnergySessionCard({ session, canEdit, canVerify, canDelete, userId }: Props) {
   const navigate = useNavigate();
   const verifyMutation  = useVerifyEnergySession();
   const deleteMutation  = useDeleteEnergySession();
   const createMutation  = useCreateEnergySession();
+
+  const isOwn = !!userId && session.created_by === userId;
 
   // Build root group for preview
   const root: EnergyGroup = {
@@ -121,7 +124,7 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
   }
 
   async function handleDuplicate() {
-    const newRoot = makeRootGroup();
+    void makeRootGroup(); // unused but kept to avoid tree-shaking side effects
     await createMutation.mutateAsync({
       name: `${session.name} (copie)`,
       session_kind: session.session_kind,
@@ -129,6 +132,20 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
       structure_type: session.structure_type,
       intervals: session.intervals,
       notes: session.notes,
+      created_by: userId ?? null,
+    });
+  }
+
+  async function handleCopyToPersonal() {
+    if (!userId) return;
+    await createMutation.mutateAsync({
+      name: session.name,
+      session_kind: session.session_kind,
+      custom_kind: session.custom_kind,
+      structure_type: session.structure_type,
+      intervals: session.intervals,
+      notes: session.notes,
+      created_by: userId,
     });
   }
 
@@ -193,6 +210,23 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+            {/* Copier dans ma banque — visible si la séance appartient à un autre coach */}
+            {userId && !isOwn && (
+              <button
+                onClick={handleCopyToPersonal}
+                disabled={createMutation.isPending}
+                title="Copier dans ma banque personnelle"
+                style={{
+                  padding: "4px 8px", borderRadius: 6,
+                  border: `1px solid ${C.ac}50`, background: C.ac + "12",
+                  color: C.ac, fontSize: 10, fontWeight: 600,
+                  cursor: "pointer", fontFamily: "inherit",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {createMutation.isPending ? "…" : "+ Ma banque"}
+              </button>
+            )}
             {canVerify && !session.is_verified && (
               <button
                 onClick={() => verifyMutation.mutate({ id: session.id, verify: true })}
