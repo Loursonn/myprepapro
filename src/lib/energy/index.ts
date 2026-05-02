@@ -139,12 +139,10 @@ function _targetToMetersPerSecond(target?: EnergyTarget): number {
   if (!target) return DEFAULT_M_PER_S;
 
   if (target.kind === 'pace') {
-    const avg = (target.min + target.max) / 2;
-    if (target.unit === 'kmh') {
-      return avg / 3.6;  // km/h → m/s
-    }
-    // min/km → m/s : 1 min/km = 1000 m / (avg * 60 s)
-    if (avg > 0) return 1000 / (avg * 60);
+    // Both units store seconds per km. m/s = 1000 / sPerKm.
+    // For kmh display, 3600/sPerKm gives km/h, but storage is always s/km.
+    const avgSPerKm = (target.min_s_per_unit + target.max_s_per_unit) / 2;
+    if (avgSPerKm > 0) return 1000 / avgSPerKm;
   }
 
   return DEFAULT_M_PER_S;
@@ -247,8 +245,9 @@ export function targetToIntensityPct(target: EnergyTarget): number | null {
 export function intensityToColor(pct: number): string {
   const t = Math.max(0, Math.min(100, pct)) / 100;  // normalise en [0,1]
   const hue = Math.round(140 * (1 - t));             // 140 → 0
-  const sat  = Math.round(70 + 10 * t);              // 70% → 80%
-  return `hsl(${hue}, ${sat}%, 50%)`;
+  const sat  = Math.round(75 + 5 * t);               // 75% → 80%
+  const lum  = Math.round(50 - 5 * t);               // 50% → 45%
+  return `hsl(${hue}, ${sat}%, ${lum}%)`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

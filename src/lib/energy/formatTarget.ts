@@ -13,9 +13,10 @@ export function formatTarget(target: EnergyTarget): string {
       return `${target.min}–${target.max} bpm`;
     case "pace":
       if (target.unit === "min_per_km") {
-        return `${_fmtPace(target.min)}–${_fmtPace(target.max)}/km`;
+        return `${_fmtPace(target.min_s_per_unit)}–${_fmtPace(target.max_s_per_unit)}/km`;
       }
-      return `${target.min}–${target.max} km/h`;
+      // kmh: stored as s/km, display as km/h
+      return `${(3600 / target.min_s_per_unit).toFixed(1)}–${(3600 / target.max_s_per_unit).toFixed(1)} km/h`;
     case "pace_test_pct":
       return `${target.min}–${target.max}% ${target.test_metric}`;
     case "power":
@@ -36,10 +37,10 @@ export function formatTarget(target: EnergyTarget): string {
   }
 }
 
-/** Formate un nombre de minutes décimales en "M'SS" (ex: 5.25 → "5'15") */
-function _fmtPace(minPerKm: number): string {
-  const mins = Math.floor(minPerKm);
-  const secs = Math.round((minPerKm - mins) * 60);
+/** Formate des secondes par km en "M'SS" (ex: 260 → "4'20") */
+function _fmtPace(secondsPerKm: number): string {
+  const mins = Math.floor(secondsPerKm / 60);
+  const secs = Math.round(secondsPerKm % 60);
   return `${mins}'${String(secs).padStart(2, "0")}`;
 }
 
