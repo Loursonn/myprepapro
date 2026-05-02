@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { X, Trash2, Plus, ChevronLeft } from "lucide-react";
@@ -10,6 +10,8 @@ import { useEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Competition } from "@/types/planning";
+import type { WellnessData } from "@/features/shared/types/athlete";
+import type { NutritionDailyLog } from "@/lib/nutrition";
 import { CompetitionFormModal } from "./CompetitionFormModal";
 import { SessionPreviewModal } from "@/features/coach/components/energy/SessionPreviewModal";
 
@@ -439,6 +441,65 @@ interface DayDetailsDrawerProps {
   onQuickAdd: (day: Date) => void;
   exos?: Record<string, unknown[]>;
   sets?: Record<string, unknown[]>;
+  initialSelectedEvent?: CalEvent | null;
+  wellnessHistory?: Record<string, WellnessData>;
+  nutritionLog?: Record<string, unknown>;
+}
+
+// ── WellnessDayView ───────────────────────────────────────────────────────────
+
+function WellnessDayView({ wellness }: { wellness: WellnessData }) {
+  const score = Math.round(((wellness.fatigue ?? 3) + (wellness.sommeil ?? 3) + (wellness.stress ?? 3) + (wellness.energie ?? 3) + (wellness.doms ?? 3)) / 25 * 100);
+  const color = score >= 80 ? "#22C993" : score >= 65 ? "#7BC67E" : score >= 50 ? C.o : score >= 35 ? "#F07030" : C.r;
+  const label = score >= 80 ? "Optimal" : score >= 65 ? "Bon" : score >= 50 ? "Modéré" : score >= 35 ? "Fatigué" : "Surmenage";
+  const metrics = [
+    { k: "Récup.", v: wellness.fatigue }, { k: "Sommeil", v: wellness.sommeil },
+    { k: "Sérén.", v: wellness.stress }, { k: "Énergie", v: wellness.energie }, { k: "Fraîch.", v: wellness.doms },
+  ].filter((m): m is { k: string; v: number } => m.v != null);
+  return (
+    <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, padding: "10px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: metrics.length > 0 ? 8 : 0 }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color }}>{score}</span>
+        <span style={{ fontSize: 9, color: C.tx3 }}>/100</span>
+        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, background: color + "20", color }}>{label}</span>
+        {wellness.poids != null && <span style={{ fontSize: 10, color: C.tx3, marginLeft: "auto" }}>⚖️ {wellness.poids} kg</span>}
+      </div>
+      {metrics.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 12px" }}>
+          {metrics.map(({ k, v }) => (
+            <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 9, color: C.tx3 }}>{k}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.tx }}>{v}/5</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── NutritionDayView ──────────────────────────────────────────────────────────
+
+function NutritionDayView({ nutrition }: { nutrition: NutritionDailyLog }) {
+  const { total_calories_consumed: kcal, active_calories: active, glucides_consumed: glucides, lipides_consumed: lipides, proteines_consumed: proteines } = nutrition;
+  const hasMacros = glucides != null || lipides != null || proteines != null;
+  return (
+    <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, padding: "10px 12px" }}>
+      {kcal != null && (
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.tx, marginBottom: hasMacros ? 6 : 0 }}>
+          {kcal} <span style={{ fontSize: 11, fontWeight: 400, color: C.tx3 }}>kcal</span>
+          {active != null && <span style={{ fontSize: 10, color: C.tx3, fontWeight: 400, marginLeft: 8 }}>(dépense : {active} kcal)</span>}
+        </div>
+      )}
+      {hasMacros && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 12px" }}>
+          {proteines != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: C.tx3 }}>Prot.</span><span style={{ fontSize: 10, fontWeight: 700, color: "#3B8DF0" }}>{proteines}g</span></div>}
+          {glucides != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: C.tx3 }}>Gluc.</span><span style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B" }}>{glucides}g</span></div>}
+          {lipides != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: C.tx3 }}>Lip.</span><span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444" }}>{lipides}g</span></div>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Fetches full EnergySessionRow when an energy event is selected. */
@@ -476,19 +537,32 @@ export function DayDetailsDrawer({
   onQuickAdd,
   exos,
   sets,
+  initialSelectedEvent,
+  wellnessHistory,
+  nutritionLog,
 }: DayDetailsDrawerProps) {
-  const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(initialSelectedEvent ?? null);
   const [editingComp,   setEditingComp]   = useState<Competition | null>(null);
   const [energyPreview, setEnergyPreview] = useState<CalEvent | null>(null);
   const { user } = useAuth();
 
+  useEffect(() => {
+    setSelectedEvent(initialSelectedEvent ?? null);
+    setEnergyPreview(null);
+  }, [day, initialSelectedEvent]);
+
   if (!open || !day) return null;
 
-  const dayEvents = events.filter((e) => e.date === format(day, "yyyy-MM-dd"));
+  const dateStr = format(day, "yyyy-MM-dd");
+  const dayEvents = events.filter((e) => e.date === dateStr);
   const workouts     = dayEvents.filter((e) => e.type === "workout");
   const tests        = dayEvents.filter((e) => e.type === "test");
   const competitions = dayEvents.filter((e) => e.type === "competition");
   const energyEvents = dayEvents.filter((e) => e.type === "energy");
+
+  const wKey = dateStr.replace(/-/g, "");
+  const wellnessDay = (wellnessHistory?.[wKey] ?? wellnessHistory?.[dateStr]) ?? null;
+  const nutritionDay = (nutritionLog?.[dateStr] ?? nutritionLog?.[wKey] ?? null) as NutritionDailyLog | null;
 
   const handleClose = () => {
     setSelectedEvent(null);
@@ -682,6 +756,20 @@ export function DayDetailsDrawer({
                       <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} onPreview={setEnergyPreview} />
                     ))}
                   </div>
+                </section>
+              )}
+
+              {wellnessDay && (
+                <section>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#22C993", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>❤️ Bien-être</div>
+                  <WellnessDayView wellness={wellnessDay} />
+                </section>
+              )}
+
+              {nutritionDay && (
+                <section>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>🍽️ Nutrition</div>
+                  <NutritionDayView nutrition={nutritionDay} />
                 </section>
               )}
             </>
