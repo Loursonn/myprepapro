@@ -1,23 +1,21 @@
 /**
  * ProfilSportifPage
  *
- * Gestion des références de performance d'un athlète :
- *   VMA, FCmax, FC seuil, FC repos, FTP, PMA, VO₂max, Poids
- *
- * Ces valeurs alimentent les calculs d'intensité dans SessionPreview
- * et les zones affichées sur le calendrier.
- *
+ * Références de performance + zones FC ajustables + métriques personnalisées.
  * Route : /coach/athletes/:athleteId/profil-sportif
  */
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Plus, Pencil, X, Check } from "lucide-react";
 import { C } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-// ── Metric definitions ────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type Category = "cardio" | "puissance" | "vitesse" | "corpo" | "custom";
 
 interface MetricDef {
   key: string;
@@ -27,90 +25,90 @@ interface MetricDef {
   min?: number;
   max?: number;
   step?: number;
-  category: "cardio" | "puissance" | "vitesse" | "corpo";
+  category: Category;
 }
 
+// ── Predefined metrics ────────────────────────────────────────────────────────
+
 const METRICS: MetricDef[] = [
-  // Cardio
-  { key: "FCmax",   label: "FC max",        unit: "bpm",       description: "Fréquence cardiaque maximale",     min: 100, max: 230, step: 1,   category: "cardio"    },
-  { key: "FCseuil", label: "FC seuil",      unit: "bpm",       description: "FC au seuil lactique (~85% FCmax)", min: 80,  max: 220, step: 1,   category: "cardio"    },
-  { key: "FCrepos", label: "FC repos",      unit: "bpm",       description: "Fréquence cardiaque de repos",     min: 30,  max: 100, step: 1,   category: "cardio"    },
-  // Vitesse / Endurance
-  { key: "VMA",     label: "VMA",           unit: "km/h",      description: "Vitesse Maximale Aérobie",          min: 8,   max: 25,  step: 0.1, category: "vitesse"   },
-  { key: "VO2max",  label: "VO₂max",        unit: "mL/kg/min", description: "Consommation maximale d'oxygène",   min: 20,  max: 90,  step: 0.1, category: "vitesse"   },
-  // Puissance
-  { key: "FTP",     label: "FTP",           unit: "W",         description: "Functional Threshold Power (vélo)", min: 50,  max: 600, step: 5,   category: "puissance" },
-  { key: "PMA",     label: "PMA",           unit: "W",         description: "Puissance Maximale Aérobie",        min: 50,  max: 900, step: 5,   category: "puissance" },
-  // Corpo
-  { key: "poids",   label: "Poids",         unit: "kg",        description: "Poids de référence",                min: 30,  max: 200, step: 0.1, category: "corpo"     },
+  { key: "FCmax",   label: "FC max",   unit: "bpm",       description: "Fréquence cardiaque maximale",      min: 100, max: 230, step: 1,   category: "cardio"    },
+  { key: "FCseuil", label: "FC seuil", unit: "bpm",       description: "FC au seuil lactique (~85% FCmax)", min: 80,  max: 220, step: 1,   category: "cardio"    },
+  { key: "FCrepos", label: "FC repos", unit: "bpm",       description: "Fréquence cardiaque de repos",      min: 30,  max: 100, step: 1,   category: "cardio"    },
+  { key: "VMA",     label: "VMA",      unit: "km/h",      description: "Vitesse Maximale Aérobie",          min: 8,   max: 25,  step: 0.1, category: "vitesse"   },
+  { key: "VO2max",  label: "VO₂max",   unit: "mL/kg/min", description: "Consommation maximale d'oxygène",   min: 20,  max: 90,  step: 0.1, category: "vitesse"   },
+  { key: "FTP",     label: "FTP",      unit: "W",         description: "Functional Threshold Power (vélo)", min: 50,  max: 600, step: 5,   category: "puissance" },
+  { key: "PMA",     label: "PMA",      unit: "W",         description: "Puissance Maximale Aérobie",        min: 50,  max: 900, step: 5,   category: "puissance" },
+  { key: "poids",   label: "Poids",    unit: "kg",        description: "Poids de référence",                min: 30,  max: 200, step: 0.1, category: "corpo"     },
 ];
 
-const CATEGORY_LABEL: Record<MetricDef["category"], string> = {
+const PREDEFINED_KEYS = new Set(METRICS.map((m) => m.key));
+
+const CATEGORY_LABEL: Record<Category, string> = {
   cardio:    "Cardiaque",
   vitesse:   "Vitesse / Endurance",
   puissance: "Puissance",
   corpo:     "Corporel",
+  custom:    "Personnalisées",
 };
 
-const CATEGORY_COLOR: Record<MetricDef["category"], string> = {
+const CATEGORY_COLOR: Record<Category, string> = {
   cardio:    "#EF4444",
   vitesse:   "#3B8DF0",
   puissance: "#F59E0B",
   corpo:     "#10B981",
+  custom:    "#A855F7",
 };
 
-// ── Zone computations ─────────────────────────────────────────────────────────
+// ── Zone FC computations ──────────────────────────────────────────────────────
 
-interface Zone { label: string; min: string; max: string; color: string }
+interface FcZoneDef { label: string; color: string; zoneKey: string }
 
-function fcZones(fcmax: number, fcrep = 0): Zone[] {
-  // Méthode Karvonen si FCrepos disponible, sinon % FCmax brut
+const FC_ZONES_DEF: FcZoneDef[] = [
+  { label: "Z1 — Récupération", color: "#22C55E", zoneKey: "FCzone_Z1_max" },
+  { label: "Z2 — Endurance",    color: "#84CC16", zoneKey: "FCzone_Z2_max" },
+  { label: "Z3 — Tempo",        color: "#EAB308", zoneKey: "FCzone_Z3_max" },
+  { label: "Z4 — Seuil",        color: "#F97316", zoneKey: "FCzone_Z4_max" },
+  { label: "Z5 — VO₂max",       color: "#EF4444", zoneKey: "FCzone_Z5_max" },
+];
+
+function computeDefaultFcZones(fcmax: number, fcrep = 0) {
   const fcr = fcrep || 0;
   const reserve = fcmax - fcr;
+  const k = (pct: number) => fcrep ? Math.round(fcr + reserve * pct) : Math.round(fcmax * pct);
+  return [k(0.60), k(0.70), k(0.80), k(0.90), fcmax];
+}
 
-  function k(pct: number) {
-    return fcrep ? Math.round(fcr + reserve * pct) : Math.round(fcmax * pct);
-  }
-
+function vmaZones(vma: number) {
+  const p = (pct: number) => {
+    const kmh = vma * pct;
+    const s = 3600 / kmh;
+    const m = Math.floor(s / 60);
+    const ss = Math.round(s % 60).toString().padStart(2, "0");
+    return `${m}:${ss}`;
+  };
   return [
-    { label: "Z1 — Récupération",  min: `${k(0.50)}`, max: `${k(0.60)}`, color: "#22C55E" },
-    { label: "Z2 — Endurance",     min: `${k(0.60)}`, max: `${k(0.70)}`, color: "#84CC16" },
-    { label: "Z3 — Tempo",         min: `${k(0.70)}`, max: `${k(0.80)}`, color: "#EAB308" },
-    { label: "Z4 — Seuil",         min: `${k(0.80)}`, max: `${k(0.90)}`, color: "#F97316" },
-    { label: "Z5 — VO₂max",        min: `${k(0.90)}`, max: `${k(1.00)}`, color: "#EF4444" },
+    { label: "Z1 — Footing",   min: p(0.65), max: p(0.72), color: "#22C55E" },
+    { label: "Z2 — Endurance", min: p(0.72), max: p(0.82), color: "#84CC16" },
+    { label: "Z3 — Tempo",     min: p(0.82), max: p(0.89), color: "#EAB308" },
+    { label: "Z4 — Seuil",     min: p(0.89), max: p(0.95), color: "#F97316" },
+    { label: "Z5 — VMA",       min: p(0.95), max: p(1.05), color: "#EF4444" },
   ];
 }
 
-function vmaZones(vma: number): Zone[] {
-  function kmhToPace(kmh: number) {
-    if (kmh <= 0) return "—";
-    const sPerKm = 3600 / kmh;
-    const m = Math.floor(sPerKm / 60);
-    const s = Math.round(sPerKm % 60).toString().padStart(2, "0");
-    return `${m}:${s}/km`;
-  }
+function ftpZones(ftp: number) {
+  const w = (pct: number) => Math.round(ftp * pct);
   return [
-    { label: "Z1 — Footing",      min: kmhToPace(vma * 0.65), max: kmhToPace(vma * 0.72), color: "#22C55E" },
-    { label: "Z2 — Endurance",    min: kmhToPace(vma * 0.72), max: kmhToPace(vma * 0.82), color: "#84CC16" },
-    { label: "Z3 — Tempo",        min: kmhToPace(vma * 0.82), max: kmhToPace(vma * 0.89), color: "#EAB308" },
-    { label: "Z4 — Seuil",        min: kmhToPace(vma * 0.89), max: kmhToPace(vma * 0.95), color: "#F97316" },
-    { label: "Z5 — VMA",          min: kmhToPace(vma * 0.95), max: kmhToPace(vma * 1.05), color: "#EF4444" },
+    { label: "Z1 — Récupération", range: `< ${w(0.55)} W`,                        color: "#22C55E" },
+    { label: "Z2 — Endurance",    range: `${w(0.55)}–${w(0.75)} W`,               color: "#84CC16" },
+    { label: "Z3 — Tempo",        range: `${w(0.75)}–${w(0.90)} W`,               color: "#EAB308" },
+    { label: "Z4 — Seuil",        range: `${w(0.90)}–${w(1.05)} W`,               color: "#F97316" },
+    { label: "Z5 — VO₂max",       range: `${w(1.05)}–${w(1.20)} W`,               color: "#EF4444" },
   ];
 }
 
-function ftpZones(ftp: number): Zone[] {
-  return [
-    { label: "Z1 — Récupération", min: "< 55%",    max: `< ${Math.round(ftp * 0.55)} W`, color: "#22C55E" },
-    { label: "Z2 — Endurance",    min: "55–75%",   max: `${Math.round(ftp * 0.55)}–${Math.round(ftp * 0.75)} W`, color: "#84CC16" },
-    { label: "Z3 — Tempo",        min: "75–90%",   max: `${Math.round(ftp * 0.75)}–${Math.round(ftp * 0.90)} W`, color: "#EAB308" },
-    { label: "Z4 — Seuil",        min: "90–105%",  max: `${Math.round(ftp * 0.90)}–${Math.round(ftp * 1.05)} W`, color: "#F97316" },
-    { label: "Z5 — VO₂max",       min: "105–120%", max: `${Math.round(ftp * 1.05)}–${Math.round(ftp * 1.20)} W`, color: "#EF4444" },
-  ];
-}
+// ── DB hooks ──────────────────────────────────────────────────────────────────
 
-// ── DB hook ───────────────────────────────────────────────────────────────────
-
-type RefsMap = Record<string, { value: number; date: string; id: string }>;
+type RefsMap = Record<string, { value: number; date: string; id: string; unit: string; metric_type?: string | null }>;
 
 function useAthleteRefs(athleteId: string) {
   return useQuery<RefsMap>({
@@ -118,13 +116,13 @@ function useAthleteRefs(athleteId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("performance_logs")
-        .select("id, metric_name, value, unit, date")
+        .select("id, metric_name, value, unit, date, metric_type")
         .eq("athlete_id", athleteId)
         .eq("is_active_reference", true);
       if (error) throw error;
       const map: RefsMap = {};
       for (const row of data ?? []) {
-        map[row.metric_name] = { value: row.value, date: row.date, id: row.id };
+        map[row.metric_name] = { value: row.value, date: row.date, id: row.id, unit: row.unit, metric_type: row.metric_type };
       }
       return map;
     },
@@ -137,8 +135,9 @@ function useUpsertRef(athleteId: string) {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ metricName, value, unit }: { metricName: string; value: number; unit: string }) => {
-      // Désactive les anciennes références actives pour cette métrique
+    mutationFn: async ({
+      metricName, value, unit, metricType = "reference",
+    }: { metricName: string; value: number; unit: string; metricType?: string }) => {
       await supabase
         .from("performance_logs")
         .update({ is_active_reference: false })
@@ -146,11 +145,10 @@ function useUpsertRef(athleteId: string) {
         .eq("metric_name", metricName)
         .eq("is_active_reference", true);
 
-      // Insère la nouvelle valeur de référence
       const { error } = await supabase.from("performance_logs").insert({
         athlete_id: athleteId,
         metric_name: metricName,
-        metric_type: "reference",
+        metric_type: metricType,
         value,
         unit,
         date: new Date().toISOString().slice(0, 10),
@@ -169,19 +167,32 @@ function useUpsertRef(athleteId: string) {
   });
 }
 
+function useDeleteRef(athleteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("performance_logs").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["athlete-refs-full", athleteId] });
+      qc.invalidateQueries({ queryKey: ["athlete-references", athleteId] });
+      toast.success("Donnée supprimée");
+    },
+    onError: () => toast.error("Erreur lors de la suppression"),
+  });
+}
+
 // ── MetricCard ────────────────────────────────────────────────────────────────
 
 function MetricCard({
-  metric,
-  currentValue,
-  currentDate,
-  onSave,
-  saving,
+  metric, currentValue, currentDate, onSave, onDelete, saving,
 }: {
   metric: MetricDef;
   currentValue?: number;
   currentDate?: string;
   onSave: (value: number) => void;
+  onDelete?: () => void;
   saving: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -196,15 +207,15 @@ function MetricCard({
   }
 
   return (
-    <div style={{
-      background: C.s1, border: "1px solid " + C.brd, borderRadius: 12,
-      padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8,
-      transition: "border-color 150ms",
-    }}
+    <div
+      style={{
+        background: C.s1, border: "1px solid " + C.brd, borderRadius: 12,
+        padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8,
+        transition: "border-color 150ms",
+      }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = color + "50")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.brd)}
     >
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
@@ -212,21 +223,34 @@ function MetricCard({
           </div>
           <div style={{ fontSize: 10, color: C.tx3 }}>{metric.description}</div>
         </div>
-        {!editing && (
-          <button
-            onClick={() => { setDraft(currentValue?.toString() ?? ""); setEditing(true); }}
-            style={{
-              padding: "3px 10px", borderRadius: 6, border: "1px solid " + C.brdL,
-              background: "transparent", color: C.tx3, fontSize: 11,
-              cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-            }}
-          >
-            {currentValue != null ? "Modifier" : "+ Saisir"}
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 4 }}>
+          {!editing && (
+            <button
+              onClick={() => { setDraft(currentValue?.toString() ?? ""); setEditing(true); }}
+              style={{
+                padding: "3px 8px", borderRadius: 6, border: "1px solid " + C.brdL,
+                background: "transparent", color: C.tx3, fontSize: 11,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              {currentValue != null ? <Pencil size={11} /> : <Plus size={11} />}
+            </button>
+          )}
+          {onDelete && currentValue != null && !editing && (
+            <button
+              onClick={onDelete}
+              style={{
+                padding: "3px 8px", borderRadius: 6, border: "1px solid " + C.r + "30",
+                background: "transparent", color: C.r, fontSize: 11,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Value display / edit */}
       {editing ? (
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input
@@ -244,27 +268,12 @@ function MetricCard({
               color: C.tx, fontSize: 14, fontWeight: 700, fontFamily: "inherit", outline: "none",
             }}
           />
-          <span style={{ fontSize: 12, color: C.tx3, flexShrink: 0 }}>{metric.unit}</span>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              padding: "7px 14px", borderRadius: 8, border: "none",
-              background: color, color: "#fff", fontSize: 12, fontWeight: 700,
-              cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-            }}
-          >
-            {saving ? "…" : "OK"}
+          <span style={{ fontSize: 12, color: C.tx3 }}>{metric.unit}</span>
+          <button onClick={handleSave} disabled={saving} style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: color, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <Check size={13} />
           </button>
-          <button
-            onClick={() => setEditing(false)}
-            style={{
-              padding: "7px 10px", borderRadius: 8,
-              border: "1px solid " + C.brdL, background: "transparent",
-              color: C.tx3, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            ✕
+          <button onClick={() => setEditing(false)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+            <X size={13} />
           </button>
         </div>
       ) : currentValue != null ? (
@@ -273,49 +282,271 @@ function MetricCard({
           <span style={{ fontSize: 12, color: C.tx3 }}>{metric.unit}</span>
           {currentDate && (
             <span style={{ fontSize: 10, color: C.tx3, marginLeft: "auto" }}>
-              Mis à jour le {new Date(currentDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+              {new Date(currentDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
             </span>
           )}
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: C.tx3, fontStyle: "italic" }}>
-          Non renseigné
+        <div style={{ fontSize: 12, color: C.tx3, fontStyle: "italic" }}>Non renseigné</div>
+      )}
+    </div>
+  );
+}
+
+// ── FC Zone Editor ────────────────────────────────────────────────────────────
+
+function FcZoneEditor({
+  fcmax, fcrep, storedZones, onSaveZones, saving,
+}: {
+  fcmax: number;
+  fcrep?: number;
+  storedZones: Record<string, number>;
+  onSaveZones: (zones: Record<string, number>) => void;
+  saving: boolean;
+}) {
+  const defaults = computeDefaultFcZones(fcmax, fcrep);
+  const [custom, setCustom] = useState<boolean>(Object.keys(storedZones).length > 0);
+  const [drafts, setDrafts] = useState<string[]>(() =>
+    FC_ZONES_DEF.map((z, i) => (storedZones[z.zoneKey] ?? defaults[i]).toString())
+  );
+
+  function setDraft(i: number, val: string) {
+    setDrafts((prev) => prev.map((d, j) => (j === i ? val : d)));
+  }
+
+  function handleSave() {
+    const vals = drafts.map((d) => parseFloat(d));
+    if (vals.some(isNaN) || vals.some((v) => v <= 0)) { toast.error("Valeurs invalides"); return; }
+    const zones: Record<string, number> = {};
+    FC_ZONES_DEF.forEach((z, i) => { zones[z.zoneKey] = vals[i]; });
+    onSaveZones(zones);
+  }
+
+  function resetToDefaults() {
+    setDrafts(defaults.map(String));
+    const zones: Record<string, number> = {};
+    FC_ZONES_DEF.forEach((z, i) => { zones[z.zoneKey] = defaults[i]; });
+    onSaveZones(zones);
+  }
+
+  const displayVals = custom
+    ? drafts.map((d) => parseFloat(d) || 0)
+    : defaults;
+
+  const prevMax = (i: number) => i === 0 ? 0 : displayVals[i - 1];
+
+  return (
+    <div style={{ background: C.s1, border: "1px solid " + C.brd, borderRadius: 12, overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>
+            Zones FC — FCmax {fcmax} bpm{fcrep ? ` · repos ${fcrep} bpm` : ""}
+          </div>
+          <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+            {custom ? "Bornes personnalisées (connectées au module énergie)" : "Calculé automatiquement"}
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            if (!custom) { setCustom(true); setDrafts(defaults.map(String)); }
+            else { setCustom(false); }
+          }}
+          style={{
+            padding: "4px 10px", borderRadius: 6,
+            border: "1px solid " + (custom ? C.ac + "60" : C.brdL),
+            background: custom ? C.ac + "15" : "transparent",
+            color: custom ? C.ac : C.tx3, fontSize: 11, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          {custom ? "Personnalisé ✓" : "Personnaliser"}
+        </button>
+      </div>
+
+      {/* Zone rows */}
+      <div>
+        {FC_ZONES_DEF.map((z, i) => (
+          <div
+            key={z.zoneKey}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 14px",
+              borderBottom: i < FC_ZONES_DEF.length - 1 ? "1px solid " + C.brd : "none",
+            }}
+          >
+            <div style={{ width: 4, height: 20, borderRadius: 2, background: z.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: C.tx, fontWeight: 600, flex: 1 }}>{z.label}</span>
+            <span style={{ fontSize: 11, color: C.tx3, minWidth: 50 }}>
+              {prevMax(i)} bpm
+            </span>
+            <span style={{ fontSize: 10, color: C.tx3 }}>→</span>
+            {custom ? (
+              <input
+                type="number"
+                value={drafts[i]}
+                onChange={(e) => setDraft(i, e.target.value)}
+                min={prevMax(i) + 1}
+                max={250}
+                style={{
+                  width: 65, padding: "4px 7px", borderRadius: 6,
+                  border: "1px solid " + z.color + "60", background: C.s2,
+                  color: C.tx, fontSize: 12, fontWeight: 700, fontFamily: "inherit", outline: "none",
+                  textAlign: "right",
+                }}
+              />
+            ) : (
+              <span style={{ fontSize: 12, color: C.tx, fontWeight: 700, minWidth: 65, textAlign: "right" }}>
+                {displayVals[i]}
+              </span>
+            )}
+            <span style={{ fontSize: 11, color: C.tx3, minWidth: 24 }}>bpm</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer actions */}
+      {custom && (
+        <div style={{ padding: "10px 14px", borderTop: "1px solid " + C.brd, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button
+            onClick={resetToDefaults}
+            style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Réinitialiser
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: C.ac, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {saving ? "…" : "Enregistrer les zones"}
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-// ── ZoneTable ─────────────────────────────────────────────────────────────────
+// ── Custom metric form ────────────────────────────────────────────────────────
 
-function ZoneTable({ title, zones, unit }: { title: string; zones: Zone[]; unit: string }) {
+const CUSTOM_CATEGORIES: { value: Category; label: string }[] = [
+  { value: "cardio",    label: "Cardiaque"         },
+  { value: "vitesse",   label: "Vitesse / Endurance"},
+  { value: "puissance", label: "Puissance"          },
+  { value: "corpo",     label: "Corporel"           },
+  { value: "custom",    label: "Autre"              },
+];
+
+function CustomMetricForm({ onSave, saving }: { onSave: (name: string, value: number, unit: string, category: Category) => void; saving: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName]     = useState("");
+  const [value, setValue]   = useState("");
+  const [unit, setUnit]     = useState("");
+  const [cat, setCat]       = useState<Category>("custom");
+
+  function handleSubmit() {
+    if (!name.trim()) { toast.error("Nom requis"); return; }
+    const v = parseFloat(value);
+    if (isNaN(v) || v <= 0) { toast.error("Valeur invalide"); return; }
+    onSave(name.trim(), v, unit.trim() || "—", cat);
+    setName(""); setValue(""); setUnit(""); setCat("custom");
+    setOpen(false);
+  }
+
+  if (!open) return (
+    <button
+      onClick={() => setOpen(true)}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "8px 16px", borderRadius: 9, width: "100%",
+        border: "1px dashed " + C.brdL, background: "transparent",
+        color: C.tx3, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+        justifyContent: "center", transition: "all 150ms",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.ac + "60"; e.currentTarget.style.color = C.ac; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.brdL; e.currentTarget.style.color = C.tx3; }}
+    >
+      <Plus size={13} />
+      Ajouter une donnée personnalisée
+    </button>
+  );
+
+  return (
+    <div style={{ background: C.s1, border: "1px solid " + CATEGORY_COLOR.custom + "50", borderRadius: 12, padding: "16px" }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: CATEGORY_COLOR.custom, marginBottom: 12 }}>Nouvelle donnée</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Nom</div>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ex. Lactatémie, Indice…"
+            autoFocus
+            style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Catégorie</div>
+          <select
+            value={cat}
+            onChange={(e) => setCat(e.target.value as Category)}
+            style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none" }}
+          >
+            {CUSTOM_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Valeur</div>
+          <input
+            type="number"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="0"
+            style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Unité</div>
+          <input
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="mmol/L, %, s…"
+            style={{ width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+          />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button onClick={() => setOpen(false)} style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+          Annuler
+        </button>
+        <button onClick={handleSubmit} disabled={saving} style={{ padding: "6px 16px", borderRadius: 7, border: "none", background: CATEGORY_COLOR.custom, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          {saving ? "…" : "Ajouter"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── ZoneTableSimple ───────────────────────────────────────────────────────────
+
+function ZoneTableSimple({ title, rows }: {
+  title: string;
+  rows: Array<{ label: string; range?: string; min?: string; max?: string; color: string }>;
+}) {
   return (
     <div style={{ background: C.s1, border: "1px solid " + C.brd, borderRadius: 12, overflow: "hidden" }}>
       <div style={{ padding: "10px 14px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>
         {title}
       </div>
-      <div>
-        {zones.map((z, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex", alignItems: "center", gap: 12,
-              padding: "9px 14px",
-              borderBottom: i < zones.length - 1 ? "1px solid " + C.brd : "none",
-            }}
-          >
-            <div style={{
-              width: 4, height: 20, borderRadius: 2, background: z.color, flexShrink: 0,
-            }} />
-            <span style={{ fontSize: 12, color: C.tx, fontWeight: 600, flex: 1 }}>{z.label}</span>
-            <span style={{ fontSize: 11, color: C.tx3 }}>{z.min}</span>
-            <span style={{ fontSize: 11, color: C.tx3 }}>→</span>
-            <span style={{ fontSize: 11, color: C.tx2, fontWeight: 600, minWidth: 80, textAlign: "right" }}>
-              {z.max} {unit}
-            </span>
-          </div>
-        ))}
-      </div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: i < rows.length - 1 ? "1px solid " + C.brd : "none" }}>
+          <div style={{ width: 4, height: 20, borderRadius: 2, background: r.color, flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: C.tx, fontWeight: 600, flex: 1 }}>{r.label}</span>
+          <span style={{ fontSize: 11, color: C.tx2, fontWeight: 600, textAlign: "right" }}>
+            {r.range ?? `${r.min} → ${r.max}`}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -326,24 +557,39 @@ export default function ProfilSportifPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const { data: refs = {}, isLoading } = useAthleteRefs(athleteId!);
   const upsert = useUpsertRef(athleteId!);
+  const deleteRef = useDeleteRef(athleteId!);
 
-  const categories = (["cardio", "vitesse", "puissance", "corpo"] as const);
+  const predefined = METRICS;
+  const customEntries = Object.entries(refs).filter(
+    ([k]) => !PREDEFINED_KEYS.has(k) && !k.startsWith("FCzone_")
+  );
 
   const fcmax  = refs["FCmax"]?.value;
   const fcrep  = refs["FCrepos"]?.value;
   const vma    = refs["VMA"]?.value;
   const ftp    = refs["FTP"]?.value;
 
-  const hasZones = fcmax || vma || ftp;
+  const storedFcZones: Record<string, number> = {};
+  FC_ZONES_DEF.forEach((z) => {
+    if (refs[z.zoneKey]) storedFcZones[z.zoneKey] = refs[z.zoneKey].value;
+  });
+
+  async function saveZones(zones: Record<string, number>) {
+    for (const [key, val] of Object.entries(zones)) {
+      await upsert.mutateAsync({ metricName: key, value: val, unit: "bpm", metricType: "zone" });
+    }
+  }
+
+  const categories = (["cardio", "vitesse", "puissance", "corpo"] as const);
 
   return (
-    <div style={{ padding: "0 24px 60px", maxWidth: 900, margin: "0 auto" }}>
+    <div style={{ padding: "0 24px 60px", maxWidth: 960, margin: "0 auto" }}>
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={{ padding: "20px 0 16px" }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: C.tx }}>Profil sportif</div>
         <div style={{ fontSize: 12, color: C.tx3, marginTop: 4 }}>
-          Références de performance actives — alimentent les calculs de zones et de l'éditeur de séances.
+          Références de performance — alimentent les calculs de zones et l'éditeur de séances énergétiques.
         </div>
       </div>
 
@@ -355,31 +601,20 @@ export default function ProfilSportifPage() {
         </div>
       ) : (
         <>
-          {/* ── Metrics grid by category ── */}
+          {/* ── Predefined metrics ── */}
           {categories.map((cat) => {
-            const metricsInCat = METRICS.filter((m) => m.category === cat);
+            const metricsInCat = predefined.filter((m) => m.category === cat);
             return (
-              <div key={cat} style={{ marginBottom: 28 }}>
-                <div style={{
-                  fontSize: 10, fontWeight: 700, color: CATEGORY_COLOR[cat],
-                  textTransform: "uppercase", letterSpacing: "0.06em",
-                  marginBottom: 10, display: "flex", alignItems: "center", gap: 8,
-                }}>
-                  <div style={{ width: 24, height: 2, background: CATEGORY_COLOR[cat], borderRadius: 1 }} />
-                  {CATEGORY_LABEL[cat]}
-                </div>
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                  gap: 10,
-                }}>
+              <div key={cat} style={{ marginBottom: 24 }}>
+                <SectionTitle label={CATEGORY_LABEL[cat]} color={CATEGORY_COLOR[cat]} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
                   {metricsInCat.map((metric) => (
                     <MetricCard
                       key={metric.key}
                       metric={metric}
                       currentValue={refs[metric.key]?.value}
                       currentDate={refs[metric.key]?.date}
-                      onSave={(value) => upsert.mutate({ metricName: metric.key, value, unit: metric.unit })}
+                      onSave={(v) => upsert.mutate({ metricName: metric.key, value: v, unit: metric.unit })}
                       saving={upsert.isPending}
                     />
                   ))}
@@ -388,73 +623,84 @@ export default function ProfilSportifPage() {
             );
           })}
 
+          {/* ── Custom metrics ── */}
+          <div style={{ marginBottom: 28 }}>
+            <SectionTitle label={CATEGORY_LABEL.custom} color={CATEGORY_COLOR.custom} />
+            {customEntries.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10, marginBottom: 10 }}>
+                {customEntries.map(([key, ref]) => (
+                  <MetricCard
+                    key={key}
+                    metric={{ key, label: key, unit: ref.unit, description: "Donnée personnalisée", category: "custom" }}
+                    currentValue={ref.value}
+                    currentDate={ref.date}
+                    onSave={(v) => upsert.mutate({ metricName: key, value: v, unit: ref.unit, metricType: "custom" })}
+                    onDelete={() => deleteRef.mutate(ref.id)}
+                    saving={upsert.isPending}
+                  />
+                ))}
+              </div>
+            )}
+            <CustomMetricForm
+              saving={upsert.isPending}
+              onSave={(name, value, unit, _cat) =>
+                upsert.mutate({ metricName: name, value, unit, metricType: "custom" })
+              }
+            />
+          </div>
+
           {/* ── Zones calculées ── */}
-          {hasZones && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: C.tx3,
-                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12,
-                display: "flex", alignItems: "center", gap: 8,
-              }}>
-                <div style={{ width: 24, height: 2, background: C.tx3, borderRadius: 1 }} />
-                Zones calculées
-              </div>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                gap: 12,
-              }}>
+          {(fcmax || vma || ftp) && (
+            <div style={{ marginBottom: 28 }}>
+              <SectionTitle label="Zones calculées" color={C.tx3} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+                {/* FC zones — with custom editor */}
                 {fcmax && (
-                  <ZoneTable
-                    title={`Zones FC — FCmax ${fcmax} bpm${fcrep ? ` · repos ${fcrep} bpm` : ""}`}
-                    zones={fcZones(fcmax, fcrep)}
-                    unit="bpm"
+                  <FcZoneEditor
+                    fcmax={fcmax}
+                    fcrep={fcrep}
+                    storedZones={storedFcZones}
+                    onSaveZones={saveZones}
+                    saving={upsert.isPending}
                   />
                 )}
-                {vma && (
-                  <ZoneTable
-                    title={`Zones allure — VMA ${vma} km/h`}
-                    zones={vmaZones(vma)}
-                    unit=""
-                  />
-                )}
-                {ftp && (
-                  <ZoneTable
-                    title={`Zones puissance — FTP ${ftp} W`}
-                    zones={ftpZones(ftp)}
-                    unit=""
-                  />
-                )}
+
+                {/* VMA + FTP zones */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+                  {vma && (
+                    <ZoneTableSimple
+                      title={`Zones allure — VMA ${vma} km/h`}
+                      rows={vmaZones(vma).map((z) => ({ label: z.label, min: z.min + "/km", max: z.max + "/km", color: z.color }))}
+                    />
+                  )}
+                  {ftp && (
+                    <ZoneTableSimple
+                      title={`Zones puissance — FTP ${ftp} W`}
+                      rows={ftpZones(ftp).map((z) => ({ label: z.label, range: z.range, color: z.color }))}
+                    />
+                  )}
+                </div>
               </div>
 
-              <div style={{
-                marginTop: 12, padding: "10px 14px", borderRadius: 10,
-                background: C.ac + "10", border: "1px solid " + C.ac + "30",
-                fontSize: 11, color: C.tx2,
-              }}>
-                💡 Ces zones s'appliquent automatiquement dans l'aperçu des séances énergétiques
-                et dans le calendrier de planification.
-              </div>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {!hasZones && Object.keys(refs).length === 0 && (
-            <div style={{
-              textAlign: "center", padding: "40px 20px", color: C.tx3,
-              background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, marginTop: 8,
-            }}>
-              <div style={{ fontSize: 32, marginBottom: 10 }}>📊</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.tx2, marginBottom: 6 }}>
-                Aucune donnée de référence
-              </div>
-              <div style={{ fontSize: 12 }}>
-                Renseigne les valeurs ci-dessus pour activer les calculs de zones.
+              <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, background: C.ac + "10", border: "1px solid " + C.ac + "30", fontSize: 11, color: C.tx2 }}>
+                💡 Les zones FC personnalisées s'appliquent dans l'aperçu de séance et le calendrier planning. Les bornes définissent l'interpolation d'intensité pour les cibles en bpm.
               </div>
             </div>
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ── SectionTitle ──────────────────────────────────────────────────────────────
+
+function SectionTitle({ label, color }: { label: string; color: string }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ width: 24, height: 2, background: color, borderRadius: 1 }} />
+      {label}
     </div>
   );
 }

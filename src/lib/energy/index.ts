@@ -264,18 +264,41 @@ export function targetToIntensityPct(
     }
 
     case 'hr_bpm': {
+      const avg = (target.min + target.max) / 2;
+      if (avg <= 0) return null;
+
+      // Bornes de zones personnalisées (FCzone_Z1_max … FCzone_Z4_max)
+      const z1max = refs?.FCzone_Z1_max;
+      const z2max = refs?.FCzone_Z2_max;
+      const z3max = refs?.FCzone_Z3_max;
+      const z4max = refs?.FCzone_Z4_max;
       const fcmax = refs?.FCmax ?? null;
+
+      if (z1max && z2max && z3max && z4max) {
+        // Interpolation dans les bornes de zone stockées
+        // Zones → [0-30%] [30-50%] [50-70%] [70-85%] [85-100%]
+        const zones = [
+          { lo: 0,     hi: z1max, pctLo: 0,  pctHi: 30 },
+          { lo: z1max, hi: z2max, pctLo: 30, pctHi: 50 },
+          { lo: z2max, hi: z3max, pctLo: 50, pctHi: 70 },
+          { lo: z3max, hi: z4max, pctLo: 70, pctHi: 85 },
+          { lo: z4max, hi: fcmax ?? z4max * 1.08, pctLo: 85, pctHi: 100 },
+        ];
+        for (const z of zones) {
+          if (avg <= z.hi || z === zones[zones.length - 1]) {
+            const t = z.hi > z.lo ? Math.max(0, Math.min(1, (avg - z.lo) / (z.hi - z.lo))) : 0.5;
+            return Math.round(z.pctLo + t * (z.pctHi - z.pctLo));
+          }
+        }
+      }
+
+      // Fallback FCmax seule
       if (fcmax && fcmax > 0) {
-        const avg = (target.min + target.max) / 2;
         return Math.min(100, (avg / fcmax) * 100);
       }
-      // Sans FCmax : estimation depuis plage typique 100–200 bpm
-      const avg = (target.min + target.max) / 2;
-      if (avg > 0) {
-        const normalized = Math.max(0, Math.min(1, (avg - 100) / 100));
-        return Math.round(20 + normalized * 80); // 20% → 100%
-      }
-      return null;
+      // Estimation générique 100–200 bpm
+      const normalized = Math.max(0, Math.min(1, (avg - 100) / 100));
+      return Math.round(20 + normalized * 80);
     }
 
     case 'power': {
