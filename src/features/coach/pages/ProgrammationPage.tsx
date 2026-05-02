@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Zap, Plus } from "lucide-react";
+import { ChevronRight, Zap, Plus, Library, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
-import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
+import { useEnergySessions, useCreateEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { TierConfigModal } from "@/components/coach/CoachComponents";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
@@ -30,6 +30,148 @@ const KIND_COLOR: Record<string, string> = {
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
 
+// ── BankPickerModal ────────────────────────────────────────────────────────────
+// Modale pour piocher une séance de la banque générale et la copier dans sa banque perso.
+
+function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () => void }) {
+  const { data: allSessions = [], isLoading } = useEnergySessions();
+  const createMutation = useCreateEnergySession();
+  const [search, setSearch] = useState("");
+  const [copying, setCopying] = useState<string | null>(null);
+
+  // Exclure les séances déjà créées par ce coach
+  const generalSessions = allSessions.filter((s) => s.created_by !== coachId);
+
+  const filtered = generalSessions.filter((s) =>
+    !search || s.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  async function handleCopy(s: (typeof allSessions)[0]) {
+    if (copying) return;
+    setCopying(s.id);
+    try {
+      await createMutation.mutateAsync({
+        name:          s.name + " (copie)",
+        session_kind:  s.session_kind,
+        sport:         s.sport,
+        notes:         s.notes ?? undefined,
+        intervals:     s.intervals,
+        created_by:    coachId,
+        is_verified:   false,
+      } as Parameters<typeof createMutation.mutateAsync>[0]);
+      toast.success(`"${s.name}" ajoutée à ta banque`);
+      onClose();
+    } catch {
+      toast.error("Erreur lors de la copie");
+    } finally {
+      setCopying(null);
+    }
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)" }} />
+      <div
+        style={{
+          position: "fixed", top: "50%", left: "50%", zIndex: 61,
+          transform: "translate(-50%, -50%)",
+          width: 520, maxWidth: "94vw", maxHeight: "80vh",
+          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+          display: "flex", flexDirection: "column",
+          animation: "fadeScaleIn 150ms ease-out",
+        }}
+      >
+        <style>{`@keyframes fadeScaleIn { from { opacity:0; transform:translate(-50%,-50%) scale(0.96) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }`}</style>
+
+        {/* Header */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <Library size={16} color={C.coach} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.tx }}>Banque générale</div>
+            <div style={{ fontSize: 11, color: C.tx3 }}>Clique sur une séance pour la copier dans ta banque</div>
+          </div>
+          <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: "10px 20px", borderBottom: "1px solid " + C.brd, flexShrink: 0 }}>
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher une séance…"
+            style={{
+              width: "100%", padding: "8px 10px", borderRadius: 8,
+              border: "1px solid " + C.brdL, background: C.s2,
+              color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {/* List */}
+        <div style={{ overflowY: "auto", padding: "12px 20px", flex: 1, scrollbarWidth: "none" }}>
+          {isLoading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[1, 2, 3].map((i) => <div key={i} style={{ height: 58, borderRadius: 10, background: C.s2 }} />)}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: C.tx3, fontSize: 13 }}>
+              {search ? "Aucun résultat" : "Banque générale vide"}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {filtered.map((s) => {
+                const kc = KIND_COLOR[s.session_kind] ?? "#6B7280";
+                const isCopying = copying === s.id;
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => handleCopy(s)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 12px", borderRadius: 10,
+                      border: "1px solid " + C.brdL, background: C.s2,
+                      cursor: copying ? "not-allowed" : "pointer",
+                      opacity: copying && !isCopying ? 0.5 : 1,
+                      transition: "border-color 120ms",
+                    }}
+                    onMouseEnter={(e) => { if (!copying) e.currentTarget.style.borderColor = kc + "60"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.brdL; }}
+                  >
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: kc + "20", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {isCopying ? <Check size={13} color={kc} /> : <Zap size={13} color={kc} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 1 }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3, background: kc + "20", color: kc }}>
+                          {KIND_LABEL[s.session_kind] ?? s.session_kind}
+                        </span>
+                        {s.total_duration_s != null && (
+                          <span style={{ fontSize: 10, color: C.tx3 }}>{Math.round(s.total_duration_s / 60)} min</span>
+                        )}
+                        {s.is_verified && (
+                          <span style={{ fontSize: 9, color: C.g, fontWeight: 700 }}>✓ vérifiée</span>
+                        )}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, color: C.tx3, flexShrink: 0 }}>
+                      {isCopying ? "Copie…" : "+ Ma banque"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── EnergyPanel ────────────────────────────────────────────────────────────────
 // Banque de séances énergétiques personnelle du coach.
 // Pas d'assignation ici — les assignations se font depuis Planning > Mois.
@@ -43,6 +185,7 @@ interface EnergyPanelProps {
 function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
   const { data: sessions = [], isLoading } = useEnergySessions({ created_by: coachId });
   const [search, setSearch] = useState("");
+  const [showPicker, setShowPicker] = useState(false);
 
   const filtered = sessions.filter((s) =>
     !search || s.name.toLowerCase().includes(search.toLowerCase())
@@ -60,19 +203,35 @@ function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
             </span>
           )}
         </div>
-        <button
-          onClick={onNew}
-          style={{
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "7px 14px", borderRadius: 9,
-            border: "none", background: C.coach, color: "#fff",
-            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-          }}
-        >
-          <Plus size={13} />
-          Nouvelle séance
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowPicker(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 12px", borderRadius: 9,
+              border: "1px solid " + C.brdL, background: "transparent", color: C.tx2,
+              fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Library size={13} />
+            Banque générale
+          </button>
+          <button
+            onClick={onNew}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "7px 14px", borderRadius: 9,
+              border: "none", background: C.coach, color: "#fff",
+              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Plus size={13} />
+            Nouvelle séance
+          </button>
+        </div>
       </div>
+
+      {showPicker && <BankPickerModal coachId={coachId} onClose={() => setShowPicker(false)} />}
 
       {/* Info banner */}
       <div style={{
@@ -122,16 +281,29 @@ function EnergyPanel({ coachId, onNew, onEdit }: EnergyPanelProps) {
               : "Crée ta première séance énergétique ou copie-en une depuis la banque générale."}
           </div>
           {!search && (
-            <button
-              onClick={onNew}
-              style={{
-                padding: "10px 20px", borderRadius: 10, border: "none",
-                background: C.coach, color: "#fff",
-                fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              + Créer une séance
-            </button>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button
+                onClick={() => setShowPicker(true)}
+                style={{
+                  padding: "10px 16px", borderRadius: 10,
+                  border: "1px solid " + C.brdL, background: "transparent", color: C.tx2,
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                <Library size={14} /> Banque générale
+              </button>
+              <button
+                onClick={onNew}
+                style={{
+                  padding: "10px 20px", borderRadius: 10, border: "none",
+                  background: C.coach, color: "#fff",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                + Créer une séance
+              </button>
+            </div>
           )}
         </div>
       ) : (
