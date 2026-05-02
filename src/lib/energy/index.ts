@@ -277,8 +277,9 @@ export function targetToIntensityPct(
       if (z1max && z2max && z3max && z4max) {
         // Interpolation dans les bornes de zone stockées
         // Zones → [0-30%] [30-50%] [50-70%] [70-85%] [85-100%]
+        const z0min = refs?.FCzone_Z0_min ?? 0;
         const zones = [
-          { lo: 0,     hi: z1max, pctLo: 0,  pctHi: 30 },
+          { lo: z0min, hi: z1max, pctLo: 0,  pctHi: 30 },
           { lo: z1max, hi: z2max, pctLo: 30, pctHi: 50 },
           { lo: z2max, hi: z3max, pctLo: 50, pctHi: 70 },
           { lo: z3max, hi: z4max, pctLo: 70, pctHi: 85 },

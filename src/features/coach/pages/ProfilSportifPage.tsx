@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { WellnessData } from "@/features/shared/types/athlete";
 import { toast } from "sonner";
 import { Plus, Pencil, X, Check } from "lucide-react";
 import { C } from "@/lib/theme";
@@ -38,7 +39,7 @@ const METRICS: MetricDef[] = [
   { key: "VO2max",  label: "VO₂max",   unit: "mL/kg/min", description: "Consommation maximale d'oxygène",   min: 20,  max: 90,  step: 0.1, category: "vitesse"   },
   { key: "FTP",     label: "FTP",      unit: "W",         description: "Functional Threshold Power (vélo)", min: 50,  max: 600, step: 5,   category: "puissance" },
   { key: "PMA",     label: "PMA",      unit: "W",         description: "Puissance Maximale Aérobie",        min: 50,  max: 900, step: 5,   category: "puissance" },
-  { key: "poids",   label: "Poids",    unit: "kg",        description: "Poids de référence",                min: 30,  max: 200, step: 0.1, category: "corpo"     },
+  // Note: "poids" est dérivé automatiquement depuis le wellness (moyenne 3 dernières saisies)
 ];
 
 const PREDEFINED_KEYS = new Set(METRICS.map((m) => m.key));
@@ -183,6 +184,31 @@ function useDeleteRef(athleteId: string) {
   });
 }
 
+function useLastWeights(athleteId: string) {
+  return useQuery<{ avg: number; lastDate: string; count: number } | null>({
+    queryKey: ["last-weights-wellness", athleteId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("app_data")
+        .select("value")
+        .eq("athlete_id", athleteId)
+        .eq("key", "asp:wh")
+        .maybeSingle();
+      if (error) throw error;
+      const history = data?.value as Record<string, WellnessData> | null;
+      if (!history) return null;
+      const entries = Object.entries(history)
+        .filter(([, v]) => v?.poids != null && (v.poids as number) > 0)
+        .sort(([a], [b]) => b.localeCompare(a)) // desc by date
+        .slice(0, 3);
+      if (entries.length === 0) return null;
+      const avg = entries.reduce((s, [, v]) => s + (v.poids as number), 0) / entries.length;
+      return { avg: Math.round(avg * 10) / 10, lastDate: entries[0][0], count: entries.length };
+    },
+    staleTime: 60_000,
+  });
+}
+
 // ── MetricCard ────────────────────────────────────────────────────────────────
 
 function MetricCard({
@@ -293,6 +319,45 @@ function MetricCard({
   );
 }
 
+// ── WeightDerivedCard ─────────────────────────────────────────────────────────
+
+function WeightDerivedCard({ athleteId }: { athleteId: string }) {
+  const { data, isLoading } = useLastWeights(athleteId);
+  const color = CATEGORY_COLOR.corpo;
+
+  return (
+    <div
+      style={{
+        background: C.s1, border: "1px solid " + C.brd, borderRadius: 12,
+        padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8,
+        opacity: isLoading ? 0.6 : 1,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = color + "50")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.brd)}
+    >
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+          Poids
+        </div>
+        <div style={{ fontSize: 10, color: C.tx3 }}>Moyenne des {data?.count ?? 3} dernières saisies wellness</div>
+      </div>
+      {data ? (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontSize: 24, fontWeight: 800, color: C.tx }}>{data.avg}</span>
+          <span style={{ fontSize: 12, color: C.tx3 }}>kg</span>
+          <span style={{ fontSize: 10, color: C.tx3, marginLeft: "auto" }}>
+            {new Date(data.lastDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+          </span>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: C.tx3, fontStyle: "italic" }}>
+          {isLoading ? "…" : "Aucune saisie de poids dans le wellness"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── FC Zone Editor ────────────────────────────────────────────────────────────
 
 function FcZoneEditor({
@@ -305,7 +370,11 @@ function FcZoneEditor({
   saving: boolean;
 }) {
   const defaults = computeDefaultFcZones(fcmax, fcrep);
+  const defaultZ0 = fcrep ?? 50;
   const [custom, setCustom] = useState<boolean>(Object.keys(storedZones).length > 0);
+  const [draftZ0, setDraftZ0] = useState<string>(() =>
+    (storedZones["FCzone_Z0_min"] ?? defaultZ0).toString()
+  );
   const [drafts, setDrafts] = useState<string[]>(() =>
     FC_ZONES_DEF.map((z, i) => (storedZones[z.zoneKey] ?? defaults[i]).toString())
   );
@@ -315,16 +384,18 @@ function FcZoneEditor({
   }
 
   function handleSave() {
+    const z0 = parseFloat(draftZ0);
     const vals = drafts.map((d) => parseFloat(d));
-    if (vals.some(isNaN) || vals.some((v) => v <= 0)) { toast.error("Valeurs invalides"); return; }
-    const zones: Record<string, number> = {};
+    if (isNaN(z0) || z0 < 0 || vals.some(isNaN) || vals.some((v) => v <= 0)) { toast.error("Valeurs invalides"); return; }
+    const zones: Record<string, number> = { FCzone_Z0_min: z0 };
     FC_ZONES_DEF.forEach((z, i) => { zones[z.zoneKey] = vals[i]; });
     onSaveZones(zones);
   }
 
   function resetToDefaults() {
+    setDraftZ0(defaultZ0.toString());
     setDrafts(defaults.map(String));
-    const zones: Record<string, number> = {};
+    const zones: Record<string, number> = { FCzone_Z0_min: defaultZ0 };
     FC_ZONES_DEF.forEach((z, i) => { zones[z.zoneKey] = defaults[i]; });
     onSaveZones(zones);
   }
@@ -333,7 +404,9 @@ function FcZoneEditor({
     ? drafts.map((d) => parseFloat(d) || 0)
     : defaults;
 
-  const prevMax = (i: number) => i === 0 ? 0 : displayVals[i - 1];
+  const displayZ0 = custom ? (parseFloat(draftZ0) || 0) : defaultZ0;
+
+  const prevMax = (i: number) => i === 0 ? displayZ0 : displayVals[i - 1];
 
   return (
     <div style={{ background: C.s1, border: "1px solid " + C.brd, borderRadius: 12, overflow: "hidden" }}>
@@ -362,6 +435,41 @@ function FcZoneEditor({
         >
           {custom ? "Personnalisé ✓" : "Personnaliser"}
         </button>
+      </div>
+
+      {/* Z0 min row — FC de départ activité */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "8px 14px",
+          borderBottom: "1px solid " + C.brd,
+          background: "rgba(255,255,255,0.02)",
+        }}
+      >
+        <div style={{ width: 4, height: 20, borderRadius: 2, background: C.tx3, flexShrink: 0 }} />
+        <span style={{ fontSize: 12, color: C.tx3, fontWeight: 600, flex: 1 }}>FC départ activité</span>
+        <span style={{ fontSize: 10, color: C.tx3, minWidth: 50 }}>0 bpm</span>
+        <span style={{ fontSize: 10, color: C.tx3 }}>→</span>
+        {custom ? (
+          <input
+            type="number"
+            value={draftZ0}
+            onChange={(e) => setDraftZ0(e.target.value)}
+            min={0}
+            max={150}
+            style={{
+              width: 65, padding: "4px 7px", borderRadius: 6,
+              border: "1px solid " + C.tx3 + "40", background: C.s2,
+              color: C.tx, fontSize: 12, fontWeight: 700, fontFamily: "inherit", outline: "none",
+              textAlign: "right",
+            }}
+          />
+        ) : (
+          <span style={{ fontSize: 12, color: C.tx, fontWeight: 700, minWidth: 65, textAlign: "right" }}>
+            {displayZ0}
+          </span>
+        )}
+        <span style={{ fontSize: 11, color: C.tx3, minWidth: 24 }}>bpm</span>
       </div>
 
       {/* Zone rows */}
@@ -561,7 +669,7 @@ export default function ProfilSportifPage() {
 
   const predefined = METRICS;
   const customEntries = Object.entries(refs).filter(
-    ([k]) => !PREDEFINED_KEYS.has(k) && !k.startsWith("FCzone_")
+    ([k]) => !PREDEFINED_KEYS.has(k) && !k.startsWith("FCzone_") && k !== "FCzone_Z0_min"
   );
 
   const fcmax  = refs["FCmax"]?.value;
@@ -573,6 +681,7 @@ export default function ProfilSportifPage() {
   FC_ZONES_DEF.forEach((z) => {
     if (refs[z.zoneKey]) storedFcZones[z.zoneKey] = refs[z.zoneKey].value;
   });
+  if (refs["FCzone_Z0_min"]) storedFcZones["FCzone_Z0_min"] = refs["FCzone_Z0_min"].value;
 
   async function saveZones(zones: Record<string, number>) {
     for (const [key, val] of Object.entries(zones)) {
@@ -618,6 +727,8 @@ export default function ProfilSportifPage() {
                       saving={upsert.isPending}
                     />
                   ))}
+                  {/* Corporel : poids dérivé du wellness */}
+                  {cat === "corpo" && <WeightDerivedCard athleteId={athleteId!} />}
                 </div>
               </div>
             );
