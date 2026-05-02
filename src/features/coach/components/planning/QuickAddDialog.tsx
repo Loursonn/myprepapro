@@ -1,15 +1,36 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { X, Dumbbell, FlaskConical } from "lucide-react";
+import { X, Dumbbell, FlaskConical, Zap } from "lucide-react";
 import { C } from "@/lib/theme";
 import { useAssignWorkout, useCreateTestSession } from "@/features/shared/hooks/useUnifiedCalendar";
+import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
+import { useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
 
-type Tab = "workout" | "test";
+type Tab = "workout" | "energy" | "test";
+
+const TAB_KEY = "quickadd_tab";
+
+function getSavedTab(): Tab {
+  try {
+    const v = localStorage.getItem(TAB_KEY) as Tab | null;
+    if (v === "workout" || v === "energy" || v === "test") return v;
+  } catch {}
+  return "workout";
+}
 
 // ── Test types ────────────────────────────────────────────────────────────────
 
 const TEST_TYPES = ["musculation", "endurance", "vitesse", "puissance", "souplesse", "autre"] as const;
+
+const KIND_LABEL: Record<string, string> = {
+  vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
+  footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+};
+const KIND_COLOR: Record<string, string> = {
+  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+};
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -32,18 +53,22 @@ export function QuickAddDialog({
   coachId,
   sessions,
 }: QuickAddDialogProps) {
-  const [tab, setTab] = useState<Tab>("workout");
+  const [tab, setTab] = useState<Tab>(getSavedTab);
   const [selectedSession, setSelectedSession] = useState<string>("");
   const [sessionSearch, setSessionSearch] = useState("");
+  const [selectedEnergy, setSelectedEnergy] = useState<string>("");
+  const [energySearch, setEnergySearch] = useState("");
   const [testTitle, setTestTitle] = useState("");
   const [testType, setTestType] = useState<string>("musculation");
 
-  const { mutate: assignWorkout, isPending: pendingWorkout } = useAssignWorkout();
-  const { mutate: createTest, isPending: pendingTest }       = useCreateTestSession();
+  const { mutate: assignWorkout,  isPending: pendingWorkout  } = useAssignWorkout();
+  const { mutate: createTest,     isPending: pendingTest      } = useCreateTestSession();
+  const { mutate: assignEnergy,   isPending: pendingEnergy    } = useAssignEnergySession();
+  const { data: energySessions = [] } = useEnergySessions();
 
   if (!open || !date) return null;
 
-  const dateStr  = format(date, "yyyy-MM-dd");
+  const dateStr   = format(date, "yyyy-MM-dd");
   const dateLabel = format(date, "d MMMM yyyy", { locale: fr });
 
   const filteredSessions = sessions.filter((s) => {
@@ -51,18 +76,29 @@ export function QuickAddDialog({
     return name.toLowerCase().includes(sessionSearch.toLowerCase());
   });
 
+  const filteredEnergy = energySessions.filter((s) =>
+    s.name.toLowerCase().includes(energySearch.toLowerCase())
+  );
+
+  function switchTab(t: Tab) {
+    setTab(t);
+    try { localStorage.setItem(TAB_KEY, t); } catch {}
+  }
+
   function handleWorkoutSubmit() {
     if (!selectedSession) return;
     const sess = sessions.find((s) => s.id === selectedSession);
     if (!sess) return;
     assignWorkout(
-      {
-        sessionId: sess.id,
-        sessionName: sess.name ?? sess.label ?? "Séance",
-        athleteId,
-        coachId,
-        date: dateStr,
-      },
+      { sessionId: sess.id, sessionName: sess.name ?? sess.label ?? "Séance", athleteId, coachId, date: dateStr },
+      { onSuccess: handleClose },
+    );
+  }
+
+  function handleEnergySubmit() {
+    if (!selectedEnergy) return;
+    assignEnergy(
+      { energy_session_id: selectedEnergy, athlete_id: athleteId, coach_id: coachId, scheduled_date: dateStr, status: "planned" },
       { onSuccess: handleClose },
     );
   }
@@ -76,15 +112,32 @@ export function QuickAddDialog({
   }
 
   function handleClose() {
-    setSelectedSession("");
-    setSessionSearch("");
-    setTestTitle("");
-    setTestType("musculation");
+    setSelectedSession(""); setSessionSearch("");
+    setSelectedEnergy("");  setEnergySearch("");
+    setTestTitle(""); setTestType("musculation");
     onClose();
   }
 
-  const canSubmit = tab === "workout" ? !!selectedSession : !!testTitle.trim();
-  const isPending = tab === "workout" ? pendingWorkout : pendingTest;
+  const canSubmit =
+    tab === "workout" ? !!selectedSession :
+    tab === "energy"  ? !!selectedEnergy  :
+    !!testTitle.trim();
+  const isPending =
+    tab === "workout" ? pendingWorkout :
+    tab === "energy"  ? pendingEnergy  :
+    pendingTest;
+
+  function handleSubmit() {
+    if (tab === "workout") handleWorkoutSubmit();
+    else if (tab === "energy") handleEnergySubmit();
+    else handleTestSubmit();
+  }
+
+  const submitLabel =
+    isPending ? "Ajout..." :
+    tab === "workout" ? "Planifier séance" :
+    tab === "energy"  ? "Planifier énergie" :
+    "Créer test";
 
   return (
     <>
@@ -146,12 +199,13 @@ export function QuickAddDialog({
           }}
         >
           {([
-            { key: "workout", label: "Séance", Icon: Dumbbell },
-            { key: "test",    label: "Test",   Icon: FlaskConical },
+            { key: "workout", label: "Muscu",    Icon: Dumbbell     },
+            { key: "energy",  label: "Énergie",  Icon: Zap          },
+            { key: "test",    label: "Test",      Icon: FlaskConical },
           ] as const).map(({ key, label, Icon }) => (
             <button
               key={key}
-              onClick={() => setTab(key)}
+              onClick={() => switchTab(key)}
               style={{
                 padding: "8px 16px", border: "none", background: "transparent",
                 color: tab === key ? C.ac : C.tx3,
@@ -185,14 +239,7 @@ export function QuickAddDialog({
                   boxSizing: "border-box",
                 }}
               />
-
-              <div
-                style={{
-                  maxHeight: 220, overflowY: "auto",
-                  display: "flex", flexDirection: "column", gap: 4,
-                  scrollbarWidth: "none",
-                }}
-              >
+              <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, scrollbarWidth: "none" }}>
                 {filteredSessions.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "24px 0", color: C.tx3, fontSize: 12 }}>
                     Aucune séance dans le bloc actif
@@ -224,6 +271,67 @@ export function QuickAddDialog({
             </>
           )}
 
+          {/* ── ENERGY TAB ── */}
+          {tab === "energy" && (
+            <>
+              <input
+                value={energySearch}
+                onChange={(e) => setEnergySearch(e.target.value)}
+                placeholder="Rechercher une séance énergie..."
+                style={{
+                  width: "100%", padding: "9px 12px", borderRadius: 10,
+                  border: "1px solid " + C.brdL, background: C.s2,
+                  color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, scrollbarWidth: "none" }}>
+                {filteredEnergy.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "24px 0", color: C.tx3, fontSize: 12 }}>
+                    Aucune séance énergie
+                  </div>
+                ) : (
+                  filteredEnergy.map((s) => {
+                    const active = selectedEnergy === s.id;
+                    const kindColor = KIND_COLOR[s.session_kind] ?? "#6B7280";
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedEnergy(active ? "" : s.id)}
+                        style={{
+                          width: "100%", padding: "10px 12px", borderRadius: 10,
+                          border: "1px solid " + (active ? kindColor + "60" : C.brd),
+                          background: active ? kindColor + "15" : C.s2,
+                          color: active ? kindColor : C.tx,
+                          fontSize: 13, fontWeight: active ? 600 : 400,
+                          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                          transition: "all 120ms",
+                          display: "flex", alignItems: "center", gap: 8,
+                        }}
+                      >
+                        <span
+                          style={{
+                            padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                            background: kindColor + "25", color: kindColor,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {KIND_LABEL[s.session_kind] ?? s.session_kind}
+                        </span>
+                        <span>{active && "✓ "}{s.name}</span>
+                        {s.total_duration_s && (
+                          <span style={{ marginLeft: "auto", fontSize: 10, color: C.tx3, flexShrink: 0 }}>
+                            {Math.round(s.total_duration_s / 60)} min
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+
           {/* ── TEST TAB ── */}
           {tab === "test" && (
             <>
@@ -242,7 +350,6 @@ export function QuickAddDialog({
                   }}
                 />
               </div>
-
               <div>
                 <div style={{ fontSize: 10, color: C.tx3, marginBottom: 6 }}>Type</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -271,7 +378,7 @@ export function QuickAddDialog({
 
           {/* Submit */}
           <button
-            onClick={tab === "workout" ? handleWorkoutSubmit : handleTestSubmit}
+            onClick={handleSubmit}
             disabled={!canSubmit || isPending}
             style={{
               width: "100%", padding: "13px 0", borderRadius: 12,
@@ -284,7 +391,7 @@ export function QuickAddDialog({
               transition: "all 150ms",
             }}
           >
-            {isPending ? "Ajout..." : tab === "workout" ? "Planifier séance" : "Créer test"}
+            {submitLabel}
           </button>
         </div>
       </div>

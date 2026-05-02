@@ -29,8 +29,8 @@ export type EnergyTarget =
   | { kind: 'hr_pct'; min: number; max: number }
   /** FC absolue en bpm : fourchette */
   | { kind: 'hr_bpm'; min: number; max: number }
-  /** Allure en min/km ou vitesse en km/h : fourchette */
-  | { kind: 'pace'; min: number; max: number; unit: 'min_per_km' | 'kmh' }
+  /** Allure en s/km (min_per_km) ou vitesse en km/h (kmh) : fourchette en secondes par km */
+  | { kind: 'pace'; min_s_per_unit: number; max_s_per_unit: number; unit: 'min_per_km' | 'kmh' }
   /** % d'une métrique test (ex. % VMA, % VC) : fourchette */
   | { kind: 'pace_test_pct'; test_metric: string; min: number; max: number }
   /** Puissance en watts : fourchette */
