@@ -115,6 +115,7 @@ export function useCreateEnergySession() {
       const previous = qc.getQueryData<EnergySessionRow[]>(QK.energySessions);
       const optimistic: EnergySessionRow = {
         id: `__optimistic_${Date.now()}`,
+        is_public: false,
         is_verified: false,
         verified_by: null,
         verified_at: null,
@@ -207,6 +208,45 @@ export function useDeleteEnergySession() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.energySessions });
       toast.success("Séance supprimée");
+    },
+  });
+}
+
+export function usePublishEnergySession() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, publish }: { id: string; publish: boolean }) => {
+      const { data, error } = await supabase
+        .from('energy_sessions')
+        .update({ is_public: publish, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as unknown as EnergySessionRow;
+    },
+    onMutate: async ({ id, publish }) => {
+      await qc.cancelQueries({ queryKey: QK.energySessions });
+      await qc.cancelQueries({ queryKey: QK.energySession(id) });
+      const previousList = qc.getQueryData<EnergySessionRow[]>(QK.energySessions);
+      const previousItem = qc.getQueryData<EnergySessionRow>(QK.energySession(id));
+      qc.setQueryData<EnergySessionRow[]>(QK.energySessions, (old = []) =>
+        old.map((s) => (s.id === id ? { ...s, is_public: publish } : s))
+      );
+      if (previousItem) {
+        qc.setQueryData<EnergySessionRow>(QK.energySession(id), { ...previousItem, is_public: publish });
+      }
+      return { previousList, previousItem };
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx?.previousList !== undefined) qc.setQueryData(QK.energySessions, ctx.previousList);
+      if (ctx?.previousItem !== undefined) qc.setQueryData(QK.energySession(id), ctx.previousItem);
+      toast.error("Erreur lors de la publication de la séance");
+    },
+    onSuccess: (_data, { publish }) => {
+      qc.invalidateQueries({ queryKey: QK.energySessions });
+      toast.success(publish ? "Séance publiée dans la banque" : "Séance retirée de la banque");
     },
   });
 }

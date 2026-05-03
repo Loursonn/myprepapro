@@ -46,7 +46,7 @@ export interface AthleteContextValue {
   blockHistory: ArchivedBlock[]; setBlockHistory: (v: ArchivedBlock[]) => void;
   weekSchedule: Record<string, unknown>; setWeekSchedule: (v: Record<string, unknown>) => void;
   sessionLogs: Record<string, SessionLog>; setSessionLogs: (v: Record<string, SessionLog>) => void;
-  freeSessions: FreeSession[]; setFreeSessions: (v: FreeSession[]) => void;
+  freeSessions: FreeSession[]; setFreeSessions: (v: FreeSession[] | ((prev: FreeSession[]) => FreeSession[])) => void;
   nutritionStrategy: NutritionStrategy | null; setNutritionStrategy: (v: NutritionStrategy | null) => void;
   nutritionLog: Record<string, unknown>; setNutritionLog: (v: Record<string, unknown>) => void;
   visibilitySettings: VisibilitySettings; setVisibilitySettings: (v: VisibilitySettings) => Promise<void>;
