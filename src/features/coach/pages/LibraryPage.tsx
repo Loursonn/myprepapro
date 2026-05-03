@@ -195,6 +195,7 @@ function EnergyTab() {
                 canEdit={isAuthor || isAdmin}
                 canVerify={canVerify}
                 canDelete={isAuthor || isAdmin}
+                canPublish={isAuthor || isAdmin || canVerify}
                 userId={profile?.id}
               />
             );
