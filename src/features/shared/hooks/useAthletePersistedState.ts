@@ -147,13 +147,7 @@ export function useAthletePersistedState(athleteId: string) {
 
   const setWeekSchedule = useCallback((v: Record<string, unknown>) => { setWeekScheduleRaw(v); save(SKEYS.weekSchedule, v).catch(() => {}); }, [save]);
   const setSessionLogs = useCallback((v: Record<string, SessionLog>) => { setSessionLogsRaw(v); save(SKEYS.sessionLogs, v).catch(() => {}); }, [save]);
-  const setFreeSessions = useCallback((v: FreeSession[] | ((prev: FreeSession[]) => FreeSession[])) => {
-    setFreeSessionsRaw(prev => {
-      const next = typeof v === "function" ? v(prev) : v;
-      save(SKEYS.freeSessions, next).catch(() => {});
-      return next;
-    });
-  }, [save]);
+  const setFreeSessions = useCallback((v: FreeSession[]) => { setFreeSessionsRaw(v); save(SKEYS.freeSessions, v).catch(() => {}); }, [save]);
 
   const setNutritionLog = useCallback((v: Record<string, unknown>) => {
     setNutritionLogRaw(v); save("asp:nutrition_log", v).catch(() => {});

@@ -445,7 +445,7 @@ ${detailsBlock||"Aucun detail supplementaire fourni"}`;
   </div>);
 }
 
-function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={},weekSchedule={},setWeekSchedule,defaultWeek,hideWeekNav,lockedSessId,hideSplitControls}){
+function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allMethods,customMethods,setCustomMethods,blockConfig,exMeta,setExMeta,currentWeek=1,sets={},completedSessions={},weekSchedule={},setWeekSchedule,defaultWeek,hideWeekNav,lockedSessId}){
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;const progPct=blockConfig?.progressionPct||2.5;const deloadPct=blockConfig?.deloadPct||40;
   const blockStarted=!blockConfig?.startDate||Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000)>=0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
@@ -734,7 +734,9 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
       </div>
     </div>)}
 
-{!lockedSessId&&safeSessions.length>0&&<button onClick={()=>setShowEditorModal(true)} style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>✎ Éditer le contenu des séances</button>}
+    <div style={{fontSize:10,color:C.tx3,marginBottom:10}}>Double-cliquer sur un onglet pour renommer</div>
+
+    {!lockedSessId&&safeSessions.length>0&&<button onClick={()=>setShowEditorModal(true)} style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1.5px dashed "+C.coach+"60",background:C.coachS,color:C.coach,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>✎ Éditer le contenu des séances</button>}
 
     {(showEditorModal||!!lockedSessId)&&(<div style={lockedSessId?{display:"flex",flexDirection:"column"}:{position:"fixed",inset:0,zIndex:300,background:C.bg,overflowY:"auto",display:"flex",flexDirection:"column"}}>
       {!lockedSessId&&<div style={{position:"sticky",top:0,zIndex:5,background:C.bg,borderBottom:"1px solid "+C.brd,padding:"10px 16px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
@@ -837,15 +839,15 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     {!hideWeekNav&&<div style={{display:"flex",gap:3,marginBottom:6,flexWrap:"wrap"}}>{weeksArr.map(w=><button key={w} onClick={()=>setWeek(w)} style={{flex:1,minWidth:36,padding:"9px 0",borderRadius:7,border:w===week?"2px solid "+C.coach:"1px solid "+(w===dw?C.b+"60":C.brd),background:w===week?C.coachS:(w===dw?C.bS:"transparent"),color:w===week?C.coach:(w===dw?C.b:C.tx3),fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",position:"relative"}}>{w===dw&&<span style={{position:"absolute",top:-6,right:-2,fontSize:7,background:C.b,color:"#fff",padding:"1px 4px",borderRadius:4,fontWeight:700}}>DL</span>}S{w}</button>)}</div>}
     {!hideWeekNav&&dw>0&&<div style={{fontSize:10,color:C.b,marginBottom:6,display:"flex",alignItems:"center",gap:4}}><span style={{width:6,height:6,borderRadius:"50%",background:C.b,display:"inline-block"}}/> S{dw} = Deload (-{deloadPct}% charge, volume reduit)</div>}
 
-    {!hideSplitControls&&<button onClick={autoFillProgression} style={{width:"100%",padding:"9px 0",borderRadius:8,border:"1px solid "+C.o+"50",background:C.oS,color:C.o,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+    <button onClick={autoFillProgression} style={{width:"100%",padding:"9px 0",borderRadius:8,border:"1px solid "+C.o+"50",background:C.oS,color:C.o,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
       ↗ Surcharge progressive — tout le bloc (S1→S{tw})
-    </button>}
+    </button>
 
     {undoStack.length>0&&(<button onClick={undoLast} style={{width:"100%",padding:"8px 0",borderRadius:8,border:"1px solid "+C.o+"50",background:C.oS,color:C.o,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
       ← Annuler la suppression ({undoStack.length})
     </button>)}
 
-    {!hideSplitControls&&exList.length>3&&<div style={{marginBottom:10}}>
+    {exList.length>3&&<div style={{marginBottom:10}}>
       <input value={exosSearch} onChange={e=>setExosSearch(e.target.value)} placeholder="Rechercher dans la séance..." style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit",boxSizing:"border-box",marginBottom:6,outline:"none"}}/>
       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
         {[{k:"",l:"Tous"},{k:"muscu",l:"Muscu"},{k:"halterophilie",l:"Halté."},{k:"plio",l:"Plio"},{k:"mobilite",l:"Mob."}].map(({k,l})=>{const on=exosTypeFilter===k;const tc={muscu:C.tx2,halterophilie:"#8b5cf6",plio:C.o,mobilite:C.b,"":C.tx3}[k];return(<button key={k} onClick={()=>setExosTypeFilter(k)} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(on?(k?tc:C.coach):C.brdL),background:on?(k?tc+"20":C.coachS):"transparent",color:on?(k?tc:C.coach):C.tx3,fontSize:11,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>);})}
