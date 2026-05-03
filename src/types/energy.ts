@@ -124,7 +124,6 @@ export interface EnergySessionRow {
   total_distance_m?: number | null;
   notes?: string | null;
   created_by?: string | null;
-  is_public: boolean;
   is_verified: boolean;
   verified_by?: string | null;
   verified_at?: string | null;
@@ -151,7 +150,7 @@ export interface EnergySessionAssignmentRow {
 
 export type CreateEnergySessionInput = Omit<
   EnergySessionRow,
-  'id' | 'is_public' | 'is_verified' | 'verified_by' | 'verified_at' | 'created_at' | 'updated_at'
+  'id' | 'is_verified' | 'verified_by' | 'verified_at' | 'created_at' | 'updated_at'
 >;
 
 export type CreateAssignmentInput = Omit<

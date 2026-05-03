@@ -20,7 +20,6 @@ import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { TierConfigModal } from "@/components/coach/CoachComponents";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
 import { SessionWeekDrawer } from "@/features/coach/components/SessionWeekDrawer";
-import { WorkoutSplitModal } from "@/features/coach/components/WorkoutSplitModal";
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -895,23 +894,34 @@ export default function ProgrammationPage() {
         />
       )}
 
-      {/* ── Split modal séance ── */}
+      {/* ── Drawer séance ── */}
       {openDrawer && (
-        <WorkoutSplitModal
-          open={!!openDrawer}
-          onClose={() => setOpenDrawer(null)}
-          sessionId={openDrawer.sessId}
-          sessionName={openDrawer.sessName}
-          sessionDay=""
-          dayOfWeek={sessions.find(s => s.id === openDrawer.sessId)?.day_of_week}
-          onDayChange={async (day) => {
-            updateSessionDay(openDrawer.sessId, day);
-            await rescheduleWorkoutLogs(openDrawer.sessId, day);
-          }}
-          athleteId={athleteId}
-          cycleWeekCount={tw}
-          currentWeekIndex={currentWeek}
+        <SessionWeekDrawer
+          sessId={openDrawer.sessId}
+          sessName={openDrawer.sessName}
+          currentWeek={currentWeek}
+          tw={tw}
+          dw={dw}
           blockConfig={blockConfig}
+          exos={exos as Record<string, unknown[]>}
+          setExos={setExos}
+          sessions={sessions}
+          setSessions={setSessions}
+          sets={sets as Record<string, unknown[]>}
+          completedSessions={completedSessions}
+          athleteNotes={athleteNotes as Record<string, string>}
+          allMethods={allMethods as Record<string, unknown>}
+          customMethods={customMethods as unknown[]}
+          setCustomMethods={setCustomMethods}
+          exMeta={exMeta as Record<string, unknown>}
+          setExMeta={setExMeta}
+          weekSchedule={weekSchedule as Record<string, unknown>}
+          setWeekSchedule={setWeekSchedule}
+          onDayChange={async (newDay) => {
+            updateSessionDay(openDrawer.sessId, newDay);
+            await rescheduleWorkoutLogs(openDrawer.sessId, newDay);
+          }}
+          onClose={() => setOpenDrawer(null)}
         />
       )}
 
