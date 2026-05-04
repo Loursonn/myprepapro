@@ -63,6 +63,7 @@ export function useWeekProgram(weekStart: string | null): DayProgram[] {
         .from("workout_logs")
         .select("id, session_id, session_name, scheduled_date, status")
         .eq("athlete_id", athleteId)
+        .neq("status", "skipped")
         .gte("scheduled_date", mondayISO)
         .lte("scheduled_date", sundayISO);
       return data ?? [];
@@ -119,20 +120,13 @@ export function useWeekProgram(weekStart: string | null): DayProgram[] {
             return {
               session,
               exercises,
-              isCompleted: wl.status === "completed" || doneThisWeek.has(wl.session_id),
+              isCompleted: wl.status === "completed",
               workoutLogId: wl.id,
             };
-          })
-          .filter((s) => s.exercises.length > 0);
+          });
       } else {
-        // Fallback: legacy day_of_week sessions from app_data
-        daySessions = sessions
-          .filter((s) => s.day_of_week === dow && (exos[s.id] ?? []).length > 0)
-          .map((s) => ({
-            session:      s,
-            exercises:    exos[s.id] ?? [],
-            isCompleted:  doneThisWeek.has(s.id),
-          }));
+        // No workout_logs for this week — nothing to show (legacy fallback removed)
+        daySessions = [];
       }
 
       const dayTests = (testSessions as TestSess[]).filter((t) => t.date === isoDate);

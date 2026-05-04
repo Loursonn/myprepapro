@@ -408,6 +408,7 @@ function EventCard({
                 sessionId:   event.raw?.session_id as string | undefined,
                 sessionName: event.title,
                 date:        event.date,
+                status:      event.status,
               });
             }}
             style={{

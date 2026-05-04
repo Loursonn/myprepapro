@@ -4,10 +4,10 @@
  * présentées du point de vue du joueur : où en est-il dans sa saison ?
  */
 import { useMemo } from 'react';
-import { Trophy } from 'lucide-react';
+import { Trophy, Pencil } from 'lucide-react';
 import { useSeasons, usePlanningBlocks, getBlockDepth } from '@/hooks/usePlanningBlocks';
 import { useCompetitions } from '@/hooks/useCompetitions';
-import { COMPETITION_META, type PlanningBlock } from '@/types/planning';
+import { COMPETITION_META, type PlanningBlock, type Competition } from '@/types/planning';
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ function MiniGantt({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export function PlanningOverview({ athleteId }: { athleteId: string }) {
+export function PlanningOverview({ athleteId, onEditComp }: { athleteId: string; onEditComp?: (comp: Competition) => void }) {
   const { data: seasons = [] } = useSeasons(athleteId);
 
   // Prend la saison la plus récente qui couvre aujourd'hui, sinon la plus récente
@@ -230,7 +230,7 @@ export function PlanningOverview({ athleteId }: { athleteId: string }) {
                 return (
                   <div
                     key={comp.id}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl"
+                    className="group flex items-center gap-2.5 px-3 py-2 rounded-xl"
                     style={{ background: 'rgba(255,255,255,0.04)' }}
                   >
                     <span className="text-sm shrink-0">{meta.emoji}</span>
@@ -256,6 +256,14 @@ export function PlanningOverview({ athleteId }: { athleteId: string }) {
                     >
                       {comp.priority}
                     </span>
+                    {onEditComp && (
+                      <button
+                        onClick={() => onEditComp(comp)}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/80 transition-all shrink-0"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    )}
                   </div>
                 );
               })}

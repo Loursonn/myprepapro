@@ -5,6 +5,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CompetitionFormModal } from "@/features/coach/components/planning/CompetitionFormModal";
+import type { Competition } from "@/types/planning";
 
 // Vue Saison
 import { PlanningOverview } from "@/components/coach/PlanningOverview";
@@ -31,6 +32,7 @@ export default function PlanningPage() {
   const { user } = useAuth();
   const { athleteId, loaded, sessions, blockConfig, setBlockConfig, exos, sets, completedSessions, currentWeek } = useAthleteContext();
   const [showCompForm, setShowCompForm] = useState(false);
+  const [editingComp, setEditingComp] = useState<Competition | null>(null);
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
@@ -63,7 +65,7 @@ export default function PlanningPage() {
                 🏆 + Compétition
               </button>
             </div>
-            <PlanningOverview athleteId={athleteId} C={C} />
+            <PlanningOverview athleteId={athleteId} C={C} onEditComp={(comp) => setEditingComp(comp)} />
           </>
         )}
 
@@ -98,6 +100,15 @@ export default function PlanningPage() {
           athleteId={athleteId}
           coachId={user?.id ?? ""}
           onClose={() => setShowCompForm(false)}
+        />
+      )}
+
+      {editingComp && (
+        <CompetitionFormModal
+          athleteId={athleteId}
+          coachId={user?.id ?? ""}
+          existing={editingComp}
+          onClose={() => setEditingComp(null)}
         />
       )}
     </>
