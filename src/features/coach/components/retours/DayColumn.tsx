@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { isToday, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Check, X, Clock, Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, Zap, ChevronDown, ChevronUp } from "lucide-react";
 import { C } from "@/lib/theme";
 import { DayDetailPanel } from "./DayDetailPanel";
 import type { WeeklyRetourData, WellnessDay } from "@/features/shared/types/retours.types";
@@ -21,8 +21,7 @@ interface DayColumnProps {
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "completed") return <Check size={10} color={C.g} />;
-  if (status === "missed")    return <X    size={10} color={C.r} />;
-  return <Clock size={10} color={C.tx3} />;
+  return <X size={10} color={C.tx3} />;
 }
 
 // ── Wellness mini-block ───────────────────────────────────────────────────────
@@ -75,12 +74,31 @@ function WellnessBlock({
 
 // ── Workout compact row ───────────────────────────────────────────────────────
 
-function WorkoutRow({ workout, prevWorkout, prevWeekData }: {
+function WorkoutRow({ workout, prevWorkout }: {
   workout:      DayWorkout;
   prevWorkout?: DayWorkout | null;
-  prevWeekData?: DayWorkout[];
 }) {
   const [open, setOpen] = useState(false);
+  const done = workout.status === "completed";
+
+  if (!done) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 4,
+        background: C.s2, borderRadius: 7, padding: "5px 7px",
+        opacity: 0.5,
+      }}>
+        <StatusIcon status={workout.status} />
+        <span style={{
+          flex: 1, fontSize: 10, fontWeight: 600, color: C.tx2,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {workout.session_name}
+        </span>
+        <span style={{ fontSize: 8, color: C.tx3, flexShrink: 0 }}>skip</span>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: C.s2, borderRadius: 7, overflow: "hidden" }}>
@@ -175,7 +193,7 @@ function EnergyRow({ session }: { session: DayEnergy }) {
         <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
           {session.completed
             ? <span style={{ fontSize: 8, color: C.g }}>✓ Complétée</span>
-            : <span style={{ fontSize: 8, color: C.tx3 }}>Non faite</span>
+            : <span style={{ fontSize: 8, color: C.tx3 }}>Skippée</span>
           }
           {session.duration_min != null && (
             <span style={{ fontSize: 8, color: C.tx3 }}>{session.duration_min} min</span>
