@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { CoachConfig } from "@/components/coach/CoachComponents";
@@ -5,6 +6,7 @@ import PerformanceProfile from "@/components/athlete/PerformanceProfile";
 import CoachPerfNotification from "@/components/coach/CoachPerfNotification";
 import DataManager from "@/features/coach/components/DataManager";
 import type { Profile } from "@/hooks/useAuth";
+import type { Goals } from "@/features/shared/types/athlete";
 
 export default function DonneesPage() {
   const {
@@ -12,7 +14,7 @@ export default function DonneesPage() {
     nutritionStrategy, completedSessions, uncompleteSession,
     sessions, weeksArr, setShowNewBlock, setShowBlockHistory, blockHistory,
     habitEnabled, habitToggling, habitToggleErr, toggleHabitEnabled,
-    appFeedbacks,
+    appFeedbacks, goals, setGoals,
   } = useAthleteContext();
   const ap = athleteProfile as Profile | null;
 
@@ -125,6 +127,9 @@ export default function DonneesPage() {
         <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 10 }}>Validations de performances</div>
         <CoachPerfNotification coachId={athleteId} C={C} />
       </div>
+      {/* Sleep goals */}
+      <SleepGoalsEditor goals={goals} setGoals={setGoals} />
+
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Gestion du bloc</div>
         <CoachConfig completedSessions={completedSessions} uncompleteSession={uncompleteSession} sessions={sessions} weeksArr={weeksArr} onNewBlock={() => setShowNewBlock(true)} onShowHistory={() => setShowBlockHistory(true)} blockHistoryCount={blockHistory.length} />
@@ -157,6 +162,104 @@ export default function DonneesPage() {
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Gestion des données</div>
       <div style={{ fontSize: 12, color: C.tx2, marginBottom: 16 }}>Supprimer sélectivement des données</div>
       <DataManager />
+    </div>
+  );
+}
+
+// ── Sleep goals editor ────────────────────────────────────────────────────────
+
+function HMPicker({
+  label, value, onChange,
+}: {
+  label: string;
+  value?: { h: number; m: number };
+  onChange: (v: { h: number; m: number }) => void;
+}) {
+  const h = value?.h ?? 22;
+  const m = value?.m ?? 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <select
+          value={h}
+          onChange={(e) => onChange({ h: Number(e.target.value), m })}
+          style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", outline: "none" }}
+        >
+          {Array.from({ length: 24 }, (_, i) => (
+            <option key={i} value={i}>{String(i).padStart(2, "0")}h</option>
+          ))}
+        </select>
+        <select
+          value={m}
+          onChange={(e) => onChange({ h, m: Number(e.target.value) })}
+          style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", outline: "none" }}
+        >
+          {[0, 15, 30, 45].map((min) => (
+            <option key={min} value={min}>{String(min).padStart(2, "0")}min</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function SleepGoalsEditor({ goals, setGoals }: { goals: Goals; setGoals: (v: Goals) => void }) {
+  const [saved, setSaved] = useState(false);
+
+  /** Auto-compute sleepTarget (hours) from bedtime + wakeup */
+  const autoTarget = (bed?: { h: number; m: number }, up?: { h: number; m: number }): number | undefined => {
+    if (!bed || !up) return undefined;
+    const bedDec = bed.h + bed.m / 60;
+    const upDec  = up.h  + up.m  / 60;
+    // wakeup < 12 → next day
+    const upNorm = upDec < 12 ? upDec + 24 : upDec;
+    const bedNorm = bedDec < 12 ? bedDec + 24 : bedDec;
+    const dur = upNorm - bedNorm;
+    return dur > 0 ? Math.round(dur * 10) / 10 : undefined;
+  };
+
+  const handleChange = (patch: { sleepBedtime?: { h: number; m: number }; sleepWakeup?: { h: number; m: number } }) => {
+    const next = { ...goals, ...patch };
+    next.sleepTarget = autoTarget(next.sleepBedtime, next.sleepWakeup) ?? next.sleepTarget;
+    setGoals(next);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const durTarget = autoTarget(goals.sleepBedtime, goals.sleepWakeup);
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Objectifs de sommeil</div>
+      <div style={{ fontSize: 12, color: C.tx2, marginBottom: 12 }}>Visibles dans le tunnel de sommeil (retours)</div>
+      <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, padding: "14px 16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, alignItems: "end", marginBottom: 14 }}>
+          <HMPicker
+            label="🌙 Heure de coucher"
+            value={goals.sleepBedtime}
+            onChange={(v) => handleChange({ sleepBedtime: v })}
+          />
+          <HMPicker
+            label="☀️ Heure de lever"
+            value={goals.sleepWakeup}
+            onChange={(v) => handleChange({ sleepWakeup: v })}
+          />
+          {/* Auto-computed duration */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>⏱ Durée calculée</div>
+            <div style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, fontSize: 15, fontWeight: 800, color: durTarget != null ? C.b : C.tx3 }}>
+              {durTarget != null
+                ? `${Math.floor(durTarget)}h${Math.round((durTarget % 1) * 60) > 0 ? String(Math.round((durTarget % 1) * 60)).padStart(2, "0") : ""}`
+                : "—"}
+            </div>
+          </div>
+        </div>
+        {saved && (
+          <div style={{ fontSize: 11, color: C.g, fontWeight: 600 }}>✓ Objectifs enregistrés</div>
+        )}
+      </div>
     </div>
   );
 }

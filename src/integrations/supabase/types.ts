@@ -1,4 +1,3 @@
-Initialising login role...
 export type Json =
   | string
   | number
@@ -12,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.4"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -159,6 +133,7 @@ export type Database = {
       }
       competitions: {
         Row: {
+          athlete_comment: string | null
           athlete_id: string
           coach_id: string
           created_at: string
@@ -174,6 +149,7 @@ export type Database = {
           type: string
         }
         Insert: {
+          athlete_comment?: string | null
           athlete_id: string
           coach_id: string
           created_at?: string
@@ -189,6 +165,7 @@ export type Database = {
           type?: string
         }
         Update: {
+          athlete_comment?: string | null
           athlete_id?: string
           coach_id?: string
           created_at?: string
@@ -367,6 +344,7 @@ export type Database = {
           custom_kind: string | null
           id: string
           intervals: Json
+          is_public: boolean
           is_verified: boolean
           name: string
           notes: string | null
@@ -384,6 +362,7 @@ export type Database = {
           custom_kind?: string | null
           id?: string
           intervals?: Json
+          is_public?: boolean
           is_verified?: boolean
           name: string
           notes?: string | null
@@ -401,6 +380,7 @@ export type Database = {
           custom_kind?: string | null
           id?: string
           intervals?: Json
+          is_public?: boolean
           is_verified?: boolean
           name?: string
           notes?: string | null
@@ -1409,6 +1389,51 @@ export type Database = {
           },
         ]
       }
+      workout_exercise_comments: {
+        Row: {
+          comment: string
+          created_at: string | null
+          exercise_id: string | null
+          exercise_name: string
+          id: string
+          updated_at: string | null
+          workout_log_id: string
+        }
+        Insert: {
+          comment: string
+          created_at?: string | null
+          exercise_id?: string | null
+          exercise_name: string
+          id?: string
+          updated_at?: string | null
+          workout_log_id: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string | null
+          exercise_id?: string | null
+          exercise_name?: string
+          id?: string
+          updated_at?: string | null
+          workout_log_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_exercise_comments_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_exercise_comments_workout_log_id_fkey"
+            columns: ["workout_log_id"]
+            isOneToOne: false
+            referencedRelation: "workout_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_logs: {
         Row: {
           athlete_id: string
@@ -1865,9 +1890,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

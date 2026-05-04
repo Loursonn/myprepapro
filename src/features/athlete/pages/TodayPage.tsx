@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -8,7 +8,13 @@ import { useTodayWellness } from "@/features/shared/hooks/useTodayWellness";
 import { useReadinessScore } from "@/features/shared/hooks/useReadinessScore";
 import { useUpcomingCompetition } from "@/features/shared/hooks/useUpcomingCompetition";
 import { useWeekProgram } from "@/features/shared/hooks/useWeekProgram";
+import { useUnifiedCalendar } from "@/features/shared/hooks/useUnifiedCalendar";
+import type { UnifiedCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
+import { useEnergySession } from "@/features/shared/hooks/useEnergySessions";
+import { SessionPreviewModal } from "@/features/coach/components/energy/SessionPreviewModal";
+import { useCompetitions } from "@/hooks/useCompetitions";
 import { COMPETITION_META } from "@/types/planning";
+import { AthleteCompetitionCard } from "@/features/athlete/components/AthleteCompetitionCard";
 import type { DayProgram } from "@/features/shared/hooks/useWeekProgram";
 import type { FreeSession } from "@/features/shared/types/athlete";
 
@@ -306,19 +312,31 @@ interface DayPreviewSheetProps {
   onClose: () => void;
   onStartSession: (sess: DayProgram["sessions"][number]["session"]) => void;
   freeSessions: FreeSession[];
+  energyByDate: Map<string, UnifiedCalendarEvent[]>;
+  onEnergyPreview: (ev: UnifiedCalendarEvent) => void;
   onAddActivity: (date: string) => void;
   onEditActivity: (session: FreeSession) => void;
 }
 
-function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, onAddActivity, onEditActivity }: DayPreviewSheetProps) {
+function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByDate, onEnergyPreview, onAddActivity, onEditActivity }: DayPreviewSheetProps) {
   if (!day) return null;
   const date = new Date(day.date + "T12:00:00");
   const dateLabel = `${DAYS_FULL_FR[day.dow]} ${date.getDate()} ${MONTHS_FR[date.getMonth()]}`;
   const isToday = day.date === new Date().toISOString().split("T")[0];
   const isPast  = day.date < new Date().toISOString().split("T")[0];
   const isFuture = day.date > new Date().toISOString().split("T")[0];
-  const empty   = day.sessions.length === 0 && day.tests.length === 0;
+  const dayEnergySessions = energyByDate.get(day.date) ?? [];
+  const empty   = day.sessions.length === 0 && day.tests.length === 0 && dayEnergySessions.length === 0;
   const dayFreeActivities = freeSessions.filter((f) => f.date === day.date && f.sport);
+
+  const ENERGY_KIND_COLOR: Record<string, string> = {
+    vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+    footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+  };
+  const ENERGY_KIND_LABEL: Record<string, string> = {
+    vo2: "VO₂", tempo: "Tempo", seuil: "Seuil",
+    footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+  };
 
   return (
     <Drawer open={!!day} onOpenChange={(v) => !v && onClose()}>
@@ -413,6 +431,35 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, onAddActi
                   )}
                 </div>
               ))}
+
+              {/* Séances énergie */}
+              {dayEnergySessions.map((ev) => {
+                const kc = ENERGY_KIND_COLOR[ev.sessionKind ?? ""] ?? "#A855F7";
+                const kl = ENERGY_KIND_LABEL[ev.sessionKind ?? ""] ?? ev.sessionKind ?? "Énergie";
+                const isDone = ev.status === "completed";
+                return (
+                  <button
+                    key={ev.id}
+                    onClick={() => { onEnergyPreview(ev); onClose(); haptic(); }}
+                    style={{
+                      width: "100%", background: isDone ? C.gS : kc + "12",
+                      borderRadius: 14, padding: "14px 16px",
+                      border: "1px solid " + (isDone ? C.g + "40" : kc + "40"),
+                      display: "flex", alignItems: "center", gap: 12,
+                      cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+                    }}
+                  >
+                    <div style={{ fontSize: 24 }}>🏃</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>{ev.title}</div>
+                      <div style={{ fontSize: 10, marginTop: 2, fontWeight: 600, color: kc }}>
+                        {kl} · {isDone ? "Complétée ✓" : isPast ? "Manquée" : "À faire"}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, color: C.tx3 }}>Voir →</span>
+                  </button>
+                );
+              })}
 
               {/* Tests */}
               {day.tests.map((t) => {
@@ -529,6 +576,40 @@ function getFormeAdvice(wellness: Record<string, number> | null): Array<{ icon: 
   return tips;
 }
 
+// ── Energy preview overlay (reuse coach SessionPreviewModal) ─────────────────
+
+function EnergyPreviewOverlay({
+  event,
+  athleteId,
+  onClose,
+}: {
+  event: UnifiedCalendarEvent;
+  athleteId: string;
+  onClose: () => void;
+}) {
+  const sessionId = event.energySessionId ?? (event.raw?.energy_session_id as string | undefined);
+  const { data: session, isLoading } = useEnergySession(sessionId);
+
+  if (isLoading) {
+    return (
+      <>
+        <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
+        <div style={{
+          position: "fixed", top: "50%", left: "50%", zIndex: 61,
+          transform: "translate(-50%, -50%)",
+          width: 420, maxWidth: "96vw",
+          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+          padding: "40px", textAlign: "center", color: C.tx3, fontSize: 13,
+        }}>
+          Chargement…
+        </div>
+      </>
+    );
+  }
+  if (!session) return null;
+  return <SessionPreviewModal session={session} athleteId={athleteId} onClose={onClose} />;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function TodayPage() {
@@ -536,6 +617,7 @@ export default function TodayPage() {
   const [selectedDay, setSelectedDay] = useState<DayProgram | null>(null);
   const [activityDate, setActivityDate] = useState<string | null>(null);
   const [editActivity, setEditActivity] = useState<FreeSession | null>(null);
+  const [energyPreview, setEnergyPreview] = useState<UnifiedCalendarEvent | null>(null);
 
   const {
     athleteId, athleteProfile, wellnessHistory,
@@ -545,8 +627,42 @@ export default function TodayPage() {
   const wellness        = useTodayWellness();
   const readiness       = useReadinessScore(wellness);
   const { data: nextComp } = useUpcomingCompetition(athleteId);
+  const { data: allCompetitions = [] } = useCompetitions(athleteId);
   const weekDays = useWeekProgram(null);
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+
+  // Week ISO range for current week (same logic as useWeekProgram)
+  const { mondayISO, sundayISO } = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    d.setHours(0, 0, 0, 0);
+    const mon = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const sun = new Date(d);
+    sun.setDate(d.getDate() + 6);
+    return {
+      mondayISO: mon,
+      sundayISO: `${sun.getFullYear()}-${String(sun.getMonth() + 1).padStart(2, "0")}-${String(sun.getDate()).padStart(2, "0")}`,
+    };
+  }, []);
+
+  const { data: calEvents = [] } = useUnifiedCalendar(
+    athleteId ?? "",
+    { start: mondayISO, end: sundayISO },
+  );
+
+  const energyByDate = useMemo(() => {
+    const m = new Map<string, UnifiedCalendarEvent[]>();
+    for (const ev of calEvents) {
+      if (ev.type === "energy") {
+        const arr = m.get(ev.date) ?? [];
+        arr.push(ev);
+        m.set(ev.date, arr);
+      }
+    }
+    return m;
+  }, [calEvents]);
+
+  const todayEnergySessions = energyByDate.get(today) ?? [];
 
   // Derive today's workouts from the date-based week schedule
   const todayDay = weekDays.find((d) => d.date === today);
@@ -554,6 +670,12 @@ export default function TodayPage() {
   const todayTests = todayDay?.tests ?? [];
   const nextWorkout = workouts.find((w) => !w.isCompleted) ?? null;
   const allDoneToday = workouts.length > 0 && workouts.every((w) => w.isCompleted);
+
+  // ── Compétitions passées sans commentaire (7 derniers jours) ─────────────
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+  const uncommentedComps = allCompetitions.filter(
+    (c) => c.date < today && c.date >= sevenDaysAgo && !c.athlete_comment
+  );
 
   // ── Yesterday's recap ─────────────────────────────────────────────────────
   const yesterdayISO = new Date(Date.now() - 86400000).toISOString().split("T")[0];
@@ -596,7 +718,7 @@ export default function TodayPage() {
   // ── Today's session CTA ───────────────────────────────────────────────────
   const firstDoneSession = workouts.find((w) => w.isCompleted);
   const todaySession = nextWorkout ?? (allDoneToday ? firstDoneSession ?? null : null);
-  const restDay = workouts.length === 0;
+  const restDay = workouts.length === 0 && todayEnergySessions.length === 0;
 
   return (
     <>
@@ -679,7 +801,7 @@ export default function TodayPage() {
             Séance du jour
           </div>
 
-          {restDay && todayTests.length === 0 ? (
+          {restDay && todayTests.length === 0 && todayEnergySessions.length === 0 ? (
             <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd, textAlign: "center" }}>
               <div style={{ fontSize: 20, marginBottom: 4 }}>😌</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>Jour de repos</div>
@@ -732,6 +854,58 @@ export default function TodayPage() {
           ) : (
             <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd, textAlign: "center", color: C.tx3, fontSize: 12 }}>
               Aucune séance planifiée aujourd'hui
+            </div>
+          )}
+
+          {/* Séances énergie du jour */}
+          {todayEnergySessions.length > 0 && (
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+              {todayEnergySessions.map((ev) => {
+                const ENERGY_KIND_COLOR: Record<string, string> = {
+                  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+                  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+                };
+                const ENERGY_KIND_LABEL: Record<string, string> = {
+                  vo2: "VO₂", tempo: "Tempo", seuil: "Seuil",
+                  footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+                };
+                const kc = ENERGY_KIND_COLOR[ev.sessionKind ?? ""] ?? "#A855F7";
+                const kl = ENERGY_KIND_LABEL[ev.sessionKind ?? ""] ?? ev.sessionKind ?? "Énergie";
+                const isDone = ev.status === "completed";
+                return (
+                  <button
+                    key={ev.id}
+                    onClick={() => { setEnergyPreview(ev); haptic(); }}
+                    style={{
+                      width: "100%", background: isDone ? C.gS : kc + "12",
+                      borderRadius: 14, padding: "12px 14px",
+                      border: "1px solid " + (isDone ? C.g + "40" : kc + "40"),
+                      display: "flex", alignItems: "center", gap: 12,
+                      cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                        background: isDone ? C.gS : kc + "20",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 18,
+                      }}
+                    >
+                      🏃
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {ev.title}
+                      </div>
+                      <div style={{ fontSize: 10, color: kc, marginTop: 1, fontWeight: 600 }}>
+                        {kl}{isDone ? " · Complétée ✓" : ""}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 9, color: C.tx3 }}>Voir →</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -790,6 +964,7 @@ export default function TodayPage() {
               const isToday = day.date === today;
               const hasSess = day.sessions.length > 0;
               const hasTest = day.tests.length > 0;
+              const dayEnergy = energyByDate.get(day.date) ?? [];
               const dayFree = freeSessions.filter((f) => f.date === day.date && f.sport);
               const allDone = hasSess && day.sessions.every(s => s.isCompleted);
               const DOW_SHORT = ["L", "M", "M", "J", "V", "S", "D"];
@@ -819,12 +994,12 @@ export default function TodayPage() {
                       background: isToday ? C.coach : "transparent",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 12, fontWeight: 700,
-                      color: isToday ? "#fff" : (hasSess || hasTest || dayFree.length > 0) ? C.tx : C.tx3,
+                      color: isToday ? "#fff" : (hasSess || hasTest || dayEnergy.length > 0 || dayFree.length > 0) ? C.tx : C.tx3,
                     }}
                   >
                     {new Date(day.date + "T12:00:00").getDate()}
                   </div>
-                  {/* Dots: sessions + tests + free activities */}
+                  {/* Dots: sessions + energy + tests + free activities */}
                   <div style={{ display: "flex", gap: 3, height: 6, alignItems: "center" }}>
                     {day.sessions.map((s) => (
                       <div
@@ -832,6 +1007,15 @@ export default function TodayPage() {
                         style={{
                           width: 5, height: 5, borderRadius: "50%",
                           background: s.isCompleted ? "#22C993" : C.coach,
+                        }}
+                      />
+                    ))}
+                    {dayEnergy.map((ev) => (
+                      <div
+                        key={ev.id}
+                        style={{
+                          width: 5, height: 5, borderRadius: "50%",
+                          background: ev.status === "completed" ? "#22C993" : "#A855F7",
                         }}
                       />
                     ))}
@@ -934,6 +1118,31 @@ export default function TodayPage() {
                   {nextComp.location ? ` · ${nextComp.location}` : ""}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Section 4b — Compétitions passées à commenter */}
+        {uncommentedComps.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+              Compétitions passées à commenter
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {uncommentedComps.map((comp) => (
+                <AthleteCompetitionCard
+                  key={comp.id}
+                  competition={{
+                    id: comp.id,
+                    name: comp.name,
+                    type: comp.type,
+                    date: comp.date,
+                    location: comp.location,
+                    athlete_comment: comp.athlete_comment ?? null,
+                    priority: comp.priority,
+                  }}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -1059,9 +1268,20 @@ export default function TodayPage() {
         onClose={() => setSelectedDay(null)}
         onStartSession={(sess) => navigate("/athlete/log", { state: { initialSess: sess } })}
         freeSessions={freeSessions}
+        energyByDate={energyByDate}
+        onEnergyPreview={(ev) => setEnergyPreview(ev)}
         onAddActivity={(date) => setActivityDate(date)}
         onEditActivity={(f) => setEditActivity(f)}
       />
+
+      {/* Energy session preview overlay */}
+      {energyPreview && (
+        <EnergyPreviewOverlay
+          event={energyPreview}
+          athleteId={athleteId ?? ""}
+          onClose={() => setEnergyPreview(null)}
+        />
+      )}
 
       {/* Free activity create modal */}
       <FreeActivityModal
