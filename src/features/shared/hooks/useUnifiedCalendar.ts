@@ -340,11 +340,7 @@ export function useDeleteCalendarEvent() {
           // Séance validée : hard delete pour pouvoir supprimer les doublons
           const { error } = await supabase.from("workout_logs").delete().eq("id", id);
           if (error) throw error;
-        } else {
-          // Non validée : mark skipped pour que l'event block_plan ne réapparaisse pas
-          const { error } = await supabase.from("workout_logs")
-            .update({ status: "skipped" }).eq("id", id);
-        if (isPast) {
+        } else if (isPast) {
           // Past real log: mark skipped so projected event stays suppressed
           const { error } = await supabase.from("workout_logs")
             .update({ status: "skipped" }).eq("id", id);
