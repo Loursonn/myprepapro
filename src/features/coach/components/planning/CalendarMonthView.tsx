@@ -4,7 +4,7 @@ import {
   startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, isToday,
   eachDayOfInterval, parseISO,
 } from "date-fns";
-import type { BlockConfig, Session } from "@/features/shared/types/athlete";
+import type { BlockConfig, Session, WellnessData } from "@/features/shared/types/athlete";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Dumbbell, Zap, X as XIcon } from "lucide-react";
 import {
@@ -130,12 +130,13 @@ function EventChip({
 // ── DraggableEventChip ───────────────────────────────────────────────────────
 
 function DraggableEventChip({
-  event, compact = false, athleteId = "", coachId = "",
+  event, compact = false, athleteId = "", coachId = "", onEventClick,
 }: {
   event: CalEvent;
   compact?: boolean;
   athleteId?: string;
   coachId?: string;
+  onEventClick?: (event: CalEvent) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const draggable = event.type === "workout" || event.type === "energy";
@@ -152,6 +153,7 @@ function DraggableEventChip({
       style={{ position: "relative" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={(e) => { e.stopPropagation(); onEventClick?.(event); }}
     >
       <div
         ref={setNodeRef}
@@ -257,16 +259,22 @@ function DroppableDay({
   isCurrentMonth,
   isActive,
   onClick,
+  onEventClick,
   athleteId,
   coachId,
+  wellnessLogged,
+  nutritionLogged,
 }: {
   date: Date;
   events: CalEvent[];
   isCurrentMonth: boolean;
   isActive: boolean;
   onClick: () => void;
+  onEventClick: (event: CalEvent) => void;
   athleteId: string;
   coachId: string;
+  wellnessLogged: boolean;
+  nutritionLogged: boolean;
 }) {
   const dateStr = format(date, "yyyy-MM-dd");
   const { setNodeRef, isOver } = useDroppable({ id: dateStr });
@@ -318,7 +326,7 @@ function DroppableDay({
       {/* Events */}
       <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
         {events.slice(0, maxVisible).map((ev) => (
-          <DraggableEventChip key={ev.id} event={ev} compact athleteId={athleteId} coachId={coachId} />
+          <DraggableEventChip key={ev.id} event={ev} compact athleteId={athleteId} coachId={coachId} onEventClick={onEventClick} />
         ))}
         {overflow > 0 && (
           <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 4 }}>
@@ -326,6 +334,13 @@ function DroppableDay({
           </div>
         )}
       </div>
+
+      {(wellnessLogged || nutritionLogged) && (
+        <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 2 }}>
+          {wellnessLogged && <span style={{ fontSize: 10, lineHeight: 1 }}>❤️</span>}
+          {nutritionLogged && <span style={{ fontSize: 10, lineHeight: 1 }}>🍽️</span>}
+        </div>
+      )}
 
       {/* Drop indicator */}
       {isOver && (
@@ -491,6 +506,8 @@ interface CalendarMonthViewProps {
   sets?: Record<string, unknown[]>;
   completedSessions?: Record<number, string[]>;
   currentWeek?: number;
+  wellnessHistory?: Record<string, WellnessData>;
+  nutritionLog?: Record<string, unknown>;
 }
 
 export function CalendarMonthView({
@@ -503,9 +520,12 @@ export function CalendarMonthView({
   sets,
   completedSessions = {},
   currentWeek = 1,
+  wellnessHistory,
+  nutritionLog,
 }: CalendarMonthViewProps) {
   const [month, setMonth]               = useState(new Date());
   const [drawerDay, setDrawerDay]       = useState<Date | null>(null);
+  const [drawerInitialEvent, setDrawerInitialEvent] = useState<CalEvent | null>(null);
   const [quickAddDay, setQuickAddDay]   = useState<Date | null>(null);
   const [activeDragId, setActiveDragId]     = useState<string | null>(null);
   const [activeDragEvent, setActiveDragEvent] = useState<CalEvent | null>(null);
@@ -596,6 +616,11 @@ export function CalendarMonthView({
     () => [...enrichedRealEvents.filter(e => e.status !== "skipped"), ...projectedEvents],
     [enrichedRealEvents, projectedEvents],
   );
+
+  const handleEventClick = useCallback((day: Date, event: CalEvent) => {
+    setDrawerDay(day);
+    setDrawerInitialEvent(event);
+  }, []);
 
   // Sensors : require 8px of movement before drag starts (prevent accidental drags)
   const sensors = useSensors(
@@ -815,6 +840,9 @@ export function CalendarMonthView({
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, padding: 2 }}>
                 {gridDays.map((day) => {
                   const dateStr = format(day, "yyyy-MM-dd");
+                  const wKey = dateStr.replace(/-/g, "");
+                  const wLogged = !!(wellnessHistory?.[wKey] ?? wellnessHistory?.[dateStr]);
+                  const nLogged = !!(nutritionLog?.[dateStr] ?? nutritionLog?.[wKey]);
                   return (
                     <DroppableDay
                       key={dateStr}
@@ -822,9 +850,12 @@ export function CalendarMonthView({
                       events={eventsByDate[dateStr] ?? []}
                       isCurrentMonth={isSameMonth(day, month)}
                       isActive={!!(drawerDay && isSameDay(day, drawerDay))}
-                      onClick={() => setDrawerDay(day)}
+                      onClick={() => { setDrawerDay(day); setDrawerInitialEvent(null); }}
+                      onEventClick={(ev) => handleEventClick(day, ev)}
                       athleteId={athleteId}
                       coachId={coachId}
+                      wellnessLogged={wLogged}
+                      nutritionLogged={nLogged}
                     />
                   );
                 })}
@@ -899,7 +930,7 @@ export function CalendarMonthView({
       {/* Day details drawer */}
       <DayDetailsDrawer
         open={!!drawerDay}
-        onClose={() => setDrawerDay(null)}
+        onClose={() => { setDrawerDay(null); setDrawerInitialEvent(null); }}
         day={drawerDay}
         events={events}
         athleteId={athleteId}
@@ -907,6 +938,9 @@ export function CalendarMonthView({
         onQuickAdd={(day) => setQuickAddDay(day)}
         exos={exos}
         sets={sets}
+        initialSelectedEvent={drawerInitialEvent}
+        wellnessHistory={wellnessHistory}
+        nutritionLog={nutritionLog}
       />
 
       {/* Quick-add dialog (also from empty slot click) */}

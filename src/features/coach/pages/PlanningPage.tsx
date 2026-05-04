@@ -30,7 +30,7 @@ export default function PlanningPage() {
   const view = (searchParams.get("view") as PlanView) ?? "season";
 
   const { user } = useAuth();
-  const { athleteId, loaded, sessions, blockConfig, setBlockConfig, exos, sets, completedSessions, currentWeek } = useAthleteContext();
+  const { athleteId, loaded, sessions, blockConfig, setBlockConfig, exos, sets, completedSessions, currentWeek, wellnessHistory, nutritionLog } = useAthleteContext();
   const [showCompForm, setShowCompForm] = useState(false);
   const [editingComp, setEditingComp] = useState<Competition | null>(null);
 
@@ -86,6 +86,8 @@ export default function PlanningPage() {
             sets={sets as Record<string, unknown[]>}
             completedSessions={completedSessions}
             currentWeek={currentWeek}
+            wellnessHistory={wellnessHistory}
+            nutritionLog={nutritionLog}
           />
         )}
 

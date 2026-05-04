@@ -315,17 +315,23 @@ export function useDeleteCalendarEvent() {
         return;
       }
 
-      // Projected block-plan workout: suppress by inserting a skipped workout_log
+      const isPast = date ? new Date(date + "T23:59:59") < new Date() : true;
+
+      // Projected block-plan workout
       if (type === "workout" && id.startsWith("block-") && sessionId && date) {
-        const { error } = await supabase.from("workout_logs").insert({
-          athlete_id:     athleteId,
-          coach_id:       coachId ?? null,
-          session_id:     sessionId,
-          session_name:   sessionName ?? "Séance",
-          scheduled_date: date,
-          status:         "skipped",
-        });
-        if (error) throw error;
+        if (isPast) {
+          // Past: insert a skipped log so the projection doesn't reappear
+          const { error } = await supabase.from("workout_logs").insert({
+            athlete_id:     athleteId,
+            coach_id:       coachId ?? null,
+            session_id:     sessionId,
+            session_name:   sessionName ?? "Séance",
+            scheduled_date: date,
+            status:         "skipped",
+          });
+          if (error) throw error;
+        }
+        // Future projected: no DB record — a future session cannot be "skipped"
         return;
       }
 
@@ -338,6 +344,15 @@ export function useDeleteCalendarEvent() {
           // Non validée : mark skipped pour que l'event block_plan ne réapparaisse pas
           const { error } = await supabase.from("workout_logs")
             .update({ status: "skipped" }).eq("id", id);
+        if (isPast) {
+          // Past real log: mark skipped so projected event stays suppressed
+          const { error } = await supabase.from("workout_logs")
+            .update({ status: "skipped" }).eq("id", id);
+          if (error) throw error;
+        } else {
+          // Future real log: hard delete — no semantic meaning in "skipping" a future session
+          const { error } = await supabase.from("workout_logs")
+            .delete().eq("id", id);
           if (error) throw error;
         }
         return;
