@@ -18,4 +18,18 @@ export const QK = {
   testDefinitions:      (cid: string) => ['testDefinitions', cid]      as const,
   athleteTestResults:   (aid: string) => ['athleteTestResults', aid]   as const,
   athleteCurrentValues: (aid: string) => ['athleteCurrentValues', aid] as const,
+  // ── Compétitions ─────────────────────────────────────────────────────────
+  competitions:         (aid?: string) => aid ? ['competitions', aid] : ['competitions'] as const,
+  // ── Retours hebdomadaires ─────────────────────────────────────────────────
+  weeklyRetours: (athleteId?: string, weekStartDate?: string) =>
+    athleteId && weekStartDate
+      ? ['weeklyRetours', athleteId, weekStartDate]
+      : ['weeklyRetours'],
+  // ── Retours mensuels ──────────────────────────────────────────────────────
+  monthlyRetours: (athleteId?: string, month?: string) =>
+    athleteId && month
+      ? ['monthlyRetours', athleteId, month]
+      : ['monthlyRetours'],
+  // ── Plan actif (mésocycle courant + séances à venir) ─────────────────────────
+  activePlan:     (aid: string) => ['activePlan', aid] as const,
 } as const;

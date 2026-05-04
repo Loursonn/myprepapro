@@ -39,7 +39,7 @@ export function KPICard({
         if (onClick) (e.currentTarget as HTMLElement).style.borderColor = C.brd;
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
         <span style={{ fontSize: 16 }}>{icon}</span>
         <span style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>
           {title}
@@ -48,16 +48,16 @@ export function KPICard({
 
       {loading ? (
         <>
-          <Skeleton style={{ height: 32, width: "60%", borderRadius: 6, background: C.s2 }} />
-          {subtitle && <Skeleton style={{ height: 14, width: "80%", borderRadius: 4, background: C.s2 }} />}
+          <Skeleton style={{ height: 32, width: "60%", borderRadius: 6, background: C.s2, alignSelf: "center" }} />
+          {subtitle && <Skeleton style={{ height: 14, width: "80%", borderRadius: 4, background: C.s2, alignSelf: "center" }} />}
         </>
       ) : (
         <>
-          <div style={{ fontSize: 28, fontWeight: 800, color: valueColor ?? C.tx, lineHeight: 1, letterSpacing: "-0.5px" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: valueColor ?? C.tx, lineHeight: 1, letterSpacing: "-0.5px", textAlign: "center" }}>
             {value ?? "—"}
           </div>
           {subtitle && (
-            <div style={{ fontSize: 11, color: C.tx3, marginTop: -2 }}>{subtitle}</div>
+            <div style={{ fontSize: 11, color: C.tx3, marginTop: -2, textAlign: "center" }}>{subtitle}</div>
           )}
         </>
       )}

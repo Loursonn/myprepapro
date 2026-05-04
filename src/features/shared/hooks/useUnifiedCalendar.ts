@@ -295,6 +295,7 @@ export function useDeleteCalendarEvent() {
       sessionId,
       sessionName,
       date,
+      status,
     }: {
       id: string;
       type: UCEventType;
@@ -303,6 +304,7 @@ export function useDeleteCalendarEvent() {
       sessionId?: string;
       sessionName?: string;
       date?: string;
+      status?: string;
     }) => {
       if (type === "competition") return;
 
@@ -334,6 +336,14 @@ export function useDeleteCalendarEvent() {
       }
 
       if (type === "workout") {
+        if (status === "completed") {
+          // Séance validée : hard delete pour pouvoir supprimer les doublons
+          const { error } = await supabase.from("workout_logs").delete().eq("id", id);
+          if (error) throw error;
+        } else {
+          // Non validée : mark skipped pour que l'event block_plan ne réapparaisse pas
+          const { error } = await supabase.from("workout_logs")
+            .update({ status: "skipped" }).eq("id", id);
         if (isPast) {
           // Past real log: mark skipped so projected event stays suppressed
           const { error } = await supabase.from("workout_logs")
@@ -358,6 +368,7 @@ export function useDeleteCalendarEvent() {
       qc.invalidateQueries({ queryKey: ["workout-logs-week", vars.athleteId] });
       toast.success("Supprimé");
     },
+    onError: () => toast.error("Erreur lors de la suppression"),
   });
 }
 

@@ -106,7 +106,9 @@ export interface Injury {
 
 export interface Goals {
   sessionsPerWeek: number;
-  sleepTarget: number;
+  sleepTarget: number;           // durée cible en heures
+  sleepBedtime?: { h: number; m: number }; // heure de coucher cible
+  sleepWakeup?:  { h: number; m: number }; // heure de lever cible
 }
 
 // ─── Habit ───────────────────────────────────────────────────────────────────
