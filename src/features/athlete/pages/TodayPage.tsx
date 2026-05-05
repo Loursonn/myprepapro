@@ -13,7 +13,7 @@ import { useUnifiedCalendar } from "@/features/shared/hooks/useUnifiedCalendar";
 import type { UnifiedCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { useEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import { SessionPreviewModal } from "@/features/coach/components/energy/SessionPreviewModal";
-import { useCompleteEnergyAssignment, useUpsertEnergyRpe } from "@/features/shared/hooks/useEnergyAssignments";
+import { useCompleteEnergyAssignment, useUpsertEnergyRpe, useUpdateEnergyAssignment } from "@/features/shared/hooks/useEnergyAssignments";
 import { useCompetitions } from "@/hooks/useCompetitions";
 import { COMPETITION_META } from "@/types/planning";
 import { AthleteCompetitionCard } from "@/features/athlete/components/AthleteCompetitionCard";
@@ -634,6 +634,14 @@ function EnergyPreviewOverlay({
   const { data: session, isLoading } = useEnergySession(sessionId);
   const complete = useCompleteEnergyAssignment();
   const upsertRpe = useUpsertEnergyRpe();
+  const updateAssignment = useUpdateEnergyAssignment();
+
+  function handleUnvalidate() {
+    updateAssignment.mutate(
+      { id: assignmentId, athleteId, status: "planned", block_logs: {}, rpe_score: null },
+      { onSuccess: onClose },
+    );
+  }
 
   const workBlocks = getWorkIntervals(session?.intervals ?? []);
   const isComplex = workBlocks.length > 1;
@@ -686,6 +694,7 @@ function EnergyPreviewOverlay({
         athleteId={athleteId}
         onClose={onClose}
         onValidate={!isCompleted ? () => setPhase("log") : undefined}
+        onUnvalidate={isCompleted ? handleUnvalidate : undefined}
       />
     );
   }
@@ -1080,11 +1089,11 @@ export default function TodayPage() {
                 Démarrer la séance ▶
               </button>
             </div>
-          ) : (
+          ) : todayEnergySessions.length === 0 ? (
             <div style={{ background: C.s1, borderRadius: 16, padding: 16, border: "1px solid " + C.brd, textAlign: "center", color: C.tx3, fontSize: 12 }}>
               Aucune séance planifiée aujourd'hui
             </div>
-          )}
+          ) : null}
 
           {/* Séances énergie du jour */}
           {todayEnergySessions.length > 0 && (

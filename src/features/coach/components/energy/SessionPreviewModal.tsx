@@ -120,10 +120,12 @@ interface SessionPreviewModalProps {
   onEdit?: () => void;
   /** If provided (athlete view), shows "Valider la séance" button */
   onValidate?: () => void;
+  /** If provided (athlete view, already completed), shows "Dévalider" button */
+  onUnvalidate?: () => void;
   onClose: () => void;
 }
 
-export function SessionPreviewModal({ session, athleteId, onEdit, onValidate, onClose }: SessionPreviewModalProps) {
+export function SessionPreviewModal({ session, athleteId, onEdit, onValidate, onUnvalidate, onClose }: SessionPreviewModalProps) {
   const kc = KIND_COLOR[session.session_kind] ?? "#6B7280";
   const rootGroup = buildRootGroup(session);
 
@@ -204,6 +206,11 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onValidate, on
           {onValidate && (
             <button onClick={onValidate} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: "#22C993", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Valider la séance ✓
+            </button>
+          )}
+          {onUnvalidate && (
+            <button onClick={onUnvalidate} style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid " + C.r + "50", background: "transparent", color: C.r, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              Dévalider
             </button>
           )}
         </div>

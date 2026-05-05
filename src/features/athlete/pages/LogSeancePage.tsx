@@ -10,6 +10,7 @@ import {
   useEnergyAssignments,
   useCompleteEnergyAssignment,
   useUpsertEnergyRpe,
+  useUpdateEnergyAssignment,
 } from "@/features/shared/hooks/useEnergyAssignments";
 import { RpeSheet } from "@/features/athlete/components/RpeSheet";
 import type { EnergySessionAssignmentRow, EnergyStep, EnergyInterval, BlockLogs } from "@/types/energy";
@@ -107,6 +108,11 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
   const [globalNote, setGlobalNote] = useState((a.notes ?? "") as string);
 
   const complete = useCompleteEnergyAssignment();
+  const updateAssignment = useUpdateEnergyAssignment();
+
+  function handleUnvalidate() {
+    updateAssignment.mutate({ id: a.id, athleteId, status: "planned", block_logs: {}, rpe_score: null });
+  }
 
   function handleValidate() {
     const logs: BlockLogs = isComplex
@@ -168,6 +174,16 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
             }}>
               {STATUS_LABEL[status]}
             </span>
+          )}
+          {status === "completed" && (
+            <button
+              onClick={e => { e.stopPropagation(); handleUnvalidate(); }}
+              style={{
+                fontSize: 9, fontWeight: 600, padding: "2px 7px", borderRadius: 6,
+                border: "1px solid " + C.r + "40", background: "transparent", color: C.r,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >Dévalider</button>
           )}
           {isLogable && (
             open ? <ChevronUp size={14} color={C.tx3} /> : <ChevronDown size={14} color={C.tx3} />
