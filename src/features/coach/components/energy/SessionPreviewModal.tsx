@@ -118,10 +118,12 @@ interface SessionPreviewModalProps {
   athleteId?: string;
   /** If provided, shows "Modifier la séance" button */
   onEdit?: () => void;
+  /** If provided (athlete view), shows "Valider la séance" button */
+  onValidate?: () => void;
   onClose: () => void;
 }
 
-export function SessionPreviewModal({ session, athleteId, onEdit, onClose }: SessionPreviewModalProps) {
+export function SessionPreviewModal({ session, athleteId, onEdit, onValidate, onClose }: SessionPreviewModalProps) {
   const kc = KIND_COLOR[session.session_kind] ?? "#6B7280";
   const rootGroup = buildRootGroup(session);
 
@@ -197,6 +199,11 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onClose }: Ses
           {onEdit && (
             <button onClick={onEdit} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Modifier la séance
+            </button>
+          )}
+          {onValidate && (
+            <button onClick={onValidate} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: "#22C993", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Valider la séance ✓
             </button>
           )}
         </div>
