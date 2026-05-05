@@ -255,18 +255,18 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
 
           <button
             onClick={handleValidate}
-            disabled={complete.isPending || (isComplex && !allBlocksDone && workBlocks.length > 0)}
+            disabled={complete.isPending}
             style={{
               width: "100%", marginTop: 10, padding: "11px 0", borderRadius: 10,
               border: "none",
-              background: isComplex && !allBlocksDone ? C.s2 : C.g,
-              color: isComplex && !allBlocksDone ? C.tx3 : "#fff",
+              background: C.g,
+              color: "#fff",
               fontSize: 13, fontWeight: 700, cursor: complete.isPending ? "default" : "pointer",
               fontFamily: "inherit",
               opacity: complete.isPending ? 0.7 : 1,
             }}
           >
-            {complete.isPending ? "Validation…" : isComplex && !allBlocksDone ? `Encore ${workBlocks.filter(b => !localBlocks[b.id]?.done).length} bloc(s)` : "Valider la séance ✓"}
+            {complete.isPending ? "Validation…" : "Valider la séance ✓"}
           </button>
         </div>
       )}

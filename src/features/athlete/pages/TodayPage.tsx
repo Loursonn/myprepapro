@@ -773,22 +773,18 @@ function EnergyPreviewOverlay({
 
           <button
             onClick={handleValidate}
-            disabled={complete.isPending || (isComplex && !allBlocksDone)}
+            disabled={complete.isPending}
             style={{
               width: "100%", marginTop: 12, padding: "14px 0", borderRadius: 12,
               border: "none",
-              background: isComplex && !allBlocksDone ? C.s2 : "#22C993",
-              color: isComplex && !allBlocksDone ? C.tx3 : "#fff",
+              background: "#22C993",
+              color: "#fff",
               fontSize: 14, fontWeight: 700,
               cursor: complete.isPending ? "default" : "pointer",
               fontFamily: "inherit",
             }}
           >
-            {complete.isPending
-              ? "Validation…"
-              : isComplex && !allBlocksDone
-                ? `Encore ${workBlocks.filter(b => !localBlocks[b.id]?.done).length} bloc(s)`
-                : "Valider la séance ✓"}
+            {complete.isPending ? "Validation…" : "Valider la séance ✓"}
           </button>
           <button onClick={() => setPhase("preview")} style={{ width: "100%", marginTop: 10, padding: "8px 0", border: "none", background: "transparent", color: C.tx3, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
             ← Retour
