@@ -24,20 +24,16 @@ const KIND_LABEL: Record<string, string> = {
   footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
 };
 
-function getWorkIntervals(steps: EnergyStep[]): EnergyInterval[] {
-  const seen = new Set<string>();
+function getWorkIntervals(steps: EnergyStep[], parentRepeat = 1): EnergyInterval[] {
   const out: EnergyInterval[] = [];
-  function walk(s: EnergyStep[]) {
-    for (const step of s) {
-      if (step.type === "interval" && step.role === "work" && !seen.has(step.id)) {
-        seen.add(step.id);
-        out.push(step);
-      } else if (step.type === "group") {
-        walk(step.children);
-      }
+  for (const step of steps) {
+    if (step.type === "interval" && step.role === "work") {
+      for (let r = 0; r < parentRepeat; r++)
+        out.push({ ...step, id: parentRepeat > 1 ? `${step.id}__r${r}` : step.id });
+    } else if (step.type === "group") {
+      out.push(...getWorkIntervals(step.children, step.repeat * parentRepeat));
     }
   }
-  walk(steps);
   return out;
 }
 
