@@ -19,8 +19,13 @@ function rpeColor(v: number) { return v <= 4 ? C.g : v <= 7 ? C.o : C.r; }
 function rpeBg(v: number)    { return v <= 4 ? C.gS : v <= 7 ? C.oS : C.rS; }
 
 export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
-  const statusColor = session.completed ? "#22C993" : session.partial ? "#3B8DF0" : "#FB923C";
-  const statusLabel = session.completed ? "Complétée" : session.partial ? "Partielle" : "Non faite";
+  const blVals     = session.block_logs ? Object.values(session.block_logs) : [];
+  const doneCount  = blVals.filter((b) => b.done).length;
+  const totalCount = blVals.length;
+  const statusColor = session.partial ? "#3B8DF0" : session.completed ? "#22C993" : "#FB923C";
+  const statusLabel = session.partial
+    ? `✓ Partielle ${doneCount}/${totalCount}`
+    : session.completed ? "✓ Complétée" : "Non faite";
 
   const blockEntries = session.block_logs
     ? Object.entries(session.block_logs).filter(([, b]) => b.note)
