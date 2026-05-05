@@ -94,7 +94,7 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
   const isComplex = workBlocks.length > 1;
   const status = assignmentStatus(a, today);
   const statusColor = STATUS_COLOR[status] || C.tx3;
-  const isLogable = status !== "completed" && (a.scheduled_date ?? "") <= today;
+  const isLogable = status !== "completed";
 
   const [open, setOpen] = useState(false);
   const [localBlocks, setLocalBlocks] = useState<BlockLogs>(() => {
