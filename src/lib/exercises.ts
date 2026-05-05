@@ -151,6 +151,20 @@ export const EX_TIER: Record<string, number> = {
   "Dev. machine incl.":3,"Pallof press":3,
 };
 
+export const DEF_TIER_CONFIG: Record<number, { sets: number; repsMin: number; repsMax: number; rir: number }> = {
+  1: { sets: 4, repsMin: 4, repsMax: 6,  rir: 1 },
+  2: { sets: 3, repsMin: 6, repsMax: 10, rir: 2 },
+  3: { sets: 3, repsMin: 10, repsMax: 15, rir: 2 },
+};
+
+export const BLOC_TO_TIER: Record<string, number> = {};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getExTier(name: string, ex?: any): number {
+  if (ex?.tier) return Number(ex.tier);
+  return EX_TIER[name] ?? 3;
+}
+
 export const DEF_BLOCK_CONFIG = {
   totalWeeks: 6, deloadWeek: 6, progressionPct: 2.5,
   progressionType: "linear", deloadPct: 40,

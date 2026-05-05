@@ -6,7 +6,6 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import CoachFourWeekCalendar from "@/components/coach/CoachFourWeekCalendar";
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { PlanningEditor } from "@/components/coach/PlanningEditor";
-import { CoachEnergyProgram } from "@/components/coach/CoachComponents";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
@@ -262,15 +261,9 @@ export default function ProgPage() {
       )}
 
       {progSubTab === "energie" && (
-        <CoachEnergyProgram
-          athleteId={athleteId} energyEditorKey={energyEditorKey}
-          setEnergyEditorKey={setEnergyEditorKey} energySessions={energySessions}
-          setEnergySessions={setEnergySessions}
-          energySessionsLoaded={energySessionsLoaded} setEnergySessionsLoaded={setEnergySessionsLoaded}
-          C={C} blockConfig={blockConfig} currentWeek={currentWeek}
-          weekPlan={energyWeekPlan} setWeekPlan={setEnergyWeekPlan}
-          dayPlan={energyDayPlan} setDayPlan={setEnergyDayPlan}
-        />
+        <div style={{ padding: "40px 20px", textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: C.tx3 }}>Voir onglet Programmation → Énergie</div>
+        </div>
       )}
 
       {progSubTab === "specifique" && (
