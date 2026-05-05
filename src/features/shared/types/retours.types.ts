@@ -56,10 +56,13 @@ export interface EnergySessionDetail {
   session_label: string;
   date: string;
   completed: boolean;
+  partial: boolean;
   duration_min: number | null;   // energy_sessions.total_duration_s / 60
   distance_m: number | null;     // energy_sessions.total_distance_m
   session_kind: string | null;   // energy_sessions.session_kind
   note: string | null;           // energy_session_assignments.notes
+  rpe_score: number | null;
+  block_logs: Record<string, { done: boolean; note?: string }> | null;
 }
 
 // ── WeeklyRetourData ──────────────────────────────────────────────────────────

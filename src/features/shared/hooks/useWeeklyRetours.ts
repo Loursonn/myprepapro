@@ -185,7 +185,7 @@ async function fetchWeekData(
       .order("scheduled_date"),
 
     db.from("energy_session_assignments")
-      .select("id, scheduled_date, status, notes, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m)")
+      .select("id, scheduled_date, status, notes, rpe_score, block_logs, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m)")
       .eq("athlete_id", athleteId)
       .gte("scheduled_date", start)
       .lte("scheduled_date", end),
@@ -286,15 +286,20 @@ async function fetchWeekData(
   const energySessions: EnergySessionDetail[] = (energyRes.data ?? []).map((e: any) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const es = (e.energy_sessions as any) ?? {};
+    const blockLogs = (e.block_logs ?? {}) as Record<string, { done: boolean }>;
+    const partial = e.status !== "completed" && Object.values(blockLogs).some(b => b.done);
     return {
       id:            e.id,
       session_label: es.name             ?? "Session énergétique",
       date:          e.scheduled_date,
       completed:     e.status === "completed",
+      partial,
       duration_min:  es.total_duration_s != null ? Math.round(es.total_duration_s / 60) : null,
       distance_m:    es.total_distance_m ?? null,
       session_kind:  es.session_kind     ?? null,
       note:          e.notes             ?? null,
+      rpe_score:     e.rpe_score         ?? null,
+      block_logs:    e.block_logs        ?? null,
     };
   });
 
