@@ -98,7 +98,7 @@ export function useUnifiedCalendar(
 
         supabase
           .from("energy_session_assignments")
-          .select("id, athlete_id, energy_session_id, scheduled_date, status, notes, energy_sessions(id, name, session_kind)")
+          .select("id, athlete_id, energy_session_id, scheduled_date, status, notes, rpe_score, energy_sessions(id, name, session_kind)")
           .eq("athlete_id", athleteId)
           .gte("scheduled_date", start)
           .lte("scheduled_date", end)
@@ -195,6 +195,7 @@ export function useUnifiedCalendar(
           date:            ea.scheduled_date,
           title:           session?.name ?? "Séance énergie",
           status:          ea.status ?? "planned",
+          rpe:             (ea as Record<string, unknown>).rpe_score as number | null ?? null,
           sessionKind:     session?.session_kind,
           energySessionId: ea.energy_session_id,
           raw:             ea as Record<string, unknown>,
