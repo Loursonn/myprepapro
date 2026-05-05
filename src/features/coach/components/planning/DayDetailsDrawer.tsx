@@ -340,7 +340,10 @@ function EventCard({
   onPreview?: (e: CalEvent) => void;
 }) {
   const isEnergy  = event.type === "energy";
-  const color = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
+  const baseColor = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
+  const color = event.status === "completed" && isEnergy ? C.g
+              : event.partial && isEnergy                ? "#3B8DF0"
+              : baseColor;
   const { mutate: del } = useDeleteCalendarEvent();
   const statusInfo = event.status ? STATUS_LABEL[event.status] : null;
   const isClickable = event.type === "workout" || (event.type === "energy" && !!onPreview);

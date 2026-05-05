@@ -239,26 +239,30 @@ function WorkoutCard({ w }: { w: WorkoutDetail }) {
 }
 
 function EnergyCard({ e }: { e: EnergySessionDetail }) {
-  const dur = e.duration_min != null ? `${e.duration_min}min` : null;
+  const dur  = e.duration_min != null ? `${e.duration_min}min` : null;
   const dist = e.distance_m != null
     ? e.distance_m >= 1000 ? `${(e.distance_m / 1000).toFixed(1)}km` : `${e.distance_m}m`
     : null;
+  const col  = e.completed ? C.g : e.partial ? "#3B8DF0" : C.o;
 
   return (
-    <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+    <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${col}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <Zap size={13} color={C.o} />
+          <Zap size={13} color={col} />
           <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{e.session_label}</span>
           {e.session_kind && (
-            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 5, background: C.o + "20", color: C.o, fontWeight: 700 }}>
+            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 5, background: col + "20", color: col, fontWeight: 700 }}>
               {e.session_kind}
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {dur  && <span style={{ fontSize: 10, color: C.tx3 }}>{dur}</span>}
           {dist && <span style={{ fontSize: 10, color: C.tx3 }}>{dist}</span>}
+          <span style={{ fontSize: 9, fontWeight: 700, color: col }}>
+            {e.completed ? "✓ Complétée" : e.partial ? "~ Partielle" : "Planifiée"}
+          </span>
         </div>
       </div>
       {e.note && <div style={{ marginTop: 6, fontSize: 11, color: C.tx3, fontStyle: "italic" }}>"{e.note}"</div>}

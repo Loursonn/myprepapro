@@ -176,13 +176,14 @@ function WorkoutRow({ workout, prevWorkout }: {
 // ── Energy compact row ────────────────────────────────────────────────────────
 
 function EnergyRow({ session }: { session: DayEnergy }) {
+  const col = session.completed ? C.g : session.partial ? "#3B8DF0" : C.o;
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 5,
-      background: C.oS, border: "1px solid " + C.o + "30",
+      background: col + "15", border: "1px solid " + col + "30",
       borderRadius: 7, padding: "5px 7px",
     }}>
-      <Zap size={9} color={C.o} style={{ marginTop: 1, flexShrink: 0 }} />
+      <Zap size={9} color={col} style={{ marginTop: 1, flexShrink: 0 }} />
       <div style={{ minWidth: 0 }}>
         <div style={{
           fontSize: 10, fontWeight: 600, color: C.tx,
@@ -193,7 +194,9 @@ function EnergyRow({ session }: { session: DayEnergy }) {
         <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
           {session.completed
             ? <span style={{ fontSize: 8, color: C.g }}>✓ Complétée</span>
-            : <span style={{ fontSize: 8, color: C.tx3 }}>Skippée</span>
+            : session.partial
+              ? <span style={{ fontSize: 8, color: "#3B8DF0" }}>~ Partielle</span>
+              : <span style={{ fontSize: 8, color: C.tx3 }}>Planifiée</span>
           }
           {session.duration_min != null && (
             <span style={{ fontSize: 8, color: C.tx3 }}>{session.duration_min} min</span>

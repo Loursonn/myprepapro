@@ -89,12 +89,15 @@ function EventChip({
   const baseColor = event.type === "energy" ? energyChipColor(event) : TYPE_COLOR[event.type];
   const baseBg    = event.type === "energy" ? energyChipColor(event) + "20" : TYPE_BG[event.type];
 
-  // Status overrides base type color for completed/missed
-  const color = st === "completed" ? C.g
-              : st === "missed"    ? C.r
+  // Status overrides base type color for completed/missed/partial
+  const isPartialEnergy = event.type === "energy" && event.partial;
+  const color = st === "completed"  ? C.g
+              : st === "missed"     ? C.r
+              : isPartialEnergy     ? "#3B8DF0"
               : baseColor;
-  const bg    = st === "completed" ? C.gS
-              : st === "missed"    ? C.rS
+  const bg    = st === "completed"  ? C.gS
+              : st === "missed"     ? C.rS
+              : isPartialEnergy     ? "#3B8DF020"
               : baseBg;
 
   return (
