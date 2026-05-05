@@ -191,9 +191,10 @@ export function useUnifiedCalendar(
           id: string; name: string; session_kind: string;
         } | null;
         const blockLogs = (ea as Record<string, unknown>).block_logs as Record<string, { done: boolean }> | null;
-        const isPartial = ea.status !== "completed"
-          && !!blockLogs
-          && Object.values(blockLogs).some((b) => b.done);
+        const blVals = blockLogs ? Object.values(blockLogs) : [];
+        const isPartial = blVals.length > 0
+          && blVals.some((b) => b.done)
+          && blVals.some((b) => !b.done);
         events.push({
           id:              ea.id,
           type:            "energy",

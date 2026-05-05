@@ -238,7 +238,8 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const es = (e.energy_sessions as any) ?? {};
     const blockLogs = (e.block_logs ?? {}) as Record<string, { done: boolean }>;
-    const partial = e.status !== "completed" && Object.values(blockLogs).some(b => b.done);
+    const blVals = Object.values(blockLogs);
+    const partial = blVals.length > 0 && blVals.some(b => b.done) && blVals.some(b => !b.done);
     return {
       id:            e.id,
       session_label: es.name             ?? "Session énergétique",

@@ -243,7 +243,7 @@ function EnergyCard({ e }: { e: EnergySessionDetail }) {
   const dist = e.distance_m != null
     ? e.distance_m >= 1000 ? `${(e.distance_m / 1000).toFixed(1)}km` : `${e.distance_m}m`
     : null;
-  const col  = e.completed ? C.g : e.partial ? "#3B8DF0" : C.o;
+  const col  = e.partial ? "#3B8DF0" : e.completed ? C.g : C.o;
 
   return (
     <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${col}` }}>

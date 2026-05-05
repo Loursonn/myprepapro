@@ -341,8 +341,8 @@ function EventCard({
 }) {
   const isEnergy  = event.type === "energy";
   const baseColor = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
-  const color = event.status === "completed" && isEnergy ? C.g
-              : event.partial && isEnergy                ? "#3B8DF0"
+  const color = event.partial && isEnergy                ? "#3B8DF0"
+              : event.status === "completed" && isEnergy ? C.g
               : baseColor;
   const { mutate: del } = useDeleteCalendarEvent();
   const statusInfo = event.status ? STATUS_LABEL[event.status] : null;

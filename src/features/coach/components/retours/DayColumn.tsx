@@ -176,7 +176,7 @@ function WorkoutRow({ workout, prevWorkout }: {
 // ── Energy compact row ────────────────────────────────────────────────────────
 
 function EnergyRow({ session }: { session: DayEnergy }) {
-  const col = session.completed ? C.g : session.partial ? "#3B8DF0" : C.o;
+  const col = session.partial ? "#3B8DF0" : session.completed ? C.g : C.o;
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 5,
