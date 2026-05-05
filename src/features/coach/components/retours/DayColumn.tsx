@@ -177,6 +177,9 @@ function WorkoutRow({ workout, prevWorkout }: {
 
 function EnergyRow({ session }: { session: DayEnergy }) {
   const col = session.partial ? "#3B8DF0" : session.completed ? C.g : C.o;
+  const blVals = session.block_logs ? Object.values(session.block_logs) : [];
+  const doneCount  = blVals.filter((b) => b.done).length;
+  const totalCount = blVals.length;
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 5,
@@ -192,10 +195,10 @@ function EnergyRow({ session }: { session: DayEnergy }) {
           {session.session_label}
         </div>
         <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
-          {session.completed
-            ? <span style={{ fontSize: 8, color: C.g }}>✓ Complétée</span>
-            : session.partial
-              ? <span style={{ fontSize: 8, color: "#3B8DF0" }}>~ Partielle</span>
+          {session.partial
+            ? <span style={{ fontSize: 8, color: "#3B8DF0" }}>Partielle {doneCount}/{totalCount}</span>
+            : session.completed
+              ? <span style={{ fontSize: 8, color: C.g }}>✓ Complétée</span>
               : <span style={{ fontSize: 8, color: C.tx3 }}>Planifiée</span>
           }
           {session.duration_min != null && (

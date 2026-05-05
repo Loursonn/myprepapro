@@ -244,6 +244,9 @@ function EnergyCard({ e }: { e: EnergySessionDetail }) {
     ? e.distance_m >= 1000 ? `${(e.distance_m / 1000).toFixed(1)}km` : `${e.distance_m}m`
     : null;
   const col  = e.partial ? "#3B8DF0" : e.completed ? C.g : C.o;
+  const blVals     = e.block_logs ? Object.values(e.block_logs) : [];
+  const doneCount  = blVals.filter((b) => b.done).length;
+  const totalCount = blVals.length;
 
   return (
     <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${col}` }}>
@@ -261,7 +264,9 @@ function EnergyCard({ e }: { e: EnergySessionDetail }) {
           {dur  && <span style={{ fontSize: 10, color: C.tx3 }}>{dur}</span>}
           {dist && <span style={{ fontSize: 10, color: C.tx3 }}>{dist}</span>}
           <span style={{ fontSize: 9, fontWeight: 700, color: col }}>
-            {e.completed ? "✓ Complétée" : e.partial ? "~ Partielle" : "Planifiée"}
+            {e.partial
+              ? `Partielle ${doneCount}/${totalCount}`
+              : e.completed ? "✓ Complétée" : "Planifiée"}
           </span>
         </div>
       </div>
