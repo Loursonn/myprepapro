@@ -62,7 +62,7 @@ Athlète : suivre séances, saisir wellness, voir ses stats, commenter.
 
 ### Branches
 - `main` → production (Vercel auto-deploy). Ne jamais committer directement.
-- `dev` → branche de travail partagée. Titouan et Hugo (Loursonn) pushent ici directement. Pas de feature branches.
+- `dev` → branche de travail partagée. Les deux développeurs pushent ici directement. Pas de feature branches.
 
 ### Début de session obligatoire
 
@@ -88,10 +88,10 @@ git commit -m "type(scope): message
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 git push origin dev
 ```
-Si push rejeté (non-fast-forward = Hugo a pushé entre-temps) :
+Si push rejeté (non-fast-forward = l'autre dev a pushé entre-temps) :
 ```bash
 git pull origin dev --rebase
-# résoudre conflits si besoin → fichier modifié par Hugo récemment = lire les deux avant de choisir
+# résoudre conflits si besoin → lire les deux versions avant de choisir
 git push origin dev
 ```
 
@@ -110,13 +110,13 @@ gh pr create --base main --head dev \
 EOF
 )"
 ```
-Hugo (Loursonn) review + merge → Vercel déploie automatiquement.
+Le propriétaire du repo review + merge → Vercel déploie automatiquement.
 
 ### Règles absolues
 - Toujours commencer par `git fetch origin && git reset --hard origin/dev`
 - Ne jamais committer `.claude/settings.local.json`
 - Ne jamais `--force` push sur `dev` ou `main`
-- En cas de conflit rebase : si Hugo a modifié le fichier récemment → lire sa version avant de choisir
+- En cas de conflit rebase : lire les deux versions avant de choisir — ne pas écraser aveuglément
 
 ## Fichiers clés
 
