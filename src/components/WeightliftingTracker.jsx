@@ -23,13 +23,13 @@ import WeekCalendar from "@/components/coach/WeekCalendar";
 import { C, BT, BLOC_COLORS, HABIT_COLORS, HABIT_EMOJIS } from "@/lib/theme";
 import { SKEYS, sLoad, sSave, clearAllLocalStorage } from "@/lib/storage";
 import { MTREE, ML, getMC, mL, ALL_MIDS, normPrimary, getSessionBlocs, BZFRONT, BZBACK, ALL_BZ, INJ_TYPES, INJ_STATUS, STATUS_COL, stC } from "@/lib/muscles";
-import { RIR_OPTS, rL, rC, parseReps, e1rm, roundHalf, normalizeExName, normForMatch, fuzzyExMatch, DEF_METHODS, BLOC_METHODS, EVENT_TYPES, MDEF, clusterReps, fmtMR, generateRows, EX_TIER, DEF_TIER_CONFIG, BLOC_TO_TIER, getExTier, DEF_BLOCK_CONFIG, DEF_SESSIONS } from "@/lib/exercises";
+import { RIR_OPTS, rL, rC, parseReps, e1rm, roundHalf, normalizeExName, normForMatch, fuzzyExMatch, DEF_METHODS, BLOC_METHODS, EVENT_TYPES, MDEF, clusterReps, fmtMR, generateRows, EX_TIER, DEF_BLOCK_CONFIG, DEF_SESSIONS } from "@/lib/exercises";
 import { WELL_ITEMS, calcScore, getReco, getAlerts } from "@/lib/wellness";
 import { getAllPRs, getMuscSets, get1rmByWeek, getCombinedData, getBig3, getWeightChartData, getWellnessChartData } from "@/lib/calculations";
 import { todayKey, hISO, hAddDays, calcHabitStreak, streakMsg, getHabitWeekDays, checkMilestone } from "@/lib/date";
 
 import { BodyMap, InjuryForm, WellnessFlow } from "@/components/athlete/WellnessFlow";
-import { NewBlockModal, CoachEnergyProgram, CoachConfig, TierConfigModal, CoachWeeklyFeedback } from "@/components/coach/CoachComponents";
+import { NewBlockModal, CoachEnergyProgram, CoachConfig, CoachWeeklyFeedback } from "@/components/coach/CoachComponents";
 import { PRsView, InjuriesView, MuscleVolumeCard, WeeklyVolumeCard, AIChatBar } from "@/components/athlete/StatsViews";
 import { ExerciseCreateModal, MergeModal, ExerciseDetailModal, ExerciseBank } from "@/components/coach/ExerciseBank";
 import { HabitCreateModal, HabitDashboard, HabitTrackerProfile } from "@/components/athlete/HabitTracker";
@@ -176,7 +176,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const[blockConfig,setBlockConfigState]=useState(DEF_BLOCK_CONFIG);
   const[loaded,setLoaded]=useState(false);const[saveStatus,setSaveStatus]=useState(null);
   const[weekJustCompleted,setWeekJustCompleted]=useState(null);const[showBilan,setShowBilan]=useState(false);
-  const[showWellness,setShowWellness]=useState(false);const[milestoneNotif,setMilestoneNotif]=useState(null);const[autoProgNotif,setAutoProgNotif]=useState(null);
+  const[showWellness,setShowWellness]=useState(false);const[milestoneNotif,setMilestoneNotif]=useState(null);
   const[blockHistory,setBlockHistoryState]=useState([]);
   const[weekSchedule,setWeekScheduleState]=useState({});
   const[sessionLogs,setSessionLogsState]=useState({});
@@ -364,94 +364,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
   const activeInjuries=injuries.filter(i=>i.status!=="Guerie");
 
   const switchMode=m=>{setMode(m);if(m==="coach")setCoachTab("prog");else setTab("dash");};
-  // Calcule la surcharge depuis le réel — fonction pure, ne modifie pas l'état
-  const computeAutoProgress=(sessId,completedWeek,srcExos)=>{
-    const sessExos=(srcExos||exos)[sessId]||[];
-    if(!sessExos.length)return null;
-    const tierCfgL=blockConfig?.tierConfig||DEF_TIER_CONFIG;
-    const dwL=blockConfig?.deloadWeek||tw;
-    const futureWeeks=weeksArr.filter(w=>w>completedWeek);
-    const futureTrainWeeks=futureWeeks.filter(w=>w!==dwL);
-    if(!futureWeeks.length)return null;
-    let changed=false;
-    const newSessExos=sessExos.map(ex=>{
-      const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");
-      if(eType!=="muscu"&&eType!=="halterophilie")return ex;
-      const doneRows=(sets[ex.id+"_"+completedWeek]||[]).filter(r=>r.done);
-      if(!doneRows.length)return ex;
-      const tier=getExTier(ex.name,ex);
-      const tc=tierCfgL[tier]||tierCfgL[3];
-      const plannedWd=ex.weeks[completedWeek]||{};
-      const mainRows=doneRows.filter(r=>!r.type||r.type==="set");
-      const refRows=mainRows.length?mainRows:doneRows;
-      const kgVals=refRows.map(r=>r.kg||0).filter(v=>v>0);
-      const baseKg=kgVals.length?kgVals[Math.floor(kgVals.length/2)]:(plannedWd.pdc?0:(plannedWd.kg||0));
-      const basePdc=!!(plannedWd.pdc&&!baseKg);
-      const repsVals=mainRows.filter(r=>r.reps>0).map(r=>r.reps);
-      const baseReps=repsVals.length?Math.round(repsVals.reduce((a,b)=>a+b,0)/repsVals.length):(parseReps(plannedWd.repsRange)||10);
-      const rirVals=mainRows.map(r=>r.rir).filter(v=>v!==null&&v!==undefined&&!isNaN(v));
-      const baseRir=rirVals.length?Math.round(rirVals.reduce((a,b)=>a+b,0)/rirVals.length*2)/2:(plannedWd.rir??tc.rirStart??2);
-      const baseSets=mainRows.length||plannedWd.sets||3;
-      const newWeeks={...ex.weeks};
-      futureWeeks.forEach(w=>{
-        if((completedSessions[w]||[]).includes(sessId))return;
-        const existingWd=newWeeks[w]||{};
-        const preserve={coachNote:existingWd.coachNote,tempo:existingWd.tempo,method:existingWd.method,methodParams:existingWd.methodParams};
-        const kgBase=basePdc?undefined:baseKg;
-        if(w===dwL){
-          const dlPct=tc.deloadPct||40;
-          newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:Math.round(kgBase*(1-dlPct/100)/2.5)*2.5}:{})),sets:Math.max(2,Math.round(baseSets*0.6)),rir:(tc.rirStart||2)+2,repsRange:String(baseReps)};
-        }else{
-          const wIdx=futureTrainWeeks.indexOf(w);
-          const total=futureTrainWeeks.length;
-          const kgStep=tc.kgStep??2.5;
-          if(tc.mode==="rir"){
-            const rirDrop=baseRir>=(tc.rirEnd??0)?Math.max(0,baseRir-(tc.rirEnd??0))/Math.max(1,total):0;
-            const newRir=Math.max(tc.rirEnd??0,Math.round((baseRir-rirDrop*(wIdx+1))*2)/2);
-            newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:roundHalf(kgBase+kgStep*(wIdx+1))}:{})),sets:baseSets,repsRange:String(baseReps),rir:newRir};
-          }else if(tc.mode==="reps"){
-            const repTarget=tc.repsEnd||12;
-            const repGap=Math.max(0,repTarget-baseReps);
-            const repStep=total?Math.ceil(repGap/total):0;
-            const newReps=Math.min(repTarget,baseReps+repStep*(wIdx+1));
-            const rirDrop=(baseRir-(tc.rirEnd||1))/Math.max(1,total);
-            const newRir=Math.max(tc.rirEnd||1,Math.round((baseRir-rirDrop*(wIdx+1))*2)/2);
-            const cycleLen=repGap+1||1;const cycleNum=Math.floor((wIdx+1)/cycleLen);
-            newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:roundHalf(kgBase+kgStep*cycleNum)}:{})),sets:baseSets,repsRange:String(newReps),rir:newRir};
-          }else{
-            newWeeks[w]={...preserve,...(basePdc?{pdc:true}:(kgBase?{kg:roundHalf(kgBase+kgStep*(wIdx+1))}:{})),sets:baseSets,repsRange:String(baseReps),rir:tc.rir??0};
-          }
-        }
-        changed=true;
-      });
-      return{...ex,weeks:newWeeks};
-    });
-    if(!changed)return null;
-    return{...(srcExos||exos),[sessId]:newSessExos};
-  };
-  const autoProgressOnComplete=(sessId,completedWeek,currentExos)=>{
-    const newExos=computeAutoProgress(sessId,completedWeek,currentExos||exos);
-    if(newExos){
-      setExos(newExos);
-      setAutoProgNotif(`Progression S${completedWeek+1}→S${tw} mise à jour`);
-      setTimeout(()=>setAutoProgNotif(null),3500);
-    }
-  };
-  // Synchronisation au chargement : applique la surcharge réelle sur toutes les semaines avec des données réelles
-  useEffect(()=>{
-    if(!loaded)return;
-    let current=exos;let anyChanged=false;
-    weeksArr.forEach(week=>{
-      sessions.forEach(s=>{
-        const hasActual=(current[s.id]||[]).some(ex=>(sets[ex.id+"_"+week]||[]).some(r=>r.done&&(r.kg||0)>0));
-        if(!hasActual)return;
-        const result=computeAutoProgress(s.id,week,current);
-        if(result){current=result;anyChanged=true;}
-      });
-    });
-    if(anyChanged){setExos(current);setAutoProgNotif('Progression synchronisée depuis le réel');setTimeout(()=>setAutoProgNotif(null),3500);}
-  },[loaded]);// eslint-disable-line react-hooks/exhaustive-deps
-  const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);autoProgressOnComplete(sessId,week);if(newW.length>=(weeklyTarget[week]||goals.sessionsPerWeek)){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
+  const completeSession=(sessId,week)=>{const prev=completedSessions[week]||[];if(prev.includes(sessId))return;const newW=[...prev,sessId];const newC={...completedSessions,[week]:newW};setCompletedSessions(newC);if(newW.length>=(weeklyTarget[week]||goals.sessionsPerWeek)){setWeekJustCompleted(week);setTimeout(()=>{setWeekJustCompleted(null);if(week>=tw)setShowBilan(true);else setAW(week+1);},2800);}};
   const uncompleteSession=(sessId,week)=>setCompletedSessions({...completedSessions,[week]:(completedSessions[week]||[]).filter(s=>s!==sessId)});
   const[bankAddEx,setBankAddEx]=useState(null);const[bankAddMsg,setBankAddMsg]=useState('');
   const handleBankAdd=ex=>{
@@ -460,7 +373,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     if(sessions.length===1){const sid=sessions[0].id;setExos(prev=>({...prev,[sid]:[...(prev[sid]||[]),makeEx(sid)]}));setCoachTab("prog");setBankAddMsg('Ajouté à '+sessions[0].name+' !');setTimeout(()=>setBankAddMsg(''),2500);}
     else setBankAddEx(ex);
   };
-  const[showTierModal,setShowTierModal]=useState(false);
   const[showExoParams,setShowExoParams]=useState(false);
   const[coachFeedbacks,setCoachFeedbacks]=useState({});
   const[showAppFeedback,setShowAppFeedback]=useState(false);
@@ -764,12 +676,10 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
       </div>);
     })()}
     {milestoneNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:250,background:C.s1,border:"1px solid "+C.g+"50",borderRadius:14,padding:"12px 20px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><div><div style={{fontSize:13,fontWeight:700,color:C.g}}>Nouveau palier valide !</div><div style={{fontSize:11,color:C.tx2}}>Poids mis a jour : {milestoneNotif} kg</div></div></div>)}
-    {autoProgNotif&&(<div style={{position:"fixed",top:60,left:"50%",transform:"translateX(-50%)",zIndex:251,background:C.s1,border:"1px solid "+C.coach+"50",borderRadius:14,padding:"10px 18px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 24px rgba(0,0,0,0.5)"}}><span style={{fontSize:18}}>↗</span><div><div style={{fontSize:13,fontWeight:700,color:C.coach}}>Surcharge progressive mise à jour</div><div style={{fontSize:11,color:C.tx2}}>{autoProgNotif}</div></div></div>)}
     {weekJustCompleted&&(<div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.9)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}><div style={{fontSize:26,fontWeight:800,color:C.g}}>Semaine {weekJustCompleted} validee !</div><div style={{fontSize:14,color:C.tx2}}>{weekJustCompleted<tw?"En route pour S"+(weekJustCompleted+1):"Bloc termine !"}</div><div style={{display:"flex",gap:6,marginTop:8}}>{[...Array(tw)].map((_,i)=><div key={i} style={{width:10,height:10,borderRadius:"50%",background:i<weekJustCompleted?C.g:C.s2}}/>)}</div></div>)}
     {showBilan&&(<div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}><div style={{padding:"40px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:20}}><div style={{fontSize:28,fontWeight:800,textAlign:"center"}}>Bloc termine !</div><div style={{fontSize:14,color:C.tx2}}>{totalDone} seances realisees</div><div style={{display:"flex",gap:12,width:"100%"}}>{getBig3(exos).map(({name,label,c})=>{const pr=prs[name];return(<div key={label} style={{flex:1,background:C.s1,borderRadius:14,padding:"14px 10px",textAlign:"center",border:"1px solid "+c+"30"}}><div style={{fontSize:11,color:C.tx3,marginBottom:4}}>{label}</div><div style={{fontSize:22,fontWeight:800,color:c}}>{pr?.est||"--"}</div><div style={{fontSize:9,color:C.tx3}}>kg est.</div></div>);})}</div><div style={{width:"100%",background:C.s1,borderRadius:14,padding:16,border:"1px solid "+C.brd}}><CombinedStatsChart data={combinedData}/></div><button onClick={()=>{setShowBilan(false);setShowNewBlock(true);}} style={{width:"100%",padding:"14px 0",borderRadius:14,border:"none",background:C.coach,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Nouveau bloc</button><button onClick={()=>setShowBilan(false)} style={{background:"none",border:"none",color:C.tx3,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Fermer</button></div></div>)}
     {showNewBlock&&<NewBlockModal onStart={archiveAndNewBlock} onClose={()=>setShowNewBlock(false)} onResume={()=>setShowNewBlock(false)} hasCurrentData={sessions.length>0&&Object.values(exos).flat().length>0} blockHistory={blockHistory} onDelete={idx=>setBlockHistory(blockHistory.filter((_,i)=>i!==idx))} currentAthleteId={athleteId}/>}
     {showBlockHistory&&<BlockHistoryViewer blockHistory={blockHistory} onClose={()=>setShowBlockHistory(false)} onDelete={idx=>setBlockHistory(blockHistory.filter((_,i)=>i!==idx))}/>}
-    {showTierModal&&<TierConfigModal blockConfig={blockConfig} setBlockConfig={setBlockConfig} onClose={()=>setShowTierModal(false)}/>}
     {mode==="coach"&&coachTab==="prog"&&sessions.length>0&&<AIChatBar exos={exos} sessions={sessions} chatHistory={chatHistory} setChatHistory={setChatHistory} onApply={applyAIEdit} onOpenChange={setAiChatOpen} C={C}/>}
     {mode==="athlete"&&(timerActive||timerFinished)&&(<div style={{position:"fixed",bottom:64,left:"50%",transform:"translateX(-50%)",zIndex:150,background:timerFinished?"rgba(34,201,147,0.15)":C.s1,border:"1px solid "+(timerFinished?C.g:timerActive&&timerLeft<=10?C.r:C.ac)+"70",borderRadius:50,padding:"9px 18px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",backdropFilter:"blur(8px)"}}>
       {timerFinished?<span style={{fontSize:16}}>🔔</span>:<div style={{width:24,height:24,position:"relative"}}><svg viewBox="0 0 24 24" style={{width:24,height:24,transform:"rotate(-90deg)"}}><circle cx="12" cy="12" r="9" fill="none" stroke={C.s2} strokeWidth="2.5"/><circle cx="12" cy="12" r="9" fill="none" stroke={timerLeft<=10?C.r:C.ac} strokeWidth="2.5" strokeDasharray={String(2*Math.PI*9)} strokeDashoffset={String(2*Math.PI*9*(1-Math.min((timerDur-timerLeft)/timerDur,1)))} strokeLinecap="round"/></svg></div>}
@@ -930,7 +840,6 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
             <div style={{fontSize:16,fontWeight:700}}>Musculation{blockConfig?.blockName&&<span style={{fontSize:11,color:C.b,fontWeight:600,marginLeft:8}}>{blockConfig.blockName} · {tw} sem.</span>}</div>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>setShowTierModal(true)} style={{padding:"6px 10px",borderRadius:8,border:"1px solid "+C.o+"40",background:C.o+"12",color:C.o,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>⚙ Surcharge</button>
             </div>
           </div>
           {sessions.length===0?(<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:40,marginBottom:12}}>📋</div><div style={{fontSize:14,fontWeight:700,color:C.tx,marginBottom:4}}>Aucun bloc actif</div><div style={{fontSize:12,color:C.tx3,marginBottom:16}}>Crée un nouveau bloc pour commencer à planifier.</div><button onClick={()=>setShowNewBlock(true)} style={{padding:"12px 24px",borderRadius:12,border:"none",background:C.coach,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Créer un bloc</button></div>):<CoachProgramEditor exos={exos} setExos={setExos} sessions={sessions} setSessions={setSessions} athleteNotes={athleteNotes} allMethods={allMethods} customMethods={customMethods} setCustomMethods={setCustomMethods} blockConfig={blockConfig} exMeta={exMeta} setExMeta={setExMeta} currentWeek={currentWeek} sets={sets} completedSessions={completedSessions} weekSchedule={weekSchedule} setWeekSchedule={setWeekSchedule}/>}

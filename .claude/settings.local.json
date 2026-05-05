@@ -61,7 +61,11 @@
       "Bash(node -e \"const { isPast } = require\\('date-fns'\\); console.log\\(typeof isPast\\);\")",
       "Bash(rtk lint:*)",
       "Bash(git rm:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\titou\\\\myprepapro\\\\myprepapro\\\\src\" -Recurse -Include \"*.tsx\", \"*.ts\", \"*.jsx\", \"*.js\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\titou\\\\myprepapro\\\\myprepapro\\\\src\" -Recurse -Name)",
+      "Bash(Select-Object -First 50)"
     ]
   }
 }

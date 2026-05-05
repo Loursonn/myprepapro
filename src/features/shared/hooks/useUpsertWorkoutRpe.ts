@@ -1,33 +1,39 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { calBaseKey } from "./useUnifiedCalendar";
+import { QK } from "@/lib/queryKeys";
 
-export function useUpsertWorkoutRpe(athleteId: string, sessionId: string) {
+export function useUpsertWorkoutRpe(athleteId: string, sessionId: string, scheduledDate?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (rpeScore: number) => {
       const today = new Date().toISOString().split("T")[0];
 
-      // Find the most recent workout_log for this session+athlete.
+      // Find the workout_log for this session+athlete.
+      // When scheduledDate is known, target it exactly; otherwise fall back to most recent.
       // Retry up to 3x — syncWorkoutLogStatus is async and may not have committed yet.
       let logId: string | null = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 600));
-        const { data } = await supabase
+        let q = supabase
           .from("workout_logs")
           .select("id")
           .eq("athlete_id", athleteId)
-          .eq("session_id", sessionId)
-          .order("scheduled_date", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .eq("session_id", sessionId);
+        if (scheduledDate) {
+          q = q.eq("scheduled_date", scheduledDate);
+        } else {
+          q = q.order("scheduled_date", { ascending: false }).limit(1);
+        }
+        const { data } = await q.maybeSingle();
         if (data) { logId = data.id; break; }
       }
 
       // Fallback: syncWorkoutLogStatus may have been skipped (missing scheduledDate).
       if (!logId) {
-        const { data: newLog } = await supabase
+        const { data: newLog, error: insertErr } = await supabase
           .from("workout_logs")
           .insert({
             athlete_id:     athleteId,
@@ -38,7 +44,8 @@ export function useUpsertWorkoutRpe(athleteId: string, sessionId: string) {
           })
           .select("id")
           .single();
-        if (!newLog) return;
+        if (insertErr) throw insertErr;
+        if (!newLog) throw new Error("Impossible de créer le log de séance");
         logId = newLog.id;
       }
 
@@ -50,6 +57,14 @@ export function useUpsertWorkoutRpe(athleteId: string, sessionId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: calBaseKey(athleteId) });
+      queryClient.invalidateQueries({ queryKey: QK.weeklyRetours(athleteId) });
+      queryClient.invalidateQueries({ queryKey: QK.monthlyRetours(athleteId) });
+      queryClient.invalidateQueries({ queryKey: ["wl-split"] });
+      toast.success("RPE enregistré ✓");
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Erreur inconnue";
+      toast.error(`Erreur RPE : ${msg}`);
     },
   });
 }

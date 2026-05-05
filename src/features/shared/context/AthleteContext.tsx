@@ -91,17 +91,15 @@ export interface AthleteContextValue {
   // Notification state
   weekJustCompleted: number | null; setWeekJustCompleted: (v: number | null) => void;
   milestoneNotif: number | null; setMilestoneNotif: (v: number | null) => void;
-  autoProgNotif: string | null; setAutoProgNotif: (v: string | null) => void;
   showBilan: boolean; setShowBilan: (v: boolean) => void;
   showNewBlock: boolean; setShowNewBlock: (v: boolean) => void;
   showBlockHistory: boolean; setShowBlockHistory: (v: boolean) => void;
-  showTierModal: boolean; setShowTierModal: (v: boolean) => void;
   chatHistory: unknown[]; setChatHistory: (v: unknown[]) => void;
   aiChatOpen: boolean; setAiChatOpen: (v: boolean) => void;
   aW: number; setAW: (v: number) => void;
 
   // Actions
-  completeSession: (sessId: string, week: number) => void;
+  completeSession: (sessId: string, week: number, note?: string) => void;
   uncompleteSession: (sessId: string, week: number) => void;
   archiveAndNewBlock: (opts: NewBlockOpts) => void;
   applyAIEdit: (newSessions: ExosMap) => void;
@@ -139,11 +137,9 @@ export function AthleteProvider({ athleteId, viewOnly = false, athleteProfile = 
   // UI notification state (shared between layout & pages)
   const [weekJustCompleted, setWeekJustCompleted] = useState<number | null>(null);
   const [milestoneNotif, setMilestoneNotif] = useState<number | null>(null);
-  const [autoProgNotif, setAutoProgNotif] = useState<string | null>(null);
   const [showBilan, setShowBilan] = useState(false);
   const [showNewBlock, setShowNewBlock] = useState(false);
   const [showBlockHistory, setShowBlockHistory] = useState(false);
-  const [showTierModal, setShowTierModal] = useState(false);
   const [chatHistory, setChatHistory] = useState<unknown[]>([]);
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [aW, setAW] = useState(1);
@@ -214,7 +210,7 @@ export function AthleteProvider({ athleteId, viewOnly = false, athleteProfile = 
 
   const logic = useAthleteLogic({
     athleteId, ...persisted, ...computations, loaded: persisted.loaded,
-    setAutoProgNotif, setMilestoneNotif, setWeekJustCompleted, setShowBilan, setAW, save,
+    setMilestoneNotif, setWeekJustCompleted, setShowBilan, setAW, save,
   });
 
   const value: AthleteContextValue = {
@@ -232,12 +228,12 @@ export function AthleteProvider({ athleteId, viewOnly = false, athleteProfile = 
     addAppFeedback: feedbacks.addAppFeedback,
     ...computations,
     weekJustCompleted, setWeekJustCompleted, milestoneNotif, setMilestoneNotif,
-    autoProgNotif, setAutoProgNotif, showBilan, setShowBilan,
+    showBilan, setShowBilan,
     showNewBlock, setShowNewBlock, showBlockHistory, setShowBlockHistory,
-    showTierModal, setShowTierModal, chatHistory, setChatHistory,
+    chatHistory, setChatHistory,
     aiChatOpen, setAiChatOpen, aW, setAW,
     ...logic,
-    completeSession: (sessId: string, week: number) => { timerStop(); logic.completeSession(sessId, week); },
+    completeSession: (sessId: string, week: number, note?: string) => { timerStop(); logic.completeSession(sessId, week, note); },
   };
 
   return <AthleteCtx.Provider value={value}>{children}</AthleteCtx.Provider>;

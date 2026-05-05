@@ -140,7 +140,7 @@ export const generateRows = (planned: any, method: string, mp: any) => {
   return Array.from({ length: sets }, () => ({ type: "set", kg, reps, rir, done: false }));
 };
 
-// ── Tier / block config ───────────────────────────────────────────────────────
+// ── Exercise tier lookup (used for PR grouping in stats) ─────────────────────
 
 export const EX_TIER: Record<string, number> = {
   "Dev. couche barre":1,"Back squat":1,"Traction lestee":1,
@@ -151,24 +151,10 @@ export const EX_TIER: Record<string, number> = {
   "Dev. machine incl.":3,"Pallof press":3,
 };
 
-export const DEF_TIER_CONFIG = {
-  1: { label:"Composé",    desc:"Squat, Bench, Deadlift…", c:"#EF4B4B", mode:"rir",  kgStep:2.5,  rirStart:3,  rirEnd:1, repsFixed:true,  deloadPct:40 },
-  2: { label:"Accessoire", desc:"Rowing, Dev. incliné…",   c:"#7B6FFF", mode:"reps", kgStep:2.5,  repsStart:10,repsEnd:12,rirStart:2,rirEnd:1, deloadPct:30 },
-  3: { label:"Isolation",  desc:"Curls, Extensions…",      c:"#22C993", mode:"rir",  kgStep:1.25, rirStart:2.5,rirEnd:1, deloadPct:20 },
-} as const;
-
-export const BLOC_TO_TIER: Record<string, number> = {
-  PERF:1, ESTH:2, ASSOC:2, BESOIN:3, CORE:3, MOBIL:3,
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const getExTier = (name: string, ex: any) =>
-  ex?.tier || (EX_TIER[name] || (ex?.bloc ? BLOC_TO_TIER[ex.bloc] : null) || 3);
-
 export const DEF_BLOCK_CONFIG = {
   totalWeeks: 6, deloadWeek: 6, progressionPct: 2.5,
   progressionType: "linear", deloadPct: 40,
-  tierConfig: DEF_TIER_CONFIG, startDate: null as string | null,
+  startDate: null as string | null,
 };
 
 export const DEF_SESSIONS: never[] = [];

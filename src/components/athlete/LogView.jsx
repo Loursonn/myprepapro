@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { C, BT, BLOC_COLORS } from "@/lib/theme";
-import { RIR_OPTS, rL, rC, parseReps, e1rm, roundHalf, generateRows, clusterReps, fmtMR, getExTier, DEF_TIER_CONFIG, BLOC_METHODS, fuzzyExMatch, MDEF } from "@/lib/exercises";
+import { RIR_OPTS, rL, rC, parseReps, e1rm, roundHalf, generateRows, clusterReps, fmtMR, BLOC_METHODS, fuzzyExMatch, MDEF } from "@/lib/exercises";
 import { getMC, mL, getSessionBlocs } from "@/lib/muscles";
 import RIRPicker from "@/components/ui/RIRPicker";
 
@@ -99,9 +99,10 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const[selectedFree,setSelectedFree]=useState(null);const[showFreeEndModal,setShowFreeEndModal]=useState(false);const[freeEndDuration,setFreeEndDuration]=useState(0);
   const[sessStartedAt,setSessStartedAt]=useState(null);const[elapsedSecs,setElapsedSecs]=useState(0);
   const[freeStartedAt,setFreeStartedAt]=useState(null);const[freeElapsed,setFreeElapsed]=useState(0);
-  useEffect(()=>{if(step===0)setWk(currentWeek);},[currentWeek,step]);
+  useEffect(()=>{setWk(currentWeek);},[currentWeek]);
   const sid=selectedSess?.id||null;const exercises=sid?exos[sid]||[]:[];
-  const exercisesSorted=useMemo(()=>{if(!exercises.length)return exercises;const sBlocs=getSessionBlocs(selectedSess,exercises);const order=sBlocs.map(b=>b.id);return[...exercises].sort((a,b)=>{const ai=order.indexOf(a.bloc??'');const bi=order.indexOf(b.bloc??'');if(ai===bi)return 0;if(ai===-1)return 1;if(bi===-1)return-1;return ai-bi;});},[exercises,selectedSess]);
+  const currentSess=useMemo(()=>sid?(sessions.find(s=>s.id===sid)||selectedSess):selectedSess,[sid,sessions,selectedSess]);
+  const exercisesSorted=useMemo(()=>{if(!exercises.length)return exercises;const sBlocs=getSessionBlocs(currentSess,exercises);const order=sBlocs.map(b=>b.id);return[...exercises].sort((a,b)=>{const ai=order.indexOf(a.bloc??'');const bi=order.indexOf(b.bloc??'');if(ai===bi)return 0;if(ai===-1)return 1;if(bi===-1)return-1;return ai-bi;});},[exercises,currentSess]);
   const sessIsDone=(completedSessions[wk]||[]).includes(sid);
   const allSetsDone=useMemo(()=>{if(!sid||!exercises.length)return false;return exercises.every(ex=>{const s=sets[ex.id+"_"+wk];return s?.length>0&&s.every(x=>x.done||x.skipped);});},[exercises,sets,wk,sid]);
   // Restore session start from localStorage
@@ -116,7 +117,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const startFree=()=>{const at=Date.now();localStorage.setItem('mpp:free_start',JSON.stringify({id:selectedFree.id,startedAt:at}));setFreeStartedAt(at);};
   const endSess=()=>{const dur=sessStartedAt?Math.floor((Date.now()-sessStartedAt)/1000):0;setEndDuration(dur);setShowEndModal(true);};
   const endFree=()=>{const dur=freeStartedAt?Math.floor((Date.now()-freeStartedAt)/1000):0;setFreeEndDuration(dur);setShowFreeEndModal(true);};
-  const onSessValidate=(note,forme)=>{completeSession(sid,wk);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);if(onSessionCompleted)onSessionCompleted(sid);};
+  const onSessValidate=(note,forme)=>{completeSession(sid,wk,note||undefined);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);if(onSessionCompleted)onSessionCompleted(sid,wk);};
   const onFreeValidate=(note,forme)=>{const updFn=(patch)=>{const updated={...selectedFree,...patch};setSelectedFree(updated);setFreeSessions(prev=>prev.map(f=>f.id===selectedFree.id?updated:f));};updFn({completed:true,duration:freeEndDuration,note,forme});localStorage.removeItem('mpp:free_start');setFreeStartedAt(null);setShowFreeEndModal(false);};
   const exosMap=useMemo(()=>exercises.reduce((a,e)=>({...a,[e.id]:e.name}),{}),[exercises]);
   const[addBankModal,setAddBankModal]=useState(false);
@@ -263,14 +264,9 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;
         const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];
         const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
-        // Surcharge basée sur le réel S-1 plutôt que la planif initiale
-        const prevDoneRows=(!wd?.pdc&&!isFlex&&wk>1)?(sets[ex.id+"_"+(wk-1)]||[]).filter(r=>r.done&&(r.kg||0)>0):[];
-        const prevMedianKg=prevDoneRows.length?prevDoneRows.map(r=>r.kg).sort((a,b)=>a-b)[Math.floor(prevDoneRows.length/2)]:null;
-        const exTierCfg=(blockConfig?.tierConfig||DEF_TIER_CONFIG)[getExTier(ex.name,ex)]||(blockConfig?.tierConfig||DEF_TIER_CONFIG)[3];
-        const exKgStep=exTierCfg?.kgStep??2.5;
-        const effectiveKg=prevMedianKg!==null?roundHalf(prevMedianKg+exKgStep):(wd?.kg??null);
-        const effectivePlanned=wd&&prevMedianKg!==null&&!wd.pdc?{...wd,kg:effectiveKg}:wd;
-        const kgFromActual=!!(wd&&!wd.pdc&&!isFlex&&prevMedianKg!==null&&effectiveKg!==wd?.kg);
+        const effectivePlanned=wd;
+        const effectiveKg=wd?.kg;
+        const kgFromActual=false;
         const bankEx=bankExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
         const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
         return(
@@ -291,7 +287,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         );
       };
       // ── Rendu des groupes ─────────────────────────────────────────────────
-      const sessBlocs=getSessionBlocs(selectedSess,exercises);
+      const sessBlocs=getSessionBlocs(currentSess,exercises);
       return rGroups.map((item)=>{
         const ex=item.ex;const dynBloc=sessBlocs.find(b=>b.id===ex.bloc)||null;
         const bt=BT[ex.bloc]||(dynBloc?{c:dynBloc.color,l:dynBloc.label}:{c:C.tx3,l:ex.bloc});

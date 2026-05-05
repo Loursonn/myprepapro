@@ -28,7 +28,7 @@ export default function ProgPage() {
     energyDayPlan, setEnergyDayPlan, energyEditorKey, setEnergyEditorKey,
     energySessionsLoaded, setEnergySessionsLoaded, testSessions, visibilitySettings,
     setVisibilitySettings, wellnessHistory, sessionLogs,
-    setShowTierModal, updateSessionDay, updateSessionWeekDay,
+    updateSessionDay, updateSessionWeekDay,
   } = useAthleteContext();
 
   const ctx = useAthleteContext() as unknown as Record<string, unknown>;
@@ -175,14 +175,6 @@ export default function ProgPage() {
                 </span>
               )}
             </div>
-            <button
-              onClick={() => setShowTierModal(true)}
-              style={{
-                padding: "6px 10px", borderRadius: 8,
-                border: "1px solid " + C.o + "40", background: C.o + "12", color: C.o,
-                fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >⚙ Surcharge</button>
           </div>
 
           {sortedSessions.length === 0 ? (

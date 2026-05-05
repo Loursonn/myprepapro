@@ -101,7 +101,7 @@ export default function LogSeancePage() {
   const location = useLocation();
   const initialSess = (location.state as { initialSess?: unknown } | null)?.initialSess ?? null;
   const [logSubTab, setLogSubTab] = useState("muscu");
-  const [rpeSessionId, setRpeSessionId] = useState<string | null>(null);
+  const [rpePending, setRpePending] = useState<{ sessionId: string; scheduledDate: string } | null>(null);
 
   const {
     athleteId, viewOnly, exos, sets, updSets, completedSessions, completeSession,
@@ -111,6 +111,17 @@ export default function LogSeancePage() {
     timerLeft, timerDur, timerActive, timerFinished,
     timerSetDur, timerStart, timerStop,
   } = useAthleteContext();
+
+  function computeScheduledDate(sessId: string, week: number): string {
+    const sess = sessions.find(s => s.id === sessId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dow = (sess as any)?.weekDays?.[String(week)] ?? (sess as any)?.day_of_week;
+    if (dow == null || !blockConfig?.startDate) return new Date().toISOString().split("T")[0];
+    const d0 = new Date(blockConfig.startDate + "T12:00:00");
+    const weekDow = d0.getDay();
+    d0.setDate(d0.getDate() + (weekDow === 0 ? -6 : 1 - weekDow) + (week - 1) * 7 + (dow as number));
+    return d0.toISOString().split("T")[0];
+  }
 
   return (
     <>
@@ -136,7 +147,7 @@ export default function LogSeancePage() {
           freeSessions={freeSessions} setFreeSessions={setFreeSessions}
           onAddExercise={(sessId: string, ex: unknown) => setExos(prev => ({ ...prev, [sessId]: [...(prev[sessId] || []), ex] }))}
           weekSchedule={weekSchedule}
-          onSessionCompleted={(sid: string) => setRpeSessionId(sid)}
+          onSessionCompleted={(sid: string, wk: number) => setRpePending({ sessionId: sid, scheduledDate: computeScheduledDate(sid, wk) })}
         />
       )}
 
@@ -144,8 +155,12 @@ export default function LogSeancePage() {
         <EnergyAthleteView athleteId={athleteId} />
       )}
 
-      {rpeSessionId && (
-        <RpeSheet sessionId={rpeSessionId} onClose={() => setRpeSessionId(null)} />
+      {rpePending && (
+        <RpeSheet
+          sessionId={rpePending.sessionId}
+          scheduledDate={rpePending.scheduledDate}
+          onClose={() => setRpePending(null)}
+        />
       )}
 
       {logSubTab === "specifique" && (
