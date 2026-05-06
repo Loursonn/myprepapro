@@ -49,11 +49,14 @@ export default function RetoursPage() {
   const kpiData = viewMode === "month" ? monthData : null;
   const weekCurrent = weekData?.current_week;
 
+  const weekDone  = weekCurrent ? weekCurrent.workouts.filter(w => w.status === "completed").length + weekCurrent.energy_sessions.filter(e => e.completed || e.partial).length : 0;
+  const weekTotal = weekCurrent ? weekCurrent.workouts.length + weekCurrent.energy_sessions.length : 0;
+
   const completionRate = kpiData && kpiData.workouts_total > 0
     ? Math.round((kpiData.workouts_completed / kpiData.workouts_total) * 100)
     : weekCurrent
-      ? weekCurrent.workouts.length > 0
-        ? Math.round(weekCurrent.workouts.filter(w => w.status === "completed").length / weekCurrent.workouts.length * 100)
+      ? weekTotal > 0
+        ? Math.round(weekDone / weekTotal * 100)
         : null
       : null;
 
@@ -77,7 +80,7 @@ export default function RetoursPage() {
   const workoutsVal = kpiData
     ? `${kpiData.workouts_completed}/${kpiData.workouts_total}`
     : weekCurrent
-      ? `${weekCurrent.workouts.filter(w => w.status === "completed").length}/${weekCurrent.workouts.length}`
+      ? `${weekDone}/${weekTotal}`
       : null;
 
   const testsVal = kpiData?.tests_completed

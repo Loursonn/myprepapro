@@ -100,6 +100,13 @@ function EventChip({
               : st === "missed"     ? C.rS
               : baseBg;
 
+  const blockLogs = isPartialEnergy
+    ? (event.raw?.block_logs as Record<string, { done: boolean }> | null | undefined)
+    : null;
+  const blVals     = blockLogs ? Object.values(blockLogs) : [];
+  const doneCount  = blVals.filter(b => b.done).length;
+  const totalCount = blVals.length;
+
   return (
     <div
       style={{
@@ -110,21 +117,27 @@ function EventChip({
         fontSize: compact ? 9 : 10,
         fontWeight: isProjected ? 400 : 600,
         color: color,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
         cursor: "pointer",
         maxWidth: "100%",
         fontStyle: isProjected && st !== "completed" && st !== "missed" ? "italic" : "normal",
+        display: "flex",
+        alignItems: "center",
+        gap: 2,
+        minWidth: 0,
       }}
     >
-      {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : ""}
-      {event.title}
-      {isProjected && st !== "completed" && st !== "missed" && (
-        <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
-      )}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+        {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : ""}
+        {event.title}
+        {isPartialEnergy && totalCount > 0 && (
+          <span style={{ opacity: 0.45, fontWeight: 500, marginLeft: 3 }}>{doneCount}/{totalCount}</span>
+        )}
+        {isProjected && st !== "completed" && st !== "missed" && (
+          <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
+        )}
+      </span>
       {event.rpe != null && (
-        <span style={{ opacity: 0.85, marginLeft: 4, fontWeight: 700 }}>{event.rpe}/10</span>
+        <span style={{ flexShrink: 0, opacity: 0.85, fontWeight: 700, marginLeft: 2 }}>RPE {event.rpe}</span>
       )}
     </div>
   );
@@ -560,6 +573,8 @@ export function CalendarMonthView({
     const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
     return realEvents.map(e => {
       if (e.type !== "workout" || !e.raw?.session_id) return e;
+      // Preserve explicit skipped status from DB — never override to "missed"
+      if (e.status === "skipped") return e;
       const sessId = e.raw.session_id as string;
       const weekNum = Math.floor((parseISO(e.date).getTime() - blockStart.getTime()) / MS_WEEK) + 1;
       if (weekNum < 1) return e;

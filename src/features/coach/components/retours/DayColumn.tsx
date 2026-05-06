@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { isToday, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Check, X, Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, Zap, ChevronDown, ChevronUp, Hourglass } from "lucide-react";
 import { C } from "@/lib/theme";
 import { DayDetailPanel } from "./DayDetailPanel";
 import type { WeeklyRetourData, WellnessDay } from "@/features/shared/types/retours.types";
@@ -21,6 +21,7 @@ interface DayColumnProps {
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "completed") return <Check size={10} color={C.g} />;
+  if (status === "planned" || status === "in-progress") return <Hourglass size={10} color={C.tx3} />;
   return <X size={10} color={C.tx3} />;
 }
 
@@ -95,7 +96,9 @@ function WorkoutRow({ workout, prevWorkout }: {
         }}>
           {workout.session_name}
         </span>
-        <span style={{ fontSize: 8, color: C.tx3, flexShrink: 0 }}>skip</span>
+        <span style={{ fontSize: 8, color: C.tx3, flexShrink: 0 }}>
+          {workout.status === "planned" || workout.status === "in-progress" ? "planifié" : "manquée"}
+        </span>
       </div>
     );
   }
@@ -176,10 +179,31 @@ function WorkoutRow({ workout, prevWorkout }: {
 // ── Energy compact row ────────────────────────────────────────────────────────
 
 function EnergyRow({ session }: { session: DayEnergy }) {
+  const planned = !session.completed && !session.partial;
   const col = session.partial ? "#3B8DF0" : session.completed ? C.g : C.o;
   const blVals = session.block_logs ? Object.values(session.block_logs) : [];
   const doneCount  = blVals.filter((b) => b.done).length;
   const totalCount = blVals.length;
+
+  if (planned) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 4,
+        background: C.s2, borderRadius: 7, padding: "5px 7px",
+        opacity: 0.5,
+      }}>
+        <Hourglass size={9} color={C.tx3} style={{ flexShrink: 0 }} />
+        <span style={{
+          flex: 1, fontSize: 10, fontWeight: 600, color: C.tx2,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {session.session_label}
+        </span>
+        <span style={{ fontSize: 8, color: C.tx3, flexShrink: 0 }}>planifié</span>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       display: "flex", alignItems: "flex-start", gap: 5,
@@ -197,9 +221,7 @@ function EnergyRow({ session }: { session: DayEnergy }) {
         <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
           {session.partial
             ? <span style={{ fontSize: 8, color: "#3B8DF0" }}>Partielle {doneCount}/{totalCount}</span>
-            : session.completed
-              ? <span style={{ fontSize: 8, color: C.g }}>✓ Complétée</span>
-              : <span style={{ fontSize: 8, color: C.tx3 }}>Planifiée</span>
+            : <span style={{ fontSize: 8, color: C.g }}>✓ Complétée</span>
           }
           {session.duration_min != null && (
             <span style={{ fontSize: 8, color: C.tx3 }}>{session.duration_min} min</span>
