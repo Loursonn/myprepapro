@@ -340,9 +340,20 @@ function EventCard({
   onPreview?: (e: CalEvent) => void;
 }) {
   const isEnergy  = event.type === "energy";
-  const color = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
+  const baseColor = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
+  const color = event.partial && isEnergy                ? "#3B8DF0"
+              : event.status === "completed" && isEnergy ? C.g
+              : baseColor;
   const { mutate: del } = useDeleteCalendarEvent();
-  const statusInfo = event.status ? STATUS_LABEL[event.status] : null;
+  const rawBlockLogs = isEnergy
+    ? (event.raw?.block_logs as Record<string, { done: boolean }> | null | undefined) ?? null
+    : null;
+  const blVals = rawBlockLogs ? Object.values(rawBlockLogs) : [];
+  const doneCount  = blVals.filter((b) => b.done).length;
+  const totalCount = blVals.length;
+  const statusInfo = event.partial && isEnergy
+    ? { label: `Partielle ${doneCount}/${totalCount}`, color: "#3B8DF0" }
+    : event.status ? STATUS_LABEL[event.status] : null;
   const isClickable = event.type === "workout" || (event.type === "energy" && !!onPreview);
 
   const typeLabel =

@@ -36,6 +36,7 @@ export interface UnifiedCalendarEvent {
   // Energy-specific
   sessionKind?: string;        // vo2 | tempo | seuil | footing | fartlek | autre | custom
   energySessionId?: string;    // energy_sessions.id
+  partial?: boolean;           // some blocks done but not completed
   /** Raw DB row for fields not promoted to typed fields */
   raw: Record<string, unknown>;
 }
@@ -98,7 +99,7 @@ export function useUnifiedCalendar(
 
         supabase
           .from("energy_session_assignments")
-          .select("id, athlete_id, energy_session_id, scheduled_date, status, notes, energy_sessions(id, name, session_kind)")
+          .select("id, athlete_id, energy_session_id, scheduled_date, status, notes, rpe_score, block_logs, energy_sessions(id, name, session_kind)")
           .eq("athlete_id", athleteId)
           .gte("scheduled_date", start)
           .lte("scheduled_date", end)
@@ -189,14 +190,21 @@ export function useUnifiedCalendar(
         const session = (ea as Record<string, unknown>).energy_sessions as {
           id: string; name: string; session_kind: string;
         } | null;
+        const blockLogs = (ea as Record<string, unknown>).block_logs as Record<string, { done: boolean }> | null;
+        const blVals = blockLogs ? Object.values(blockLogs) : [];
+        const isPartial = blVals.length > 0
+          && blVals.some((b) => b.done)
+          && blVals.some((b) => !b.done);
         events.push({
           id:              ea.id,
           type:            "energy",
           date:            ea.scheduled_date,
           title:           session?.name ?? "Séance énergie",
           status:          ea.status ?? "planned",
+          rpe:             (ea as Record<string, unknown>).rpe_score as number | null ?? null,
           sessionKind:     session?.session_kind,
           energySessionId: ea.energy_session_id,
+          partial:         isPartial,
           raw:             ea as Record<string, unknown>,
         });
       }
@@ -440,6 +448,7 @@ export interface CalEvent {
   rpe?: number | null;
   sessionKind?: string;
   energySessionId?: string;
+  partial?: boolean;
   raw: Record<string, unknown>;
 }
 
@@ -453,6 +462,7 @@ export function toCalEvent(e: UnifiedCalendarEvent): CalEvent {
     rpe:             e.rpe,
     sessionKind:     e.sessionKind,
     energySessionId: e.energySessionId,
+    partial:         e.partial,
     raw:             e.raw,
   };
 }

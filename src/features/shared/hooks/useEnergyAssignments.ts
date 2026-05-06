@@ -12,6 +12,7 @@ import type {
   EnergySessionAssignmentRow,
   CreateAssignmentInput,
   AssignmentStatus,
+  BlockLogs,
 } from "@/types/energy";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +176,64 @@ export function useUnassignEnergySession() {
       qc.invalidateQueries({ queryKey: ["cal", athleteId] });
       toast.success("Assignation supprimée");
     },
+  });
+}
+
+/** Valide une séance énergie : status=completed + block_logs + notes optionnels. */
+export function useCompleteEnergyAssignment() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      block_logs,
+      notes,
+    }: { id: string; athleteId: string; block_logs: BlockLogs; notes?: string }) => {
+      const patch: Record<string, unknown> = {
+        status: "completed",
+        block_logs,
+        updated_at: new Date().toISOString(),
+      };
+      if (notes != null) patch.notes = notes;
+      const { error } = await supabase
+        .from("energy_session_assignments")
+        .update(patch)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { athleteId }) => {
+      qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
+      qc.invalidateQueries({ queryKey: ["cal", athleteId] });
+      qc.invalidateQueries({ queryKey: QK.weeklyRetours() });
+      qc.invalidateQueries({ queryKey: QK.monthlyRetours() });
+      toast.success("Séance validée !");
+    },
+    onError: () => toast.error("Erreur lors de la validation"),
+  });
+}
+
+/** Enregistre le RPE Foster d'une séance énergie. */
+export function useUpsertEnergyRpe() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      rpe_score,
+    }: { id: string; athleteId: string; rpe_score: number }) => {
+      const { error } = await supabase
+        .from("energy_session_assignments")
+        .update({ rpe_score, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { athleteId }) => {
+      qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
+      qc.invalidateQueries({ queryKey: QK.weeklyRetours() });
+      qc.invalidateQueries({ queryKey: QK.monthlyRetours() });
+      toast.success("RPE enregistré");
+    },
+    onError: () => toast.error("Erreur lors de l'enregistrement du RPE"),
   });
 }
 

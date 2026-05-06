@@ -3,7 +3,6 @@ import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
-import { TierConfigModal } from "@/components/coach/CoachComponents";
 import { AIChatBar } from "@/components/athlete/StatsViews";
 import BlockHistoryViewer from "./components/BlockHistoryViewer";
 
@@ -27,7 +26,7 @@ export default function CoachLayout({ onSwitchMode, children }: CoachLayoutProps
   const {
     athleteProfile, blockConfig, setBlockConfig, currentWeek, tw, dw, saveStatus,
     showNewBlock, setShowNewBlock, showBlockHistory, setShowBlockHistory,
-    showTierModal, setShowTierModal, blockHistory, setBlockHistory,
+    blockHistory, setBlockHistory,
     archiveAndNewBlock, sessions, chatHistory, setChatHistory,
     applyAIEdit, aiChatOpen, setAiChatOpen, exos,
   } = useAthleteContext();
@@ -129,9 +128,6 @@ export default function CoachLayout({ onSwitchMode, children }: CoachLayoutProps
           onClose={() => setShowBlockHistory(false)}
           onDelete={idx => setBlockHistory(blockHistory.filter((_, i) => i !== idx))}
         />
-      )}
-      {showTierModal && (
-        <TierConfigModal blockConfig={blockConfig} setBlockConfig={setBlockConfig} onClose={() => setShowTierModal(false)} />
       )}
       {activeTab === "prog" && sessions.length > 0 && (
         <AIChatBar exos={exos} sessions={sessions} chatHistory={chatHistory} setChatHistory={setChatHistory} onApply={applyAIEdit} onOpenChange={setAiChatOpen} C={C} />

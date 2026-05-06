@@ -101,7 +101,7 @@ export default function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { session, exercises, isCompleted } = useWorkoutDetail(id ?? "");
+  const { session, exercises, isCompleted, currentWeek } = useWorkoutDetail(id ?? "");
   const { mutate: updateSet } = useUpdateSet();
   const { mutate: completeWorkout } = useCompleteWorkout();
   const [showRpe, setShowRpe] = useState(false);
@@ -153,10 +153,23 @@ export default function WorkoutDetailPage() {
             Aucun exercice dans cette séance
           </div>
         ) : (
-          exercises.map(({ exercise, sets }) => {
+          exercises.map(({ exercise, sets, prevSets }) => {
             const exSets = sets.length > 0
               ? sets
               : Array.from({ length: exercise.weeks?.[1]?.sets ?? 3 }, (): SetRow => ({}));
+
+            const prevLine = (() => {
+              if (currentWeek <= 1) return null;
+              if (prevSets.length === 0) return "↩ Skippée";
+              const parts = prevSets.map(s => {
+                const kg = s.kg != null ? `${s.kg}kg` : "?";
+                const reps = s.reps != null ? `×${s.reps}` : "";
+                return kg + reps;
+              });
+              const lastRir = prevSets.at(-1)?.rir;
+              const rirPart = lastRir != null ? ` · RIR ${lastRir}` : "";
+              return `↩ Dernière fois : ${parts.join(" · ")}${rirPart}`;
+            })();
 
             return (
               <div
@@ -171,6 +184,11 @@ export default function WorkoutDetailPage() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{exercise.name}</div>
                   {exercise.bloc && (
                     <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>{exercise.bloc}</div>
+                  )}
+                  {prevLine && (
+                    <div style={{ fontSize: 10, color: C.tx3, marginTop: 4, fontStyle: "italic" }}>
+                      {prevLine}
+                    </div>
                   )}
                 </div>
 

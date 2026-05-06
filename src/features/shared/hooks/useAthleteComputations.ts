@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { DEF_METHODS, DEF_TIER_CONFIG, getExTier } from "@/lib/exercises";
+import { DEF_METHODS } from "@/lib/exercises";
 import { getAllPRs, getMuscSets, getCombinedData } from "@/lib/calculations";
 import { getReco } from "@/lib/wellness";
 import type { ExosMap, SetsMap, Session, BlockConfig, Goals, WellnessData, Injury } from "../types/athlete";
@@ -83,13 +83,9 @@ export function useAthleteComputations(s: ComputationInput) {
   const wScore = wellness?.score || 50;
   const wReco = useMemo(() => getReco(wScore), [wScore]);
 
-  // Tier config helper (used by autoProgress)
-  const tierCfg = blockConfig?.tierConfig || DEF_TIER_CONFIG;
-
   return {
     tw, dw, allMethods, weeksArr, isDeload, weeklyTarget, currentWeek,
     totalTarget, streak, weekAdherence, prs, muscSets, combinedData,
-    totalDone, activeInjuries, wScore, wReco, tierCfg,
-    getExTier,
+    totalDone, activeInjuries, wScore, wReco,
   };
 }

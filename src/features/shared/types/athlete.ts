@@ -52,17 +52,6 @@ export interface BlockConfig {
   totalWeeks: number;
   deloadWeek: number;
   startDate?: string | null;
-  tierConfig?: Record<string, TierConfig>;
-}
-
-export interface TierConfig {
-  mode?: string;
-  kgStep?: number;
-  rirStart?: number;
-  rirEnd?: number;
-  repsEnd?: number;
-  deloadPct?: number;
-  rir?: number;
 }
 
 // ─── Wellness & Body ──────────────────────────────────────────────────────────

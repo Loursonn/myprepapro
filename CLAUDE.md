@@ -58,11 +58,65 @@ Athlète : suivre séances, saisir wellness, voir ses stats, commenter.
 - Imports : alias `@/` pour `src/` ; Styling : Tailwind uniquement
 - Requêtes BDD : via hooks React Query, jamais directement dans les composants
 
-## Git
+## Git workflow
 
-- `main` → production (Vercel auto-deploy) — ne jamais pusher directement
-- `dev` → branche de travail partagée
-- `feat/xxx` / `fix/xxx` → créées depuis `dev`, PR vers `dev`
+### Branches
+- `main` → production (Vercel auto-deploy). Ne jamais committer directement.
+- `dev` → branche de travail partagée. Les deux développeurs pushent ici directement. Pas de feature branches.
+
+### Début de session obligatoire
+
+**1. Récupérer la dernière version GitHub (priorité absolue sur la version locale)**
+```bash
+git checkout dev
+git fetch origin
+git reset --hard origin/dev
+```
+> `reset --hard` garantit que la version locale = version GitHub exacte, même si Hugo a pushé entre temps. Ne jamais utiliser `git pull` seul — risque de merge inutile si divergence.
+
+**2. Lancer l'app en local pour vérifier qu'elle tourne**
+```bash
+npm run dev
+```
+Ouvrir dans le navigateur, vérifier que l'app charge sans erreur console bloquante avant de commencer à coder.
+
+### PUSH — sauvegarder sur dev
+```bash
+git add <fichiers modifiés>   # jamais .claude/settings.local.json
+git commit -m "type(scope): message
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+git push origin dev
+```
+Si push rejeté (non-fast-forward = l'autre dev a pushé entre-temps) :
+```bash
+git pull origin dev --rebase
+# résoudre conflits si besoin → lire les deux versions avant de choisir
+git push origin dev
+```
+
+### PULL REQUEST — dev → main (mise en prod)
+```bash
+gh pr create --base main --head dev \
+  --title "feat: ..." \
+  --body "$(cat <<'EOF'
+## Summary
+- ...
+
+## Test plan
+- [ ] ...
+
+🤖 Generated with Claude Code
+EOF
+)"
+```
+Le propriétaire du repo review + merge → Vercel déploie automatiquement.
+
+### Règles absolues
+- Toujours commencer par `git fetch origin && git reset --hard origin/dev`
+- Ne jamais committer `.claude/settings.local.json`
+- Ne jamais `--force` push sur `dev` ou `main`
+- En cas de conflit rebase : lire les deux versions avant de choisir — ne pas écraser aveuglément
 
 ## Fichiers clés
 

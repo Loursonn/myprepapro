@@ -6,6 +6,7 @@ interface KPICardProps {
   title: string;
   value: string | number | null;
   subtitle?: string;
+  subtitle2?: string;
   valueColor?: string;
   loading?: boolean;
   onClick?: () => void;
@@ -15,7 +16,7 @@ interface KPICardProps {
  * Single KPI tile for the coach home dashboard.
  */
 export function KPICard({
-  icon, title, value, subtitle, valueColor, loading = false, onClick,
+  icon, title, value, subtitle, subtitle2, valueColor, loading = false, onClick,
 }: KPICardProps) {
   return (
     <div
@@ -58,6 +59,9 @@ export function KPICard({
           </div>
           {subtitle && (
             <div style={{ fontSize: 11, color: C.tx3, marginTop: -2, textAlign: "center" }}>{subtitle}</div>
+          )}
+          {subtitle2 && (
+            <div style={{ fontSize: 10, color: C.tx3, marginTop: -4, textAlign: "center" }}>{subtitle2}</div>
           )}
         </>
       )}

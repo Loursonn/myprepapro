@@ -8,8 +8,11 @@ export interface WorkoutDetail {
     exercise: Exercise;
     /** sets[exId_week] */
     sets: SetRow[];
+    /** done sets from previous week — empty on week 1 */
+    prevSets: SetRow[];
   }>;
   isCompleted: boolean;
+  currentWeek: number;
 }
 
 /**
@@ -25,15 +28,20 @@ export function useWorkoutDetail(sessionId: string): WorkoutDetail {
     const sessionExos: Exercise[] = exos[sessionId] ?? [];
     const doneNow = new Set(completedSessions[currentWeek] ?? []);
 
+    const prevWeek = currentWeek - 1;
     const exercises = sessionExos.map((ex) => ({
       exercise: ex,
       sets: (sets[`${ex.id}_${currentWeek}`] ?? []) as SetRow[],
+      prevSets: prevWeek >= 1
+        ? ((sets[`${ex.id}_${prevWeek}`] ?? []) as SetRow[]).filter(s => s.done)
+        : [],
     }));
 
     return {
       session,
       exercises,
       isCompleted: doneNow.has(sessionId),
+      currentWeek,
     };
   }, [sessions, exos, sets, completedSessions, currentWeek, sessionId]);
 }

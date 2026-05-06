@@ -24,8 +24,8 @@ function decimalHour(h: number, m: number): number {
 
 /** Simulate bedtime/wakeup from sommeil score 0-10 when no real data */
 function simulateSleep(sommeil: number): { bedH: number; bedM: number; upH: number; upM: number } {
-  const bedDec = 22 + (10 - sommeil) * 0.35;  // 22h–25.5h
-  const upDec  = 6.5 + (10 - sommeil) * 0.15; // 6.5h–8h
+  const bedDec = 22 + (5 - sommeil) * 0.7;  // 22h–24.8h (sommeil 1-5)
+  const upDec  = 6.5 + (5 - sommeil) * 0.3; // 6.5h–7.7h
   const toHM = (dec: number) => {
     const norm = dec >= 24 ? dec - 24 : dec;
     return { h: Math.floor(norm), m: Math.round((norm - Math.floor(norm)) * 60) };
@@ -44,7 +44,7 @@ function scoreColor(v: number, max = 10): string {
 
 // ── Component bars ────────────────────────────────────────────────────────────
 
-function ComponentBar({ label, value, max = 10, color }: { label: string; value: number; max?: number; color: string }) {
+function ComponentBar({ label, value, max = 5, color }: { label: string; value: number; max?: number; color: string }) {
   const pct = Math.round((value / max) * 100);
   return (
     <div>
@@ -78,13 +78,18 @@ function SleepTunnel({ wellness }: { wellness: WellnessDay }) {
   const bedDec = decimalHour(bedH, bedM);
   const upDec  = decimalHour(upH,  upM);
 
-  // Sleep duration
+  // Sleep duration — prefer exact minute arithmetic when real times are available
   let durH: number, durM: number;
-  if (wellness.sleepDur != null) {
+  if (hasReal) {
+    const bedMin  = bedH * 60 + bedM;
+    const upMin   = upH * 60 + upM;
+    const totalMin = upMin <= bedMin ? upMin + 1440 - bedMin : upMin - bedMin;
+    durH = Math.floor(totalMin / 60);
+    durM = totalMin % 60;
+  } else if (wellness.sleepDur != null) {
     durH = Math.floor(wellness.sleepDur);
     durM = Math.round((wellness.sleepDur - durH) * 60);
   } else {
-    // compute from times: wakeup is next day if < bedtime
     const upAdjusted = upDec < bedDec ? upDec + 24 : upDec;
     const durDec = upAdjusted - bedDec;
     durH = Math.floor(durDec);
@@ -239,26 +244,35 @@ function WorkoutCard({ w }: { w: WorkoutDetail }) {
 }
 
 function EnergyCard({ e }: { e: EnergySessionDetail }) {
-  const dur = e.duration_min != null ? `${e.duration_min}min` : null;
+  const dur  = e.duration_min != null ? `${e.duration_min}min` : null;
   const dist = e.distance_m != null
     ? e.distance_m >= 1000 ? `${(e.distance_m / 1000).toFixed(1)}km` : `${e.distance_m}m`
     : null;
+  const col  = e.partial ? "#3B8DF0" : e.completed ? C.g : C.o;
+  const blVals     = e.block_logs ? Object.values(e.block_logs) : [];
+  const doneCount  = blVals.filter((b) => b.done).length;
+  const totalCount = blVals.length;
 
   return (
-    <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
+    <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${col}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <Zap size={13} color={C.o} />
+          <Zap size={13} color={col} />
           <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{e.session_label}</span>
           {e.session_kind && (
-            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 5, background: C.o + "20", color: C.o, fontWeight: 700 }}>
+            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 5, background: col + "20", color: col, fontWeight: 700 }}>
               {e.session_kind}
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {dur  && <span style={{ fontSize: 10, color: C.tx3 }}>{dur}</span>}
           {dist && <span style={{ fontSize: 10, color: C.tx3 }}>{dist}</span>}
+          <span style={{ fontSize: 9, fontWeight: 700, color: col }}>
+            {e.partial
+              ? `Partielle ${doneCount}/${totalCount}`
+              : e.completed ? "✓ Complétée" : "Planifiée"}
+          </span>
         </div>
       </div>
       {e.note && <div style={{ marginTop: 6, fontSize: 11, color: C.tx3, fontStyle: "italic" }}>"{e.note}"</div>}
