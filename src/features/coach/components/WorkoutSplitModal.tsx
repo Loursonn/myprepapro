@@ -13,7 +13,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { CoachProgramEditor } from "@/components/coach/CoachProgramEditor";
 import { useWorkoutSplitData } from "@/features/coach/hooks/useWorkoutSplitData";
 import { getSessionBlocs } from "@/lib/muscles";
-import type { Exercise, BlockConfig, WellnessData, SetRow } from "@/features/shared/types/athlete";
+import type { Exercise, BlockConfig, WellnessData, SetRow, WeekConfig } from "@/features/shared/types/athlete";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -515,23 +515,58 @@ export function WorkoutSplitModal({
     return map;
   }, [ctx.sets, exercises, displayLeftWeekIndex]);
 
-  // Duplicate S-1 → S-right (copies weeks config)
+  // Duplicate logged data (left) → planned session (right)
+  // Missing sets: extend to planned count using last logged set as template
+  // Missing exercises: fallback to most recent historical log
   function handleDuplicate() {
-    const lw = rightWeekIndex - 1;
+    const lw = displayLeftWeekIndex;
     if (lw < 1) return;
+
     const updated = {
       ...ctx.exos,
-      [sessionId]: (ctx.exos[sessionId] ?? []).map(ex => ({
-        ...ex,
-        weeks: {
-          ...(ex.weeks ?? {}),
-          [rightWeekIndex]: { ...(ex.weeks?.[lw] ?? {}) },
-        },
-      })),
+      [sessionId]: exercises.map(ex => {
+        const logged = setLogsByExId[ex.id] ?? [];
+
+        // Find last logged set: this week first, then search history
+        let lastSet: SetRow | undefined = logged.length > 0
+          ? logged[logged.length - 1]
+          : undefined;
+
+        if (!lastSet) {
+          const allKeys = Object.keys(ctx.sets)
+            .filter(k => k.startsWith(`${ex.id}_`))
+            .sort((a, b) => {
+              const wa = parseInt(a.split("_").pop() ?? "0");
+              const wb = parseInt(b.split("_").pop() ?? "0");
+              return wb - wa;
+            });
+          for (const key of allKeys) {
+            const rows = (ctx.sets[key] ?? []).filter(s => s.done);
+            if (rows.length > 0) { lastSet = rows[rows.length - 1]; break; }
+          }
+        }
+
+        const plannedSets = ex.weeks?.[lw]?.sets ?? logged.length;
+        const setsCount = Math.max(logged.length, plannedSets || 0) || 3;
+
+        const newWeekConfig: WeekConfig = lastSet ? {
+          ...(ex.weeks?.[lw] ?? {}),
+          kg: lastSet.kg,
+          repsRange: lastSet.reps != null ? String(lastSet.reps) : ex.weeks?.[lw]?.repsRange,
+          rir: lastSet.rir != null ? lastSet.rir : ex.weeks?.[lw]?.rir,
+          sets: setsCount,
+        } : { ...(ex.weeks?.[lw] ?? {}) };
+
+        return {
+          ...ex,
+          weeks: { ...(ex.weeks ?? {}), [rightWeekIndex]: newWeekConfig },
+        };
+      }),
     };
+
     ctx.setExos(updated);
     setConfirmDuplicate(false);
-    toast.success(`S${lw} dupliquée vers S${rightWeekIndex}`);
+    toast.success(`S${lw} dupliquée → S${rightWeekIndex}`);
   }
 
   const hasRightData = exercises.some(ex => !!(ex.weeks?.[rightWeekIndex]));
