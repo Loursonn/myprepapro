@@ -65,6 +65,19 @@ export interface EnergySessionDetail {
   block_logs: Record<string, { done: boolean; note?: string }> | null;
 }
 
+// ── Activité libre ────────────────────────────────────────────────────────────
+
+export interface FreeActivityDetail {
+  id: string;
+  name: string;
+  date: string;
+  sport?: string;
+  sportEmoji?: string;
+  duration?: number;  // minutes
+  intensity?: number; // 1-5
+  note?: string;
+}
+
 // ── WeeklyRetourData ──────────────────────────────────────────────────────────
 
 export interface WeeklyRetourData {
@@ -110,6 +123,7 @@ export interface WeeklyRetourData {
 
   avg_wellness: number | null;
   daily_wellness: Record<string, WellnessDay | null>;
+  free_activities: FreeActivityDetail[];
 }
 
 export interface WeekComparisonData {
@@ -125,6 +139,7 @@ export interface DailyData {
   workouts_completed: number;
   has_competition: boolean;
   has_test: boolean;
+  free_activity_count?: number;
 }
 
 export interface WorkoutDetail {
@@ -176,4 +191,5 @@ export interface MonthlyRetourData {
   energy_sessions: EnergySessionDetail[];
   test_sessions: TestDetail[];
   competitions: CompetitionDetail[];
+  free_activities: FreeActivityDetail[];
 }

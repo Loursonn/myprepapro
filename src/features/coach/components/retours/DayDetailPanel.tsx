@@ -1,14 +1,18 @@
-import { X, Moon, Sunrise, CheckCircle2, Zap } from "lucide-react";
+import { useState } from "react";
+import { X, Moon, Sunrise, CheckCircle2, Zap, ChevronDown, ChevronUp, Footprints } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import { C } from "@/lib/theme";
-import type { WellnessDay, WorkoutDetail, EnergySessionDetail } from "@/features/shared/types/retours.types";
+import type { WellnessDay, WorkoutDetail, EnergySessionDetail, FreeActivityDetail } from "@/features/shared/types/retours.types";
+
+const FREE_COLOR = "#0D9488";
 
 interface DayDetailPanelProps {
   date: string;           // "yyyy-MM-dd"
   wellness: WellnessDay | null;
   workouts?: WorkoutDetail[];
   energySessions?: EnergySessionDetail[];
+  freeActivities?: FreeActivityDetail[];
   onClose: () => void;
 }
 
@@ -191,12 +195,16 @@ function fmtDuration(s: number | null): string | null {
 
 function WorkoutCard({ w }: { w: WorkoutDetail }) {
   const dur = fmtDuration(w.duration_s);
-  const hasPerformed = w.performed_exercises.length > 0;
+
+  const exIds = [...new Set([
+    ...w.planned_exercises.map((p) => p.exercise_id),
+    ...w.performed_exercises.map((p) => p.exercise_id),
+  ])];
 
   return (
     <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: hasPerformed ? 10 : 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: exIds.length > 0 ? 10 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <CheckCircle2 size={13} color={w.status === "completed" ? C.g : C.tx3} />
           <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{w.session_name}</span>
@@ -211,27 +219,45 @@ function WorkoutCard({ w }: { w: WorkoutDetail }) {
         </div>
       </div>
 
-      {/* Performed exercises */}
-      {hasPerformed && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {w.performed_exercises.map((ex) => (
-            <div key={ex.exercise_id}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.tx2, marginBottom: 3 }}>{ex.exercise_name}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {ex.sets.map((s, i) => (
-                  <span key={i} style={{
-                    fontSize: 9, padding: "2px 7px", borderRadius: 5,
-                    background: C.s1, border: "1px solid " + C.brdL, color: C.tx2,
-                  }}>
-                    {s.kg != null ? `${s.kg}kg` : "—"}
-                    {s.reps != null ? ` × ${s.reps}` : ""}
-                    {s.rir != null ? ` @${s.rir}` : ""}
-                    {s.method ? ` (${s.method})` : ""}
-                  </span>
-                ))}
+      {/* Exercises: planned target + actual sets merged */}
+      {exIds.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {exIds.map((exId) => {
+            const planned   = w.planned_exercises.find((p) => p.exercise_id === exId);
+            const performed = w.performed_exercises.find((p) => p.exercise_id === exId);
+            const name      = planned?.exercise_name ?? performed?.exercise_name ?? "Exercice";
+            return (
+              <div key={exId}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.tx2, marginBottom: 3 }}>{name}</div>
+                {/* Planned target */}
+                {planned && planned.sets > 0 && (
+                  <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>
+                    Plan : {planned.sets}×{planned.reps_range ?? "—"}
+                    {planned.kg != null ? ` @${planned.kg}kg` : ""}
+                    {planned.rir != null ? ` RIR${planned.rir}` : ""}
+                  </div>
+                )}
+                {/* Actual sets */}
+                {performed ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {performed.sets.map((s, i) => (
+                      <span key={i} style={{
+                        fontSize: 9, padding: "2px 7px", borderRadius: 5,
+                        background: C.s1, border: "1px solid " + C.brdL, color: C.tx2,
+                      }}>
+                        {s.kg != null ? `${s.kg}kg` : "—"}
+                        {s.reps != null ? ` × ${s.reps}` : ""}
+                        {s.rir != null ? ` @${s.rir}` : ""}
+                        {s.method ? ` (${s.method})` : ""}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Non réalisé</span>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -244,45 +270,120 @@ function WorkoutCard({ w }: { w: WorkoutDetail }) {
 }
 
 function EnergyCard({ e }: { e: EnergySessionDetail }) {
-  const dur  = e.duration_min != null ? `${e.duration_min}min` : null;
-  const dist = e.distance_m != null
+  const [open, setOpen] = useState(false);
+  const dur      = e.duration_min != null ? `${e.duration_min}min` : null;
+  const dist     = e.distance_m != null
     ? e.distance_m >= 1000 ? `${(e.distance_m / 1000).toFixed(1)}km` : `${e.distance_m}m`
     : null;
-  const col  = e.partial ? "#3B8DF0" : e.completed ? C.g : C.o;
-  const blVals     = e.block_logs ? Object.values(e.block_logs) : [];
-  const doneCount  = blVals.filter((b) => b.done).length;
-  const totalCount = blVals.length;
+  const col      = e.partial ? "#3B8DF0" : e.completed ? C.g : C.o;
+  const blEntries  = e.block_logs ? Object.entries(e.block_logs) : [];
+  const doneCount  = blEntries.filter(([, b]) => b.done).length;
+  const totalCount = blEntries.length;
+  const hasDetail  = blEntries.length > 0 || !!e.note || e.rpe_score != null;
 
   return (
-    <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8, borderLeft: `3px solid ${col}` }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <Zap size={13} color={col} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{e.session_label}</span>
+    <div style={{ background: C.s2, borderRadius: 10, marginBottom: 8, borderLeft: `3px solid ${col}`, overflow: "hidden" }}>
+      {/* Header */}
+      <div
+        onClick={() => hasDetail && setOpen((v) => !v)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", cursor: hasDetail ? "pointer" : "default" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+          <Zap size={13} color={col} style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {e.session_label}
+          </span>
           {e.session_kind && (
-            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 5, background: col + "20", color: col, fontWeight: 700 }}>
+            <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 5, background: col + "20", color: col, fontWeight: 700, flexShrink: 0 }}>
               {e.session_kind}
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
           {dur  && <span style={{ fontSize: 10, color: C.tx3 }}>{dur}</span>}
           {dist && <span style={{ fontSize: 10, color: C.tx3 }}>{dist}</span>}
+          {e.rpe_score != null && <span style={{ fontSize: 10, fontWeight: 700, color: C.tx3 }}>RPE {e.rpe_score}</span>}
           <span style={{ fontSize: 9, fontWeight: 700, color: col }}>
-            {e.partial
-              ? `Partielle ${doneCount}/${totalCount}`
-              : e.completed ? "✓ Complétée" : "Planifiée"}
+            {e.partial ? `Partielle ${doneCount}/${totalCount}` : e.completed ? "✓" : "Planifiée"}
           </span>
+          {hasDetail && (open ? <ChevronUp size={12} color={C.tx3} /> : <ChevronDown size={12} color={C.tx3} />)}
         </div>
       </div>
-      {e.note && <div style={{ marginTop: 6, fontSize: 11, color: C.tx3, fontStyle: "italic" }}>"{e.note}"</div>}
+
+      {/* Expanded: blocks */}
+      {open && (
+        <div style={{ borderTop: "1px solid " + C.brd, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+          {blEntries.map(([key, b], i) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+              <span style={{
+                width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                background: b.done ? C.g : "transparent",
+                border: "1px solid " + (b.done ? C.g : C.brd),
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 9, color: "#fff",
+              }}>
+                {b.done ? "✓" : ""}
+              </span>
+              <span style={{ color: b.done ? C.tx : C.tx3 }}>Bloc {i + 1}</span>
+              {b.note && <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>{b.note}</span>}
+            </div>
+          ))}
+          {e.note && (
+            <div style={{ marginTop: 4, fontSize: 11, color: C.tx3, fontStyle: "italic" }}>"{e.note}"</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FreeActivityCard({ f }: { f: FreeActivityDetail }) {
+  const [open, setOpen] = useState(false);
+  const hasDetail = f.intensity != null || !!f.note;
+
+  return (
+    <div style={{ background: FREE_COLOR + "15", borderRadius: 10, marginBottom: 8, borderLeft: `3px solid ${FREE_COLOR}`, overflow: "hidden" }}>
+      {/* Header */}
+      <div
+        onClick={() => hasDetail && setOpen((v) => !v)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", cursor: hasDetail ? "pointer" : "default" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>{f.sportEmoji ?? "🏃"}</span>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+              {f.name}
+            </span>
+            <span style={{ fontSize: 9, color: FREE_COLOR, fontWeight: 600 }}>{f.sport ?? "Activité libre"}</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          {f.duration != null && <span style={{ fontSize: 10, color: C.tx3 }}>{f.duration} min</span>}
+          {f.intensity != null && <span style={{ fontSize: 10, fontWeight: 700, color: FREE_COLOR }}>RPE {f.intensity}/10</span>}
+          {hasDetail && (open ? <ChevronUp size={12} color={C.tx3} /> : <ChevronDown size={12} color={C.tx3} />)}
+        </div>
+      </div>
+
+      {/* Expanded detail */}
+      {open && (
+        <div style={{ borderTop: "1px solid " + FREE_COLOR + "30", padding: "8px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+          {f.intensity != null && (
+            <div style={{ fontSize: 11, color: FREE_COLOR, fontWeight: 600 }}>
+              RPE {f.intensity}/10
+            </div>
+          )}
+          {f.note && (
+            <div style={{ fontSize: 11, color: C.tx3, fontStyle: "italic" }}>"{f.note}"</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export function DayDetailPanel({ date, wellness, workouts = [], energySessions = [], onClose }: DayDetailPanelProps) {
+export function DayDetailPanel({ date, wellness, workouts = [], energySessions = [], freeActivities = [], onClose }: DayDetailPanelProps) {
   const dateLabel = format(parseISO(date), "EEEE d MMMM", { locale: fr });
   const titleCase = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
   const scoreCol  = wellness ? scoreColor(wellness.score, 100) : C.tx3;
@@ -302,6 +403,7 @@ export function DayDetailPanel({ date, wellness, workouts = [], energySessions =
                 wellness ? "Forme" : null,
                 completedWorkouts.length > 0 ? `${completedWorkouts.length} séance${completedWorkouts.length > 1 ? "s" : ""}` : null,
                 energySessions.length > 0 ? `${energySessions.length} énergie` : null,
+                freeActivities.length > 0 ? `${freeActivities.length} activité${freeActivities.length > 1 ? "s" : ""} libre${freeActivities.length > 1 ? "s" : ""}` : null,
               ].filter(Boolean).join(" · ")}
             </div>
           </div>
@@ -354,13 +456,14 @@ export function DayDetailPanel({ date, wellness, workouts = [], energySessions =
         )}
 
         {/* Workouts section */}
-        {(completedWorkouts.length > 0 || energySessions.length > 0) && (
+        {(completedWorkouts.length > 0 || energySessions.length > 0 || freeActivities.length > 0) && (
           <div style={{ marginTop: wellness ? 20 : 0 }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 10 }}>
               Séances réalisées
             </div>
             {completedWorkouts.map((w) => <WorkoutCard key={w.id} w={w} />)}
             {energySessions.map((e) => <EnergyCard key={e.id} e={e} />)}
+            {freeActivities.map((f) => <FreeActivityCard key={f.id} f={f} />)}
           </div>
         )}
 

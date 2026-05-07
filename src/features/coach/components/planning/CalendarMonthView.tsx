@@ -37,32 +37,27 @@ import { QuickAddDialog } from "./QuickAddDialog";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-const ENERGY_KIND_COLOR: Record<string, string> = {
-  vo2:     "#A855F7",
-  tempo:   "#3B8DF0",
-  seuil:   "#F59E0B",
-  footing: "#10B981",
-  fartlek: "#EF4444",
-  autre:   "#6B7280",
-  custom:  "#6B7280",
-};
+const FREE_COLOR    = "#0D9488";
+const TEST_COLOR    = "#C49A6C";
 
-function energyChipColor(event: CalEvent): string {
-  return ENERGY_KIND_COLOR[event.sessionKind ?? ""] ?? "#A855F7";
+function energyChipColor(_event: CalEvent): string {
+  return C.o;
 }
 
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
-  workout:     C.ac,
-  test:        C.o,
-  competition: C.coach,
-  energy:      "#A855F7",
+  workout:       C.ac,
+  test:          TEST_COLOR,
+  competition:   C.coach,
+  energy:        C.o,
+  free_activity: FREE_COLOR,
 };
 
 const TYPE_BG: Record<CalEvent["type"], string> = {
-  workout:     C.acS,
-  test:        C.oS,
-  competition: C.coachS,
-  energy:      "#A855F720",
+  workout:       C.acS,
+  test:          TEST_COLOR + "20",
+  competition:   C.coachS,
+  energy:        C.oS,
+  free_activity: FREE_COLOR + "20",
 };
 
 const STATUS_OPACITY: Record<string, number> = {
@@ -127,7 +122,7 @@ function EventChip({
       }}
     >
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-        {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : ""}
+        {event.type === "workout" ? "🏋️ " : event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ") : ""}
         {event.title}
         {isPartialEnergy && totalCount > 0 && (
           <span style={{ opacity: 0.45, fontWeight: 500, marginLeft: 3 }}>{doneCount}/{totalCount}</span>

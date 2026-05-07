@@ -626,6 +626,7 @@ function EnergyPreviewOverlay({
   const [localBlocks, setLocalBlocks] = useState<BlockLogs>({});
   const [globalNote, setGlobalNote] = useState("");
   const [rpeSelected, setRpeSelected] = useState<number | null>(null);
+  const [actualDuration, setActualDuration] = useState<string>("");
 
   const sessionId = event.energySessionId ?? (event.raw?.energy_session_id as string | undefined);
   const assignmentId = event.id;
@@ -647,19 +648,30 @@ function EnergyPreviewOverlay({
   const isComplex = workBlocks.length > 1;
 
   useEffect(() => {
-    if (!session || workBlocks.length === 0) return;
-    const existing = (event.raw?.block_logs ?? {}) as BlockLogs;
-    const init: BlockLogs = {};
-    for (const b of workBlocks) init[b.id] = existing[b.id] ?? { done: false, note: "" };
-    setLocalBlocks(init);
+    if (!session) return;
+    if (workBlocks.length > 0) {
+      const existing = (event.raw?.block_logs ?? {}) as BlockLogs;
+      const init: BlockLogs = {};
+      for (const b of workBlocks) init[b.id] = existing[b.id] ?? { done: false, note: "" };
+      setLocalBlocks(init);
+    }
+    const plannedMin = session.total_duration_s != null ? Math.round(session.total_duration_s / 60) : null;
+    if (plannedMin != null) setActualDuration(String(plannedMin));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
 
   const allBlocksDone = workBlocks.length === 0 || workBlocks.every(b => localBlocks[b.id]?.done);
 
   function handleValidate() {
+    const durationMin = actualDuration !== "" ? parseInt(actualDuration, 10) : undefined;
     complete.mutate(
-      { id: assignmentId, athleteId, block_logs: isComplex ? localBlocks : {}, notes: globalNote || undefined },
+      {
+        id: assignmentId,
+        athleteId,
+        block_logs: isComplex ? localBlocks : {},
+        notes: globalNote || undefined,
+        actual_duration_min: durationMin && !isNaN(durationMin) ? durationMin : undefined,
+      },
       { onSuccess: () => setPhase("rpe") },
     );
   }
@@ -758,13 +770,34 @@ function EnergyPreviewOverlay({
             </>
           )}
 
+          {/* Duration input */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>
+              Durée réelle (min)
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={300}
+              value={actualDuration}
+              onChange={e => setActualDuration(e.target.value)}
+              placeholder="Durée en minutes"
+              style={{
+                width: "100%", padding: "8px 10px", borderRadius: 8,
+                border: "1px solid " + C.brdL, background: C.s2,
+                color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
           <textarea
             placeholder="Note sur la séance…"
             value={globalNote}
             onChange={e => setGlobalNote(e.target.value)}
             rows={2}
             style={{
-              width: "100%", marginTop: 16, padding: "8px 10px", borderRadius: 8,
+              width: "100%", marginTop: 12, padding: "8px 10px", borderRadius: 8,
               border: "1px solid " + C.brdL, background: C.s2,
               color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
               resize: "none", boxSizing: "border-box",

@@ -188,18 +188,32 @@ export function useCompleteEnergyAssignment() {
       id,
       block_logs,
       notes,
-    }: { id: string; athleteId: string; block_logs: BlockLogs; notes?: string }) => {
+      actual_duration_min,
+    }: { id: string; athleteId: string; block_logs: BlockLogs; notes?: string; actual_duration_min?: number | null }) => {
       const patch: Record<string, unknown> = {
         status: "completed",
         block_logs,
         updated_at: new Date().toISOString(),
       };
       if (notes != null) patch.notes = notes;
+      if (actual_duration_min != null) patch.actual_duration_min = actual_duration_min;
       const { error } = await supabase
         .from("energy_session_assignments")
         .update(patch)
         .eq("id", id);
-      if (error) throw error;
+      if (error) {
+        // Column may not exist yet — retry without actual_duration_min
+        if (error.message?.includes("actual_duration_min")) {
+          const { actual_duration_min: _drop, ...patchWithout } = patch as Record<string, unknown> & { actual_duration_min?: unknown };
+          const { error: error2 } = await supabase
+            .from("energy_session_assignments")
+            .update(patchWithout)
+            .eq("id", id);
+          if (error2) throw error2;
+        } else {
+          throw error;
+        }
+      }
     },
     onSuccess: (_data, { athleteId }) => {
       qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
@@ -208,7 +222,11 @@ export function useCompleteEnergyAssignment() {
       qc.invalidateQueries({ queryKey: QK.monthlyRetours() });
       toast.success("Séance validée !");
     },
-    onError: () => toast.error("Erreur lors de la validation"),
+    onError: (err) => {
+      console.error("[useCompleteEnergyAssignment] error:", err);
+      const msg = (err as { message?: string })?.message ?? String(err);
+      toast.error(`Validation échouée : ${msg}`);
+    },
   });
 }
 

@@ -146,6 +146,7 @@ export interface EnergySessionAssignmentRow {
   notes?: string | null;
   rpe_score?: number | null;
   block_logs?: BlockLogs | null;
+  actual_duration_min?: number | null;
   created_at: string;
   updated_at: string;
   // Jointure optionnelle

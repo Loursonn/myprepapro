@@ -32,24 +32,20 @@ interface SetRow {
 function rpeColor(v: number) { return v <= 4 ? C.g : v <= 7 ? C.o : C.r; }
 function rpeBg(v: number)    { return v <= 4 ? C.gS : v <= 7 ? C.oS : C.rS; }
 
-const ENERGY_KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
-  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
-};
+const FREE_COLOR  = "#0D9488";
+const TEST_COLOR  = "#C49A6C";
+
 const ENERGY_KIND_LABEL: Record<string, string> = {
   vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
   footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
 };
 
-function energyColor(event: CalEvent): string {
-  return ENERGY_KIND_COLOR[event.sessionKind ?? ""] ?? "#A855F7";
-}
-
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
-  workout:     C.ac,
-  test:        C.o,
-  competition: C.coach,
-  energy:      "#A855F7",
+  workout:       C.ac,
+  test:          TEST_COLOR,
+  competition:   C.coach,
+  energy:        C.o,
+  free_activity: FREE_COLOR,
 };
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -98,9 +94,10 @@ function WorkoutDetailView({
   const exoById: Record<string, string> = {};
   for (const e of allExosList) { if (e.id) exoById[e.id] = e.name ?? e.id; }
 
-  // Planned exercises for this session
+  // Planned exercises for this session (with weekly config)
   const plannedExos = (sessionId && exos ? exos[sessionId] ?? [] : []) as Array<{
     id: string; name: string; bloc?: string;
+    weeks?: Record<string, { sets?: number; repsRange?: string; kg?: number; rir?: number; method?: string }>;
   }>;
 
   const statusInfo = event.status ? STATUS_LABEL[event.status] : null;
@@ -193,48 +190,59 @@ function WorkoutDetailView({
           }
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {Object.entries(grouped).map(([exId, rows]) => (
-                <div key={exId} style={{
-                  background: C.s2, borderRadius: 10,
-                  border: "1px solid " + C.brd,
-                  overflow: "hidden",
-                }}>
-                  <div style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid " + C.brd,
-                    fontSize: 12, fontWeight: 700, color: C.tx,
+              {Object.entries(grouped).map(([exId, rows]) => {
+                const planEx = plannedExos.find((e) => e.id === exId);
+                const cfg = planEx && week ? (planEx.weeks?.[String(week)] ?? null) : null;
+                return (
+                  <div key={exId} style={{
+                    background: C.s2, borderRadius: 10,
+                    border: "1px solid " + C.brd,
+                    overflow: "hidden",
                   }}>
-                    {exoById[exId] ?? "Exercice"}
+                    <div style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid " + C.brd,
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{exoById[exId] ?? planEx?.name ?? "Exercice"}</span>
+                      {cfg && cfg.sets != null && cfg.sets > 0 && (
+                        <span style={{ fontSize: 10, color: C.tx3 }}>
+                          Plan : {cfg.sets}×{cfg.repsRange ?? "—"}
+                          {cfg.kg != null ? ` @${cfg.kg}kg` : ""}
+                          {cfg.rir != null ? ` RIR${cfg.rir}` : ""}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {rows.map((s, i) => (
+                        <div key={s.id} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          fontSize: 11, color: C.tx2,
+                        }}>
+                          <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
+                          {s.kg != null && (
+                            <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>
+                          )}
+                          {s.reps != null && (
+                            <span>× {s.reps} rép.</span>
+                          )}
+                          {s.rir != null && (
+                            <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>
+                          )}
+                          {s.method && s.method !== "normal" && (
+                            <span style={{
+                              fontSize: 9, padding: "1px 5px", borderRadius: 4,
+                              background: C.coachS, color: C.coach, fontWeight: 600,
+                            }}>
+                              {s.method}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                    {rows.map((s, i) => (
-                      <div key={s.id} style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        fontSize: 11, color: C.tx2,
-                      }}>
-                        <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
-                        {s.kg != null && (
-                          <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>
-                        )}
-                        {s.reps != null && (
-                          <span>× {s.reps} rép.</span>
-                        )}
-                        {s.rir != null && (
-                          <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>
-                        )}
-                        {s.method && s.method !== "normal" && (
-                          <span style={{
-                            fontSize: 9, padding: "1px 5px", borderRadius: 4,
-                            background: C.coachS, color: C.coach, fontWeight: 600,
-                          }}>
-                            {s.method}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           );
         })()
@@ -306,17 +314,27 @@ function WorkoutDetailView({
           );
         }
 
-        // Planned (not completed): show exercise list
+        // Planned (not completed): show exercise list with weekly targets
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 2 }}>
               Exercices prévus
             </div>
-            {plannedExos.map((ex, i) => (
-              <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd, fontSize: 12, fontWeight: 600, color: C.tx }}>
-                {ex.name ?? "Exercice"}
-              </div>
-            ))}
+            {plannedExos.map((ex, i) => {
+              const cfg = week ? (ex.weeks?.[String(week)] ?? null) : null;
+              return (
+                <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, marginBottom: cfg ? 4 : 0 }}>{ex.name ?? "Exercice"}</div>
+                  {cfg && cfg.sets != null && cfg.sets > 0 && (
+                    <div style={{ fontSize: 10, color: C.tx3 }}>
+                      {cfg.sets}×{cfg.repsRange ?? "—"}
+                      {cfg.kg != null ? ` @${cfg.kg}kg` : ""}
+                      {cfg.rir != null ? ` RIR${cfg.rir}` : ""}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       })()}
@@ -331,44 +349,47 @@ function EventCard({
   athleteId,
   coachId,
   onSelect,
-  onPreview,
 }: {
   event: CalEvent;
   athleteId: string;
   coachId: string;
   onSelect: (e: CalEvent) => void;
-  onPreview?: (e: CalEvent) => void;
 }) {
-  const isEnergy  = event.type === "energy";
-  const baseColor = isEnergy ? energyColor(event) : TYPE_COLOR[event.type];
-  const color = event.partial && isEnergy                ? "#3B8DF0"
-              : event.status === "completed" && isEnergy ? C.g
-              : baseColor;
+  const isEnergy = event.type === "energy";
+  const color = event.partial && isEnergy ? "#3B8DF0" : TYPE_COLOR[event.type] ?? C.tx3;
   const { mutate: del } = useDeleteCalendarEvent();
+
   const rawBlockLogs = isEnergy
     ? (event.raw?.block_logs as Record<string, { done: boolean }> | null | undefined) ?? null
     : null;
-  const blVals = rawBlockLogs ? Object.values(rawBlockLogs) : [];
+  const blVals     = rawBlockLogs ? Object.values(rawBlockLogs) : [];
   const doneCount  = blVals.filter((b) => b.done).length;
   const totalCount = blVals.length;
+
   const statusInfo = event.partial && isEnergy
     ? { label: `Partielle ${doneCount}/${totalCount}`, color: "#3B8DF0" }
     : event.status ? STATUS_LABEL[event.status] : null;
-  const isClickable = event.type === "workout" || (event.type === "energy" && !!onPreview);
+
+  const isClickable = event.type === "workout" || event.type === "energy" || event.type === "free_activity";
+  const isDeletable = event.type === "workout" || event.type === "energy" || event.type === "test";
 
   const typeLabel =
-    event.type === "workout"     ? "Séance"
-    : event.type === "test"      ? "Test"
-    : event.type === "energy"    ? (ENERGY_KIND_LABEL[event.sessionKind ?? ""] ?? "Énergie")
+    event.type === "workout"       ? "Séance"
+    : event.type === "test"        ? "Test"
+    : event.type === "energy"      ? (ENERGY_KIND_LABEL[event.sessionKind ?? ""] ?? "Énergie")
+    : event.type === "free_activity" ? (event.sport ?? "Activité libre")
     : "Compétition";
+
+  const emoji =
+    event.type === "workout"         ? "🏋️ "
+    : event.type === "energy"        ? "⚡ "
+    : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ")
+    : event.type === "test"          ? "🧪 "
+    : "🏆 ";
 
   return (
     <div
-      onClick={() => {
-        if (!isClickable) return;
-        if (event.type === "energy" && onPreview) { onPreview(event); return; }
-        onSelect(event);
-      }}
+      onClick={() => { if (isClickable) onSelect(event); }}
       style={{
         background: C.s2,
         borderRadius: 12,
@@ -383,13 +404,10 @@ function EventCard({
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: C.tx, marginBottom: 2 }}>
-            {event.title}
+            {emoji}{event.title}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{
-              fontSize: 9, fontWeight: 700, letterSpacing: "0.4px",
-              textTransform: "uppercase", color,
-            }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase", color }}>
               {typeLabel}
             </span>
             {statusInfo && (
@@ -403,13 +421,16 @@ function EventCard({
                 RPE {event.rpe}/10
               </span>
             )}
+            {event.type === "free_activity" && event.duration != null && (
+              <span style={{ fontSize: 9, color: C.tx3 }}>{event.duration} min</span>
+            )}
             {isClickable && (
               <span style={{ fontSize: 9, color: C.tx3, marginLeft: "auto" }}>Voir →</span>
             )}
           </div>
         </div>
 
-        {event.type !== "competition" && (
+        {isDeletable && (
           <button
             onClick={(ev) => {
               ev.stopPropagation();
@@ -514,6 +535,139 @@ function NutritionDayView({ nutrition }: { nutrition: NutritionDailyLog }) {
   );
 }
 
+// ── EnergyDetailView (inline in drawer) ──────────────────────────────────────
+
+function EnergyDetailView({ event, onOpenPreview }: { event: CalEvent; onOpenPreview: () => void }) {
+  const blockLogs = event.raw?.block_logs as Record<string, { done: boolean; note?: string }> | null | undefined;
+  const blEntries = blockLogs ? Object.entries(blockLogs) : [];
+  const doneCount  = blEntries.filter(([, b]) => b.done).length;
+  const totalCount = blEntries.length;
+
+  const statusInfo = event.partial
+    ? { label: `Partielle ${doneCount}/${totalCount}`, color: "#3B8DF0" }
+    : event.status ? STATUS_LABEL[event.status] : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Badges */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        {statusInfo && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+            background: statusInfo.color + "20", color: statusInfo.color,
+            textTransform: "uppercase", letterSpacing: "0.4px",
+          }}>
+            {statusInfo.label}
+          </span>
+        )}
+        {event.sessionKind && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+            background: C.oS, color: C.o,
+          }}>
+            {ENERGY_KIND_LABEL[event.sessionKind] ?? event.sessionKind}
+          </span>
+        )}
+        {event.rpe != null && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+            background: rpeBg(event.rpe), color: rpeColor(event.rpe),
+          }}>
+            RPE {event.rpe}/10
+          </span>
+        )}
+      </div>
+
+      {/* Block completion */}
+      {blEntries.length > 0 && (
+        <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
+          <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+            Blocs
+          </div>
+          <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+            {blEntries.map(([key, b], i) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+                <span style={{
+                  width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+                  background: b.done ? C.g : C.s2,
+                  border: "1px solid " + (b.done ? C.g : C.brd),
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 8, color: "#fff",
+                }}>
+                  {b.done ? "✓" : ""}
+                </span>
+                <span style={{ color: b.done ? C.tx : C.tx3 }}>Bloc {i + 1}</span>
+                {b.note && <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>{b.note}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Notes */}
+      {event.raw?.notes && (
+        <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, padding: "10px 12px", fontSize: 12, color: C.tx2, fontStyle: "italic" }}>
+          {String(event.raw.notes)}
+        </div>
+      )}
+
+      {/* Link to full session programme */}
+      <button
+        onClick={onOpenPreview}
+        style={{
+          padding: "10px 14px", borderRadius: 10, border: "1px solid " + C.o + "40",
+          background: C.oS, color: C.o, fontSize: 12, fontWeight: 600,
+          cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+        }}
+      >
+        Voir le programme de la séance →
+      </button>
+    </div>
+  );
+}
+
+// ── FreeActivityDetailView (inline in drawer) ─────────────────────────────────
+
+function FreeActivityDetailView({ event }: { event: CalEvent }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Sport */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 32 }}>{event.sportEmoji ?? "🏃"}</span>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.tx }}>{event.sport ?? "Activité libre"}</div>
+          <div style={{ fontSize: 11, color: FREE_COLOR, fontWeight: 600 }}>Activité libre</div>
+        </div>
+      </div>
+
+      {/* Metrics */}
+      {(event.duration != null || event.intensity != null) && (
+        <div style={{ display: "flex", gap: 10 }}>
+          {event.duration != null && (
+            <div style={{ background: C.s2, borderRadius: 10, padding: "10px 14px", flex: 1, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 9, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>Durée</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.tx }}>{event.duration} <span style={{ fontSize: 11, fontWeight: 400, color: C.tx3 }}>min</span></div>
+            </div>
+          )}
+          {event.intensity != null && (
+            <div style={{ background: C.s2, borderRadius: 10, padding: "10px 14px", flex: 1, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 9, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 3 }}>RPE</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: FREE_COLOR }}>{event.intensity}<span style={{ fontSize: 11, fontWeight: 400, color: C.tx3 }}>/10</span></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Note */}
+      {event.raw?.note && (
+        <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, padding: "10px 12px", fontSize: 12, color: C.tx2, fontStyle: "italic" }}>
+          {String(event.raw.note)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Fetches full EnergySessionRow when an energy event is selected. */
 function EnergyEventPreview({ event, athleteId, onClose }: { event: CalEvent; athleteId: string; onClose: () => void }) {
   const sessionId = event.energySessionId ?? (event.raw?.energy_session_id as string | undefined);
@@ -557,20 +711,24 @@ export function DayDetailsDrawer({
   const [editingComp,   setEditingComp]   = useState<Competition | null>(null);
   const [energyPreview, setEnergyPreview] = useState<CalEvent | null>(null);
   const { user } = useAuth();
+  // Track when user wants to open the full energy session modal from detail view
+  const [energyFullPreview, setEnergyFullPreview] = useState<CalEvent | null>(null);
 
   useEffect(() => {
     setSelectedEvent(initialSelectedEvent ?? null);
     setEnergyPreview(null);
+    setEnergyFullPreview(null);
   }, [day, initialSelectedEvent]);
 
   if (!open || !day) return null;
 
   const dateStr = format(day, "yyyy-MM-dd");
-  const dayEvents = events.filter((e) => e.date === dateStr);
+  const dayEvents    = events.filter((e) => e.date === dateStr);
   const workouts     = dayEvents.filter((e) => e.type === "workout");
   const tests        = dayEvents.filter((e) => e.type === "test");
   const competitions = dayEvents.filter((e) => e.type === "competition");
   const energyEvents = dayEvents.filter((e) => e.type === "energy");
+  const freeEvents   = dayEvents.filter((e) => e.type === "free_activity");
 
   const wKey = dateStr.replace(/-/g, "");
   const wellnessDay = (wellnessHistory?.[wKey] ?? wellnessHistory?.[dateStr]) ?? null;
@@ -579,6 +737,7 @@ export function DayDetailsDrawer({
   const handleClose = () => {
     setSelectedEvent(null);
     setEnergyPreview(null);
+    setEnergyFullPreview(null);
     onClose();
   };
 
@@ -634,7 +793,7 @@ export function DayDetailsDrawer({
                 ? format(day, "d MMMM yyyy", { locale: fr })
                 : dayEvents.length === 0
                   ? "Aucun événement"
-                  : `${dayEvents.length} événement${dayEvents.length > 1 ? "s" : ""}`}
+                  : `${workouts.length + energyEvents.length + freeEvents.length + tests.length + competitions.length} événement${dayEvents.length > 1 ? "s" : ""}`}
             </div>
           </div>
           <button
@@ -657,37 +816,9 @@ export function DayDetailsDrawer({
         }}>
           {selectedEvent ? (
             selectedEvent.type === "energy" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  {selectedEvent.status && STATUS_LABEL[selectedEvent.status] && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
-                      background: STATUS_LABEL[selectedEvent.status].color + "20",
-                      color: STATUS_LABEL[selectedEvent.status].color,
-                      textTransform: "uppercase", letterSpacing: "0.4px",
-                    }}>
-                      {STATUS_LABEL[selectedEvent.status].label}
-                    </span>
-                  )}
-                  {selectedEvent.sessionKind && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
-                      background: energyColor(selectedEvent) + "20",
-                      color: energyColor(selectedEvent),
-                    }}>
-                      {ENERGY_KIND_LABEL[selectedEvent.sessionKind] ?? selectedEvent.sessionKind}
-                    </span>
-                  )}
-                </div>
-                {selectedEvent.raw?.notes && (
-                  <div style={{ fontSize: 12, color: C.tx2, background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
-                    {String(selectedEvent.raw.notes)}
-                  </div>
-                )}
-                <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12 }}>
-                  Séance énergétique — voir le planning calendrier pour les détails
-                </div>
-              </div>
+              <EnergyDetailView event={selectedEvent} onOpenPreview={() => setEnergyFullPreview(selectedEvent)} />
+            ) : selectedEvent.type === "free_activity" ? (
+              <FreeActivityDetailView event={selectedEvent} />
             ) : (
               <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
             )
@@ -735,7 +866,7 @@ export function DayDetailsDrawer({
               {workouts.length > 0 && (
                 <section>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.ac, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-                    Séances
+                    Séances muscu
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {workouts.map((e) => (
@@ -745,27 +876,40 @@ export function DayDetailsDrawer({
                 </section>
               )}
 
-              {tests.length > 0 && (
+              {energyEvents.length > 0 && (
                 <section>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.o, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-                    Tests
+                    Séances énergétiques
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {tests.map((e) => (
+                    {energyEvents.map((e) => (
                       <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} />
                     ))}
                   </div>
                 </section>
               )}
 
-              {energyEvents.length > 0 && (
+              {freeEvents.length > 0 && (
                 <section>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#A855F7", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-                    Séances énergétiques
+                  <div style={{ fontSize: 10, fontWeight: 700, color: FREE_COLOR, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+                    Activités libres
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {energyEvents.map((e) => (
-                      <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} onPreview={setEnergyPreview} />
+                    {freeEvents.map((e) => (
+                      <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {tests.length > 0 && (
+                <section>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: TEST_COLOR, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+                    Tests
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {tests.map((e) => (
+                      <EventCard key={e.id} event={e} athleteId={athleteId} coachId={coachId} onSelect={setSelectedEvent} />
                     ))}
                   </div>
                 </section>
@@ -818,12 +962,12 @@ export function DayDetailsDrawer({
         />
       )}
 
-      {/* Energy session preview modal */}
-      {energyPreview && (
+      {/* Energy session full preview modal (from detail view → "Voir programme") */}
+      {(energyPreview || energyFullPreview) && (
         <EnergyEventPreview
-          event={energyPreview}
+          event={(energyFullPreview ?? energyPreview)!}
           athleteId={athleteId}
-          onClose={() => setEnergyPreview(null)}
+          onClose={() => { setEnergyPreview(null); setEnergyFullPreview(null); }}
         />
       )}
     </>
