@@ -123,7 +123,7 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
       .order("scheduled_date"),
 
     db.from("energy_session_assignments")
-      .select("id, scheduled_date, status, notes, rpe_score, block_logs, actual_duration_min, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m)")
+      .select("id, scheduled_date, status, notes, rpe_score, block_logs, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m)")
       .eq("athlete_id", athleteId)
       .gte("scheduled_date", start)
       .lte("scheduled_date", end),
@@ -246,9 +246,7 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
       date:          e.scheduled_date,
       completed:     e.status === "completed",
       partial,
-      duration_min:  (e as Record<string, unknown>).actual_duration_min != null
-        ? Number((e as Record<string, unknown>).actual_duration_min)
-        : es.total_duration_s != null ? Math.round(es.total_duration_s / 60) : null,
+      duration_min:  es.total_duration_s != null ? Math.round(es.total_duration_s / 60) : null,
       distance_m:    es.total_distance_m ?? null,
       session_kind:  es.session_kind     ?? null,
       note:          e.notes             ?? null,
