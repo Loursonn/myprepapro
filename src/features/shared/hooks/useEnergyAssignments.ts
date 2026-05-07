@@ -201,7 +201,19 @@ export function useCompleteEnergyAssignment() {
         .from("energy_session_assignments")
         .update(patch)
         .eq("id", id);
-      if (error) throw error;
+      if (error) {
+        // Column may not exist yet — retry without actual_duration_min
+        if (error.message?.includes("actual_duration_min")) {
+          const { actual_duration_min: _drop, ...patchWithout } = patch as Record<string, unknown> & { actual_duration_min?: unknown };
+          const { error: error2 } = await supabase
+            .from("energy_session_assignments")
+            .update(patchWithout)
+            .eq("id", id);
+          if (error2) throw error2;
+        } else {
+          throw error;
+        }
+      }
     },
     onSuccess: (_data, { athleteId }) => {
       qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
