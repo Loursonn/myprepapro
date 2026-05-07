@@ -210,7 +210,11 @@ export function useCompleteEnergyAssignment() {
       qc.invalidateQueries({ queryKey: QK.monthlyRetours() });
       toast.success("Séance validée !");
     },
-    onError: () => toast.error("Erreur lors de la validation"),
+    onError: (err) => {
+      console.error("[useCompleteEnergyAssignment] error:", err);
+      const msg = (err as { message?: string })?.message ?? String(err);
+      toast.error(`Validation échouée : ${msg}`);
+    },
   });
 }
 
