@@ -15,7 +15,7 @@ import type { Exercise, WeekConfig } from "@/features/shared/types/athlete";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type UCEventType = "workout" | "test" | "competition" | "energy";
+export type UCEventType = "workout" | "test" | "competition" | "energy" | "free_activity";
 
 export interface UnifiedCalendarEvent {
   id: string;
@@ -37,6 +37,11 @@ export interface UnifiedCalendarEvent {
   sessionKind?: string;        // vo2 | tempo | seuil | footing | fartlek | autre | custom
   energySessionId?: string;    // energy_sessions.id
   partial?: boolean;           // some blocks done but not completed
+  // Free activity-specific
+  sport?: string;
+  sportEmoji?: string;
+  duration?: number;
+  intensity?: number;
   /** Raw DB row for fields not promoted to typed fields */
   raw: Record<string, unknown>;
 }
@@ -71,8 +76,8 @@ export function useUnifiedCalendar(
     enabled: !!athleteId && !!start && !!end,
     staleTime,
     queryFn: async (): Promise<UnifiedCalendarEvent[]> => {
-      // ── 1. Parallel fetch: workouts + tests + competitions + energy ───────
-      const [wRes, tRes, cRes, eRes] = await Promise.all([
+      // ── 1. Parallel fetch: workouts + tests + competitions + energy + free ─
+      const [wRes, tRes, cRes, eRes, fRes] = await Promise.all([
         supabase
           .from("workout_logs")
           .select("id, session_id, session_name, scheduled_date, status, rpe_score")
@@ -104,12 +109,21 @@ export function useUnifiedCalendar(
           .gte("scheduled_date", start)
           .lte("scheduled_date", end)
           .order("scheduled_date"),
+
+        supabase
+          .from("app_data")
+          .select("value")
+          .eq("athlete_id", athleteId)
+          .eq("key", "asp:freesess")
+          .maybeSingle(),
       ]);
 
       const logs         = wRes.data ?? [];
       const tests        = tRes.data ?? [];
       const comps        = cRes.data ?? [];
       const energyAssign = eRes.data ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const allFree: any[] = (fRes.data as any)?.value ?? [];
 
       // ── 2. Optionally fetch exercises ──────────────────────────────────────
       const exercisesBySession: Record<string, Exercise[]> = {};
@@ -206,6 +220,22 @@ export function useUnifiedCalendar(
           energySessionId: ea.energy_session_id,
           partial:         isPartial,
           raw:             ea as Record<string, unknown>,
+        });
+      }
+
+      for (const f of allFree) {
+        if (!f.date || f.date < start || f.date > end) continue;
+        events.push({
+          id:          f.id,
+          type:        "free_activity",
+          date:        f.date,
+          title:       f.name ?? f.sport ?? "Activité libre",
+          status:      f.completed ? "completed" : "planned",
+          sport:       f.sport,
+          sportEmoji:  f.sportEmoji,
+          duration:    f.duration,
+          intensity:   f.intensity,
+          raw:         f as Record<string, unknown>,
         });
       }
 
@@ -314,7 +344,7 @@ export function useDeleteCalendarEvent() {
       date?: string;
       status?: string;
     }) => {
-      if (type === "competition") return;
+      if (type === "competition" || type === "free_activity") return;
 
       // Energy session assignment: hard delete
       if (type === "energy") {
@@ -449,6 +479,10 @@ export interface CalEvent {
   sessionKind?: string;
   energySessionId?: string;
   partial?: boolean;
+  sport?: string;
+  sportEmoji?: string;
+  duration?: number;
+  intensity?: number;
   raw: Record<string, unknown>;
 }
 
@@ -463,6 +497,10 @@ export function toCalEvent(e: UnifiedCalendarEvent): CalEvent {
     sessionKind:     e.sessionKind,
     energySessionId: e.energySessionId,
     partial:         e.partial,
+    sport:           e.sport,
+    sportEmoji:      e.sportEmoji,
+    duration:        e.duration,
+    intensity:       e.intensity,
     raw:             e.raw,
   };
 }

@@ -176,6 +176,7 @@ export default function RetoursPage() {
               return acc;
             }, new Map<string, number>())
           )}
+          freeActivities={monthData.free_activities ?? []}
         />
       )}
 

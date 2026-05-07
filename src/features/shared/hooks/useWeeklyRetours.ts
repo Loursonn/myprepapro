@@ -4,6 +4,7 @@ import { QK } from "@/lib/queryKeys";
 import type {
   WeeklyRetourData, WeekComparisonData,
   PerformedExercise, PerformedSet, PlannedExercise, WellnessDay, EnergySessionDetail,
+  FreeActivityDetail,
 } from "@/features/shared/types/retours.types";
 import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
 import { startOfWeek, endOfWeek, subWeeks, format, eachDayOfInterval, addDays } from "date-fns";
@@ -25,7 +26,7 @@ export function useWeeklyRetours(athleteId: string, weekStartDate: Date) {
         .from("app_data")
         .select("key, value")
         .eq("athlete_id", athleteId)
-        .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:sessionlogs", "asp:blockHistory"]);
+        .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:sessionlogs", "asp:blockHistory", "asp:freesess"]);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const appDataMap: Record<string, any> = Object.fromEntries(
@@ -304,6 +305,22 @@ async function fetchWeekData(
     };
   });
 
+  // ── Free activities ──────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allFree: any[] = appDataMap["asp:freesess"] ?? [];
+  const freeActivities: FreeActivityDetail[] = allFree
+    .filter((f) => f.date && f.date >= start && f.date <= end)
+    .map((f) => ({
+      id:         f.id,
+      name:       f.name ?? f.sport ?? "Activité libre",
+      date:       f.date,
+      sport:      f.sport      ?? undefined,
+      sportEmoji: f.sportEmoji ?? undefined,
+      duration:   f.duration   ?? undefined,
+      intensity:  f.intensity  ?? undefined,
+      note:       f.note       ?? undefined,
+    }));
+
   return {
     week_number:    calcWeekNum(start, currentBlockConfig.startDate),
     start_date:     start,
@@ -330,7 +347,8 @@ async function fetchWeekData(
       athlete_comment: c.athlete_comment ?? null,
       priority:        c.priority        ?? null,
     })),
-    avg_wellness:   avgWellness,
-    daily_wellness: buildDailyWellness(startDate, endDate, mergedWH),
+    avg_wellness:    avgWellness,
+    daily_wellness:  buildDailyWellness(startDate, endDate, mergedWH),
+    free_activities: freeActivities,
   };
 }

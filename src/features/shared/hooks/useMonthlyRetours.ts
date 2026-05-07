@@ -4,7 +4,7 @@ import { QK } from "@/lib/queryKeys";
 import type {
   MonthlyRetourData, DailyData, WorkoutDetail,
   PerformedExercise, PerformedSet, PlannedExercise, WellnessDay,
-  EnergySessionDetail, WorkoutExerciseComment,
+  EnergySessionDetail, WorkoutExerciseComment, FreeActivityDetail,
 } from "@/features/shared/types/retours.types";
 import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
 import { startOfMonth, endOfMonth, format, eachDayOfInterval, addDays } from "date-fns";
@@ -112,7 +112,7 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
     db.from("app_data")
       .select("key, value")
       .eq("athlete_id", athleteId)
-      .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:blockHistory"]),
+      .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:blockHistory", "asp:freesess"]),
 
     db.from("workout_logs")
       .select("id, session_id, session_name, scheduled_date, status, duration_s, notes, rpe_score")
@@ -269,15 +269,34 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
       doneByDate[w.scheduled_date] = (doneByDate[w.scheduled_date] ?? 0) + 1;
   }
 
+  // Free activities
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allFree: any[] = appDataMap["asp:freesess"] ?? [];
+  const freeActivities: FreeActivityDetail[] = allFree
+    .filter((f) => f.date && f.date >= start && f.date <= end)
+    .map((f) => ({
+      id:         f.id,
+      name:       f.name ?? f.sport ?? "Activité libre",
+      date:       f.date,
+      sport:      f.sport      ?? undefined,
+      sportEmoji: f.sportEmoji ?? undefined,
+      duration:   f.duration   ?? undefined,
+      intensity:  f.intensity  ?? undefined,
+      note:       f.note       ?? undefined,
+    }));
+  const freeByDate: Record<string, number> = {};
+  for (const f of freeActivities) freeByDate[f.date] = (freeByDate[f.date] ?? 0) + 1;
+
   const daily_data: Record<string, DailyData> = {};
   for (const day of allDays) {
     const d = format(day, "yyyy-MM-dd");
     daily_data[d] = {
-      date:               d,
-      wellness:           toWellnessDay(mergedWH[d]),
-      workouts_completed: doneByDate[d]    ?? 0,
-      has_competition:    compDates.has(d),
-      has_test:           testDates.has(d),
+      date:                d,
+      wellness:            toWellnessDay(mergedWH[d]),
+      workouts_completed:  doneByDate[d]    ?? 0,
+      has_competition:     compDates.has(d),
+      has_test:            testDates.has(d),
+      free_activity_count: freeByDate[d]    ?? 0,
     };
   }
 
@@ -327,5 +346,6 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
       athlete_comment: c.athlete_comment ?? null,
       priority:        c.priority        ?? null,
     })),
+    free_activities: freeActivities,
   };
 }
