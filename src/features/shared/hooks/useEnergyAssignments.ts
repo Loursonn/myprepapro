@@ -188,13 +188,15 @@ export function useCompleteEnergyAssignment() {
       id,
       block_logs,
       notes,
-    }: { id: string; athleteId: string; block_logs: BlockLogs; notes?: string }) => {
+      actual_duration_min,
+    }: { id: string; athleteId: string; block_logs: BlockLogs; notes?: string; actual_duration_min?: number | null }) => {
       const patch: Record<string, unknown> = {
         status: "completed",
         block_logs,
         updated_at: new Date().toISOString(),
       };
       if (notes != null) patch.notes = notes;
+      if (actual_duration_min != null) patch.actual_duration_min = actual_duration_min;
       const { error } = await supabase
         .from("energy_session_assignments")
         .update(patch)

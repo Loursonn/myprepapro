@@ -102,6 +102,12 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
     return init;
   });
   const [globalNote, setGlobalNote] = useState((a.notes ?? "") as string);
+  const [actualDuration, setActualDuration] = useState<string>(() => {
+    if ((a as Record<string, unknown>).actual_duration_min != null)
+      return String((a as Record<string, unknown>).actual_duration_min);
+    if (es?.total_duration_s != null) return String(Math.round(es.total_duration_s / 60));
+    return "";
+  });
 
   const complete = useCompleteEnergyAssignment();
   const updateAssignment = useUpdateEnergyAssignment();
@@ -111,11 +117,16 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
   }
 
   function handleValidate() {
-    const logs: BlockLogs = isComplex
-      ? localBlocks
-      : {};
+    const logs: BlockLogs = isComplex ? localBlocks : {};
+    const durationMin = actualDuration !== "" ? parseInt(actualDuration, 10) : undefined;
     complete.mutate(
-      { id: a.id, athleteId, block_logs: logs, notes: globalNote || undefined },
+      {
+        id: a.id,
+        athleteId,
+        block_logs: logs,
+        notes: globalNote || undefined,
+        actual_duration_min: durationMin && !isNaN(durationMin) ? durationMin : undefined,
+      },
       { onSuccess: () => onRpeDone(a.id) },
     );
   }
@@ -238,6 +249,27 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
               {workBlocks.length === 1 ? fmtIntervalLabel(workBlocks[0]) : "Séance continue"}
             </div>
           )}
+
+          {/* Duration input */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6 }}>
+              Durée réelle (min)
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={300}
+              value={actualDuration}
+              onChange={e => setActualDuration(e.target.value)}
+              placeholder="Durée en minutes"
+              style={{
+                width: "100%", padding: "8px 10px", borderRadius: 8,
+                border: "1px solid " + C.brdL, background: C.s2,
+                color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
 
           {/* Global note */}
           <textarea
