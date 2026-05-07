@@ -125,24 +125,39 @@ function WorkoutRow({ workout, prevWorkout }: {
         {open ? <ChevronUp size={9} color={C.tx3} /> : <ChevronDown size={9} color={C.tx3} />}
       </div>
 
-      {/* Expanded: exercise list */}
-      {open && (
-        <div style={{ borderTop: "1px solid " + C.brd, padding: "6px 7px", display: "flex", flexDirection: "column", gap: 4 }}>
-          {workout.duration_s != null && (
-            <div style={{ fontSize: 9, color: C.tx3 }}>
-              {Math.round(workout.duration_s / 60)} min
-            </div>
-          )}
-          {workout.notes && (
-            <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>{workout.notes}</div>
-          )}
-          {workout.performed_exercises.length > 0 ? (
-            workout.performed_exercises.map((ex) => {
-              const prevEx = prevWorkout?.performed_exercises.find((p) => p.exercise_id === ex.exercise_id);
+      {/* Expanded: planned + actual exercises */}
+      {open && (() => {
+        const exIds = [...new Set([
+          ...workout.planned_exercises.map((p) => p.exercise_id),
+          ...workout.performed_exercises.map((p) => p.exercise_id),
+        ])];
+        return (
+          <div style={{ borderTop: "1px solid " + C.brd, padding: "6px 7px", display: "flex", flexDirection: "column", gap: 5 }}>
+            {workout.duration_s != null && (
+              <div style={{ fontSize: 9, color: C.tx3 }}>{Math.round(workout.duration_s / 60)} min</div>
+            )}
+            {workout.notes && (
+              <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>{workout.notes}</div>
+            )}
+            {exIds.length > 0 ? exIds.map((exId) => {
+              const planned   = workout.planned_exercises.find((p) => p.exercise_id === exId);
+              const performed = workout.performed_exercises.find((p) => p.exercise_id === exId);
+              const prevEx    = prevWorkout?.performed_exercises.find((p) => p.exercise_id === exId);
+              const name      = planned?.exercise_name ?? performed?.exercise_name ?? "Exercice";
+              const comment   = workout.exercise_comments.find((c) => c.exercise_id === exId || c.exercise_name === name);
               return (
-                <div key={ex.exercise_id} style={{ fontSize: 9 }}>
-                  <div style={{ fontWeight: 700, color: C.tx, marginBottom: 2 }}>{ex.exercise_name}</div>
-                  {ex.sets.map((s) => (
+                <div key={exId} style={{ fontSize: 9 }}>
+                  <div style={{ fontWeight: 700, color: C.tx, marginBottom: 2 }}>{name}</div>
+                  {/* Planned target */}
+                  {planned && planned.sets > 0 && (
+                    <div style={{ fontSize: 8, color: C.tx3, paddingLeft: 6, marginBottom: 2 }}>
+                      ↗ {planned.sets}×{planned.reps_range ?? "—"}
+                      {planned.kg != null ? ` @${planned.kg}kg` : ""}
+                      {planned.rir != null ? ` RIR${planned.rir}` : ""}
+                    </div>
+                  )}
+                  {/* Actual sets */}
+                  {performed?.sets.map((s) => (
                     <div key={s.set_num} style={{ display: "flex", gap: 4, color: C.tx2, paddingLeft: 6 }}>
                       <span style={{ color: C.tx3, minWidth: 14 }}>S{s.set_num}</span>
                       <span style={{ fontWeight: 600 }}>
@@ -151,29 +166,29 @@ function WorkoutRow({ workout, prevWorkout }: {
                       {s.rir != null && <span style={{ color: C.tx3 }}>RIR{s.rir}</span>}
                     </div>
                   ))}
+                  {!performed && (
+                    <div style={{ fontSize: 8, color: C.tx3, paddingLeft: 6, fontStyle: "italic" }}>Non enregistré</div>
+                  )}
                   {/* S-1 comparison */}
                   {prevEx && prevEx.sets.length > 0 && (
                     <div style={{ marginTop: 2, paddingLeft: 6, color: C.tx3, fontStyle: "italic" }}>
                       S-1 : {prevEx.sets[0].kg ?? "—"}kg × {prevEx.sets[0].reps ?? "—"}
                     </div>
                   )}
-                  {/* Exercise comment */}
-                  {workout.exercise_comments.find((c) => c.exercise_id === ex.exercise_id || c.exercise_name === ex.exercise_name) && (
-                    <div style={{
-                      marginTop: 3, padding: "2px 5px", borderRadius: 4,
-                      background: C.acS, color: C.ac, fontSize: 8,
-                    }}>
-                      {workout.exercise_comments.find((c) => c.exercise_id === ex.exercise_id || c.exercise_name === ex.exercise_name)?.comment}
+                  {/* Comment */}
+                  {comment && (
+                    <div style={{ marginTop: 3, padding: "2px 5px", borderRadius: 4, background: C.acS, color: C.ac, fontSize: 8 }}>
+                      {comment.comment}
                     </div>
                   )}
                 </div>
               );
-            })
-          ) : (
-            <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Aucun résultat enregistré</span>
-          )}
-        </div>
-      )}
+            }) : (
+              <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Aucun résultat enregistré</span>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

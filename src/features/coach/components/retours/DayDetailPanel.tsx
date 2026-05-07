@@ -195,12 +195,16 @@ function fmtDuration(s: number | null): string | null {
 
 function WorkoutCard({ w }: { w: WorkoutDetail }) {
   const dur = fmtDuration(w.duration_s);
-  const hasPerformed = w.performed_exercises.length > 0;
+
+  const exIds = [...new Set([
+    ...w.planned_exercises.map((p) => p.exercise_id),
+    ...w.performed_exercises.map((p) => p.exercise_id),
+  ])];
 
   return (
     <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", marginBottom: 8 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: hasPerformed ? 10 : 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: exIds.length > 0 ? 10 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <CheckCircle2 size={13} color={w.status === "completed" ? C.g : C.tx3} />
           <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{w.session_name}</span>
@@ -215,27 +219,45 @@ function WorkoutCard({ w }: { w: WorkoutDetail }) {
         </div>
       </div>
 
-      {/* Performed exercises */}
-      {hasPerformed && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {w.performed_exercises.map((ex) => (
-            <div key={ex.exercise_id}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.tx2, marginBottom: 3 }}>{ex.exercise_name}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {ex.sets.map((s, i) => (
-                  <span key={i} style={{
-                    fontSize: 9, padding: "2px 7px", borderRadius: 5,
-                    background: C.s1, border: "1px solid " + C.brdL, color: C.tx2,
-                  }}>
-                    {s.kg != null ? `${s.kg}kg` : "—"}
-                    {s.reps != null ? ` × ${s.reps}` : ""}
-                    {s.rir != null ? ` @${s.rir}` : ""}
-                    {s.method ? ` (${s.method})` : ""}
-                  </span>
-                ))}
+      {/* Exercises: planned target + actual sets merged */}
+      {exIds.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {exIds.map((exId) => {
+            const planned   = w.planned_exercises.find((p) => p.exercise_id === exId);
+            const performed = w.performed_exercises.find((p) => p.exercise_id === exId);
+            const name      = planned?.exercise_name ?? performed?.exercise_name ?? "Exercice";
+            return (
+              <div key={exId}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.tx2, marginBottom: 3 }}>{name}</div>
+                {/* Planned target */}
+                {planned && planned.sets > 0 && (
+                  <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>
+                    Plan : {planned.sets}×{planned.reps_range ?? "—"}
+                    {planned.kg != null ? ` @${planned.kg}kg` : ""}
+                    {planned.rir != null ? ` RIR${planned.rir}` : ""}
+                  </div>
+                )}
+                {/* Actual sets */}
+                {performed ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {performed.sets.map((s, i) => (
+                      <span key={i} style={{
+                        fontSize: 9, padding: "2px 7px", borderRadius: 5,
+                        background: C.s1, border: "1px solid " + C.brdL, color: C.tx2,
+                      }}>
+                        {s.kg != null ? `${s.kg}kg` : "—"}
+                        {s.reps != null ? ` × ${s.reps}` : ""}
+                        {s.rir != null ? ` @${s.rir}` : ""}
+                        {s.method ? ` (${s.method})` : ""}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Non réalisé</span>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

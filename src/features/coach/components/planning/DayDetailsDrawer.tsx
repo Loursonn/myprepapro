@@ -94,9 +94,10 @@ function WorkoutDetailView({
   const exoById: Record<string, string> = {};
   for (const e of allExosList) { if (e.id) exoById[e.id] = e.name ?? e.id; }
 
-  // Planned exercises for this session
+  // Planned exercises for this session (with weekly config)
   const plannedExos = (sessionId && exos ? exos[sessionId] ?? [] : []) as Array<{
     id: string; name: string; bloc?: string;
+    weeks?: Record<string, { sets?: number; repsRange?: string; kg?: number; rir?: number; method?: string }>;
   }>;
 
   const statusInfo = event.status ? STATUS_LABEL[event.status] : null;
@@ -189,48 +190,59 @@ function WorkoutDetailView({
           }
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {Object.entries(grouped).map(([exId, rows]) => (
-                <div key={exId} style={{
-                  background: C.s2, borderRadius: 10,
-                  border: "1px solid " + C.brd,
-                  overflow: "hidden",
-                }}>
-                  <div style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid " + C.brd,
-                    fontSize: 12, fontWeight: 700, color: C.tx,
+              {Object.entries(grouped).map(([exId, rows]) => {
+                const planEx = plannedExos.find((e) => e.id === exId);
+                const cfg = planEx && week ? (planEx.weeks?.[String(week)] ?? null) : null;
+                return (
+                  <div key={exId} style={{
+                    background: C.s2, borderRadius: 10,
+                    border: "1px solid " + C.brd,
+                    overflow: "hidden",
                   }}>
-                    {exoById[exId] ?? "Exercice"}
+                    <div style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid " + C.brd,
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                    }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{exoById[exId] ?? planEx?.name ?? "Exercice"}</span>
+                      {cfg && cfg.sets != null && cfg.sets > 0 && (
+                        <span style={{ fontSize: 10, color: C.tx3 }}>
+                          Plan : {cfg.sets}×{cfg.repsRange ?? "—"}
+                          {cfg.kg != null ? ` @${cfg.kg}kg` : ""}
+                          {cfg.rir != null ? ` RIR${cfg.rir}` : ""}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                      {rows.map((s, i) => (
+                        <div key={s.id} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          fontSize: 11, color: C.tx2,
+                        }}>
+                          <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
+                          {s.kg != null && (
+                            <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>
+                          )}
+                          {s.reps != null && (
+                            <span>× {s.reps} rép.</span>
+                          )}
+                          {s.rir != null && (
+                            <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>
+                          )}
+                          {s.method && s.method !== "normal" && (
+                            <span style={{
+                              fontSize: 9, padding: "1px 5px", borderRadius: 4,
+                              background: C.coachS, color: C.coach, fontWeight: 600,
+                            }}>
+                              {s.method}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                    {rows.map((s, i) => (
-                      <div key={s.id} style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        fontSize: 11, color: C.tx2,
-                      }}>
-                        <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
-                        {s.kg != null && (
-                          <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>
-                        )}
-                        {s.reps != null && (
-                          <span>× {s.reps} rép.</span>
-                        )}
-                        {s.rir != null && (
-                          <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>
-                        )}
-                        {s.method && s.method !== "normal" && (
-                          <span style={{
-                            fontSize: 9, padding: "1px 5px", borderRadius: 4,
-                            background: C.coachS, color: C.coach, fontWeight: 600,
-                          }}>
-                            {s.method}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           );
         })()
@@ -302,17 +314,27 @@ function WorkoutDetailView({
           );
         }
 
-        // Planned (not completed): show exercise list
+        // Planned (not completed): show exercise list with weekly targets
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 2 }}>
               Exercices prévus
             </div>
-            {plannedExos.map((ex, i) => (
-              <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd, fontSize: 12, fontWeight: 600, color: C.tx }}>
-                {ex.name ?? "Exercice"}
-              </div>
-            ))}
+            {plannedExos.map((ex, i) => {
+              const cfg = week ? (ex.weeks?.[String(week)] ?? null) : null;
+              return (
+                <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, marginBottom: cfg ? 4 : 0 }}>{ex.name ?? "Exercice"}</div>
+                  {cfg && cfg.sets != null && cfg.sets > 0 && (
+                    <div style={{ fontSize: 10, color: C.tx3 }}>
+                      {cfg.sets}×{cfg.repsRange ?? "—"}
+                      {cfg.kg != null ? ` @${cfg.kg}kg` : ""}
+                      {cfg.rir != null ? ` RIR${cfg.rir}` : ""}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       })()}
