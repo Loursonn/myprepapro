@@ -17,7 +17,6 @@ import { useEnergySessions, useCreateEnergySession } from "@/features/shared/hoo
 import type { EnergySessionRow } from "@/types/energy";
 import { SessionPreviewModal, KIND_COLOR, KIND_LABEL } from "@/features/coach/components/energy/SessionPreviewModal";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
-import { TierConfigModal } from "@/components/coach/CoachComponents";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
 import { SessionWeekDrawer } from "@/features/coach/components/SessionWeekDrawer";
 import { WorkoutSplitModal } from "@/features/coach/components/WorkoutSplitModal";
@@ -508,7 +507,7 @@ export default function ProgrammationPage() {
     customMethods, setCustomMethods, exMeta, setExMeta, sets,
     athleteNotes, weekSchedule, setWeekSchedule,
     showNewBlock, setShowNewBlock, showBlockHistory, setShowBlockHistory,
-    showTierModal, setShowTierModal, blockHistory, setBlockHistory,
+    blockHistory, setBlockHistory,
     archiveAndNewBlock, updateSessionDay,
   } = useAthleteContext();
 
@@ -887,14 +886,6 @@ export default function ProgrammationPage() {
           onDelete={(idx) => setBlockHistory(blockHistory.filter((_, i) => i !== idx))}
         />
       )}
-      {showTierModal && (
-        <TierConfigModal
-          blockConfig={blockConfig}
-          setBlockConfig={setBlockConfig}
-          onClose={() => setShowTierModal(false)}
-        />
-      )}
-
       {/* ── Split modal séance ── */}
       {openDrawer && (
         <WorkoutSplitModal

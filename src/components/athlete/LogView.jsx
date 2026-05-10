@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { C, BT, BLOC_COLORS } from "@/lib/theme";
-import { RIR_OPTS, rL, rC, parseReps, e1rm, roundHalf, generateRows, clusterReps, fmtMR, getExTier, DEF_TIER_CONFIG, BLOC_METHODS, fuzzyExMatch, MDEF } from "@/lib/exercises";
+import { RIR_OPTS, rL, rC, parseReps, e1rm, roundHalf, generateRows, clusterReps, fmtMR, BLOC_METHODS, fuzzyExMatch, MDEF } from "@/lib/exercises";
 import { getMC, mL, getSessionBlocs } from "@/lib/muscles";
 import RIRPicker from "@/components/ui/RIRPicker";
 
@@ -99,9 +99,10 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const[selectedFree,setSelectedFree]=useState(null);const[showFreeEndModal,setShowFreeEndModal]=useState(false);const[freeEndDuration,setFreeEndDuration]=useState(0);
   const[sessStartedAt,setSessStartedAt]=useState(null);const[elapsedSecs,setElapsedSecs]=useState(0);
   const[freeStartedAt,setFreeStartedAt]=useState(null);const[freeElapsed,setFreeElapsed]=useState(0);
-  useEffect(()=>{if(step===0)setWk(currentWeek);},[currentWeek,step]);
+  useEffect(()=>{setWk(currentWeek);},[currentWeek]);
   const sid=selectedSess?.id||null;const exercises=sid?exos[sid]||[]:[];
-  const exercisesSorted=useMemo(()=>{if(!exercises.length)return exercises;const sBlocs=getSessionBlocs(selectedSess,exercises);const order=sBlocs.map(b=>b.id);return[...exercises].sort((a,b)=>{const ai=order.indexOf(a.bloc??'');const bi=order.indexOf(b.bloc??'');if(ai===bi)return 0;if(ai===-1)return 1;if(bi===-1)return-1;return ai-bi;});},[exercises,selectedSess]);
+  const currentSess=useMemo(()=>sid?(sessions.find(s=>s.id===sid)||selectedSess):selectedSess,[sid,sessions,selectedSess]);
+  const exercisesSorted=useMemo(()=>{if(!exercises.length)return exercises;const sBlocs=getSessionBlocs(currentSess,exercises);const order=sBlocs.map(b=>b.id);return[...exercises].sort((a,b)=>{const ai=order.indexOf(a.bloc??'');const bi=order.indexOf(b.bloc??'');if(ai===bi)return 0;if(ai===-1)return 1;if(bi===-1)return-1;return ai-bi;});},[exercises,currentSess]);
   const sessIsDone=(completedSessions[wk]||[]).includes(sid);
   const allSetsDone=useMemo(()=>{if(!sid||!exercises.length)return false;return exercises.every(ex=>{const s=sets[ex.id+"_"+wk];return s?.length>0&&s.every(x=>x.done||x.skipped);});},[exercises,sets,wk,sid]);
   // Restore session start from localStorage
@@ -116,7 +117,7 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
   const startFree=()=>{const at=Date.now();localStorage.setItem('mpp:free_start',JSON.stringify({id:selectedFree.id,startedAt:at}));setFreeStartedAt(at);};
   const endSess=()=>{const dur=sessStartedAt?Math.floor((Date.now()-sessStartedAt)/1000):0;setEndDuration(dur);setShowEndModal(true);};
   const endFree=()=>{const dur=freeStartedAt?Math.floor((Date.now()-freeStartedAt)/1000):0;setFreeEndDuration(dur);setShowFreeEndModal(true);};
-  const onSessValidate=(note,forme)=>{completeSession(sid,wk);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);if(onSessionCompleted)onSessionCompleted(sid);};
+  const onSessValidate=(note,forme)=>{completeSession(sid,wk,note||undefined);if(setSessionLogs)setSessionLogs(prev=>({...prev,[sid+"_"+wk]:{note,forme,duration:endDuration,date:new Date().toISOString()}}));localStorage.removeItem('mpp:sess_start');setSessStartedAt(null);setShowEndModal(false);if(onSessionCompleted)onSessionCompleted(sid,wk);};
   const onFreeValidate=(note,forme)=>{const updFn=(patch)=>{const updated={...selectedFree,...patch};setSelectedFree(updated);setFreeSessions(prev=>prev.map(f=>f.id===selectedFree.id?updated:f));};updFn({completed:true,duration:freeEndDuration,note,forme});localStorage.removeItem('mpp:free_start');setFreeStartedAt(null);setShowFreeEndModal(false);};
   const exosMap=useMemo(()=>exercises.reduce((a,e)=>({...a,[e.id]:e.name}),{}),[exercises]);
   const[addBankModal,setAddBankModal]=useState(false);
@@ -260,17 +261,13 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
         const wd=ex.weeks[wk];const sessB=sessBlocs?.find(b=>b.id===ex.bloc)||null;const bt=BT[ex.bloc]||(sessB?{c:sessB.color,l:sessB.label}:{c:C.tx3,l:ex.bloc});
         const isOpen=openEx===ex.id;const sk=ex.id+"_"+wk;
         const rows=sets[sk]||[];const done=rows.filter(r=>r.done||r.skipped).length;
+        const prevData=(()=>{for(let w=wk-1;w>=1;w--){const s=(sets[ex.id+"_"+w]||[]).filter(r=>r.done);if(s.length>0)return{sets:s,week:w};}return null;})();
         const total=rows.length||wd?.sets||0;const allDone=total>0&&done===total;
         const method=wd?.method;const mp=wd?.methodParams;const mInfo=allMethods[method];
         const eType=ex.exType||(ex.isFlexibility?"mobilite":"muscu");const isFlex=eType!=="muscu"&&eType!=="halterophilie";
-        // Surcharge basée sur le réel S-1 plutôt que la planif initiale
-        const prevDoneRows=(!wd?.pdc&&!isFlex&&wk>1)?(sets[ex.id+"_"+(wk-1)]||[]).filter(r=>r.done&&(r.kg||0)>0):[];
-        const prevMedianKg=prevDoneRows.length?prevDoneRows.map(r=>r.kg).sort((a,b)=>a-b)[Math.floor(prevDoneRows.length/2)]:null;
-        const exTierCfg=(blockConfig?.tierConfig||DEF_TIER_CONFIG)[getExTier(ex.name,ex)]||(blockConfig?.tierConfig||DEF_TIER_CONFIG)[3];
-        const exKgStep=exTierCfg?.kgStep??2.5;
-        const effectiveKg=prevMedianKg!==null?roundHalf(prevMedianKg+exKgStep):(wd?.kg??null);
-        const effectivePlanned=wd&&prevMedianKg!==null&&!wd.pdc?{...wd,kg:effectiveKg}:wd;
-        const kgFromActual=!!(wd&&!wd.pdc&&!isFlex&&prevMedianKg!==null&&effectiveKg!==wd?.kg);
+        const effectivePlanned=wd;
+        const effectiveKg=wd?.kg;
+        const kgFromActual=false;
         const bankEx=bankExos.find(b=>(ex.exercise_id&&b.id===ex.exercise_id)||fuzzyExMatch(b.name,ex.name));
         const hasVideo=!!(bankEx?.youtube_id||bankEx?.image_url);
         return(
@@ -285,13 +282,13 @@ function LogView({exos,sets,updSets,completedSessions,completeSession,uncomplete
                   <span style={{fontSize:11,color:C.tx3}}>{isOpen?"^":"v"}</span>
                 </div>
               </div>
-              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm((effectivePlanned||wd)?.kg||0,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}{kgFromActual&&<div style={{marginBottom:10,padding:"6px 10px",borderRadius:8,background:C.g+"10",border:"1px solid "+C.g+"30",fontSize:10,color:C.g,display:"flex",alignItems:"center",gap:6}}><span>Basé sur S{wk-1} réel :</span><span style={{fontWeight:700}}>{prevMedianKg}kg → {effectiveKg}kg (+{exKgStep}kg)</span></div>}<SmartSetEditor planned={effectivePlanned||wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly} isUnilateral={!!(bankEx?.is_unilateral||ex.is_unilateral)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
+              {isOpen&&(<div style={{padding:"0 14px 14px",borderTop:"1px solid "+C.brd}}>{wd?(<>{!isFlex&&<div style={{display:"grid",gridTemplateColumns:wd.pdc?"1fr":"1fr 1fr",gap:6,paddingTop:12,marginBottom:14}}>{!wd.pdc&&<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>1RM estime</div><div style={{fontSize:18,fontWeight:800,color:C.ac}}>{e1rm((effectivePlanned||wd)?.kg||0,parseReps(wd.repsRange)||1)} kg</div></div>}<div style={{background:C.s2,borderRadius:8,padding:"8px 10px",textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:2}}>RIR cible</div><div style={{fontSize:18,fontWeight:800,color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</div></div></div>}{kgFromActual&&<div style={{marginBottom:10,padding:"6px 10px",borderRadius:8,background:C.g+"10",border:"1px solid "+C.g+"30",fontSize:10,color:C.g,display:"flex",alignItems:"center",gap:6}}><span>Basé sur S{wk-1} réel :</span><span style={{fontWeight:700}}>{prevMedianKg}kg → {effectiveKg}kg (+{exKgStep}kg)</span></div>}{prevData&&<div style={{marginBottom:12,padding:"10px 12px",borderRadius:8,background:C.s2,border:"1px solid "+C.brd}}><div style={{fontSize:9,fontWeight:700,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}}>↩ Dernière fois · Sem. {prevData.week}</div><div style={{display:"flex",flexDirection:"column",gap:3}}>{prevData.sets.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12}}><span style={{fontSize:10,color:C.tx3,minWidth:20}}>S{i+1}</span><span style={{fontWeight:700,color:C.tx}}>{s.kg!=null?s.kg+" kg":"—"}</span><span style={{color:C.tx3}}>×</span><span style={{fontWeight:700,color:C.tx}}>{s.reps!=null?s.reps:"—"}</span>{s.rir!=null&&<span style={{fontSize:10,color:C.tx3}}>· RIR {s.rir}</span>}</div>))}</div></div>}<SmartSetEditor planned={effectivePlanned||wd} storeKey={sk} sessionSets={sets} updateSets={updSets} athleteNotes={athleteNotes} setAthleteNotes={setAthleteNotes} method={isFlex?null:method} methodParams={isFlex?null:mp} allMethods={allMethods} exosMap={exosMap} viewOnly={viewOnly||(!sessStartedAt&&!sessIsDone)} onTimerStart={onTimerStart} postSession={sessIsDone&&!viewOnly} isUnilateral={!!(bankEx?.is_unilateral||ex.is_unilateral)}/></>):<div style={{padding:"14px 0",fontSize:12,color:C.tx3,textAlign:"center"}}>Pas de prescription S{wk}</div>}</div>)}
             </div>
           </div>
         );
       };
       // ── Rendu des groupes ─────────────────────────────────────────────────
-      const sessBlocs=getSessionBlocs(selectedSess,exercises);
+      const sessBlocs=getSessionBlocs(currentSess,exercises);
       return rGroups.map((item)=>{
         const ex=item.ex;const dynBloc=sessBlocs.find(b=>b.id===ex.bloc)||null;
         const bt=BT[ex.bloc]||(dynBloc?{c:dynBloc.color,l:dynBloc.label}:{c:C.tx3,l:ex.bloc});

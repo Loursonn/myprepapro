@@ -4,10 +4,12 @@ import {
   eachDayOfInterval, isSameMonth, isToday, format,
 } from "date-fns";
 import { fr } from "date-fns/locale";
-import { CheckCircle2, Trophy, FlaskConical, Zap } from "lucide-react";
+import { CheckCircle2, Trophy, FlaskConical, Zap, Footprints } from "lucide-react";
 import { C } from "@/lib/theme";
 import { DayDetailPanel } from "./DayDetailPanel";
-import type { DailyData, WellnessDay, WorkoutDetail, EnergySessionDetail } from "@/features/shared/types/retours.types";
+import type { DailyData, WellnessDay, WorkoutDetail, EnergySessionDetail, FreeActivityDetail } from "@/features/shared/types/retours.types";
+
+const FREE_COLOR = "#0D9488";
 
 interface MonthCalendarViewProps {
   month: Date;
@@ -15,6 +17,7 @@ interface MonthCalendarViewProps {
   energyByDate?: Record<string, number>; // count of energy sessions per date
   workouts?: WorkoutDetail[];
   energySessions?: EnergySessionDetail[];
+  freeActivities?: FreeActivityDetail[];
 }
 
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -25,7 +28,7 @@ function wellnessColor(score: number): string {
   return C.r;
 }
 
-export function MonthCalendarView({ month, dailyData, energyByDate = {}, workouts = [], energySessions = [] }: MonthCalendarViewProps) {
+export function MonthCalendarView({ month, dailyData, energyByDate = {}, workouts = [], energySessions = [], freeActivities = [] }: MonthCalendarViewProps) {
   const [panelDate, setPanelDate]         = useState<string | null>(null);
   const [panelWellness, setPanelWellness] = useState<WellnessDay | null>(null);
 
@@ -35,13 +38,21 @@ export function MonthCalendarView({ month, dailyData, energyByDate = {}, workout
   const gridEnd    = endOfWeek(monthEnd,     { weekStartsOn: 1 });
   const allDays    = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
-  // Index workouts and energy sessions by date for fast lookup
+  // Index workouts, energy sessions, and free activities by date
   const workoutsByDate = workouts.reduce<Record<string, WorkoutDetail[]>>((acc, w) => {
     (acc[w.scheduled_date] ??= []).push(w);
     return acc;
   }, {});
   const energyByDateFull = energySessions.reduce<Record<string, EnergySessionDetail[]>>((acc, e) => {
     (acc[e.date] ??= []).push(e);
+    return acc;
+  }, {});
+  const freeCountByDate = freeActivities.reduce<Record<string, number>>((acc, f) => {
+    acc[f.date] = (acc[f.date] ?? 0) + 1;
+    return acc;
+  }, {});
+  const freeByDate = freeActivities.reduce<Record<string, FreeActivityDetail[]>>((acc, f) => {
+    (acc[f.date] ??= []).push(f);
     return acc;
   }, {});
 
@@ -71,11 +82,12 @@ export function MonthCalendarView({ month, dailyData, energyByDate = {}, workout
             const dateStr  = format(day, "yyyy-MM-dd");
             const inMonth  = isSameMonth(day, month);
             const today    = isToday(day);
-            const data     = dailyData[dateStr];
-            const wellness = data?.wellness ?? null;
-            const dayWorkouts = workoutsByDate[dateStr] ?? [];
-            const dayEnergy   = energyByDateFull[dateStr] ?? [];
-            const clickable   = !!(wellness || dayWorkouts.some(w => w.status === "completed") || dayEnergy.length > 0);
+            const data          = dailyData[dateStr];
+            const wellness      = data?.wellness ?? null;
+            const dayWorkouts   = workoutsByDate[dateStr] ?? [];
+            const dayEnergy     = energyByDateFull[dateStr] ?? [];
+            const dayFreeCount  = freeCountByDate[dateStr] ?? data?.free_activity_count ?? 0;
+            const clickable     = !!(wellness || dayWorkouts.some(w => w.status === "completed") || dayEnergy.length > 0);
 
             return (
               <div
@@ -133,6 +145,14 @@ export function MonthCalendarView({ month, dailyData, energyByDate = {}, workout
                   </div>
                 )}
 
+                {/* Free activities */}
+                {dayFreeCount > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <Footprints size={9} color={FREE_COLOR} />
+                    <span style={{ fontSize: 9, color: FREE_COLOR }}>{dayFreeCount}</span>
+                  </div>
+                )}
+
                 {/* Competition / Test icons */}
                 <div style={{ display: "flex", gap: 4, marginTop: "auto" }}>
                   {data?.has_competition && <Trophy size={10} color={C.y} />}
@@ -164,6 +184,10 @@ export function MonthCalendarView({ month, dailyData, energyByDate = {}, workout
             <span style={{ fontSize: 9, color: C.tx3 }}>Énergie</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <Footprints size={9} color={FREE_COLOR} />
+            <span style={{ fontSize: 9, color: C.tx3 }}>Activité libre</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Trophy size={9} color={C.y} />
             <span style={{ fontSize: 9, color: C.tx3 }}>Compétition</span>
           </div>
@@ -181,6 +205,7 @@ export function MonthCalendarView({ month, dailyData, energyByDate = {}, workout
           wellness={panelWellness}
           workouts={workoutsByDate[panelDate] ?? []}
           energySessions={energyByDateFull[panelDate] ?? []}
+          freeActivities={freeByDate[panelDate] ?? []}
           onClose={() => { setPanelDate(null); setPanelWellness(null); }}
         />
       )}

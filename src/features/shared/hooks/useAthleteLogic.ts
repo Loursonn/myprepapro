@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { e1rm, roundHalf, parseReps, DEF_TIER_CONFIG, getExTier } from "@/lib/exercises";
 import { todayKey } from "@/lib/date";
 import { checkMilestone } from "@/lib/date";
 import { SKEYS } from "@/lib/storage";
@@ -45,7 +44,6 @@ interface LogicDeps {
   setBodyWeight: (v: BodyWeight) => void;
   setInjuries: (v: Injury[]) => void;
   setVisibilitySettings: (v: VisibilitySettings) => Promise<void>;
-  setAutoProgNotif: (v: string | null) => void;
   setMilestoneNotif: (v: number | null) => void;
   setWeekJustCompleted: (v: number | null) => void;
   setShowBilan: (v: boolean) => void;
@@ -62,7 +60,7 @@ export function useAthleteLogic(d: LogicDeps) {
     setExos, setSets, setSessions, setBlockConfig, setGoals, setCompletedSessions,
     setAthleteNotes, setBlockHistory, setWellness, setWellnessHistory,
     setWeightLog, setWeightMilestones, setBodyWeight, setInjuries,
-    setAutoProgNotif, setMilestoneNotif, setWeekJustCompleted, setShowBilan, setAW, save,
+    setMilestoneNotif, setWeekJustCompleted, setShowBilan, setAW, save,
   } = d;
 
   // ── Auto progress computation (pure) ──────────────────────────────────────
@@ -251,6 +249,10 @@ export function useAthleteLogic(d: LogicDeps) {
 
   const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned") => {
     if (!athleteId || !blockConfig?.startDate) return;
+  const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned", note?: string) => {
+    if (!athleteId) return;
+    const scheduledDate = sessionScheduledDate(sessId, week);
+    if (!scheduledDate) return;
     const sess = sessions.find(s => s.id === sessId);
 
     // Compute the Monday–Sunday of the target week (block-relative)
@@ -284,7 +286,7 @@ export function useAthleteLogic(d: LogicDeps) {
       if (existing) {
         await supabase
           .from("workout_logs")
-          .update({ status })
+          .update(note != null ? { status, notes: note } : { status })
           .eq("id", existing.id);
       } else if (status === "completed") {
         await supabase
@@ -295,25 +297,25 @@ export function useAthleteLogic(d: LogicDeps) {
             session_name:   sess?.name ?? "Séance",
             scheduled_date: scheduledDate,
             status:         "completed",
+            ...(note != null ? { notes: note } : {}),
           });
       }
       qc.invalidateQueries({ queryKey: ["cal", athleteId] });
     })();
   }, [sessionScheduledDate, sessions, athleteId, blockConfig?.startDate, qc]);
 
-  const completeSession = useCallback((sessId: string, week: number) => {
+  const completeSession = useCallback((sessId: string, week: number, note?: string) => {
     const prev = completedSessions[week] || [];
     if (prev.includes(sessId)) return;
     const newW = [...prev, sessId];
     const newC = { ...completedSessions, [week]: newW };
     setCompletedSessions(newC);
-    autoProgressOnComplete(sessId, week);
     if (newW.length >= (weeklyTarget[week] || goals.sessionsPerWeek)) {
       setWeekJustCompleted(week);
       setTimeout(() => { setWeekJustCompleted(null); if (week >= tw) setShowBilan(true); else setAW(week + 1); }, 2800);
     }
-    syncWorkoutLogStatus(sessId, week, "completed");
-  }, [completedSessions, weeklyTarget, goals.sessionsPerWeek, tw, setCompletedSessions, autoProgressOnComplete, setWeekJustCompleted, setShowBilan, setAW, syncWorkoutLogStatus]);
+    syncWorkoutLogStatus(sessId, week, "completed", note);
+  }, [completedSessions, weeklyTarget, goals.sessionsPerWeek, tw, setCompletedSessions, setWeekJustCompleted, setShowBilan, setAW, syncWorkoutLogStatus]);
 
   const uncompleteSession = useCallback((sessId: string, week: number) => {
     setCompletedSessions({ ...completedSessions, [week]: (completedSessions[week] || []).filter(s => s !== sessId) });
@@ -408,7 +410,7 @@ export function useAthleteLogic(d: LogicDeps) {
   const updSets = useCallback((k: string, ns: unknown[]) => setSets({ ...sets, [k]: ns as SetsMap[string] }), [sets, setSets]);
 
   return {
-    computeAutoProgress, autoProgressOnComplete, completeSession, uncompleteSession,
+    completeSession, uncompleteSession,
     archiveAndNewBlock, applyAIEdit, saveWellness, updateSessionDay,
     updateSessionWeekDay, addInjury, updateInjury, deleteInjury, toggleHabitLog, updSets,
   };

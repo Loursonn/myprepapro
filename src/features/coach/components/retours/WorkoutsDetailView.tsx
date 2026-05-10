@@ -42,7 +42,10 @@ export function WorkoutsDetailView({ workouts, energySessions, onClose }: Workou
   const completionRate = workouts.length > 0
     ? Math.round(completed.length / workouts.length * 100)
     : null;
-  const avgRpe     = avgNum(completed.map((w) => w.rpe_score));
+  const avgRpe     = avgNum([
+    ...completed.map((w) => w.rpe_score),
+    ...energySessions.filter((e) => e.completed).map((e) => e.rpe_score),
+  ]);
   const avgDurMin  = avgNum(completed.map((w) => w.duration_s != null ? Math.round(w.duration_s / 60) : null));
   const energyDone = energySessions.filter((e) => e.completed).length;
 

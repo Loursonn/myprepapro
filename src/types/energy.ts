@@ -132,6 +132,9 @@ export interface EnergySessionRow {
   updated_at: string;
 }
 
+export type BlockLogEntry = { done: boolean; note?: string };
+export type BlockLogs = Record<string, BlockLogEntry>;
+
 export interface EnergySessionAssignmentRow {
   id: string;
   athlete_id: string;
@@ -141,6 +144,9 @@ export interface EnergySessionAssignmentRow {
   status: AssignmentStatus;
   microcycle_id?: string | null;
   notes?: string | null;
+  rpe_score?: number | null;
+  block_logs?: BlockLogs | null;
+  actual_duration_min?: number | null;
   created_at: string;
   updated_at: string;
   // Jointure optionnelle

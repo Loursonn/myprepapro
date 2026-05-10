@@ -18,7 +18,7 @@ export function useMicroStats(
     enabled: !!athleteId && !!startDate,
     staleTime: 300_000,
     queryFn: async () => {
-      const [logsRes, wellnessRes] = await Promise.all([
+      const [logsRes, wellnessRes, energyRes] = await Promise.all([
         supabase
           .from("workout_logs")
           .select("status, workout_rpe(rpe_score)")
@@ -31,19 +31,30 @@ export function useMicroStats(
           .eq("athlete_id", athleteId)
           .gte("date", startDate)
           .lte("date", endDate),
+        supabase
+          .from("energy_session_assignments")
+          .select("rpe_score")
+          .eq("athlete_id", athleteId)
+          .eq("status", "completed")
+          .gte("scheduled_date", startDate)
+          .lte("scheduled_date", endDate),
       ]);
 
       const logs = logsRes.data ?? [];
       const completed = logs.filter((l) => l.status === "completed").length;
       const planned   = logs.length;
 
-      const rpeValues = logs.flatMap((l) => {
+      const muscuRpes = logs.flatMap((l) => {
         if (!Array.isArray(l.workout_rpe) || l.workout_rpe.length === 0) return [];
         const r = (l.workout_rpe[0] as { rpe_score: number }).rpe_score;
         return r != null ? [r] : [];
       });
-      const avg_rpe = rpeValues.length > 0
-        ? rpeValues.reduce((s, v) => s + v, 0) / rpeValues.length
+      const energyRpes = (energyRes.data ?? [])
+        .map((e) => (e as { rpe_score: number | null }).rpe_score)
+        .filter((r): r is number => r != null);
+      const allRpes = [...muscuRpes, ...energyRpes];
+      const avg_rpe = allRpes.length > 0
+        ? allRpes.reduce((s, v) => s + v, 0) / allRpes.length
         : null;
 
       const wellness = wellnessRes.data ?? [];

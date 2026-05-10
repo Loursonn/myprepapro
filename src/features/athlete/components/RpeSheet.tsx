@@ -29,13 +29,14 @@ function rpeBg(v: number) {
 
 interface RpeSheetProps {
   sessionId: string;
+  scheduledDate?: string;
   onClose: () => void;
 }
 
-export function RpeSheet({ sessionId, onClose }: RpeSheetProps) {
+export function RpeSheet({ sessionId, scheduledDate, onClose }: RpeSheetProps) {
   const [selected, setSelected] = useState<number | null>(null);
   const { athleteId } = useAthleteContext();
-  const { mutate, isPending } = useUpsertWorkoutRpe(athleteId, sessionId);
+  const { mutate, isPending } = useUpsertWorkoutRpe(athleteId, sessionId, scheduledDate);
 
   function handleSubmit() {
     if (selected == null) { onClose(); return; }

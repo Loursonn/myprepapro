@@ -319,7 +319,7 @@ export function TimelineRow({
           const dur = differenceInDays(parseISO(item.endDate), parseISO(item.startDate));
           return (
             <TLItem
-              key={item.id}
+              key={`${item.id}-${item.startDate}`}
               id={item.id}
               label={item.label}
               isDeload={item.isDeload}

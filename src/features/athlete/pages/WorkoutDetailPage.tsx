@@ -288,7 +288,7 @@ export default function WorkoutDetailPage() {
   const navigate = useNavigate();
   const { athleteId } = useAthleteContext();
 
-  const { session, exercises, isCompleted } = useWorkoutDetail(id ?? "");
+  const { session, exercises, isCompleted, currentWeek } = useWorkoutDetail(id ?? "");
   const { mutate: updateSet } = useUpdateSet();
   const { mutate: completeWorkout } = useCompleteWorkout();
   const [showRpe, setShowRpe] = useState(false);
@@ -381,7 +381,7 @@ export default function WorkoutDetailPage() {
             Aucun exercice dans cette séance
           </div>
         ) : (
-          exercises.map(({ exercise, sets }) => {
+          exercises.map(({ exercise, sets, prevSets, prevWeekNum }) => {
             const exSets = sets.length > 0
               ? sets
               : Array.from({ length: exercise.weeks?.[1]?.sets ?? 3 }, (): SetRow => ({}));
@@ -404,6 +404,39 @@ export default function WorkoutDetailPage() {
                 </div>
 
                 {/* Prescribed sets */}
+                {/* Previous session */}
+                {prevWeekNum !== null && (
+                  <div style={{
+                    padding: "8px 14px",
+                    borderBottom: "1px solid " + C.brd,
+                    background: C.s2,
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      ↩ Sem. {prevWeekNum}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      {prevSets.map((s, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.tx2 }}>
+                          <span style={{ fontSize: 10, color: C.tx3, minWidth: 18 }}>S{i + 1}</span>
+                          <span style={{ fontWeight: 600, color: C.tx }}>
+                            {s.kg != null ? `${s.kg} kg` : "—"}
+                          </span>
+                          <span style={{ color: C.tx3 }}>×</span>
+                          <span style={{ fontWeight: 600, color: C.tx }}>
+                            {s.reps != null ? `${s.reps}` : "—"}
+                          </span>
+                          {s.rir != null && (
+                            <span style={{ fontSize: 10, color: C.tx3, marginLeft: 2 }}>
+                              · RIR {s.rir}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sets */}
                 <div style={{ padding: "0 14px" }}>
                   {exSets.map((s, i) => (
                     <SetEditor

@@ -37,32 +37,27 @@ import { QuickAddDialog } from "./QuickAddDialog";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-const ENERGY_KIND_COLOR: Record<string, string> = {
-  vo2:     "#A855F7",
-  tempo:   "#3B8DF0",
-  seuil:   "#F59E0B",
-  footing: "#10B981",
-  fartlek: "#EF4444",
-  autre:   "#6B7280",
-  custom:  "#6B7280",
-};
+const FREE_COLOR    = "#0D9488";
+const TEST_COLOR    = "#C49A6C";
 
-function energyChipColor(event: CalEvent): string {
-  return ENERGY_KIND_COLOR[event.sessionKind ?? ""] ?? "#A855F7";
+function energyChipColor(_event: CalEvent): string {
+  return C.o;
 }
 
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
-  workout:     C.ac,
-  test:        C.o,
-  competition: C.coach,
-  energy:      "#A855F7",
+  workout:       C.ac,
+  test:          TEST_COLOR,
+  competition:   C.coach,
+  energy:        C.o,
+  free_activity: FREE_COLOR,
 };
 
 const TYPE_BG: Record<CalEvent["type"], string> = {
-  workout:     C.acS,
-  test:        C.oS,
-  competition: C.coachS,
-  energy:      "#A855F720",
+  workout:       C.acS,
+  test:          TEST_COLOR + "20",
+  competition:   C.coachS,
+  energy:        C.oS,
+  free_activity: FREE_COLOR + "20",
 };
 
 const STATUS_OPACITY: Record<string, number> = {
@@ -89,13 +84,23 @@ function EventChip({
   const baseColor = event.type === "energy" ? energyChipColor(event) : TYPE_COLOR[event.type];
   const baseBg    = event.type === "energy" ? energyChipColor(event) + "20" : TYPE_BG[event.type];
 
-  // Status overrides base type color for completed/missed
-  const color = st === "completed" ? C.g
-              : st === "missed"    ? C.r
+  // Status overrides base type color — partial takes priority over completed
+  const isPartialEnergy = event.type === "energy" && event.partial;
+  const color = isPartialEnergy     ? "#3B8DF0"
+              : st === "completed"  ? C.g
+              : st === "missed"     ? C.r
               : baseColor;
-  const bg    = st === "completed" ? C.gS
-              : st === "missed"    ? C.rS
+  const bg    = isPartialEnergy     ? "#3B8DF020"
+              : st === "completed"  ? C.gS
+              : st === "missed"     ? C.rS
               : baseBg;
+
+  const blockLogs = isPartialEnergy
+    ? (event.raw?.block_logs as Record<string, { done: boolean }> | null | undefined)
+    : null;
+  const blVals     = blockLogs ? Object.values(blockLogs) : [];
+  const doneCount  = blVals.filter(b => b.done).length;
+  const totalCount = blVals.length;
 
   return (
     <div
@@ -107,21 +112,27 @@ function EventChip({
         fontSize: compact ? 9 : 10,
         fontWeight: isProjected ? 400 : 600,
         color: color,
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
         cursor: "pointer",
         maxWidth: "100%",
         fontStyle: isProjected && st !== "completed" && st !== "missed" ? "italic" : "normal",
+        display: "flex",
+        alignItems: "center",
+        gap: 2,
+        minWidth: 0,
       }}
     >
-      {event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : ""}
-      {event.title}
-      {isProjected && st !== "completed" && st !== "missed" && (
-        <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
-      )}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+        {event.type === "workout" ? "🏋️ " : event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ") : ""}
+        {event.title}
+        {isPartialEnergy && totalCount > 0 && (
+          <span style={{ opacity: 0.45, fontWeight: 500, marginLeft: 3 }}>{doneCount}/{totalCount}</span>
+        )}
+        {isProjected && st !== "completed" && st !== "missed" && (
+          <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
+        )}
+      </span>
       {event.rpe != null && (
-        <span style={{ opacity: 0.85, marginLeft: 4, fontWeight: 700 }}>{event.rpe}/10</span>
+        <span style={{ flexShrink: 0, opacity: 0.85, fontWeight: 700, marginLeft: 2 }}>RPE {event.rpe}</span>
       )}
     </div>
   );
@@ -589,6 +600,8 @@ export function CalendarMonthView({
     const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
     return realEvents.map(e => {
       if (e.type !== "workout" || !e.raw?.session_id) return e;
+      // Preserve explicit skipped status from DB — never override to "missed"
+      if (e.status === "skipped") return e;
       const sessId = e.raw.session_id as string;
       const weekNum = Math.floor((parseISO(e.date).getTime() - blockStart.getTime()) / MS_WEEK) + 1;
       if (weekNum < 1) return e;

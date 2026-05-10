@@ -62,14 +62,39 @@ export default function RetoursPage() {
     ? Math.round((kpiData.workouts_completed / kpiData.workouts_total) * 100)
     : weekCurrent && weekTotal > 0
       ? Math.round(weekCompleted / weekTotal * 100)
+  const weekDone  = weekCurrent ? weekCurrent.workouts.filter(w => w.status === "completed").length + weekCurrent.energy_sessions.filter(e => e.completed || e.partial).length : 0;
+  const weekTotal = weekCurrent ? weekCurrent.workouts.length + weekCurrent.energy_sessions.length : 0;
+
+  const completionRate = kpiData && kpiData.workouts_total > 0
+    ? Math.round((kpiData.workouts_completed / kpiData.workouts_total) * 100)
+    : weekCurrent
+      ? weekTotal > 0
+        ? Math.round(weekDone / weekTotal * 100)
+        : null
       : null;
 
   const avgWellness = kpiData?.avg_wellness ?? weekCurrent?.avg_wellness ?? null;
+
+  function calcAvgRpe(workouts: { rpe_score: number | null }[], energySessions: { completed: boolean; rpe_score: number | null }[]): string | undefined {
+    const vals = [
+      ...workouts.filter(w => (w as { status?: string }).status === "completed").map(w => w.rpe_score),
+      ...energySessions.filter(e => e.completed).map(e => e.rpe_score),
+    ].filter((v): v is number => v != null);
+    if (!vals.length) return undefined;
+    return `RPE ${(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)}/10`;
+  }
+
+  const avgRpeSubtitle = kpiData
+    ? calcAvgRpe(kpiData.workouts, kpiData.energy_sessions)
+    : weekCurrent
+      ? calcAvgRpe(weekCurrent.workouts, weekCurrent.energy_sessions)
+      : undefined;
 
   const workoutsVal = kpiData
     ? `${kpiData.workouts_completed}/${kpiData.workouts_total}`
     : weekCurrent
       ? `${weekCompleted}/${weekTotal}`
+      ? `${weekDone}/${weekTotal}`
       : null;
 
   const testsVal = kpiData?.tests_completed
@@ -137,7 +162,7 @@ export default function RetoursPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 160px)", justifyContent: "center", gap: 10, marginBottom: 16 }}>
         {[
           { icon: "❤️",  title: "Wellness moyen", value: avgWellness, subtitle: "/100",                                                    onClick: () => setDetailView("wellness")     },
-          { icon: "🏋️", title: "Séances",         value: workoutsVal, subtitle: completionRate != null ? `${completionRate}%` : undefined, onClick: () => setDetailView("workouts")     },
+          { icon: "🏋️", title: "Séances",         value: workoutsVal, subtitle: completionRate != null ? `${completionRate}%` : undefined, subtitle2: avgRpeSubtitle, onClick: () => setDetailView("workouts") },
           { icon: "🧪",  title: "Tests",           value: testsVal,    subtitle: undefined,                                                onClick: () => setDetailView("tests")        },
           { icon: "🏆",  title: "Compétitions",    value: compsVal,    subtitle: undefined,                                                onClick: () => setDetailView("competitions") },
         ].map((kpi) => (
@@ -165,6 +190,7 @@ export default function RetoursPage() {
               return acc;
             }, new Map<string, number>())
           )}
+          freeActivities={monthData.free_activities ?? []}
         />
       )}
 

@@ -51,6 +51,12 @@ export function WeekView({ weekData, prevWeekData }: WeekViewProps) {
       .map(e => e.id),
   );
 
+  const freeByDate: Record<string, typeof weekData.free_activities> = {};
+  for (const f of (weekData.free_activities ?? [])) {
+    if (!freeByDate[f.date]) freeByDate[f.date] = [];
+    freeByDate[f.date].push(f);
+  }
+
   const prevWorkouts = prevWeekData?.workouts ?? [];
 
   return (
@@ -75,6 +81,7 @@ export function WeekView({ weekData, prevWeekData }: WeekViewProps) {
               previousWorkouts={prevWorkouts}
               rescheduledWorkoutIds={rescheduledWorkoutIds}
               rescheduledEnergyIds={rescheduledEnergyIds}
+              freeActivities={freeByDate[dateStr] ?? []}
             />
           );
         })}

@@ -78,6 +78,10 @@
       "Bash(supabase --version)",
       "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(s.get\\('name'\\), 'dow:', s.get\\('day_of_week'\\), 'weekDays:', s.get\\('weekDays'\\)\\) for s in data['rows'][0]['value']]\")",
       "Bash(xargs git:*)"
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\titou\\\\myprepapro\\\\myprepapro\\\\src\" -Recurse -Include \"*.tsx\", \"*.ts\", \"*.jsx\", \"*.js\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\titou\\\\myprepapro\\\\myprepapro\\\\src\" -Recurse -Name)",
+      "Bash(Select-Object -First 50)"
     ]
   }
 }

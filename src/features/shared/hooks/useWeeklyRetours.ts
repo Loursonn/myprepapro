@@ -4,6 +4,7 @@ import { QK } from "@/lib/queryKeys";
 import type {
   WeeklyRetourData, WeekComparisonData,
   PerformedExercise, PerformedSet, PlannedExercise, WellnessDay, EnergySessionDetail,
+  FreeActivityDetail,
 } from "@/features/shared/types/retours.types";
 import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
 import { startOfWeek, endOfWeek, subWeeks, format, eachDayOfInterval, addDays } from "date-fns";
@@ -25,7 +26,7 @@ export function useWeeklyRetours(athleteId: string, weekStartDate: Date) {
         .from("app_data")
         .select("key, value")
         .eq("athlete_id", athleteId)
-        .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:sessionlogs", "asp:blockHistory"]);
+        .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:sessionlogs", "asp:blockHistory", "asp:freesess"]);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const appDataMap: Record<string, any> = Object.fromEntries(
@@ -186,6 +187,7 @@ async function fetchWeekData(
 
     db.from("energy_session_assignments")
       .select("id, scheduled_date, status, notes, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m, intervals)")
+      .select("id, scheduled_date, status, notes, rpe_score, block_logs, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m)")
       .eq("athlete_id", athleteId)
       .gte("scheduled_date", start)
       .lte("scheduled_date", end),
@@ -296,20 +298,43 @@ async function fetchWeekData(
         else note = e.notes;
       } catch { note = e.notes; }
     }
+    const blockLogs = (e.block_logs ?? {}) as Record<string, { done: boolean }>;
+    const blVals = Object.values(blockLogs);
+    const partial = blVals.length > 0 && blVals.some(b => b.done) && blVals.some(b => !b.done);
     return {
       id:            e.id,
       session_label: es.name             ?? "Session énergétique",
       date:          e.scheduled_date,
       status:        e.status            ?? "planned",
       completed:     e.status === "completed",
+      partial,
       duration_min:  es.total_duration_s != null ? Math.round(es.total_duration_s / 60) : null,
       distance_m:    es.total_distance_m ?? null,
       session_kind:  es.session_kind     ?? null,
       note,
       intervals:     es.intervals        ?? [],
       step_log:      stepLog,
+      note:          e.notes             ?? null,
+      rpe_score:     e.rpe_score         ?? null,
+      block_logs:    e.block_logs        ?? null,
     };
   });
+
+  // ── Free activities ──────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allFree: any[] = appDataMap["asp:freesess"] ?? [];
+  const freeActivities: FreeActivityDetail[] = allFree
+    .filter((f) => f.date && f.date >= start && f.date <= end)
+    .map((f) => ({
+      id:         f.id,
+      name:       f.name ?? f.sport ?? "Activité libre",
+      date:       f.date,
+      sport:      f.sport      ?? undefined,
+      sportEmoji: f.sportEmoji ?? undefined,
+      duration:   f.duration   ?? undefined,
+      intensity:  f.intensity  ?? undefined,
+      note:       f.note       ?? undefined,
+    }));
 
   return {
     week_number:    calcWeekNum(start, currentBlockConfig.startDate),
@@ -338,7 +363,8 @@ async function fetchWeekData(
       athlete_comment: c.athlete_comment ?? null,
       priority:        c.priority        ?? null,
     })),
-    avg_wellness:   avgWellness,
-    daily_wellness: buildDailyWellness(startDate, endDate, mergedWH),
+    avg_wellness:    avgWellness,
+    daily_wellness:  buildDailyWellness(startDate, endDate, mergedWH),
+    free_activities: freeActivities,
   };
 }

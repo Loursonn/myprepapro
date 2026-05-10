@@ -6,6 +6,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import CoachFourWeekCalendar from "@/components/coach/CoachFourWeekCalendar";
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { CoachEnergyProgram } from "@/components/coach/CoachComponents";
+import { PlanningEditor } from "@/components/coach/PlanningEditor";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
@@ -27,7 +28,7 @@ export default function ProgPage() {
     energyDayPlan, setEnergyDayPlan, energyEditorKey, setEnergyEditorKey,
     energySessionsLoaded, setEnergySessionsLoaded, testSessions, visibilitySettings,
     setVisibilitySettings, wellnessHistory, sessionLogs,
-    setShowTierModal, updateSessionDay, updateSessionWeekDay,
+    updateSessionDay, updateSessionWeekDay,
   } = useAthleteContext();
 
   const ctx = useAthleteContext() as unknown as Record<string, unknown>;
@@ -189,14 +190,6 @@ export default function ProgPage() {
                 </span>
               )}
             </div>
-            <button
-              onClick={() => setShowTierModal(true)}
-              style={{
-                padding: "6px 10px", borderRadius: 8,
-                border: "1px solid " + C.o + "40", background: C.o + "12", color: C.o,
-                fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >⚙ Surcharge</button>
           </div>
 
           {sortedSessions.length === 0 ? (
@@ -284,15 +277,9 @@ export default function ProgPage() {
       )}
 
       {progSubTab === "energie" && (
-        <CoachEnergyProgram
-          athleteId={athleteId} energyEditorKey={energyEditorKey}
-          setEnergyEditorKey={setEnergyEditorKey} energySessions={energySessions}
-          setEnergySessions={setEnergySessions}
-          energySessionsLoaded={energySessionsLoaded} setEnergySessionsLoaded={setEnergySessionsLoaded}
-          C={C} blockConfig={blockConfig} currentWeek={currentWeek}
-          weekPlan={energyWeekPlan} setWeekPlan={setEnergyWeekPlan}
-          dayPlan={energyDayPlan} setDayPlan={setEnergyDayPlan}
-        />
+        <div style={{ padding: "40px 20px", textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: C.tx3 }}>Voir onglet Programmation → Énergie</div>
+        </div>
       )}
 
       {progSubTab === "specifique" && (
