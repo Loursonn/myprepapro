@@ -34,6 +34,23 @@ const LEVEL_LABEL: Record<TLLevel, string> = {
   microcycle: "Micro",
 };
 
+// ── Resize grip handle (2 vertical lines, rendered inside the block) ──────────
+
+function GripHandle({ color }: { color: string }) {
+  return (
+    <div
+      style={{
+        width: "100%", height: "100%",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        gap: 3, cursor: "ew-resize",
+      }}
+    >
+      <div style={{ width: 2, height: 13, borderRadius: 1, background: color, opacity: 0.55 }} />
+      <div style={{ width: 2, height: 13, borderRadius: 1, background: color, opacity: 0.55 }} />
+    </div>
+  );
+}
+
 // ── Single item ───────────────────────────────────────────────────────────────
 
 interface TLItemProps {
@@ -51,6 +68,9 @@ interface TLItemProps {
   onResizeStop: (newX: number, newWidth: number) => void;
 }
 
+/** Handle zone width (px) — must match paddingLeft/paddingRight on content div */
+const HANDLE_W = 14;
+
 function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoom, onDragStop, onResizeStop }: TLItemProps) {
   const [dragging, setDragging] = useState(false);
 
@@ -58,7 +78,8 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoo
     <Rnd
       key={id}
       position={{ x, y: ITEM_Y }}
-      size={{ width: Math.max(width, MIN_W_PX), height: ITEM_H }}
+      // -1px gap so adjacent items don't visually bleed into each other
+      size={{ width: Math.max(width - 1, MIN_W_PX), height: ITEM_H }}
       dragAxis="x"
       minWidth={MIN_W_PX}
       enableResizing={{
@@ -66,23 +87,14 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoo
         top: false, bottom: false,
         topLeft: false, topRight: false, bottomLeft: false, bottomRight: false,
       }}
+      // Handles positioned INSIDE the block (left: 0 / right: 0, not at boundary)
+      resizeHandleStyles={{
+        left:  { position: "absolute", left: 0,  top: 0, width: HANDLE_W, height: "100%", zIndex: 5 },
+        right: { position: "absolute", right: 0, top: 0, width: HANDLE_W, height: "100%", zIndex: 5 },
+      }}
       resizeHandleComponent={{
-        left: (
-          <div
-            style={{
-              width: 6, height: "100%", cursor: "ew-resize",
-              background: color, opacity: 0.5, borderRadius: "4px 0 0 4px",
-            }}
-          />
-        ),
-        right: (
-          <div
-            style={{
-              width: 6, height: "100%", cursor: "ew-resize",
-              background: color, opacity: 0.5, borderRadius: "0 4px 4px 0",
-            }}
-          />
-        ),
+        left:  <GripHandle color={color} />,
+        right: <GripHandle color={color} />,
       }}
       onDragStart={() => setDragging(true)}
       onDragStop={(_e, d) => { setDragging(false); onDragStop(d.x); }}
@@ -97,25 +109,27 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoo
         style={{
           width: "100%", height: "100%",
           background: bg,
-          border: `1.5px solid ${color}`,
-          borderLeft: `4px solid ${color}`,
-          borderRadius: 8,
+          border: `1px solid ${color}50`,
+          borderTop: `3px solid ${color}`,
+          borderRadius: 0, // rectangular
           display: "flex", alignItems: "center",
-          paddingLeft: 8, paddingRight: 4,
-          cursor: "grab",
+          // Padding matches handle zone so text never hides behind grips
+          paddingLeft: HANDLE_W + 4, paddingRight: HANDLE_W + 4,
+          cursor: dragging ? "grabbing" : "grab",
           userSelect: "none",
           overflow: "hidden",
-          opacity: dragging ? 0.75 : 1,
+          opacity: dragging ? 0.78 : 1,
           boxShadow: dragging ? `0 4px 16px ${color}40` : "none",
           transition: "opacity 100ms, box-shadow 100ms",
           position: "relative",
+          boxSizing: "border-box",
         }}
       >
         {/* Deload hatching */}
         {isDeload && (
           <div
             style={{
-              position: "absolute", inset: 0, borderRadius: 6,
+              position: "absolute", inset: 0,
               background: `repeating-linear-gradient(45deg, transparent, transparent 5px, ${C.b}18 5px, ${C.b}18 10px)`,
               pointerEvents: "none",
             }}
@@ -136,7 +150,7 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoo
             onClick={(e) => { e.stopPropagation(); onZoom(); }}
             title="Zoomer sur ce macrocycle"
             style={{
-              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+              width: 18, height: 18, borderRadius: 3, flexShrink: 0,
               border: `1px solid ${color}60`, background: "transparent",
               color, cursor: "pointer", fontFamily: "inherit",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -150,7 +164,7 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoo
           <button
             onClick={(e) => { e.stopPropagation(); onAdd(); }}
             style={{
-              width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+              width: 18, height: 18, borderRadius: 3, flexShrink: 0,
               border: `1px solid ${color}60`, background: "transparent",
               color, cursor: "pointer", fontFamily: "inherit",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -282,9 +296,9 @@ export function TimelineRow({
                   width: Math.max(width - 2, 6),
                   height: CHIP_H,
                   background: bg,
-                  border: `1px solid ${color}60`,
-                  borderLeft: `3px solid ${color}`,
-                  borderRadius: 5,
+                  border: `1px solid ${color}50`,
+                  borderTop: `2px solid ${color}`,
+                  borderRadius: 0,
                   display: "flex", alignItems: "center",
                   paddingLeft: 5, overflow: "hidden",
                   cursor: "pointer", zIndex: 2,

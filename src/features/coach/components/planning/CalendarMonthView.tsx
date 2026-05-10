@@ -140,7 +140,7 @@ function DraggableEventChip({
 }) {
   const [hovered, setHovered] = useState(false);
   const draggable = event.type === "workout" || event.type === "energy";
-  const deletable = event.type === "workout" || event.type === "energy";
+  const deletable = event.type === "workout" || event.type === "energy" || event.type === "test";
   const { mutate: del } = useDeleteCalendarEvent();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `cal-event-${event.id}`,
@@ -334,6 +334,38 @@ function DroppableDay({
           </div>
         )}
       </div>
+
+      {/* Athlete reschedule markers */}
+      {(() => {
+        const hasAlert     = events.some((e) => e.type === "workout" && (e as { coachAlert?: boolean }).coachAlert);
+        const hasRescheduled = events.some((e) => e.type === "workout" && (e as { rescheduledByAthlete?: boolean }).rescheduledByAthlete);
+        if (!hasRescheduled && !hasAlert) return null;
+        return (
+          <div style={{ position: "absolute", top: 4, right: 4, display: "flex", gap: 2 }}>
+            {hasAlert && (
+              <span
+                title="Décalage → semaine suivante (coach requis)"
+                style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: "#F59E0B",
+                  display: "block",
+                }}
+              />
+            )}
+            {!hasAlert && hasRescheduled && (
+              <span
+                title="Séance déplacée par l'athlète"
+                style={{
+                  width: 5, height: 5, borderRadius: "50%",
+                  background: "#F59E0B50",
+                  border: "1px solid #F59E0B",
+                  display: "block",
+                }}
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {(wellnessLogged || nutritionLogged) && (
         <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 2 }}>

@@ -1,5 +1,5 @@
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
-import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
+import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks, addDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, Plus, Eye, Pencil, Trash2, Check, ChevronDown } from "lucide-react";
 import { snapMonday, snapSunday, chainNextStart, endFromWeeks, computeCascade } from "./utils/planningHelpers";
@@ -408,6 +408,10 @@ interface CreateState {
   defaultStart:   string;
   defaultEnd:     string;
   minStart?:      string; // hard floor: prevent overlapping with previous sibling
+  /** All same-level periods with parentId for client-side overlap detection */
+  existingSiblings?: Array<{ id: string; name: string; start_date: string; end_date: string; parentId: string }>;
+  /** Cascade shift fn: shift conflict + all subsequent same-parent periods +1 week */
+  cascadeShiftFn?: (conflictStartDate: string, parentId: string) => Promise<void>;
 }
 
 function CreateModal({
@@ -433,6 +437,14 @@ function CreateModal({
   );
   const [saving,    setSaving]    = useState(false);
   const [selectedParentId, setSelectedParentId] = useState(state.parentId ?? state.parentOptions?.[0]?.id ?? "");
+  const [snapPrompt, setSnapPrompt] = useState<{
+    conflict:         SnapConflict;
+    snapAfterStart:   string;
+    snapAfterEnd:     string;
+    snapBeforeEnd:    string | null;
+    movingStart:      string;
+    onCascadeShift?:  () => Promise<void>;
+  } | null>(null);
 
   const defaultWeeks = PERIOD_DEFAULTS[state.level as keyof typeof PERIOD_DEFAULTS] ?? 4;
 
@@ -475,41 +487,78 @@ function CreateModal({
     macrocycle: "Macrocycle", mesocycle: "Mésocycle", cycle: "Cycle", microcycle: "Microcycle",
   };
 
-  async function handleSubmit() {
-    if (!startDate || !endDate) { toast.error("Dates requises"); return; }
+  async function handleSubmit(opts?: { start: string; end: string }) {
+    const sDate = opts?.start ?? startDate;
+    const eDate = opts?.end   ?? endDate;
+
+    if (!sDate || !eDate) { toast.error("Dates requises"); return; }
     if (state.level !== "microcycle" && !name.trim()) { toast.error("Nom requis"); return; }
     if ((state.level === "mesocycle" || state.level === "cycle" || state.level === "microcycle") && !selectedParentId) {
       toast.error("Sélectionne un parent"); return;
     }
     // Hard overlap guard: start must be ≥ minStart (next sibling floor)
-    if (state.minStart && startDate < state.minStart) {
+    if (state.minStart && sDate < state.minStart) {
       toast.error(`Début doit être ≥ ${state.minStart} (pas de chevauchement)`);
       return;
     }
+
+    // Client-side overlap check (skip if called with explicit snap overrides)
+    if (!opts && state.existingSiblings) {
+      const sameParent = state.level === "macrocycle"
+        ? state.existingSiblings
+        : state.existingSiblings.filter((s) => s.parentId === selectedParentId);
+      const conflicts = sameParent.filter((s) => s.start_date <= eDate && s.end_date >= sDate);
+      if (conflicts.length > 0) {
+        const conflict = conflicts[0];
+        const originalWeeks = Math.max(1, Math.round(
+          (parseISO(eDate).getTime() - parseISO(sDate).getTime()) / (7 * 86400_000),
+        ) + 1);
+        const afterStart = chainNextStart(conflict.end_date);
+        const afterEnd   = endFromWeeks(afterStart, originalWeeks);
+        const beforeEnd  = format(addDays(parseISO(conflict.start_date), -1), "yyyy-MM-dd");
+        const capturedParentId = selectedParentId;
+        setSnapPrompt({
+          conflict:       { name: conflict.name, start_date: conflict.start_date, end_date: conflict.end_date },
+          snapAfterStart: afterStart,
+          snapAfterEnd:   afterEnd,
+          snapBeforeEnd:  beforeEnd >= sDate ? beforeEnd : null,
+          movingStart:    sDate,
+          onCascadeShift: state.cascadeShiftFn
+            ? async () => {
+                await state.cascadeShiftFn!(conflict.start_date, capturedParentId);
+                setSnapPrompt(null);
+                await handleSubmit({ start: sDate, end: eDate });
+              }
+            : undefined,
+        });
+        return;
+      }
+    }
+
     setSaving(true);
     let error: unknown = null;
     switch (state.level) {
       case "macrocycle":
         ({ error } = await supabase.from("macrocycles").insert({
           athlete_id: athleteId, coach_id: coachId,
-          name: name.trim(), start_date: startDate, end_date: endDate,
+          name: name.trim(), start_date: sDate, end_date: eDate,
         }));
         break;
       case "mesocycle":
         ({ error } = await supabase.from("mesocycles").insert({
           macrocycle_id: selectedParentId, name: name.trim(),
-          start_date: startDate, end_date: endDate,
+          start_date: sDate, end_date: eDate,
         }));
         break;
       case "cycle": {
         const { data: newCycle, error: cycleErr } = await supabase
           .from("cycles")
-          .insert({ mesocycle_id: selectedParentId, name: name.trim(), start_date: startDate, end_date: endDate })
+          .insert({ mesocycle_id: selectedParentId, name: name.trim(), start_date: sDate, end_date: eDate })
           .select("id")
           .single();
         error = cycleErr;
         if (!cycleErr && newCycle) {
-          const micros = buildMicrocycles(newCycle.id, startDate, endDate);
+          const micros = buildMicrocycles(newCycle.id, sDate, eDate);
           if (micros.length > 0) {
             const { error: microErr } = await supabase.from("microcycles").insert(micros);
             if (microErr) console.error("[auto-microcycles]", microErr.message);
@@ -520,7 +569,7 @@ function CreateModal({
       case "microcycle":
         ({ error } = await supabase.from("microcycles").insert({
           cycle_id: selectedParentId, week_number: weekNum,
-          start_date: startDate, end_date: endDate, is_deload: isDeload,
+          start_date: sDate, end_date: eDate, is_deload: isDeload,
         }));
         break;
     }
@@ -566,6 +615,52 @@ function CreateModal({
             <X size={14} />
           </button>
         </div>
+
+        {/* Snap prompt banner */}
+        {snapPrompt && (
+          <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 10, background: C.oS, border: "1px solid " + C.o + "50" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.o, marginBottom: 6 }}>
+              Chevauche « {snapPrompt.conflict.name} »
+            </div>
+            <div style={{ fontSize: 10, color: C.tx3, marginBottom: 10 }}>
+              {snapPrompt.conflict.start_date} → {snapPrompt.conflict.end_date}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => { setSnapPrompt(null); handleSubmit({ start: snapPrompt.snapAfterStart, end: snapPrompt.snapAfterEnd }); }}
+                style={{ padding: "5px 12px", borderRadius: 7, border: "none", background: C.o, color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Coller après ({snapPrompt.snapAfterStart})
+              </button>
+              {snapPrompt.snapBeforeEnd && (
+                <button
+                  type="button"
+                  onClick={() => { setSnapPrompt(null); handleSubmit({ start: snapPrompt.movingStart, end: snapPrompt.snapBeforeEnd! }); }}
+                  style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx2, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Coller avant (→ {snapPrompt.snapBeforeEnd})
+                </button>
+              )}
+              {snapPrompt.onCascadeShift && (
+                <button
+                  type="button"
+                  onClick={snapPrompt.onCascadeShift}
+                  style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Décaler « {snapPrompt.conflict.name} » +1 sem.
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSnapPrompt(null)}
+                style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Modifier manuellement
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -613,7 +708,7 @@ function CreateModal({
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
                 placeholder={`Nom du ${LEVEL_LABEL[state.level].toLowerCase()}…`}
                 style={inputStyle}
               />
@@ -687,7 +782,7 @@ function CreateModal({
             Annuler
           </button>
           <button
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={saving}
             style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: color, color: "#fff", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}
           >
@@ -939,6 +1034,134 @@ function NoParentDragModal({
   );
 }
 
+// ── Snap-to-adjacent dialog (overlap detected on drag/resize/create) ──────────
+
+interface SnapConflict {
+  name:       string;
+  start_date: string;
+  end_date:   string;
+}
+
+interface SnapDragDialogState {
+  movingLabel: string;
+  movingStart: string;  // snapped tentative start
+  movingEnd:   string;  // snapped tentative end
+  conflict:    SnapConflict;
+  onConfirmSnap:    (newStart: string, newEnd: string) => void;
+  /** Shift conflict + all subsequent siblings +1 week, then place moving item */
+  onCascadeShift?:  () => Promise<void>;
+  onCancel:         () => void;
+}
+
+function SnapDragDialog({ state }: { state: SnapDragDialogState }) {
+  const [cascading, setCascading] = useState(false);
+
+  const originalWeeks = Math.max(1, Math.round(
+    (parseISO(state.movingEnd).getTime() - parseISO(state.movingStart).getTime()) / (7 * 86400_000),
+  ) + 1);
+
+  const afterStart = chainNextStart(state.conflict.end_date);
+  const afterEnd   = endFromWeeks(afterStart, originalWeeks);
+
+  // "Coller avant" = end right before conflict.start (conflict starts Monday → Sunday before)
+  const beforeEnd   = format(addDays(parseISO(state.conflict.start_date), -1), "yyyy-MM-dd");
+  const beforeValid = beforeEnd >= state.movingStart; // needs at least 1 week of room
+
+  const btnBase: React.CSSProperties = {
+    padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+    cursor: "pointer", fontFamily: "inherit", border: "none",
+  };
+
+  return (
+    <>
+      <div onClick={state.onCancel} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.55)" }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", zIndex: 71,
+        transform: "translate(-50%,-50%)",
+        width: 420, maxWidth: "92vw",
+        background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+        padding: "20px 24px",
+        animation: "fadeScaleIn 150ms ease-out",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 4, height: 28, borderRadius: 3, background: C.o, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 9, color: C.o, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Chevauchement
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>Que faire ?</div>
+          </div>
+          <button onClick={state.onCancel} style={{ marginLeft: "auto", width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Info */}
+        <div style={{ padding: "10px 12px", borderRadius: 8, background: C.oS, marginBottom: 16, fontSize: 12, color: C.tx2 }}>
+          <b style={{ color: C.tx }}>{state.movingLabel}</b> chevauche{" "}
+          <b style={{ color: C.tx }}>{state.conflict.name}</b>
+          <div style={{ marginTop: 4, fontSize: 10, color: C.tx3 }}>
+            {state.conflict.start_date} → {state.conflict.end_date}
+          </div>
+        </div>
+
+        {/* Options */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          <button
+            onClick={() => state.onConfirmSnap(afterStart, afterEnd)}
+            style={{ ...btnBase, background: C.o, color: "#fff", textAlign: "left", padding: "10px 14px" }}
+          >
+            <div style={{ fontSize: 11, opacity: 0.85 }}>Coller après</div>
+            <div style={{ fontSize: 13, fontWeight: 800 }}>{state.conflict.name}</div>
+            <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{afterStart} → {afterEnd}</div>
+          </button>
+
+          {beforeValid && (
+            <button
+              onClick={() => state.onConfirmSnap(state.movingStart, beforeEnd)}
+              style={{ ...btnBase, background: C.s2, color: C.tx, border: "1px solid " + C.brdL, textAlign: "left", padding: "10px 14px" }}
+            >
+              <div style={{ fontSize: 11, color: C.tx3 }}>Coller avant</div>
+              <div style={{ fontSize: 13, fontWeight: 800 }}>{state.conflict.name}</div>
+              <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>{state.movingStart} → {beforeEnd}</div>
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {/* Cascade shift option */}
+          {state.onCascadeShift && (
+            <button
+              onClick={async () => {
+                setCascading(true);
+                await state.onCascadeShift!();
+                setCascading(false);
+              }}
+              disabled={cascading}
+              style={{
+                ...btnBase, background: C.s2, color: C.tx2,
+                border: "1px solid " + C.brdL, fontSize: 11,
+                opacity: cascading ? 0.6 : 1, cursor: cascading ? "not-allowed" : "pointer",
+              }}
+              title="Décale « conflict » et tous les blocs suivants de 1 semaine, puis place la période à sa nouvelle position"
+            >
+              {cascading ? "…" : `Décaler « ${state.conflict.name} » +1 sem. → cascade`}
+            </button>
+          )}
+
+          <button
+            onClick={state.onCancel}
+            style={{ ...btnBase, background: "transparent", border: "1px solid " + C.brdL, color: C.tx3 }}
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── TimelineView ──────────────────────────────────────────────────────────────
 
 interface TimelineViewProps { athleteId: string }
@@ -953,6 +1176,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const [editingComp,    setEditingComp]    = useState<Competition | null>(null);
   const [noParentModal,  setNoParentModal]  = useState<NoParentDragState | null>(null);
   const [selectedId,     setSelectedId]     = useState<string | null>(null);
+  const [snapDragDialog, setSnapDragDialog] = useState<SnapDragDialogState | null>(null);
 
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -1016,6 +1240,73 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     },
   });
 
+  // ── Drag/resize overlap detection ────────────────────────────────────────
+
+  function detectDragConflict(
+    level: "macrocycles" | "mesocycles" | "cycles",
+    id: string,
+    ns: string, // snapped start
+    ne: string, // snapped end
+  ): SnapConflict | null {
+    if (!data) return null;
+    let siblings: Array<{ id: string; name: string; start_date: string; end_date: string }> = [];
+    if (level === "macrocycles") {
+      siblings = data.macrocycles.filter((m) => m.id !== id);
+    } else if (level === "mesocycles") {
+      const meso = data.mesocycles.find((m) => m.id === id);
+      if (!meso) return null;
+      siblings = data.mesocycles.filter((m) => m.macrocycle_id === meso.macrocycle_id && m.id !== id);
+    } else {
+      const cycle = data.cycles.find((c) => c.id === id);
+      if (!cycle) return null;
+      siblings = data.cycles.filter((c) => c.mesocycle_id === cycle.mesocycle_id && c.id !== id);
+    }
+    return siblings.find((s) => s.start_date <= ne && s.end_date >= ns) ?? null;
+  }
+
+  // ── Cascade shift helper ─────────────────────────────────────────────────
+
+  async function cascadeShift1Week(
+    level: "macrocycles" | "mesocycles" | "cycles",
+    conflictStartDate: string,
+    parentIdValue: string,
+    excludeId?: string,
+  ) {
+    if (!data) return;
+    let allSiblings: Array<{ id: string; start_date: string; end_date: string }>;
+    if (level === "macrocycles") {
+      allSiblings = data.macrocycles;
+    } else if (level === "mesocycles") {
+      allSiblings = data.mesocycles.filter((m) => m.macrocycle_id === parentIdValue);
+    } else {
+      allSiblings = data.cycles.filter((c) => c.mesocycle_id === parentIdValue);
+    }
+    const toShift = allSiblings
+      .filter((s) => s.start_date >= conflictStartDate && s.id !== excludeId)
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+    for (const item of toShift) {
+      const newStart = format(addWeeks(parseISO(item.start_date), 1), "yyyy-MM-dd");
+      const newEnd   = format(addWeeks(parseISO(item.end_date),   1), "yyyy-MM-dd");
+      await supabase.from(level as never).update({ start_date: newStart, end_date: newEnd }).eq("id", item.id);
+    }
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+  }
+
+  function buildExistingSiblings(level: CreateLevel): CreateState["existingSiblings"] {
+    if (!data) return [];
+    if (level === "macrocycle") {
+      return data.macrocycles.map((m) => ({ id: m.id, name: m.name, start_date: m.start_date, end_date: m.end_date, parentId: athleteId }));
+    }
+    if (level === "mesocycle") {
+      return data.mesocycles.map((m) => ({ id: m.id, name: m.name, start_date: m.start_date, end_date: m.end_date, parentId: m.macrocycle_id }));
+    }
+    if (level === "cycle") {
+      return data.cycles.map((c) => ({ id: c.id, name: c.name, start_date: c.start_date, end_date: c.end_date, parentId: c.mesocycle_id ?? "" }));
+    }
+    return [];
+  }
+
   function openCreate(
     level: CreateLevel,
     parentId?: string,
@@ -1025,11 +1316,19 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     parentOptions?: ParentOption[],
     siblingItems?: Array<{ parentId: string; end_date: string }>,
   ) {
+    const levelForCascade = level === "macrocycle" ? "macrocycles"
+                          : level === "mesocycle"  ? "mesocycles"
+                          : level === "cycle"      ? "cycles"
+                          : null;
     setCreateModal({
       level, parentId, parentOptions, siblingItems,
-      defaultStart: defaultStart ?? rsStr,
-      defaultEnd:   defaultEnd   ?? reStr,
+      defaultStart:     defaultStart ?? rsStr,
+      defaultEnd:       defaultEnd   ?? reStr,
       minStart,
+      existingSiblings: buildExistingSiblings(level),
+      cascadeShiftFn:   levelForCascade
+        ? (conflictStartDate, parentIdValue) => cascadeShift1Week(levelForCascade, conflictStartDate, parentIdValue)
+        : undefined,
     });
   }
 
@@ -1079,16 +1378,74 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
 
   function makeDragHandler(level: "macrocycles" | "mesocycles" | "cycles" | "microcycles") {
     return (id: string, ns: string, ne: string, ps?: string, pe?: string) => {
-      const item = (data?.[level] as Array<{ id: string }>)?.find((i) => i.id === id);
+      const item = (data?.[level] as Array<{ id: string; name?: string; start_date: string; end_date: string }>)?.find((i) => i.id === id);
       if (!item) return;
+      if (level !== "microcycles") {
+        const snappedStart = snapMonday(ns);
+        const snappedEnd   = snapSunday(ne);
+        const conflict = detectDragConflict(level as "macrocycles" | "mesocycles" | "cycles", id, snappedStart, snappedEnd);
+        if (conflict) {
+          const cascadeParentId = level === "mesocycles" ? (item as unknown as Mesocycle).macrocycle_id
+                                : level === "cycles"     ? ((item as unknown as Cycle).mesocycle_id ?? "")
+                                : "";
+          setSnapDragDialog({
+            movingLabel: item.name ?? id,
+            movingStart: snappedStart,
+            movingEnd:   snappedEnd,
+            conflict,
+            onConfirmSnap: (newStart, newEnd) => {
+              setSnapDragDialog(null);
+              drag({ level, item: item as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
+            },
+            onCascadeShift: async () => {
+              await cascadeShift1Week(level as "macrocycles" | "mesocycles" | "cycles", conflict.start_date, cascadeParentId, id);
+              setSnapDragDialog(null);
+              drag({ level, item: item as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
+            },
+            onCancel: () => setSnapDragDialog(null),
+          });
+          return;
+        }
+        drag({ level, item: item as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
+        return;
+      }
       drag({ level, item: item as never, newStart: parseISO(ns), newEnd: parseISO(ne), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
     };
   }
 
   function makeResizeHandler(level: "macrocycles" | "mesocycles" | "cycles" | "microcycles") {
     return (id: string, ns: string, ne: string, ps?: string, pe?: string) => {
-      const item = (data?.[level] as Array<{ id: string }>)?.find((i) => i.id === id);
+      const item = (data?.[level] as Array<{ id: string; name?: string; start_date: string; end_date: string }>)?.find((i) => i.id === id);
       if (!item) return;
+      if (level !== "microcycles") {
+        const snappedStart = snapMonday(ns);
+        const snappedEnd   = snapSunday(ne);
+        const conflict = detectDragConflict(level as "macrocycles" | "mesocycles" | "cycles", id, snappedStart, snappedEnd);
+        if (conflict) {
+          const cascadeParentId = level === "mesocycles" ? (item as unknown as Mesocycle).macrocycle_id
+                                : level === "cycles"     ? ((item as unknown as Cycle).mesocycle_id ?? "")
+                                : "";
+          setSnapDragDialog({
+            movingLabel: item.name ?? id,
+            movingStart: snappedStart,
+            movingEnd:   snappedEnd,
+            conflict,
+            onConfirmSnap: (newStart, newEnd) => {
+              setSnapDragDialog(null);
+              resize({ level, item: item as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
+            },
+            onCascadeShift: async () => {
+              await cascadeShift1Week(level as "macrocycles" | "mesocycles" | "cycles", conflict.start_date, cascadeParentId, id);
+              setSnapDragDialog(null);
+              resize({ level, item: item as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
+            },
+            onCancel: () => setSnapDragDialog(null),
+          });
+          return;
+        }
+        resize({ level, item: item as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
+        return;
+      }
       resize({ level, item: item as never, newStart: parseISO(ns), newEnd: parseISO(ne), parentStart: ps, parentEnd: pe, athleteId, rangeStart: rsStr, rangeEnd: reStr });
     };
   }
@@ -1100,9 +1457,47 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     if (!cycle) return;
     const snappedStart = snapMonday(ns);
     const snappedEnd   = snapSunday(ne);
+
+    // Overlap check with same-meso siblings
+    const conflict = detectDragConflict("cycles", id, snappedStart, snappedEnd);
+    if (conflict) {
+      setSnapDragDialog({
+        movingLabel: cycle.name,
+        movingStart: snappedStart,
+        movingEnd:   snappedEnd,
+        conflict,
+        onConfirmSnap: (newStart, newEnd) => {
+          setSnapDragDialog(null);
+          const meso = data?.mesocycles.find((m) => newStart >= m.start_date && newStart <= m.end_date);
+          if (meso) {
+            drag({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
+            if (cycle.mesocycle_id !== meso.id)
+              supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
+                .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+          } else {
+            setNoParentModal({ cycleId: id, newStart, newEnd });
+          }
+        },
+        onCascadeShift: async () => {
+          await cascadeShift1Week("cycles", conflict.start_date, cycle.mesocycle_id ?? "", id);
+          setSnapDragDialog(null);
+          const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
+          if (meso) {
+            drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
+            if (cycle.mesocycle_id !== meso.id)
+              supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
+                .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+          } else {
+            setNoParentModal({ cycleId: id, newStart: snappedStart, newEnd: snappedEnd });
+          }
+        },
+        onCancel: () => setSnapDragDialog(null),
+      });
+      return;
+    }
+
     const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
     if (meso) {
-      // No parentStart/parentEnd: meso lookup already done, skip bounds check in mutation
       drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
              athleteId, rangeStart: rsStr, rangeEnd: reStr });
       if (cycle.mesocycle_id !== meso.id) {
@@ -1119,6 +1514,35 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     if (!cycle) return;
     const snappedStart = snapMonday(ns);
     const snappedEnd   = snapSunday(ne);
+
+    // Overlap check with same-meso siblings
+    const conflict = detectDragConflict("cycles", id, snappedStart, snappedEnd);
+    if (conflict) {
+      setSnapDragDialog({
+        movingLabel: cycle.name,
+        movingStart: snappedStart,
+        movingEnd:   snappedEnd,
+        conflict,
+        onConfirmSnap: (newStart, newEnd) => {
+          setSnapDragDialog(null);
+          const meso = data?.mesocycles.find((m) => newStart >= m.start_date && newStart <= m.end_date);
+          if (meso) {
+            resize({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
+            if (cycle.mesocycle_id !== meso.id)
+              supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
+                .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+          }
+        },
+        onCascadeShift: async () => {
+          await cascadeShift1Week("cycles", conflict.start_date, cycle.mesocycle_id ?? "", id);
+          setSnapDragDialog(null);
+          resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
+        },
+        onCancel: () => setSnapDragDialog(null),
+      });
+      return;
+    }
+
     const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
     if (meso) {
       resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
@@ -1411,6 +1835,9 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           Drag axe X pour déplacer · Poignées colorées pour redimensionner · + pour détails · Compétitions: 🏆 rose(A) violet(B) gris(C)
         </div>
       </div>
+
+      {/* Snap-to-adjacent dialog (overlap on drag/resize) */}
+      {snapDragDialog && <SnapDragDialog state={snapDragDialog} />}
 
       {/* No-parent drag modal */}
       {noParentModal && (

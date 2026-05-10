@@ -6,12 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TimelineView } from "@/features/coach/components/planning/TimelineView";
 import { CalendarMonthView } from "@/features/coach/components/planning/CalendarMonthView";
 import { SummaryView } from "@/features/coach/components/planning/SummaryView";
+import { CompetitionsView } from "@/features/coach/components/planning/CompetitionsView";
 
-type PlanView = "timeline" | "month" | "summary";
+type PlanView = "timeline" | "month" | "summary" | "competitions";
 
 export default function PlanningPage() {
   const [searchParams] = useSearchParams();
-  const view = (searchParams.get("view") as PlanView) ?? "timeline";
+  const view = (searchParams.get("view") as PlanView) ?? "month";
 
   const { user } = useAuth();
   const { athleteId, loaded, sessions, blockConfig, setBlockConfig, exos, sets, completedSessions, currentWeek, wellnessHistory, nutritionLog } = useAthleteContext();
@@ -45,6 +46,10 @@ export default function PlanningPage() {
       )}
 
       {view === "summary" && <SummaryView athleteId={athleteId} />}
+
+      {view === "competitions" && (
+        <CompetitionsView athleteId={athleteId} coachId={user?.id ?? ""} />
+      )}
     </div>
   );
 }

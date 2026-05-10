@@ -36,9 +36,10 @@ const TABS = [
 
 const SUB_TABS: Record<string, { key: string; label: string }[]> = {
   planning: [
-    { key: "timeline", label: "Frise"    },
-    { key: "month",    label: "Mois"     },
-    { key: "summary",  label: "Synthèse" },
+    { key: "month",        label: "Mois"          },
+    { key: "timeline",     label: "Frise"         },
+    { key: "summary",      label: "Synthèse"      },
+    { key: "competitions", label: "Compétitions"  },
   ],
   programmation: [],
 };
