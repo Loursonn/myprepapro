@@ -99,8 +99,9 @@ function EnergyAthleteView({ athleteId }: { athleteId: string }) {
 
 export default function LogSeancePage() {
   const location = useLocation();
-  const initialSess = (location.state as { initialSess?: unknown } | null)?.initialSess ?? null;
-  const [logSubTab, setLogSubTab] = useState("muscu");
+  const locationState = location.state as { initialSess?: unknown; initialTab?: string } | null;
+  const initialSess = locationState?.initialSess ?? null;
+  const [logSubTab, setLogSubTab] = useState(locationState?.initialTab ?? "muscu");
   const [rpeSessionId, setRpeSessionId] = useState<string | null>(null);
 
   const {

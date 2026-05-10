@@ -1,13 +1,23 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CalendarDays, X, Zap } from "lucide-react";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { toast } from "sonner";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useActivePlan } from "@/features/shared/hooks/useActivePlan";
 import { useEnergySession } from "@/features/shared/hooks/useEnergySessions";
-import { SessionPreviewModal } from "@/features/coach/components/energy/SessionPreviewModal";
+import { useRescheduleWorkout } from "@/features/shared/hooks/useRescheduleWorkout";
+import { useWorkoutDetail } from "@/features/shared/hooks/useWorkoutDetail";
+import { SessionPreviewModal, ROLE_COLOR, ROLE_LABEL_FR } from "@/features/coach/components/energy/SessionPreviewModal";
 import { EmptyState } from "@/features/shared/components/EmptyState";
-import type { ActiveMesocycle, WeekDay, WeekSession } from "@/features/shared/hooks/useActivePlan";
+import { supabase } from "@/integrations/supabase/client";
+import { QK } from "@/lib/queryKeys";
+import { formatS, formatTarget } from "@/lib/energy/formatTarget";
+import { TestFillDrawer } from "@/features/athlete/components/TestFillDrawer";
+import type { ActiveMesocycle, WeekDay, WeekSession, TestBrief } from "@/features/shared/hooks/useActivePlan";
+import type { EnergyStep, EnergySessionRow } from "@/types/energy";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -70,12 +80,283 @@ function ProgramSkeleton() {
   );
 }
 
+// ── Energy active session — interactive step validation ───────────────────────
+
+// ── Per-step state ────────────────────────────────────────────────────────────
+
+type StepStatus = "done" | "partial";
+interface StepState { status: StepStatus; comment: string; }
+
+// ── Step card (done / partial + comment) ──────────────────────────────────────
+
+function StepCheckRow({
+  step, state, onDone, onPartial, onComment,
+}: {
+  step: EnergyStep;
+  state: StepState | undefined;
+  onDone: () => void;
+  onPartial: () => void;
+  onComment: (v: string) => void;
+}) {
+  const status    = state?.status;
+  const isDone    = status === "done";
+  const isPartial = status === "partial";
+  const comment   = state?.comment ?? "";
+  const bg        = isDone ? C.g + "18" : isPartial ? "#F59E0B18" : C.s2;
+  const borderCol = isDone ? C.g + "40" : isPartial ? "#F59E0B50" : "transparent";
+
+  // ── shared step-info block ──────────────────────────────────────────────────
+  let infoNode: React.ReactNode;
+  if (step.type === "interval") {
+    const rc  = ROLE_COLOR[step.role] ?? "#6B7280";
+    const dur = step.duration.kind === "time"
+      ? formatS(step.duration.value ?? 0)
+      : step.duration.kind === "distance"
+      ? `${step.duration.value ?? 0} m`
+      : step.duration.kind === "calories"
+      ? `${step.duration.value ?? 0} kcal`
+      : "Lap";
+    const tgt = formatTarget(step.target);
+    infoNode = (
+      <>
+        <div style={{ width: 3, height: 34, borderRadius: 2, background: rc, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: rc }}>{ROLE_LABEL_FR[step.role] ?? step.role}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{dur}</span>
+          </div>
+          {tgt && tgt !== "Libre" && (
+            <div style={{ fontSize: 10, color: C.tx3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tgt}</div>
+          )}
+          {step.notes && (
+            <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginTop: 1 }}>{step.notes}</div>
+          )}
+        </div>
+      </>
+    );
+  } else {
+    const previewChildren = step.children
+      .filter((c): c is Extract<EnergyStep, { type: "interval" }> => c.type === "interval")
+      .slice(0, 3);
+    const childSummary = previewChildren.map(c =>
+      c.duration.kind === "time" ? formatS(c.duration.value ?? 0) : `${c.duration.value ?? 0}m`
+    ).join(" + ");
+    infoNode = (
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: C.b }}>× {step.repeat}</span>
+          <span style={{ fontSize: 10, color: C.tx3 }}>répétitions</span>
+        </div>
+        {childSummary && (
+          <div style={{ fontSize: 10, color: C.tx2, marginTop: 1 }}>
+            {childSummary}{step.children.length > 3 ? " …" : ""}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ borderRadius: 12, background: bg, border: "1px solid " + borderCol, overflow: "hidden" }}>
+      {/* Main row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
+        {infoNode}
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+          {/* ✓ Fait */}
+          <button
+            onClick={onDone}
+            title="Bloc fait"
+            style={{
+              width: 32, height: 32, borderRadius: 8, border: "none",
+              background: isDone ? C.g : "rgba(255,255,255,0.07)",
+              color: isDone ? "#fff" : C.tx3,
+              cursor: "pointer", fontFamily: "inherit", fontSize: 14,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 700,
+            }}
+          >✓</button>
+
+          {/* ~ Incomplet */}
+          <button
+            onClick={onPartial}
+            title="Bloc non terminé"
+            style={{
+              width: 32, height: 32, borderRadius: 8, border: "none",
+              background: isPartial ? "#F59E0B" : "rgba(255,255,255,0.07)",
+              color: isPartial ? "#fff" : C.tx3,
+              cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 700,
+            }}
+          >~</button>
+        </div>
+      </div>
+
+      {/* Comment — mandatory when partial */}
+      {isPartial && (
+        <div style={{ padding: "0 14px 12px" }}>
+          <input
+            value={comment}
+            onChange={(e) => onComment(e.target.value)}
+            placeholder="Commentaire obligatoire…"
+            autoFocus
+            style={{
+              width: "100%", padding: "8px 10px", borderRadius: 8,
+              border: "1.5px solid " + (comment.trim() ? C.brdL : "#F59E0B80"),
+              background: "rgba(245,158,11,0.06)",
+              color: C.tx, fontSize: 12, fontFamily: "inherit",
+              boxSizing: "border-box" as const, outline: "none",
+            }}
+          />
+          {!comment.trim() && (
+            <div style={{ fontSize: 9, color: "#F59E0B", marginTop: 3 }}>
+              Requis avant de terminer la séance
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EnergyActiveSession({
+  session, onTerminate, onClose,
+}: {
+  session: EnergySessionRow;
+  onTerminate: (log: Map<string, StepState>) => void;
+  onClose: () => void;
+}) {
+  const steps = session.intervals ?? [];
+  const [stepStates, setStepStates] = useState<Map<string, StepState>>(new Map());
+
+  const kc = ENERGY_KIND_COLOR[session.session_kind] ?? "#6B7280";
+
+  function setStatus(id: string, status: StepStatus) {
+    setStepStates(prev => {
+      const n = new Map(prev);
+      const cur = n.get(id);
+      // Toggle: same status → remove (back to pending)
+      if (cur?.status === status) { n.delete(id); }
+      else { n.set(id, { status, comment: cur?.comment ?? "" }); }
+      return n;
+    });
+  }
+  function setComment(id: string, comment: string) {
+    setStepStates(prev => {
+      const n = new Map(prev);
+      const cur = n.get(id);
+      if (cur) n.set(id, { ...cur, comment });
+      return n;
+    });
+  }
+
+  const validatedCount = stepStates.size;
+  const total          = steps.length;
+  const hasUnsavedPartial = Array.from(stepStates.values()).some(
+    s => s.status === "partial" && !s.comment.trim()
+  );
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.7)" }} />
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 61,
+        maxHeight: "88vh", display: "flex", flexDirection: "column",
+        background: C.s1, borderRadius: "16px 16px 0 0", border: "1px solid " + C.brd,
+      }}>
+        {/* Header */}
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 9, background: kc + "25", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Zap size={14} color={kc} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {session.name}
+            </div>
+            <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+              {validatedCount}/{total} blocs validés · En cours…
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <X size={13} />
+          </button>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ height: 3, background: "rgba(255,255,255,0.06)", flexShrink: 0 }}>
+          <div style={{ height: "100%", background: C.g, width: total > 0 ? `${(validatedCount / total) * 100}%` : "0%", transition: "width 0.3s ease", borderRadius: "0 2px 2px 0" }} />
+        </div>
+
+        {/* Steps */}
+        <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+          {steps.map((step, i) => {
+            const id = step.id ?? String(i);
+            return (
+              <StepCheckRow
+                key={id}
+                step={step}
+                state={stepStates.get(id)}
+                onDone={() => setStatus(id, "done")}
+                onPartial={() => setStatus(id, "partial")}
+                onComment={(v) => setComment(id, v)}
+              />
+            );
+          })}
+        </div>
+
+        {/* Terminer */}
+        <div style={{ padding: "12px 16px", paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))", borderTop: "1px solid " + C.brd, flexShrink: 0 }}>
+          {hasUnsavedPartial && (
+            <div style={{ fontSize: 11, color: "#F59E0B", textAlign: "center", marginBottom: 8 }}>
+              ⚠ Remplis les commentaires des blocs non terminés
+            </div>
+          )}
+          <button
+            onClick={() => onTerminate(stepStates)}
+            disabled={hasUnsavedPartial}
+            style={{
+              width: "100%", padding: "16px 0", borderRadius: 14, border: "none",
+              background: hasUnsavedPartial ? C.s2 : C.g,
+              color: hasUnsavedPartial ? C.tx3 : "#fff",
+              fontSize: 15, fontWeight: 800,
+              cursor: hasUnsavedPartial ? "default" : "pointer",
+              fontFamily: "inherit",
+              boxShadow: hasUnsavedPartial ? "none" : "0 4px 20px rgba(16,185,129,0.35)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            Terminer la séance ✓
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Energy preview overlay ────────────────────────────────────────────────────
 
 function EnergyPreviewOverlay({
-  energySessionId, athleteId, onClose,
-}: { energySessionId: string; athleteId: string; onClose: () => void }) {
+  energySessionId, assignmentId, scheduledDate, initialStatus, today,
+  athleteId, onClose,
+  onRescheduleToToday, onComplete, onCancel,
+}: {
+  energySessionId: string;
+  assignmentId: string;
+  scheduledDate: string;
+  initialStatus: string;
+  today: string;
+  athleteId: string;
+  onClose: () => void;
+  onRescheduleToToday: () => void;
+  onComplete: (log: Map<string, StepState>) => void;
+  onCancel: () => void;
+}) {
   const { data: session, isLoading } = useEnergySession(energySessionId);
+  const [isNowToday,    setIsNowToday]    = useState(scheduledDate === today);
+  const [sessionActive, setSessionActive] = useState(false);
+
   if (isLoading) return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
@@ -88,7 +369,42 @@ function EnergyPreviewOverlay({
     </>
   );
   if (!session) return null;
-  return <SessionPreviewModal session={session} athleteId={athleteId} onClose={onClose} />;
+  void assignmentId;
+
+  const isCompleted = initialStatus === "completed";
+
+  // — Active mode: interactive step-by-step validation —
+  if (sessionActive) {
+    return (
+      <EnergyActiveSession
+        session={session}
+        onTerminate={(log) => onComplete(log)}
+        onClose={onClose}
+      />
+    );
+  }
+
+  // — Preview mode —
+  const startLabel = !isCompleted
+    ? (isNowToday ? "Faire la séance ▶" : "Faire la séance aujourd'hui")
+    : undefined;
+
+  const onStartFn = !isCompleted
+    ? isNowToday
+      ? () => setSessionActive(true)
+      : () => { onRescheduleToToday(); setIsNowToday(true); }
+    : undefined;
+
+  return (
+    <SessionPreviewModal
+      session={session}
+      athleteId={athleteId}
+      onClose={onClose}
+      onStart={onStartFn}
+      startLabel={startLabel}
+      onCancel={isCompleted ? onCancel : undefined}
+    />
+  );
 }
 
 // ── Plan actif card ───────────────────────────────────────────────────────────
@@ -169,55 +485,422 @@ function ActivePlanCard({ meso, weekSessionCount }: { meso: ActiveMesocycle; wee
   );
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const DOW_SHORT_FR = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+function isoFromDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// ── Reschedule drawer ─────────────────────────────────────────────────────────
+
+function RescheduleDrawer({
+  sessionName,
+  scheduledDate,
+  weekMondayISO,
+  onConfirm,
+  isPending,
+  onClose,
+}: {
+  sessionName: string;
+  scheduledDate: string;
+  weekMondayISO: string;
+  onConfirm: (newDate: string, reason?: string) => void;
+  isPending?: boolean;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState(scheduledDate);
+  const [reason, setReason]     = useState("");
+
+  const { week1, week2 } = useMemo(() => {
+    const mon = new Date(weekMondayISO + "T12:00:00");
+    const makeDay = (offset: number) => {
+      const d = new Date(mon); d.setDate(mon.getDate() + offset);
+      return { iso: isoFromDate(d), dow: (d.getDay() + 6) % 7, num: d.getDate() };
+    };
+    return {
+      week1: Array.from({ length: 7 }, (_, i) => makeDay(i)),
+      week2: Array.from({ length: 7 }, (_, i) => makeDay(7 + i)),
+    };
+  }, [weekMondayISO]);
+
+  const isNextWeek  = week2.some(d => d.iso === selected);
+  const canConfirm  = selected !== scheduledDate && !isPending;
+
+  function WeekRow({ days, nextWeek }: { days: typeof week1; nextWeek?: boolean }) {
+    return (
+      <div style={{ display: "flex", gap: 4 }}>
+        {days.map(d => {
+          const isSel = d.iso === selected;
+          const isCur = d.iso === scheduledDate;
+          return (
+            <button
+              key={d.iso}
+              onClick={() => setSelected(d.iso)}
+              style={{
+                flex: 1, display: "flex", flexDirection: "column",
+                alignItems: "center", padding: "7px 2px", borderRadius: 10,
+                cursor: "pointer", fontFamily: "inherit",
+                border: "1px solid " + (isSel ? C.ac : nextWeek ? "#F59E0B30" : C.brd),
+                background: isSel ? C.acS : nextWeek ? "rgba(245,158,11,0.04)" : C.s2,
+                position: "relative",
+              }}
+            >
+              <span style={{ fontSize: 9, fontWeight: 600, color: isSel ? C.ac : C.tx3, textTransform: "uppercase" }}>
+                {DOW_SHORT_FR[d.dow]}
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: isSel ? C.ac : C.tx, lineHeight: 1.2 }}>
+                {d.num}
+              </span>
+              {isCur && (
+                <span style={{ position: "absolute", bottom: 3, width: 4, height: 4, borderRadius: "50%", background: C.ac }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <Drawer open onOpenChange={(v) => !v && onClose()}>
+      <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: "0 0 32px" }}>
+        <DrawerHeader style={{ padding: "16px 20px 8px" }}>
+          <DrawerTitle style={{ fontSize: 15, fontWeight: 700, color: C.tx }}>
+            Déplacer
+            <span style={{ fontSize: 12, fontWeight: 400, color: C.tx3, marginLeft: 8 }}>{sessionName}</span>
+          </DrawerTitle>
+        </DrawerHeader>
+
+        <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Week 1 */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+              Cette semaine
+            </div>
+            <WeekRow days={week1} />
+          </div>
+
+          {/* Week 2 */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+              Semaine suivante <span style={{ fontSize: 9 }}>⚠ notifie le coach</span>
+            </div>
+            <WeekRow days={week2} nextWeek />
+          </div>
+
+          {/* Raison */}
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Raison (optionnel) — blessure, compétition…"
+            style={{
+              width: "100%", padding: "9px 12px", borderRadius: 8,
+              border: "1px solid " + C.brdL, background: C.s2,
+              color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+
+          <button
+            onClick={() => onConfirm(selected, reason.trim() || undefined)}
+            disabled={!canConfirm}
+            style={{
+              width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
+              background: canConfirm ? C.ac : C.s2,
+              color: canConfirm ? "#fff" : C.tx3,
+              fontSize: 14, fontWeight: 700, cursor: canConfirm ? "pointer" : "default",
+              fontFamily: "inherit", minHeight: 44,
+            }}
+          >
+            {isPending ? "Déplacement…" : "Confirmer"}
+          </button>
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+// ── Workout preview drawer ────────────────────────────────────────────────────
+
+const METHOD_LABEL: Record<string, string> = {
+  dropset: "Drop Set", superset: "Superset", cluster: "Cluster",
+  pause: "Pause", partiel: "Partiel", excentrique: "Excentrique",
+  isometrique: "Iso", pyramide: "Pyramide", degressif: "Dégressif",
+};
+
+/** Convert auto-generated bloc keys (e.g. "BLOC_1777474109225") to letters A, B, C… */
+function blocLabel(raw: string, idx: number): string {
+  if (raw === "—" || /^BLOC_\d+/i.test(raw)) return String.fromCharCode(65 + idx);
+  return raw;
+}
+
+function WorkoutPreviewDrawer({
+  session,
+  today,
+  onStart,
+  onReschedule,
+  onClose,
+}: {
+  session: WeekSession;
+  today: string;
+  onStart: () => void;
+  onReschedule: () => void;
+  onClose: () => void;
+}) {
+  const { exercises } = useWorkoutDetail(session.sessionId ?? "");
+  const { currentWeek } = useAthleteContext();
+  const isPast = session.scheduledDate < today;
+
+  // Group by bloc
+  const byBloc = useMemo(() => {
+    const map = new Map<string, typeof exercises>();
+    for (const e of exercises) {
+      const key = e.exercise.bloc?.trim() || "—";
+      const arr = map.get(key) ?? [];
+      arr.push(e);
+      map.set(key, arr);
+    }
+    return Array.from(map.entries()); // [["A", [...]], ["B", [...]]]
+  }, [exercises]);
+
+  return (
+    <Drawer open onOpenChange={(v) => !v && onClose()}>
+      <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: 0, maxHeight: "86vh", display: "flex", flexDirection: "column" }}>
+        <DrawerHeader style={{ padding: "16px 20px 8px", flexShrink: 0 }}>
+          <DrawerTitle style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
+            {session.sessionName}
+          </DrawerTitle>
+        </DrawerHeader>
+
+        {/* Exercises — scrollable */}
+        {exercises.length > 0 && (
+          <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", padding: "0 16px" }}>
+            {byBloc.map(([bloc, exs], blocIdx) => {
+              const label = blocLabel(bloc, blocIdx);
+              return (
+              <div key={bloc} style={{ marginBottom: 14 }}>
+                {/* Bloc header */}
+                {byBloc.length > 1 || bloc !== "—" ? (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.ac, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+                    Bloc {label}
+                  </div>
+                ) : null}
+                <div style={{ background: C.s2, borderRadius: 12, overflow: "hidden" }}>
+                  {exs.map(({ exercise }, idx) => {
+                    const cfg = exercise.weeks[currentWeek] ?? exercise.weeks[1] ?? {};
+                    const method = cfg.method ? (METHOD_LABEL[cfg.method.toLowerCase()] ?? cfg.method) : null;
+                    return (
+                      <div
+                        key={exercise.id}
+                        style={{
+                          padding: "10px 14px",
+                          borderTop: idx > 0 ? "1px solid " + C.brd : "none",
+                          display: "flex", alignItems: "center", gap: 10,
+                        }}
+                      >
+                        {/* Bloc letter badge */}
+                        <div style={{
+                          width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                          background: C.ac + "20", color: C.ac,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 10, fontWeight: 800,
+                        }}>
+                          {label}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {exercise.name}
+                            </span>
+                            {method && (
+                              <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5, background: C.b + "20", color: C.b, flexShrink: 0 }}>
+                                {method}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                            {cfg.sets != null && (
+                              <span style={{ fontSize: 10, color: C.tx3 }}>{cfg.sets} séries</span>
+                            )}
+                            {cfg.repsRange && (
+                              <span style={{ fontSize: 10, color: C.tx3 }}>· {cfg.repsRange} reps</span>
+                            )}
+                            {cfg.rir != null && (
+                              <span style={{ fontSize: 10, color: C.tx3 }}>· RIR {cfg.rir}</span>
+                            )}
+                            {cfg.tempo && (
+                              <span style={{ fontSize: 10, color: C.tx3 }}>· {cfg.tempo}</span>
+                            )}
+                            {cfg.kg != null && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: C.ac }}>· {cfg.kg} kg</span>
+                            )}
+                          </div>
+                          {cfg.coachNote && (
+                            <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginTop: 2 }}>
+                              📝 {cfg.coachNote}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Actions — sticky */}
+        <div style={{ padding: "12px 16px 24px", flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={onStart}
+            style={{
+              width: "100%", padding: "14px 0", borderRadius: 12, border: "none",
+              background: C.ac, color: "#fff",
+              fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minHeight: 44,
+            }}
+          >
+            Démarrer la séance ▶
+          </button>
+
+          {!isPast && (
+            <button
+              onClick={onReschedule}
+              style={{
+                width: "100%", padding: "11px 0", borderRadius: 12,
+                border: "1px solid " + C.brd, background: "transparent",
+                color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Déplacer à une autre date
+            </button>
+          )}
+        </div>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
 // ── Session chip (within a day) ───────────────────────────────────────────────
 
 function SessionChip({
   session,
   onPress,
-}: { session: WeekSession; onPress: (s: WeekSession) => void }) {
+  onReschedule,
+}: {
+  session: WeekSession;
+  onPress: (s: WeekSession) => void;
+  onReschedule?: (s: WeekSession) => void;
+}) {
   const color = sessionColor(session);
-  const isDone = session.status === "completed";
-  const isMissed = session.status === "missed";
+  const isDone    = session.status === "completed";
+  const isMissed  = session.status === "missed";
+  const isMuscu   = session.kind === "workout";
 
   const meta = session.kind === "energy"
     ? (ENERGY_KIND_LABEL[session.sessionKind ?? ""] ?? "Énergie")
     : "Musculation";
 
   return (
+    <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+      <button
+        onClick={() => { haptic(); onPress(session); }}
+        style={{
+          flex: 1, display: "flex", alignItems: "center", gap: 12,
+          background: isDone ? C.gS : color + "12",
+          border: "none", borderLeft: "4px solid " + (isDone ? C.g : color),
+          borderRadius: "0 10px 10px 0",
+          padding: "10px 12px",
+          cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+          minHeight: 44,
+          opacity: isMissed ? 0.55 : 1,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 13, fontWeight: 700, color: C.tx,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {session.sessionName}
+          </div>
+          <div style={{ fontSize: 10, color: isDone ? C.g : C.tx3, marginTop: 2 }}>
+            {meta}
+            {isDone ? " · Complétée ✓" : isMissed ? " · Manquée" : " · Planifiée"}
+            {session.rescheduledByAthlete && session.originalScheduledDate && !isDone && (
+              <span style={{ color: "#F59E0B" }}> · Déplacée</span>
+            )}
+          </div>
+        </div>
+        {!isDone && !isMissed && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+            background: color + "20", color, flexShrink: 0,
+          }}>
+            {session.kind === "energy" ? "Voir →" : "Démarrer ▶"}
+          </span>
+        )}
+        {isDone && <span style={{ fontSize: 14, color: C.g, flexShrink: 0 }}>✓</span>}
+      </button>
+
+      {/* ⋯ reschedule button — workout and energy (not completed/missed) */}
+      {!isDone && !isMissed && onReschedule && (
+        <button
+          onClick={(e) => { e.stopPropagation(); haptic(); onReschedule(session); }}
+          title="Déplacer la séance"
+          style={{
+            width: 36, height: 44, display: "flex", alignItems: "center", justifyContent: "center",
+            background: "transparent", border: "none", cursor: "pointer",
+            color: C.tx3, fontSize: 16, fontFamily: "inherit", flexShrink: 0,
+          }}
+        >
+          ⋯
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Test chip ─────────────────────────────────────────────────────────────────
+
+const TEST_TYPE_COLOR: Record<string, string> = {
+  musculation: "#7B6FFF", endurance: "#3B8DF0", vitesse: "#EF4444",
+  puissance: "#F59E0B", souplesse: "#10B981", autre: "#6B7280",
+};
+
+function TestChip({ test, onPress }: { test: TestBrief; onPress: (id: string) => void }) {
+  const tc = TEST_TYPE_COLOR[test.type] ?? "#6B7280";
+  return (
     <button
-      onClick={() => { haptic(); onPress(session); }}
+      onClick={() => { haptic(); onPress(test.id); }}
       style={{
-        width: "100%", display: "flex", alignItems: "center", gap: 12,
-        background: isDone ? C.gS : color + "12",
-        border: "none", borderLeft: "4px solid " + (isDone ? C.g : color),
+        flex: 1, display: "flex", alignItems: "center", gap: 12,
+        background: test.completed ? C.gS : tc + "12",
+        border: "none", borderLeft: "4px solid " + (test.completed ? C.g : tc),
         borderRadius: "0 10px 10px 0",
         padding: "10px 12px",
         cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
         minHeight: 44,
-        opacity: isMissed ? 0.55 : 1,
       }}
     >
+      <span style={{ fontSize: 14, flexShrink: 0 }}>🧪</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 13, fontWeight: 700, color: C.tx,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {session.sessionName}
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {test.title}
         </div>
-        <div style={{ fontSize: 10, color: isDone ? C.g : C.tx3, marginTop: 2 }}>
-          {meta}{isDone ? " · Complétée ✓" : isMissed ? " · Manquée" : " · Planifiée"}
+        <div style={{ fontSize: 10, color: test.completed ? C.g : C.tx3, marginTop: 2, textTransform: "capitalize" }}>
+          {test.type}{test.completed ? " · Réalisé ✓" : " · À faire"}
         </div>
       </div>
-      {!isDone && !isMissed && (
-        <span style={{
-          fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
-          background: color + "20", color,
-          flexShrink: 0,
-        }}>
-          {session.kind === "energy" ? "Voir →" : "Démarrer ▶"}
+      {!test.completed && (
+        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: tc + "20", color: tc, flexShrink: 0 }}>
+          Remplir →
         </span>
       )}
-      {isDone && <span style={{ fontSize: 14, color: C.g, flexShrink: 0 }}>✓</span>}
+      {test.completed && <span style={{ fontSize: 14, color: C.g, flexShrink: 0 }}>✓</span>}
     </button>
   );
 }
@@ -225,17 +908,19 @@ function SessionChip({
 // ── Day row ───────────────────────────────────────────────────────────────────
 
 function DayRow({
-  day, today, onSessionPress,
+  day, today, onSessionPress, onReschedule, onTestPress,
 }: {
   day: WeekDay;
   today: string;
   onSessionPress: (s: WeekSession) => void;
+  onReschedule: (s: WeekSession) => void;
+  onTestPress: (id: string) => void;
 }) {
   const isToday = day.date === today;
   const isPast  = day.date < today;
   const d       = new Date(day.date + "T12:00:00");
   const dateNum = d.getDate();
-  const isEmpty = day.sessions.length === 0;
+  const isEmpty = day.sessions.length === 0 && day.tests.length === 0;
 
   return (
     <div style={{
@@ -290,7 +975,21 @@ function DayRow({
       {day.sessions.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 0 6px 14px" }}>
           {day.sessions.map(s => (
-            <SessionChip key={s.id} session={s} onPress={onSessionPress} />
+            <SessionChip
+              key={s.id}
+              session={s}
+              onPress={onSessionPress}
+              onReschedule={onReschedule}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Test list */}
+      {day.tests.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "6px 0 6px 14px" }}>
+          {day.tests.map(t => (
+            <TestChip key={t.id} test={t} onPress={onTestPress} />
           ))}
         </div>
       )}
@@ -300,45 +999,118 @@ function DayRow({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+function localMonday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
 export default function ProgramPage() {
-  const navigate   = useNavigate();
+  const navigate  = useNavigate();
+  const qc        = useQueryClient();
   const { athleteId } = useAthleteContext();
   const { data, isLoading } = useActivePlan(athleteId ?? "");
-  const [energyPreview, setEnergyPreview] = useState<{ id: string } | null>(null);
 
-  const today = (() => {
+  const [workoutPreview,   setWorkoutPreview]   = useState<WeekSession | null>(null);
+  const [energyPreview,    setEnergyPreview]    = useState<{ sessionId: string; assignmentId: string; status: string; scheduledDate: string } | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<WeekSession | null>(null);
+  const [testPreviewId,    setTestPreviewId]    = useState<string | null>(null);
+
+  const today         = useMemo(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  })();
+  }, []);
+  const weekMondayISO = useMemo(localMonday, []);
+
+  // ── Mutations ────────────────────────────────────────────────────────────────
+
+  const rescheduleWorkout = useRescheduleWorkout();
+
+  const rescheduleEnergy = useMutation({
+    mutationFn: async ({ assignmentId, newDate }: { assignmentId: string; newDate: string }) => {
+      const { error } = await supabase
+        .from("energy_session_assignments")
+        .update({ scheduled_date: newDate })
+        .eq("id", assignmentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.activePlan(athleteId ?? "") });
+      toast.success("Séance déplacée");
+      setRescheduleTarget(null);
+    },
+    onError: () => toast.error("Erreur lors du déplacement"),
+  });
+
+  const rescheduleEnergyToToday = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      const { error } = await supabase
+        .from("energy_session_assignments")
+        .update({ scheduled_date: today })
+        .eq("id", assignmentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.activePlan(athleteId ?? "") });
+      toast.success("Séance déplacée à aujourd'hui");
+      setEnergyPreview(prev => prev ? { ...prev, scheduledDate: today } : null);
+    },
+    onError: () => toast.error("Erreur lors du déplacement"),
+  });
+
+  const cancelEnergy = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      const { error } = await supabase
+        .from("energy_session_assignments")
+        .update({ status: "planned" })
+        .eq("id", assignmentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.activePlan(athleteId ?? "") });
+      toast.success("Séance annulée");
+      setEnergyPreview(null);
+    },
+    onError: () => toast.error("Erreur lors de l'annulation"),
+  });
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
 
   function handleSessionPress(s: WeekSession) {
     if (s.kind === "energy" && s.energySessionId) {
-      setEnergyPreview({ id: s.energySessionId });
-      return;
-    }
-    if (s.kind === "workout" && s.sessionId) {
-      navigate("/athlete/log", {
-        state: {
-          initialSess: {
-            id:          s.sessionId,
-            name:        s.sessionName,
-            short:       s.sessionName.slice(0, 3).toUpperCase(),
-            day_of_week: (new Date(s.scheduledDate + "T12:00:00").getDay() + 6) % 7,
-          },
-        },
-      });
+      setEnergyPreview({ sessionId: s.energySessionId, assignmentId: s.id, status: s.status ?? "planned", scheduledDate: s.scheduledDate });
+    } else if (s.kind === "workout") {
+      setWorkoutPreview(s);
     }
   }
+
+  function handleRescheduleConfirm(newDate: string, reason?: string) {
+    if (!rescheduleTarget) return;
+    if (rescheduleTarget.kind === "workout") {
+      rescheduleWorkout.mutate(
+        { workoutLogId: rescheduleTarget.id, athleteId: athleteId ?? "", currentDate: rescheduleTarget.scheduledDate, newDate, reason, weekMondayISO },
+        { onSuccess: () => setRescheduleTarget(null) },
+      );
+    } else {
+      rescheduleEnergy.mutate({ assignmentId: rescheduleTarget.id, newDate });
+    }
+  }
+
+  const reschedulePending = rescheduleTarget?.kind === "workout"
+    ? rescheduleWorkout.isPending
+    : rescheduleEnergy.isPending;
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", scrollbarWidth: "none" }}>
       {/* Sticky header */}
       <div style={{
         position: "sticky", top: 45, zIndex: 5,
-        background: "#08090C", borderBottom: "1px solid " + C.brd,
+        background: "linear-gradient(135deg, rgba(168,85,247,0.22) 0%, rgba(37,35,39,0.98) 70%)",
+        borderBottom: "1px solid rgba(168,85,247,0.25)",
         padding: "14px 16px", textAlign: "center",
+        backdropFilter: "blur(8px)",
       }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>Programme</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.tx, letterSpacing: "-0.2px" }}>Programme</div>
       </div>
 
       {isLoading ? (
@@ -380,6 +1152,8 @@ export default function ProgramPage() {
                     day={day}
                     today={today}
                     onSessionPress={handleSessionPress}
+                    onReschedule={setRescheduleTarget}
+                    onTestPress={(id) => setTestPreviewId(id)}
                   />
                 ))}
               </div>
@@ -389,14 +1163,89 @@ export default function ProgramPage() {
         </div>
       )}
 
+      {/* Workout preview drawer */}
+      {workoutPreview && (
+        <WorkoutPreviewDrawer
+          session={workoutPreview}
+          today={today}
+          onStart={() => {
+            setWorkoutPreview(null);
+            navigate("/athlete/log", {
+              state: {
+                initialSess: {
+                  id:          workoutPreview.sessionId,
+                  name:        workoutPreview.sessionName,
+                  short:       workoutPreview.sessionName.slice(0, 3).toUpperCase(),
+                  day_of_week: (new Date(workoutPreview.scheduledDate + "T12:00:00").getDay() + 6) % 7,
+                },
+              },
+            });
+          }}
+          onReschedule={() => { setRescheduleTarget(workoutPreview); setWorkoutPreview(null); }}
+          onClose={() => setWorkoutPreview(null)}
+        />
+      )}
+
       {/* Energy preview overlay */}
       {energyPreview && (
         <EnergyPreviewOverlay
-          energySessionId={energyPreview.id}
+          energySessionId={energyPreview.sessionId}
+          assignmentId={energyPreview.assignmentId}
+          scheduledDate={energyPreview.scheduledDate}
+          initialStatus={energyPreview.status}
+          today={today}
           athleteId={athleteId ?? ""}
           onClose={() => setEnergyPreview(null)}
+          onRescheduleToToday={() => rescheduleEnergyToToday.mutate(energyPreview.assignmentId)}
+          onComplete={(log) => {
+            // Build step log JSON — stored in notes field
+            const stepLogNotes: string | null = log.size > 0
+              ? JSON.stringify({
+                  __type: "step_log_v1",
+                  steps: Object.fromEntries(
+                    Array.from(log.entries()).map(([k, v]) => [k, { status: v.status, comment: v.comment }])
+                  ),
+                  session_comment: null,
+                })
+              : null;
+            supabase.from("energy_session_assignments")
+              .update({
+                status: "completed",
+                ...(stepLogNotes ? { notes: stepLogNotes } : {}),
+              })
+              .eq("id", energyPreview.assignmentId)
+              .then(({ error }) => {
+                if (!error) {
+                  qc.invalidateQueries({ queryKey: QK.activePlan(athleteId ?? "") });
+                  toast.success("Séance terminée !");
+                  setEnergyPreview(null);
+                } else {
+                  toast.error("Erreur lors de la validation");
+                }
+              });
+          }}
+          onCancel={() => cancelEnergy.mutate(energyPreview.assignmentId)}
         />
       )}
+
+      {/* Reschedule drawer (workout + energy) */}
+      {rescheduleTarget && (
+        <RescheduleDrawer
+          sessionName={rescheduleTarget.sessionName}
+          scheduledDate={rescheduleTarget.scheduledDate}
+          weekMondayISO={weekMondayISO}
+          onConfirm={handleRescheduleConfirm}
+          isPending={reschedulePending}
+          onClose={() => setRescheduleTarget(null)}
+        />
+      )}
+
+      {/* Test preview / fill drawer */}
+      <TestFillDrawer
+        testId={testPreviewId}
+        athleteId={athleteId ?? ""}
+        onClose={() => setTestPreviewId(null)}
+      />
     </div>
   );
 }

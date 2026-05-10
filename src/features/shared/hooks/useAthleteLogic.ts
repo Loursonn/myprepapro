@@ -142,6 +142,78 @@ export function useAthleteLogic(d: LogicDeps) {
     }
   }, [computeAutoProgress, exos, setExos, setAutoProgNotif, tw]);
 
+  // ── Backfill completedSessions → workout_logs on first load ─────────────
+  // Sessions marked complete before DB-sync was implemented live only in
+  // localStorage. This one-time sync writes them to workout_logs so that
+  // the Retours view (which reads only from the DB) can see them.
+  const backfillDoneRef = useRef(false);
+  useEffect(() => {
+    return () => { backfillDoneRef.current = false; };
+  }, []);
+  useEffect(() => {
+    if (!loaded || backfillDoneRef.current || !athleteId || !blockConfig?.startDate) return;
+    backfillDoneRef.current = true;
+
+    const allEntries = Object.entries(completedSessions) as [string, string[]][];
+    if (allEntries.length === 0) return;
+
+    const blockStart = new Date(blockConfig.startDate + "T12:00:00");
+    const dow0 = blockStart.getDay();
+    // Snap blockStart to the Monday of its week
+    const blockMonday = new Date(blockStart);
+    blockMonday.setDate(blockStart.getDate() + (dow0 === 0 ? -6 : 1 - dow0));
+
+    (async () => {
+      for (const [weekStr, sessIds] of allEntries) {
+        const week = Number(weekStr);
+        if (!Number.isFinite(week) || week < 1 || sessIds.length === 0) continue;
+
+        const monday = new Date(blockMonday);
+        monday.setDate(blockMonday.getDate() + (week - 1) * 7);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const weekStart = monday.toISOString().split("T")[0];
+        const weekEnd   = sunday.toISOString().split("T")[0];
+
+        for (const sessId of sessIds) {
+          const sess = sessions.find(s => s.id === sessId);
+
+          // Check if a workout_log already exists for this session in this week
+          const { data: rows } = await supabase
+            .from("workout_logs")
+            .select("id, status")
+            .eq("session_id", sessId)
+            .eq("athlete_id", athleteId)
+            .gte("scheduled_date", weekStart)
+            .lte("scheduled_date", weekEnd)
+            .limit(1);
+
+          const existing = rows?.[0] ?? null;
+
+          if (existing) {
+            if (existing.status !== "completed") {
+              await supabase.from("workout_logs").update({ status: "completed" }).eq("id", existing.id);
+            }
+          } else {
+            // Compute the scheduled_date for this session
+            const dow = (sess?.weekDays?.[weekStr] ?? sess?.day_of_week) as number | undefined;
+            const scheduledDate = dow != null
+              ? (() => { const d = new Date(monday); d.setDate(monday.getDate() + dow); return d.toISOString().split("T")[0]; })()
+              : weekStart;
+            await supabase.from("workout_logs").insert({
+              athlete_id:     athleteId,
+              session_id:     sessId,
+              session_name:   sess?.name ?? "Séance",
+              scheduled_date: scheduledDate,
+              status:         "completed",
+            });
+          }
+        }
+      }
+      qc.invalidateQueries({ queryKey: ["cal", athleteId] });
+    })();
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Sync auto-progress on load ────────────────────────────────────────────
   // Guard: only run once per mount cycle — not on every remount (e.g. navigation)
   const autoSyncDoneRef = useRef(false);
@@ -178,19 +250,36 @@ export function useAthleteLogic(d: LogicDeps) {
   }, [blockConfig?.startDate, sessions]);
 
   const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned") => {
-    if (!athleteId) return;
-    const scheduledDate = sessionScheduledDate(sessId, week);
-    if (!scheduledDate) return;
+    if (!athleteId || !blockConfig?.startDate) return;
     const sess = sessions.find(s => s.id === sessId);
 
+    // Compute the Monday–Sunday of the target week (block-relative)
+    const blockStart = new Date(blockConfig.startDate + "T12:00:00");
+    const dow0 = blockStart.getDay();
+    const monday = new Date(blockStart);
+    monday.setDate(blockStart.getDate() + (dow0 === 0 ? -6 : 1 - dow0) + (week - 1) * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const weekStart = monday.toISOString().split("T")[0];
+    const weekEnd   = sunday.toISOString().split("T")[0];
+
+    // Fallback scheduled_date (used only when inserting a new log)
+    const scheduledDate = sessionScheduledDate(sessId, week) ?? weekStart;
+
     (async () => {
-      const { data: existing } = await supabase
+      // Search by session_id + week range — works regardless of which exact day
+      // the coach placed the session on (avoids exact-date mismatch bug)
+      const { data: rows } = await supabase
         .from("workout_logs")
         .select("id")
         .eq("session_id", sessId)
         .eq("athlete_id", athleteId)
-        .eq("scheduled_date", scheduledDate)
-        .maybeSingle();
+        .gte("scheduled_date", weekStart)
+        .lte("scheduled_date", weekEnd)
+        .order("scheduled_date")
+        .limit(1);
+
+      const existing = rows?.[0] ?? null;
 
       if (existing) {
         await supabase
@@ -210,7 +299,7 @@ export function useAthleteLogic(d: LogicDeps) {
       }
       qc.invalidateQueries({ queryKey: ["cal", athleteId] });
     })();
-  }, [sessionScheduledDate, sessions, athleteId, qc]);
+  }, [sessionScheduledDate, sessions, athleteId, blockConfig?.startDate, qc]);
 
   const completeSession = useCallback((sessId: string, week: number) => {
     const prev = completedSessions[week] || [];
