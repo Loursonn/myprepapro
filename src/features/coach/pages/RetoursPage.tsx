@@ -51,17 +51,6 @@ export default function RetoursPage() {
   const kpiData = viewMode === "month" ? monthData : null;
   const weekCurrent = weekData?.current_week;
 
-  // KPI séances — includes both muscu/spé AND energy
-  const weekTotal     = weekCurrent ? weekCurrent.workouts.length + weekCurrent.energy_sessions.length : 0;
-  const weekCompleted = weekCurrent
-    ? weekCurrent.workouts.filter(w => w.status === "completed").length
-      + weekCurrent.energy_sessions.filter(e => e.completed).length
-    : 0;
-
-  const completionRate = kpiData && kpiData.workouts_total > 0
-    ? Math.round((kpiData.workouts_completed / kpiData.workouts_total) * 100)
-    : weekCurrent && weekTotal > 0
-      ? Math.round(weekCompleted / weekTotal * 100)
   const weekDone  = weekCurrent ? weekCurrent.workouts.filter(w => w.status === "completed").length + weekCurrent.energy_sessions.filter(e => e.completed || e.partial).length : 0;
   const weekTotal = weekCurrent ? weekCurrent.workouts.length + weekCurrent.energy_sessions.length : 0;
 
@@ -93,7 +82,6 @@ export default function RetoursPage() {
   const workoutsVal = kpiData
     ? `${kpiData.workouts_completed}/${kpiData.workouts_total}`
     : weekCurrent
-      ? `${weekCompleted}/${weekTotal}`
       ? `${weekDone}/${weekTotal}`
       : null;
 

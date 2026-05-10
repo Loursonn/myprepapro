@@ -247,12 +247,8 @@ export function useAthleteLogic(d: LogicDeps) {
     return d0.toISOString().split("T")[0];
   }, [blockConfig?.startDate, sessions]);
 
-  const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned") => {
-    if (!athleteId || !blockConfig?.startDate) return;
   const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned", note?: string) => {
-    if (!athleteId) return;
-    const scheduledDate = sessionScheduledDate(sessId, week);
-    if (!scheduledDate) return;
+    if (!athleteId || !blockConfig?.startDate) return;
     const sess = sessions.find(s => s.id === sessId);
 
     // Compute the Monday–Sunday of the target week (block-relative)

@@ -255,7 +255,6 @@ export function WellnessDetailView({ dailyData, avgWellness, sleepGoals, onClose
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={composantesData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.tx3 }} tickLine={false} axisLine={false} />
-              <YAxis domain={[0, 5]} tick={{ fontSize: 10, fill: C.tx3 }} tickLine={false} axisLine={false} />
               <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} tick={{ fontSize: 10, fill: C.tx3 }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 10, color: C.tx3 }} />
