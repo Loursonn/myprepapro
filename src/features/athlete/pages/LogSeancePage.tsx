@@ -432,8 +432,6 @@ export default function LogSeancePage() {
   const initialSess = locationState?.initialSess ?? null;
   const [logSubTab, setLogSubTab] = useState(locationState?.initialTab ?? "muscu");
   const [rpeSessionId, setRpeSessionId] = useState<string | null>(null);
-  const initialSess = (location.state as { initialSess?: unknown } | null)?.initialSess ?? null;
-  const [logSubTab, setLogSubTab] = useState("muscu");
   const [rpePending, setRpePending] = useState<{ sessionId: string; scheduledDate: string } | null>(null);
 
   const {
