@@ -429,7 +429,7 @@ export function DayDetailPanel({ date, wellness, workouts = [], energySessions =
                   {wellness.score >= 70 ? "Bonne forme" : wellness.score >= 50 ? "Forme correcte" : "Fatigue élevée"}
                 </div>
                 <div style={{ fontSize: 11, color: C.tx3 }}>
-                  Fatigue {wellness.fatigue}/10 · Énergie {wellness.energie}/10
+                  Fatigue {wellness.fatigue}/5 · Énergie {wellness.energie}/5
                 </div>
               </div>
             </div>

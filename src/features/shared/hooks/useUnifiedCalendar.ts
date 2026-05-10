@@ -25,8 +25,10 @@ export interface UnifiedCalendarEvent {
   status?: string;        // planned | completed | missed | skipped
   rpe?: number | null;
   // Workout-specific
-  sessionId?: string;     // workout_logs.session_id
-  exercises?: Exercise[]; // populated only when includeExercises = true
+  sessionId?: string;          // workout_logs.session_id
+  exercises?: Exercise[];      // populated only when includeExercises = true
+  rescheduledByAthlete?: boolean;
+  coachAlert?: boolean;
   // Test-specific
   testType?: string;
   completed?: boolean;
@@ -163,15 +165,17 @@ export function useUnifiedCalendar(
       for (const w of logs) {
         const rpe = (w as Record<string, unknown>).rpe_score as number | null ?? null;
         events.push({
-          id:        w.id,
-          type:      "workout",
-          date:      w.scheduled_date,
-          title:     w.session_name,
-          status:    w.status,
+          id:                   w.id,
+          type:                 "workout",
+          date:                 w.scheduled_date,
+          title:                w.session_name,
+          status:               w.status,
           rpe,
-          sessionId: w.session_id ?? undefined,
-          exercises: includeExercises ? (exercisesBySession[w.session_id ?? ""] ?? []) : undefined,
-          raw:       { ...(w as Record<string, unknown>), session_id: w.session_id },
+          sessionId:            w.session_id ?? undefined,
+          exercises:            includeExercises ? (exercisesBySession[w.session_id ?? ""] ?? []) : undefined,
+          rescheduledByAthlete: (w as { rescheduled_by_athlete?: boolean }).rescheduled_by_athlete ?? false,
+          coachAlert:           (w as { coach_alert?: boolean }).coach_alert ?? false,
+          raw:                  { ...(w as Record<string, unknown>), session_id: w.session_id },
         });
       }
 

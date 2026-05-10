@@ -1437,6 +1437,8 @@ export type Database = {
       workout_logs: {
         Row: {
           athlete_id: string
+          athlete_modifications: import("@/features/shared/types/athlete").AthleteModifications | null
+          coach_alert: boolean
           coach_id: string | null
           completed_at: string | null
           created_at: string
@@ -1444,6 +1446,9 @@ export type Database = {
           id: string
           microcycle_id: string | null
           notes: string | null
+          original_scheduled_date: string
+          reschedule_reason: string | null
+          rescheduled_by_athlete: boolean
           rpe_score: number | null
           scheduled_date: string
           session_id: string
@@ -1454,6 +1459,8 @@ export type Database = {
         }
         Insert: {
           athlete_id: string
+          athlete_modifications?: import("@/features/shared/types/athlete").AthleteModifications | null
+          coach_alert?: boolean
           coach_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1461,6 +1468,9 @@ export type Database = {
           id?: string
           microcycle_id?: string | null
           notes?: string | null
+          original_scheduled_date?: string
+          reschedule_reason?: string | null
+          rescheduled_by_athlete?: boolean
           rpe_score?: number | null
           scheduled_date?: string
           session_id: string
@@ -1471,6 +1481,8 @@ export type Database = {
         }
         Update: {
           athlete_id?: string
+          athlete_modifications?: import("@/features/shared/types/athlete").AthleteModifications | null
+          coach_alert?: boolean
           coach_id?: string | null
           completed_at?: string | null
           created_at?: string
@@ -1478,6 +1490,9 @@ export type Database = {
           id?: string
           microcycle_id?: string | null
           notes?: string | null
+          original_scheduled_date?: string
+          reschedule_reason?: string | null
+          rescheduled_by_athlete?: boolean
           rpe_score?: number | null
           scheduled_date?: string
           session_id?: string

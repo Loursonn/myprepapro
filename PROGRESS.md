@@ -188,4 +188,106 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 
 ---
 
-**Dernière mise à jour :** 2026-04-27 — PROMPT 5 terminé (TEST MANUEL restant)
+## 🏃 PROMPT 7 - Flexibilité planning + édition séance athlète
+
+### A. Décalage de séance
+- [x] Migration SQL `20260507000000_athlete_flexibility.sql` (5 colonnes + contrainte unique + indexes + RLS)
+- [x] `useRescheduleWorkout` — UPDATE scheduled_date + flags, optimistic + rollback
+- [x] `RescheduleDrawer` dans `ProgramPage` — sélecteur 14 jours, raison, alerte semaine suivante
+- [x] Badge "Décalée du {date}" dans `WorkoutDetailPage`
+- [x] Marqueur orange dans `CalendarMonthView` (dot plein si coachAlert, contour si rescheduled)
+- [x] Badge ⚡ N dans `ContextBar` → lien RetoursPage
+- [x] Section "Modifications planning" dans `RetoursPage`
+
+### B. Séance non prévue le jour-J
+- [x] `useStartUnplannedSession` — INSERT workout_log avec flags athlète
+- [x] Section "Faire une autre séance" dans `TodayPage` (collapsed, liste séances non complétées)
+- [x] Badge "N séances aujourd'hui" si conflit jour-J
+
+### C. Édition live (bonus sets + exercices)
+- [x] `useAddBonusSet` — PATCH athlete_modifications JSONB, isolé de app_data
+- [x] `useAddCustomExercise` — PATCH athlete_modifications JSONB
+- [x] `useWorkoutLog` — hook lecture workout_log courant pour une session
+- [x] `BonusSetSection` dans `WorkoutDetailPage` — "+ Série" sous chaque exercice
+- [x] `ExercisePicker` modal dans `WorkoutDetailPage` — recherche dans table exercises
+- [x] Guard : boutons cachés si pas de workoutLogId (séances legacy app_data)
+- [x] Isolation surcharge progressive : athlete_modifications ≠ sets legacy → computeAutoProgress non affecté
+
+### Types & QueryKeys
+- [x] `AthleteModifications`, `BonusSet`, `CustomExercise` dans `athlete.ts`
+- [x] Champs workout_logs mis à jour dans `types.ts`
+- [x] `workoutLogsWeek`, `athleteModifications` dans `queryKeys.ts`
+- [x] `rescheduledByAthlete`, `coachAlert` dans `WeekSession` (useActivePlan)
+- [x] `rescheduledByAthlete`, `coachAlert` dans `UnifiedCalendarEvent`
+
+### Build & lint
+- [x] `npm run build` passe (0 erreur)
+- [x] `npm run lint` — 0 erreur sur tous les fichiers modifiés
+- [ ] ✅ **TEST MANUEL** : reschedule, bonus set, séance non prévue, vue coach
+
+---
+
+**Dernière mise à jour :** 2026-05-07 — PROMPT 7 terminé (TEST MANUEL restant)
+
+---
+
+## ✅ PROMPT 8 - Refonte système de planification (frise périodisation)
+
+### §1 — Suppression Schema A (saisons + planning_blocks)
+- [x] Migration `20260510000000_drop_legacy_planning_schema_a.sql` créée
+- [x] `usePlanningBlocks.ts` supprimé
+- [x] `PlanningOverview.tsx` supprimé
+- [x] `PlanningEditor.tsx` supprimé — remplacé par lien vers TimelineView
+- [x] `src/types/planning.ts` nettoyé : `Season`, `PlanningBlock`, `BLOCK_TYPE_LABELS` supprimés
+- [x] `BlockType` mis à jour : `macrocycle | mesocycle | cycle | microcycle`
+- [x] `CompetitionFormModal.tsx` : suppression `season_id`, `planning_block_id`
+- [x] `useCompetitions.ts` : suppression `useSeasonCompetitions`
+- [x] `ContextBar.tsx` : suppression tab "Saison"
+- [x] `PlanningPage.tsx` : refactorisée, type `PlanView` sans "season"
+- [x] `ProgPage.tsx` : PlanningEditor remplacé par redirect planning timeline
+
+### §2 — Règles de chevauchement
+- [x] Migration `20260510100000_period_overlap_triggers.sql` créée
+- [x] Triggers : `check_macrocycle_overlap`, `check_mesocycle_overlap`, `check_cycle_overlap`
+- [x] `PeriodConflictDialog.tsx` créé (cascade shift / réduire / annuler)
+- [x] `ChildOverflowDialog.tsx` créé (multi-parent / réduire / annuler)
+
+### §3 — Multi-parent (calcul à la volée)
+- [x] `useEffectiveParents.ts` créé (hooks `useEffectiveParentsMeso`, `useEffectiveParentsCycle`, `useEffectiveParentsMicro`)
+- [x] Secondaire = tout parent du même niveau qui chevauche la plage de l'enfant
+
+### §4 — Changement de parent
+- [x] `ChangeParentDialog.tsx` créé
+
+### §5 — Dates snappées + PERIOD_DEFAULTS
+- [x] `planningHelpers.ts` créé : `snapMonday`, `snapSunday`, `chainNextStart`, `endFromWeeks`, `computeCascade`
+- [x] `PERIOD_DEFAULTS` exporté depuis `src/types/planning.ts` : macro=52, meso=13, cycle=4, micro=1 semaines
+
+### §6 — UX
+- [x] §6.a Raccourcis clavier : `usePlanningKeyboardShortcuts.ts` créé (N/←/→/↑/↓/Suppr/Cmd+D/Esc)
+- [x] §6.b Boutons dates rapides : `DateQuickAdjust.tsx` créé, intégré dans 3 drawers
+- [x] §6.d Breadcrumb : calculé dynamiquement dans TimelineView depuis état drawer + données
+- [ ] §6.c Inline creation (+ button en fin de chaque ligne) — non implémenté
+
+### §7 — Réutilisation drawers existants
+- [x] `MacrocycleDrawer.tsx` : DateQuickAdjust + prevEndDate intégré
+- [x] `MesocycleDrawer.tsx` : DateQuickAdjust + prevEndDate intégré
+- [x] `CycleDrawer.tsx` : DateQuickAdjust + prevEndDate intégré
+
+### §8 — Tests Vitest
+- [x] `src/__tests__/planning.test.ts` créé — 23 tests
+- [x] Overlap detection (4 tests)
+- [x] `useEffectiveParentsMeso` + `useEffectiveParentsCycle` (4 tests)
+- [x] `snapMonday` / `snapSunday` (3 tests)
+- [x] `chainNextStart` / `endFromWeeks` (4 tests)
+- [x] `computeCascade` (2 tests)
+- [x] `PERIOD_DEFAULTS` (4 tests)
+- [x] `npm run test` → 23/23 ✅
+
+### Build & lint
+- [x] `npm run build` passe (0 erreur)
+- [ ] ✅ **TEST MANUEL** : création/édition périodes, chevauchement, cascade, multi-parent
+
+---
+
+**Dernière mise à jour :** 2026-05-10 — PROMPT 8 terminé (§6.c inline creation + TEST MANUEL restants)

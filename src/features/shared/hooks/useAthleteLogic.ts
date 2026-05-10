@@ -63,6 +63,177 @@ export function useAthleteLogic(d: LogicDeps) {
     setMilestoneNotif, setWeekJustCompleted, setShowBilan, setAW, save,
   } = d;
 
+  // ── Auto progress computation (pure) ──────────────────────────────────────
+  const computeAutoProgress = useCallback((sessId: string, completedWeek: number, srcExos?: ExosMap): ExosMap | null => {
+    const curExos = srcExos ?? exos;
+    const sessExos = curExos[sessId] || [];
+    if (!sessExos.length) return null;
+    const tierCfgL = blockConfig?.tierConfig || DEF_TIER_CONFIG;
+    const dwL = blockConfig?.deloadWeek || tw;
+    const futureWeeks = weeksArr.filter(w => w > completedWeek);
+    const futureTrainWeeks = futureWeeks.filter(w => w !== dwL);
+    if (!futureWeeks.length) return null;
+    let changed = false;
+    const newSessExos = sessExos.map(ex => {
+      const eType = ex.exType || (ex.isFlexibility ? "mobilite" : "muscu");
+      if (eType !== "muscu" && eType !== "halterophilie") return ex;
+      const doneRows = (sets[ex.id + "_" + completedWeek] || []).filter(r => r.done);
+      if (!doneRows.length) return ex;
+      const tier = getExTier(ex.name, ex);
+      const tc = (tierCfgL as Record<number, typeof DEF_TIER_CONFIG[number]>)[tier] || (tierCfgL as Record<number, typeof DEF_TIER_CONFIG[number]>)[3];
+      const plannedWd = ex.weeks[completedWeek] || {};
+      const mainRows = doneRows.filter(r => !r.type || r.type === "set");
+      const refRows = mainRows.length ? mainRows : doneRows;
+      const kgVals = refRows.map(r => r.kg || 0).filter(v => v > 0);
+      const baseKg = kgVals.length ? kgVals[Math.floor(kgVals.length / 2)] : (plannedWd.pdc ? 0 : (plannedWd.kg || 0));
+      const basePdc = !!(plannedWd.pdc && !baseKg);
+      const repsVals = mainRows.filter(r => (r.reps ?? 0) > 0).map(r => r.reps!);
+      const baseReps = repsVals.length ? Math.round(repsVals.reduce((a, b) => a + b, 0) / repsVals.length) : (parseReps(plannedWd.repsRange ?? "") || 10);
+      const rirVals = mainRows.map(r => r.rir).filter((v): v is number => v != null && !isNaN(v));
+      const baseRir = rirVals.length ? Math.round(rirVals.reduce((a, b) => a + b, 0) / rirVals.length * 2) / 2 : (plannedWd.rir ?? tc.rirStart ?? 2);
+      const baseSets = mainRows.length || plannedWd.sets || 3;
+      const newWeeks = { ...ex.weeks };
+      futureWeeks.forEach(w => {
+        if ((completedSessions[w] || []).includes(sessId)) return;
+        const existingWd = newWeeks[w] || {};
+        const preserve = { coachNote: existingWd.coachNote, tempo: existingWd.tempo, method: existingWd.method, methodParams: existingWd.methodParams };
+        const kgBase = basePdc ? undefined : baseKg;
+        if (w === dwL) {
+          const dlPct = tc.deloadPct || 40;
+          newWeeks[w] = { ...preserve, ...(basePdc ? { pdc: true } : (kgBase ? { kg: Math.round(kgBase * (1 - dlPct / 100) / 2.5) * 2.5 } : {})), sets: Math.max(2, Math.round(baseSets * 0.6)), rir: (tc.rirStart || 2) + 2, repsRange: String(baseReps) };
+        } else {
+          const wIdx = futureTrainWeeks.indexOf(w);
+          const total = futureTrainWeeks.length;
+          const kgStep = tc.kgStep ?? 2.5;
+          if (tc.mode === "rir") {
+            const rirDrop = baseRir >= (tc.rirEnd ?? 0) ? Math.max(0, baseRir - (tc.rirEnd ?? 0)) / Math.max(1, total) : 0;
+            const newRir = Math.max(tc.rirEnd ?? 0, Math.round((baseRir - rirDrop * (wIdx + 1)) * 2) / 2);
+            newWeeks[w] = { ...preserve, ...(basePdc ? { pdc: true } : (kgBase ? { kg: roundHalf(kgBase + kgStep * (wIdx + 1)) } : {})), sets: baseSets, repsRange: String(baseReps), rir: newRir };
+          } else if (tc.mode === "reps") {
+            const repTarget = tc.repsEnd || 12;
+            const repGap = Math.max(0, repTarget - baseReps);
+            const repStep = total ? Math.ceil(repGap / total) : 0;
+            const newReps = Math.min(repTarget, baseReps + repStep * (wIdx + 1));
+            const rirDrop = (baseRir - (tc.rirEnd || 1)) / Math.max(1, total);
+            const newRir = Math.max(tc.rirEnd || 1, Math.round((baseRir - rirDrop * (wIdx + 1)) * 2) / 2);
+            const cycleLen = repGap + 1 || 1;
+            const cycleNum = Math.floor((wIdx + 1) / cycleLen);
+            newWeeks[w] = { ...preserve, ...(basePdc ? { pdc: true } : (kgBase ? { kg: roundHalf(kgBase + kgStep * cycleNum) } : {})), sets: baseSets, repsRange: String(newReps), rir: newRir };
+          } else {
+            newWeeks[w] = { ...preserve, ...(basePdc ? { pdc: true } : (kgBase ? { kg: roundHalf(kgBase + kgStep * (wIdx + 1)) } : {})), sets: baseSets, repsRange: String(baseReps), rir: tc.rir ?? 0 };
+          }
+        }
+        changed = true;
+      });
+      return { ...ex, weeks: newWeeks };
+    });
+    if (!changed) return null;
+    return { ...curExos, [sessId]: newSessExos };
+  }, [exos, sets, blockConfig, completedSessions, tw, weeksArr]);
+
+  const autoProgressOnComplete = useCallback((sessId: string, completedWeek: number, currentExos?: ExosMap) => {
+    const newExos = computeAutoProgress(sessId, completedWeek, currentExos ?? exos);
+    if (newExos) {
+      setExos(newExos);
+      setAutoProgNotif(`Progression S${completedWeek + 1}→S${tw} mise à jour`);
+      setTimeout(() => setAutoProgNotif(null), 3500);
+    }
+  }, [computeAutoProgress, exos, setExos, setAutoProgNotif, tw]);
+
+  // ── Backfill completedSessions → workout_logs on first load ─────────────
+  // Sessions marked complete before DB-sync was implemented live only in
+  // localStorage. This one-time sync writes them to workout_logs so that
+  // the Retours view (which reads only from the DB) can see them.
+  const backfillDoneRef = useRef(false);
+  useEffect(() => {
+    return () => { backfillDoneRef.current = false; };
+  }, []);
+  useEffect(() => {
+    if (!loaded || backfillDoneRef.current || !athleteId || !blockConfig?.startDate) return;
+    backfillDoneRef.current = true;
+
+    const allEntries = Object.entries(completedSessions) as [string, string[]][];
+    if (allEntries.length === 0) return;
+
+    const blockStart = new Date(blockConfig.startDate + "T12:00:00");
+    const dow0 = blockStart.getDay();
+    // Snap blockStart to the Monday of its week
+    const blockMonday = new Date(blockStart);
+    blockMonday.setDate(blockStart.getDate() + (dow0 === 0 ? -6 : 1 - dow0));
+
+    (async () => {
+      for (const [weekStr, sessIds] of allEntries) {
+        const week = Number(weekStr);
+        if (!Number.isFinite(week) || week < 1 || sessIds.length === 0) continue;
+
+        const monday = new Date(blockMonday);
+        monday.setDate(blockMonday.getDate() + (week - 1) * 7);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const weekStart = monday.toISOString().split("T")[0];
+        const weekEnd   = sunday.toISOString().split("T")[0];
+
+        for (const sessId of sessIds) {
+          const sess = sessions.find(s => s.id === sessId);
+
+          // Check if a workout_log already exists for this session in this week
+          const { data: rows } = await supabase
+            .from("workout_logs")
+            .select("id, status")
+            .eq("session_id", sessId)
+            .eq("athlete_id", athleteId)
+            .gte("scheduled_date", weekStart)
+            .lte("scheduled_date", weekEnd)
+            .limit(1);
+
+          const existing = rows?.[0] ?? null;
+
+          if (existing) {
+            if (existing.status !== "completed") {
+              await supabase.from("workout_logs").update({ status: "completed" }).eq("id", existing.id);
+            }
+          } else {
+            // Compute the scheduled_date for this session
+            const dow = (sess?.weekDays?.[weekStr] ?? sess?.day_of_week) as number | undefined;
+            const scheduledDate = dow != null
+              ? (() => { const d = new Date(monday); d.setDate(monday.getDate() + dow); return d.toISOString().split("T")[0]; })()
+              : weekStart;
+            await supabase.from("workout_logs").insert({
+              athlete_id:     athleteId,
+              session_id:     sessId,
+              session_name:   sess?.name ?? "Séance",
+              scheduled_date: scheduledDate,
+              status:         "completed",
+            });
+          }
+        }
+      }
+      qc.invalidateQueries({ queryKey: ["cal", athleteId] });
+    })();
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync auto-progress on load ────────────────────────────────────────────
+  // Guard: only run once per mount cycle — not on every remount (e.g. navigation)
+  const autoSyncDoneRef = useRef(false);
+  useEffect(() => {
+    // Reset guard when component unmounts so next mount gets a fresh sync
+    return () => { autoSyncDoneRef.current = false; };
+  }, []);
+  useEffect(() => {
+    if (!loaded || autoSyncDoneRef.current) return;
+    autoSyncDoneRef.current = true;
+    let current = exos; let anyChanged = false;
+    weeksArr.forEach(week => {
+      sessions.forEach(s => {
+        const hasActual = (current[s.id] || []).some(ex => (sets[ex.id + "_" + week] || []).some(r => r.done && (r.kg || 0) > 0));
+        if (!hasActual) return;
+        const result = computeAutoProgress(s.id, week, current);
+        if (result) { current = result; anyChanged = true; }
+      });
+    });
+    if (anyChanged) { setExos(current); setAutoProgNotif('Progression synchronisée depuis le réel'); setTimeout(() => setAutoProgNotif(null), 3500); }
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Calcule la date exacte planifiée pour une séance dans une semaine donnée
   const sessionScheduledDate = useCallback((sessId: string, week: number): string | null => {
     if (!blockConfig?.startDate) return null;
@@ -76,20 +247,41 @@ export function useAthleteLogic(d: LogicDeps) {
     return d0.toISOString().split("T")[0];
   }, [blockConfig?.startDate, sessions]);
 
+  const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned") => {
+    if (!athleteId || !blockConfig?.startDate) return;
   const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned", note?: string) => {
     if (!athleteId) return;
     const scheduledDate = sessionScheduledDate(sessId, week);
     if (!scheduledDate) return;
     const sess = sessions.find(s => s.id === sessId);
 
+    // Compute the Monday–Sunday of the target week (block-relative)
+    const blockStart = new Date(blockConfig.startDate + "T12:00:00");
+    const dow0 = blockStart.getDay();
+    const monday = new Date(blockStart);
+    monday.setDate(blockStart.getDate() + (dow0 === 0 ? -6 : 1 - dow0) + (week - 1) * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const weekStart = monday.toISOString().split("T")[0];
+    const weekEnd   = sunday.toISOString().split("T")[0];
+
+    // Fallback scheduled_date (used only when inserting a new log)
+    const scheduledDate = sessionScheduledDate(sessId, week) ?? weekStart;
+
     (async () => {
-      const { data: existing } = await supabase
+      // Search by session_id + week range — works regardless of which exact day
+      // the coach placed the session on (avoids exact-date mismatch bug)
+      const { data: rows } = await supabase
         .from("workout_logs")
         .select("id")
         .eq("session_id", sessId)
         .eq("athlete_id", athleteId)
-        .eq("scheduled_date", scheduledDate)
-        .maybeSingle();
+        .gte("scheduled_date", weekStart)
+        .lte("scheduled_date", weekEnd)
+        .order("scheduled_date")
+        .limit(1);
+
+      const existing = rows?.[0] ?? null;
 
       if (existing) {
         await supabase
@@ -110,7 +302,7 @@ export function useAthleteLogic(d: LogicDeps) {
       }
       qc.invalidateQueries({ queryKey: ["cal", athleteId] });
     })();
-  }, [sessionScheduledDate, sessions, athleteId, qc]);
+  }, [sessionScheduledDate, sessions, athleteId, blockConfig?.startDate, qc]);
 
   const completeSession = useCallback((sessId: string, week: number, note?: string) => {
     const prev = completedSessions[week] || [];

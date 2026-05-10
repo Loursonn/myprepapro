@@ -32,4 +32,8 @@ export const QK = {
       : ['monthlyRetours'],
   // ── Plan actif (mésocycle courant + séances à venir) ─────────────────────────
   activePlan:     (aid: string) => ['activePlan', aid] as const,
+  // ── Workout logs (semaine) ────────────────────────────────────────────────────
+  workoutLogsWeek: (aid: string, mondayISO: string) => ['workout-logs-week', aid, mondayISO] as const,
+  // ── Modifications athlète (reschedule + bonus, pour coach) ───────────────────
+  athleteModifications: (aid: string) => ['athleteModifications', aid] as const,
 } as const;

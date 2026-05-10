@@ -117,19 +117,20 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
     db.from("workout_logs")
       .select("id, session_id, session_name, scheduled_date, status, duration_s, notes, rpe_score")
       .eq("athlete_id", athleteId)
-      .neq("status", "skipped")
+      // include skipped — coaches want to see them
       .gte("scheduled_date", start)
       .lte("scheduled_date", end)
       .order("scheduled_date"),
 
     db.from("energy_session_assignments")
+      .select("id, scheduled_date, status, notes, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m, intervals)")
       .select("id, scheduled_date, status, notes, rpe_score, block_logs, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m)")
       .eq("athlete_id", athleteId)
       .gte("scheduled_date", start)
       .lte("scheduled_date", end),
 
     db.from("test_sessions")
-      .select("id, title, type, date, completed, results_note, coach_validated")
+      .select("id, title, type, date, completed, results_note, results_structured, coach_validated")
       .eq("athlete_id", athleteId)
       .gte("date", start)
       .lte("date", end),
@@ -237,6 +238,17 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
   const energySessions: EnergySessionDetail[] = (energyRes.data ?? []).map((e: any) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const es = (e.energy_sessions as any) ?? {};
+    // notes may be plain text or JSON step_log_v1
+    let note: string | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let stepLog: Record<string, any> | null = null;
+    if (e.notes) {
+      try {
+        const parsed = JSON.parse(e.notes);
+        if (parsed.__type === "step_log_v1") { stepLog = parsed.steps ?? null; note = parsed.session_comment ?? null; }
+        else note = e.notes;
+      } catch { note = e.notes; }
+    }
     const blockLogs = (e.block_logs ?? {}) as Record<string, { done: boolean }>;
     const blVals = Object.values(blockLogs);
     const partial = blVals.length > 0 && blVals.some(b => b.done) && blVals.some(b => !b.done);
@@ -244,11 +256,15 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
       id:            e.id,
       session_label: es.name             ?? "Session énergétique",
       date:          e.scheduled_date,
+      status:        e.status            ?? "planned",
       completed:     e.status === "completed",
       partial,
       duration_min:  es.total_duration_s != null ? Math.round(es.total_duration_s / 60) : null,
       distance_m:    es.total_distance_m ?? null,
       session_kind:  es.session_kind     ?? null,
+      note,
+      intervals:     es.intervals        ?? [],
+      step_log:      stepLog,
       note:          e.notes             ?? null,
       rpe_score:     e.rpe_score         ?? null,
       block_logs:    e.block_logs        ?? null,
@@ -308,15 +324,16 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
     ? Math.round(wellnessScores.reduce((a, b) => a + b, 0) / wellnessScores.length)
     : null;
 
-  const completed = workouts.filter((w) => w.status === "completed");
+  const completed      = workouts.filter((w) => w.status === "completed");
+  const energyDone     = energySessions.filter((e) => e.completed).length;
 
   return {
     month:      format(monthStart, "yyyy-MM"),
     start_date: start,
     end_date:   end,
     avg_wellness,
-    workouts_completed: completed.length,
-    workouts_total:     workouts.length,
+    workouts_completed: completed.length + energyDone,
+    workouts_total:     workouts.length  + energySessions.length,
     workouts_by_type: {
       muscu:    completed.filter((w) => w.session_type === "muscu").length,
       specific: completed.filter((w) => w.session_type === "specific").length,
@@ -328,13 +345,14 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
     energy_sessions: energySessions,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     test_sessions: (testsRes.data ?? []).map((t: any) => ({
-      id:              t.id,
-      title:           t.title,
-      type:            t.type,
-      date:            t.date,
-      completed:       t.completed,
-      results_note:    t.results_note    ?? null,
-      coach_validated: t.coach_validated ?? null,
+      id:                  t.id,
+      title:               t.title,
+      type:                t.type,
+      date:                t.date,
+      completed:           t.completed,
+      results_note:        t.results_note        ?? null,
+      results_structured:  t.results_structured  ?? null,
+      coach_validated:     t.coach_validated      ?? null,
     })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     competitions: (compsRes.data ?? []).map((c: any) => ({

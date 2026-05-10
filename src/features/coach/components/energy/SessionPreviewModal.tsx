@@ -118,6 +118,16 @@ interface SessionPreviewModalProps {
   athleteId?: string;
   /** If provided, shows "Modifier la séance" button */
   onEdit?: () => void;
+  /** If provided (athlete context, not completed), shows action button */
+  onStart?: () => void;
+  /** Label for the onStart button. Default: "Faire la séance aujourd'hui" */
+  startLabel?: string;
+  /** If provided (athlete context, completed), shows "Annuler la séance" button */
+  onCancel?: () => void;
+  onClose: () => void;
+}
+
+export function SessionPreviewModal({ session, athleteId, onEdit, onStart, startLabel, onCancel, onClose }: SessionPreviewModalProps) {
   /** If provided (athlete view), shows "Valider la séance" button */
   onValidate?: () => void;
   /** If provided (athlete view, already completed), shows "Dévalider" button */
@@ -203,6 +213,14 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onValidate, on
               Modifier la séance
             </button>
           )}
+          {onStart && (
+            <button onClick={onStart} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: C.ac, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              {startLabel ?? "Faire la séance aujourd'hui"}
+            </button>
+          )}
+          {onCancel && (
+            <button onClick={onCancel} style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Annuler la séance
           {onValidate && (
             <button onClick={onValidate} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: "#22C993", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Valider la séance ✓

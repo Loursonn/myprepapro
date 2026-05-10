@@ -12,6 +12,7 @@ import { PageSkeleton } from "@/features/shared/components/skeletons";
 import { KPICard } from "@/features/coach/components/KPICard";
 import { useMonthlyRetours } from "@/features/shared/hooks/useMonthlyRetours";
 import { useWeeklyRetours } from "@/features/shared/hooks/useWeeklyRetours";
+import { useAthleteModifications } from "@/features/shared/hooks/useAthleteModifications";
 import { MonthCalendarView } from "../components/retours/MonthCalendarView";
 import { WeekView } from "../components/retours/WeekView";
 import { WellnessDetailView } from "../components/retours/WellnessDetailView";
@@ -33,6 +34,7 @@ export default function RetoursPage() {
   // ── Data ──────────────────────────────────────────────────────────────────
   const { data: monthData, isLoading: monthLoading } = useMonthlyRetours(athleteId!, selectedMonth);
   const { data: weekData,  isLoading: weekLoading  } = useWeeklyRetours(athleteId!, selectedWeek);
+  const { data: modifications = [] } = useAthleteModifications(athleteId!);
 
   const isLoading = viewMode === "month" ? monthLoading : weekLoading;
   if (isLoading) return <PageSkeleton />;
@@ -49,6 +51,17 @@ export default function RetoursPage() {
   const kpiData = viewMode === "month" ? monthData : null;
   const weekCurrent = weekData?.current_week;
 
+  // KPI séances — includes both muscu/spé AND energy
+  const weekTotal     = weekCurrent ? weekCurrent.workouts.length + weekCurrent.energy_sessions.length : 0;
+  const weekCompleted = weekCurrent
+    ? weekCurrent.workouts.filter(w => w.status === "completed").length
+      + weekCurrent.energy_sessions.filter(e => e.completed).length
+    : 0;
+
+  const completionRate = kpiData && kpiData.workouts_total > 0
+    ? Math.round((kpiData.workouts_completed / kpiData.workouts_total) * 100)
+    : weekCurrent && weekTotal > 0
+      ? Math.round(weekCompleted / weekTotal * 100)
   const weekDone  = weekCurrent ? weekCurrent.workouts.filter(w => w.status === "completed").length + weekCurrent.energy_sessions.filter(e => e.completed || e.partial).length : 0;
   const weekTotal = weekCurrent ? weekCurrent.workouts.length + weekCurrent.energy_sessions.length : 0;
 
@@ -80,6 +93,7 @@ export default function RetoursPage() {
   const workoutsVal = kpiData
     ? `${kpiData.workouts_completed}/${kpiData.workouts_total}`
     : weekCurrent
+      ? `${weekCompleted}/${weekTotal}`
       ? `${weekDone}/${weekTotal}`
       : null;
 
@@ -244,6 +258,87 @@ export default function RetoursPage() {
           }
           onClose={() => setDetailView(null)}
         />
+      )}
+
+      {/* ── Modifications planning athlète ── */}
+      {modifications.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            Modifications planning athlète
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+              background: "rgba(245,158,11,0.12)", color: "#F59E0B",
+              border: "1px solid rgba(245,158,11,0.3)",
+            }}>
+              {modifications.length}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {modifications.map((mod) => {
+              const isAlert   = mod.coachAlert;
+              const hasBonus  = mod.athleteModifications !== null;
+              const dateLabel = new Date(mod.scheduledDate + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+              const origLabel = mod.rescheduledByAthlete && mod.originalScheduledDate !== mod.scheduledDate
+                ? new Date(mod.originalScheduledDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
+                : null;
+              const bonusSetsCount = mod.athleteModifications?.bonusSets?.reduce((n, b) => n + b.sets.length, 0) ?? 0;
+              const customExCount  = mod.athleteModifications?.customExercises?.length ?? 0;
+
+              return (
+                <div
+                  key={mod.id}
+                  style={{
+                    background: C.s1, borderRadius: 12, padding: "12px 14px",
+                    border: "1px solid " + (isAlert ? "rgba(245,158,11,0.4)" : C.brd),
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{mod.sessionName}</div>
+                      <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>
+                        {dateLabel}
+                        {origLabel && <span style={{ color: "#F59E0B" }}> · Décalée du {origLabel}</span>}
+                      </div>
+                      {mod.rescheduleReason && (
+                        <div style={{ fontSize: 11, color: C.tx3, marginTop: 4, fontStyle: "italic" }}>
+                          « {mod.rescheduleReason} »
+                        </div>
+                      )}
+                      {hasBonus && (
+                        <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {bonusSetsCount > 0 && (
+                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: "rgba(245,158,11,0.1)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.25)" }}>
+                              +{bonusSetsCount} série{bonusSetsCount > 1 ? "s" : ""} bonus
+                            </span>
+                          )}
+                          {customExCount > 0 && (
+                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: "rgba(59,141,240,0.1)", color: "#3B8DF0", border: "1px solid rgba(59,141,240,0.25)" }}>
+                              +{customExCount} exercice{customExCount > 1 ? "s" : ""} ajouté{customExCount > 1 ? "s" : ""}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                      {isAlert && (
+                        <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(245,158,11,0.15)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.4)" }}>
+                          ⚠ À vérifier
+                        </span>
+                      )}
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
+                        background: mod.status === "completed" ? C.gS : mod.status === "missed" ? "rgba(239,75,75,0.12)" : C.s2,
+                        color: mod.status === "completed" ? C.g : mod.status === "missed" ? C.r : C.tx3,
+                      }}>
+                        {mod.status === "completed" ? "✓ Complétée" : mod.status === "missed" ? "Manquée" : mod.status === "in_progress" ? "En cours" : "Planifiée"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );

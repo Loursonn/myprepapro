@@ -9,6 +9,7 @@ import { ChevronDown, ChevronUp, Heart } from "lucide-react";
 import { C } from "@/lib/theme";
 import { WorkoutRetourCard } from "./WorkoutRetourCard";
 import { EnergyRetourCard } from "./EnergyRetourCard";
+import { TestRetourCard } from "./TestRetourCard";
 import { DayDetailPanel } from "./DayDetailPanel";
 import type { MonthlyRetourData, WellnessDay } from "@/features/shared/types/retours.types";
 
@@ -38,7 +39,8 @@ function WeekSection({ weekStart, month, data, onDayClick }: WeekSectionProps) {
 
   // count sessions + check if any data this week
   const workoutsByDate: Record<string, typeof data.workouts> = {};
-  const energyByDate: Record<string, typeof data.energy_sessions> = {};
+  const energyByDate:  Record<string, typeof data.energy_sessions> = {};
+  const testsByDate:   Record<string, typeof data.test_sessions>   = {};
 
   for (const w of data.workouts) {
     const d = w.scheduled_date;
@@ -50,10 +52,15 @@ function WeekSection({ weekStart, month, data, onDayClick }: WeekSectionProps) {
     if (!energyByDate[d]) energyByDate[d] = [];
     energyByDate[d].push(e);
   }
+  for (const t of data.test_sessions) {
+    if (!testsByDate[t.date]) testsByDate[t.date] = [];
+    testsByDate[t.date].push(t);
+  }
 
   const weekDates = days.map((d) => format(d, "yyyy-MM-dd"));
   const totalSessions = weekDates.reduce(
-    (acc, d) => acc + (workoutsByDate[d]?.length ?? 0) + (energyByDate[d]?.length ?? 0),
+    (acc, d) =>
+      acc + (workoutsByDate[d]?.length ?? 0) + (energyByDate[d]?.length ?? 0) + (testsByDate[d]?.length ?? 0),
     0,
   );
   const hasWellness = weekDates.some((d) => data.daily_data[d]?.wellness != null);
@@ -98,7 +105,8 @@ function WeekSection({ weekStart, month, data, onDayClick }: WeekSectionProps) {
             const wellness   = data.daily_data[dateStr]?.wellness as WellnessDay | null ?? null;
             const dayWorkouts = workoutsByDate[dateStr] ?? [];
             const dayEnergy   = energyByDate[dateStr]   ?? [];
-            const hasContent  = dayWorkouts.length > 0 || dayEnergy.length > 0;
+            const dayTests    = testsByDate[dateStr]    ?? [];
+            const hasContent  = dayWorkouts.length > 0 || dayEnergy.length > 0 || dayTests.length > 0;
 
             return (
               <div
@@ -155,6 +163,9 @@ function WeekSection({ weekStart, month, data, onDayClick }: WeekSectionProps) {
                     ))}
                     {dayEnergy.map((e) => (
                       <EnergyRetourCard key={e.id} session={e} />
+                    ))}
+                    {dayTests.map((t) => (
+                      <TestRetourCard key={t.id} test={t} />
                     ))}
                   </div>
                 )}

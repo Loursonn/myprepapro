@@ -1,7 +1,6 @@
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { MuscleVolumeCard } from "@/components/athlete/StatsViews";
-import { PlanningOverview } from "@/components/coach/PlanningOverview";
 import { MiniChart, WeightChart } from "@/components/athlete/StatsCharts";
 import { getBig3, get1rmByWeek } from "@/lib/calculations";
 import { stC } from "@/lib/muscles";
@@ -29,8 +28,6 @@ export default function StatsPage() {
       <div style={{ fontSize: 12, color: C.tx2, marginBottom: 12 }}>
         {sessions.length > 0 ? (blockConfig?.blockName || "Programme") + " · S" + currentWeek + "/" + tw : "Aucun bloc actif"}
       </div>
-
-      <PlanningOverview athleteId={athleteId} />
 
       {/* 1RM Progression */}
       <div style={{ background: C.s1, borderRadius: 14, padding: 14, border: "1px solid " + C.brd, marginBottom: 14 }}>

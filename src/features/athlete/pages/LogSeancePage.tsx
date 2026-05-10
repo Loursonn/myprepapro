@@ -428,6 +428,10 @@ function RpeGridInline({ onSubmit, onSkip, isPending }: { onSubmit: (v: number) 
 
 export default function LogSeancePage() {
   const location = useLocation();
+  const locationState = location.state as { initialSess?: unknown; initialTab?: string } | null;
+  const initialSess = locationState?.initialSess ?? null;
+  const [logSubTab, setLogSubTab] = useState(locationState?.initialTab ?? "muscu");
+  const [rpeSessionId, setRpeSessionId] = useState<string | null>(null);
   const initialSess = (location.state as { initialSess?: unknown } | null)?.initialSess ?? null;
   const [logSubTab, setLogSubTab] = useState("muscu");
   const [rpePending, setRpePending] = useState<{ sessionId: string; scheduledDate: string } | null>(null);

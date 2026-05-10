@@ -46,12 +46,29 @@ export interface WeekSession {
   sessionId?: string;
   /** energy_session_assignments.energy_session_id — used to open preview */
   energySessionId?: string;
+  /** Date originale avant reschedule athlète */
+  originalScheduledDate?: string;
+  /** L'athlète a décalé cette séance */
+  rescheduledByAthlete?: boolean;
+  /** Le coach doit être alerté */
+  coachAlert?: boolean;
+}
+
+export interface TestBrief {
+  id: string;
+  title: string;
+  type: string;
+  date: string;
+  completed: boolean;
+  description: string | null;
+  results_note: string | null;
 }
 
 export interface WeekDay {
   date: string;   // ISO yyyy-MM-dd
   dow: number;    // 0=Mon … 6=Sun
   sessions: WeekSession[];
+  tests: TestBrief[];
 }
 
 export interface ActivePlanResult {
@@ -175,8 +192,8 @@ export function useActivePlan(athleteId: string) {
         }
       }
 
-      // ── 4. Current week: workout_logs + energy_assignments (parallel) ──────
-      const [{ data: wLogs }, { data: eAssigns }] = await Promise.all([
+      // ── 4. Current week: workout_logs + energy_assignments + tests (parallel) ─
+      const [{ data: wLogs }, { data: eAssigns }, { data: tSessions }] = await Promise.all([
         supabase
           .from("workout_logs")
           .select("id, session_id, session_name, scheduled_date, status")
@@ -193,20 +210,46 @@ export function useActivePlan(athleteId: string) {
           .gte("scheduled_date", mondayISO)
           .lte("scheduled_date", sundayISO)
           .order("scheduled_date"),
+
+        supabase
+          .from("test_sessions")
+          .select("id, title, type, date, completed, description, results_note")
+          .eq("athlete_id", athleteId)
+          .gte("date", mondayISO)
+          .lte("date", sundayISO)
+          .order("date"),
       ]);
 
-      // ── 5. Build sessions by date ──────────────────────────────────────────
+      // ── 5. Build sessions + tests by date ─────────────────────────────────
       const byDate = new Map<string, WeekSession[]>();
+      const testsByDate = new Map<string, TestBrief[]>();
+
+      for (const t of tSessions ?? []) {
+        const arr = testsByDate.get(t.date) ?? [];
+        arr.push({
+          id:           t.id,
+          title:        t.title,
+          type:         t.type,
+          date:         t.date,
+          completed:    t.completed ?? false,
+          description:  (t as Record<string, unknown>).description as string | null ?? null,
+          results_note: (t as Record<string, unknown>).results_note as string | null ?? null,
+        });
+        testsByDate.set(t.date, arr);
+      }
 
       for (const wl of wLogs ?? []) {
         const arr = byDate.get(wl.scheduled_date) ?? [];
         arr.push({
-          id:           wl.id,
-          sessionName:  wl.session_name,
-          scheduledDate: wl.scheduled_date,
-          status:       wl.status,
-          kind:         "workout",
-          sessionId:    wl.session_id,
+          id:                    wl.id,
+          sessionName:           wl.session_name,
+          scheduledDate:         wl.scheduled_date,
+          status:                wl.status,
+          kind:                  "workout",
+          sessionId:             wl.session_id,
+          originalScheduledDate: (wl as { original_scheduled_date?: string }).original_scheduled_date,
+          rescheduledByAthlete:  (wl as { rescheduled_by_athlete?: boolean }).rescheduled_by_athlete ?? false,
+          coachAlert:            (wl as { coach_alert?: boolean }).coach_alert ?? false,
         });
         byDate.set(wl.scheduled_date, arr);
       }
@@ -233,7 +276,7 @@ export function useActivePlan(athleteId: string) {
         const d = new Date(monDate);
         d.setDate(monDate.getDate() + i);
         const iso = localISO(d);
-        return { date: iso, dow: i, sessions: byDate.get(iso) ?? [] };
+        return { date: iso, dow: i, sessions: byDate.get(iso) ?? [], tests: testsByDate.get(iso) ?? [] };
       });
 
       // ── 7. Week session count (planned + completed, all types) ────────────

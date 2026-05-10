@@ -146,6 +146,29 @@ export interface VisibilitySettings {
   weight: boolean;
 }
 
+// ─── Athlete Modifications (stored in workout_logs.athlete_modifications) ────
+
+export interface BonusSet {
+  /** exercice cible (id dans app_data exos) */
+  exerciseId: string;
+  exerciseName: string;
+  sets: SetRow[];
+}
+
+export interface CustomExercise {
+  /** id temporaire généré côté client */
+  tempId: string;
+  name: string;
+  exerciseId?: string; // id dans la table exercises si choisi depuis la banque
+  exType?: string;     // 'muscu' | 'duration' | …
+  sets: Array<{ kg?: number; reps?: number; duration_s?: number; rir?: number; done?: boolean }>;
+}
+
+export interface AthleteModifications {
+  bonusSets?: BonusSet[];
+  customExercises?: CustomExercise[];
+}
+
 // ─── Session Logs ────────────────────────────────────────────────────────────
 
 export interface SessionLog {

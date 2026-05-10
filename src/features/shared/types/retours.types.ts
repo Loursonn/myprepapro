@@ -51,15 +51,26 @@ export interface WellnessDay {
 
 // ── Séance énergétique ────────────────────────────────────────────────────────
 
+export interface EnergyStepLog {
+  status: "done" | "partial";
+  comment: string;
+}
+
 export interface EnergySessionDetail {
   id: string;
   session_label: string;
   date: string;
+  /** assignment status (planned/completed/missed/skipped) */
+  status: string;
   completed: boolean;
   partial: boolean;
   duration_min: number | null;   // energy_sessions.total_duration_s / 60
   distance_m: number | null;     // energy_sessions.total_distance_m
   session_kind: string | null;   // energy_sessions.session_kind
+  note: string | null;           // plain-text note (coach or athlete)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  intervals: any[];              // EnergyStep[] — planned structure
+  step_log: Record<string, EnergyStepLog> | null; // per-step completion
   note: string | null;           // energy_session_assignments.notes
   rpe_score: number | null;
   block_logs: Record<string, { done: boolean; note?: string }> | null;
@@ -108,6 +119,7 @@ export interface WeeklyRetourData {
     date: string;
     completed: boolean;
     results_note: string | null;
+    results_structured: Record<string, unknown> | null;
     coach_validated: boolean | null;
   }[];
 
@@ -164,6 +176,7 @@ export interface TestDetail {
   date: string;
   completed: boolean;
   results_note: string | null;
+  results_structured: Record<string, unknown> | null;
   coach_validated: boolean | null;
 }
 

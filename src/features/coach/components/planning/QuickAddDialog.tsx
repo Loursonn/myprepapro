@@ -6,6 +6,8 @@ import { C } from "@/lib/theme";
 import { useAssignWorkout, useCreateTestSession } from "@/features/shared/hooks/useUnifiedCalendar";
 import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
+import { useTestDefinitions } from "@/features/shared/hooks/tests/useTestDefinitions";
+import type { TestDefinitionWithVariables } from "@/features/shared/types/tests";
 
 type Tab = "workout" | "energy" | "test";
 
@@ -58,13 +60,16 @@ export function QuickAddDialog({
   const [sessionSearch, setSessionSearch] = useState("");
   const [selectedEnergy, setSelectedEnergy] = useState<string>("");
   const [energySearch, setEnergySearch] = useState("");
-  const [testTitle, setTestTitle] = useState("");
-  const [testType, setTestType] = useState<string>("musculation");
+  const [testSearch, setTestSearch]       = useState("");
+  const [selectedTestDef, setSelectedTestDef] = useState<TestDefinitionWithVariables | null>(null);
+  const [testTitle, setTestTitle]         = useState("");
+  const [testType, setTestType]           = useState<string>("musculation");
 
   const { mutate: assignWorkout,  isPending: pendingWorkout  } = useAssignWorkout();
   const { mutate: createTest,     isPending: pendingTest      } = useCreateTestSession();
   const { mutate: assignEnergy,   isPending: pendingEnergy    } = useAssignEnergySession();
   const { data: energySessions = [] } = useEnergySessions();
+  const { data: testDefinitions = [] } = useTestDefinitions(coachId);
 
   if (!open || !date) return null;
 
@@ -78,6 +83,10 @@ export function QuickAddDialog({
 
   const filteredEnergy = energySessions.filter((s) =>
     s.name.toLowerCase().includes(energySearch.toLowerCase())
+  );
+
+  const filteredTests = testDefinitions.filter((d) =>
+    d.name.toLowerCase().includes(testSearch.toLowerCase())
   );
 
   function switchTab(t: Tab) {
@@ -104,9 +113,10 @@ export function QuickAddDialog({
   }
 
   function handleTestSubmit() {
-    if (!testTitle.trim()) return;
+    const title = testTitle.trim() || selectedTestDef?.name;
+    if (!title) return;
     createTest(
-      { athleteId, coachId, title: testTitle.trim(), type: testType, date: dateStr },
+      { athleteId, coachId, title, type: testType, date: dateStr },
       { onSuccess: handleClose },
     );
   }
@@ -114,14 +124,14 @@ export function QuickAddDialog({
   function handleClose() {
     setSelectedSession(""); setSessionSearch("");
     setSelectedEnergy("");  setEnergySearch("");
-    setTestTitle(""); setTestType("musculation");
+    setTestSearch(""); setSelectedTestDef(null); setTestTitle(""); setTestType("musculation");
     onClose();
   }
 
   const canSubmit =
     tab === "workout" ? !!selectedSession :
     tab === "energy"  ? !!selectedEnergy  :
-    !!testTitle.trim();
+    !!(selectedTestDef || testTitle.trim());
   const isPending =
     tab === "workout" ? pendingWorkout :
     tab === "energy"  ? pendingEnergy  :
@@ -335,21 +345,83 @@ export function QuickAddDialog({
           {/* ── TEST TAB ── */}
           {tab === "test" && (
             <>
-              <div>
-                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Nom du test</div>
-                <input
-                  value={testTitle}
-                  onChange={(e) => setTestTitle(e.target.value)}
-                  placeholder="ex: VMA, 1RM Squat, 30-15..."
-                  autoFocus
-                  style={{
-                    width: "100%", padding: "9px 12px", borderRadius: 10,
-                    border: "1px solid " + C.brdL, background: C.s2,
-                    color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
+              {/* Bank picker */}
+              <input
+                value={testSearch}
+                onChange={(e) => setTestSearch(e.target.value)}
+                placeholder="Rechercher dans la banque de tests..."
+                autoFocus
+                style={{
+                  width: "100%", padding: "9px 12px", borderRadius: 10,
+                  border: "1px solid " + C.brdL, background: C.s2,
+                  color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, scrollbarWidth: "none" }}>
+                {filteredTests.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12 }}>
+                    {testSearch ? `Aucun test « ${testSearch} »` : "Banque de tests vide"}
+                  </div>
+                ) : (
+                  filteredTests.map((def) => {
+                    const active = selectedTestDef?.id === def.id;
+                    return (
+                      <button
+                        key={def.id}
+                        onClick={() => {
+                          setSelectedTestDef(active ? null : def);
+                          setTestTitle(active ? "" : def.name);
+                        }}
+                        style={{
+                          width: "100%", padding: "9px 12px", borderRadius: 10,
+                          border: "1px solid " + (active ? C.o + "60" : C.brd),
+                          background: active ? C.oS : C.s2,
+                          color: active ? C.o : C.tx,
+                          fontSize: 13, fontWeight: active ? 600 : 400,
+                          cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                          transition: "all 120ms",
+                          display: "flex", alignItems: "center", gap: 8,
+                        }}
+                      >
+                        <span style={{ flex: 1 }}>{active && "✓ "}{def.name}</span>
+                        {def.kind === "preset" && (
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: C.ac + "20", color: C.ac, flexShrink: 0 }}>
+                            Officiel
+                          </span>
+                        )}
+                        {def.test_variables.length > 0 && (
+                          <span style={{ fontSize: 9, color: C.tx3, flexShrink: 0 }}>
+                            {def.test_variables.length} var.
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
               </div>
+
+              {/* Custom title (shown when bank empty or user wants to override) */}
+              {(filteredTests.length === 0 || testTitle !== (selectedTestDef?.name ?? "")) && (
+                <div>
+                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>
+                    {selectedTestDef ? "Titre personnalisé" : "Ou saisir un titre libre"}
+                  </div>
+                  <input
+                    value={testTitle}
+                    onChange={(e) => { setTestTitle(e.target.value); if (selectedTestDef && e.target.value !== selectedTestDef.name) setSelectedTestDef(null); }}
+                    placeholder="ex: VMA, 1RM Squat, 30-15..."
+                    style={{
+                      width: "100%", padding: "9px 12px", borderRadius: 10,
+                      border: "1px solid " + C.brdL, background: C.s2,
+                      color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Type */}
               <div>
                 <div style={{ fontSize: 10, color: C.tx3, marginBottom: 6 }}>Type</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
