@@ -32,13 +32,19 @@ export function WeekView({ weekData, prevWeekData }: WeekViewProps) {
     testsByDate[t.date].push(t);
   }
 
+  const freeByDate: Record<string, typeof weekData.free_activities> = {};
+  for (const f of (weekData.free_activities ?? [])) {
+    if (!freeByDate[f.date]) freeByDate[f.date] = [];
+    freeByDate[f.date].push(f);
+  }
+
   // Detect rescheduled sessions: same session appears completed on another day
   const completedWorkoutSessionIds = new Set(
-    weekData.workouts.filter(w => w.status === "completed").map(w => w.session_id),
+    weekData.workouts.filter(w => w.status === "completed").map(w => (w as { session_id?: string }).session_id ?? ""),
   );
   const rescheduledWorkoutIds = new Set(
     weekData.workouts
-      .filter(w => w.status !== "completed" && completedWorkoutSessionIds.has(w.session_id))
+      .filter(w => w.status !== "completed" && completedWorkoutSessionIds.has((w as { session_id?: string }).session_id ?? ""))
       .map(w => w.id),
   );
 
@@ -75,6 +81,7 @@ export function WeekView({ weekData, prevWeekData }: WeekViewProps) {
               previousWorkouts={prevWorkouts}
               rescheduledWorkoutIds={rescheduledWorkoutIds}
               rescheduledEnergyIds={rescheduledEnergyIds}
+              freeActivities={freeByDate[dateStr] ?? []}
             />
           );
         })}

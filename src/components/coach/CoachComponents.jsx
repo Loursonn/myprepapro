@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { C } from "@/lib/theme";
-import { DEF_TIER_CONFIG } from "@/lib/exercises";
 function NewBlockModal({onStart,onClose,onResume,hasCurrentData,blockHistory=[],onDelete}){
   const[step,setStep]=useState(hasCurrentData?0:1);
   const[blockName,setBlockName]=useState("");
@@ -193,29 +192,6 @@ function CoachConfig({completedSessions,uncompleteSession,sessions,weeksArr,onNe
   </div>);
 }
 
-function TierConfigModal({blockConfig,setBlockConfig,onClose}){
-  const tw=blockConfig?.totalWeeks||6;
-  const row=(label,desc,val,onM,onP,fmt)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid "+C.brd}}><div><div style={{fontSize:13,fontWeight:600}}>{label}</div>{desc&&<div style={{fontSize:10,color:C.tx3}}>{desc}</div>}</div><div style={{display:"flex",alignItems:"center",gap:10}}><button onClick={onM} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>-</button><span style={{fontSize:15,fontWeight:800,color:C.o,minWidth:40,textAlign:"center"}}>{fmt?fmt(val):val}</span><button onClick={onP} style={{width:28,height:28,borderRadius:7,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:15,cursor:"pointer",fontFamily:"inherit"}}>+</button></div></div>);
-  return(<div style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
-    <div style={{width:"100%",maxWidth:640,background:C.s1,borderRadius:"16px 16px 0 0",padding:24,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-        <div><div style={{fontSize:15,fontWeight:700}}>Surcharge progressive</div><div style={{fontSize:11,color:C.tx3,marginTop:2}}>Paramètres de progression par catégorie d'exercice</div></div>
-        <button onClick={onClose} style={{width:28,height:28,borderRadius:8,border:"1px solid "+C.brdL,background:"transparent",color:C.tx2,fontSize:18,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
-      </div>
-      {[1,2,3].map(t=>{const tc=(blockConfig?.tierConfig||DEF_TIER_CONFIG)[t];const updTier=(f,v)=>setBlockConfig(c=>{const tc2={...(c.tierConfig||DEF_TIER_CONFIG)};tc2[t]={...tc2[t],[f]:v};return{...c,tierConfig:tc2};});
-        return(<div key={t} style={{marginBottom:12,padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+tc.c+"30"}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><span style={{fontSize:10,fontWeight:800,color:tc.c}}>T{t}</span><span style={{fontSize:12,fontWeight:700,color:tc.c}}>{tc.label}</span><span style={{fontSize:10,color:C.tx3}}>{tc.desc}</span></div>
-          <div style={{fontSize:9,color:C.tx3,marginBottom:6}}>Stratégie : {tc.mode==="rir"?"+"+( tc.kgStep??2.5)+"kg/sem, RIR "+tc.rirStart+"→"+tc.rirEnd:tc.mode==="reps"?"Reps "+tc.repsStart+"→"+tc.repsEnd+" puis +"+( tc.kgStep??2.5)+"kg":"Reps "+tc.repsStart+"→"+tc.repsEnd+" à l'échec puis +"+( tc.kgStep??1.25)+"kg"}</div>
-          {tc.mode==="rir"&&(<div>{row("RIR départ","",tc.rirStart,()=>updTier("rirStart",Math.max(1,tc.rirStart-0.5)),()=>updTier("rirStart",Math.min(5,tc.rirStart+0.5)))}{row("RIR fin","",tc.rirEnd,()=>updTier("rirEnd",Math.max(0,tc.rirEnd-0.5)),()=>updTier("rirEnd",Math.min(tc.rirStart-0.5,tc.rirEnd+0.5)))}{row("kg/semaine","incrément fixe",tc.kgStep??2.5,()=>updTier("kgStep",Math.max(0.5,(tc.kgStep??2.5)-0.5)),()=>updTier("kgStep",Math.min(20,(tc.kgStep??2.5)+0.5)),v=>"+"+v+"kg")}</div>)}
-          {tc.mode==="reps"&&(<div>{row("Reps début","",tc.repsStart,()=>updTier("repsStart",Math.max(6,tc.repsStart-1)),()=>updTier("repsStart",Math.min(tc.repsEnd-1,tc.repsStart+1)))}{row("Reps fin","",tc.repsEnd,()=>updTier("repsEnd",Math.max(tc.repsStart+1,tc.repsEnd-1)),()=>updTier("repsEnd",Math.min(20,tc.repsEnd+1)))}{row("kg/cycle","incrément au reset",tc.kgStep??2.5,()=>updTier("kgStep",Math.max(0.5,(tc.kgStep??2.5)-0.5)),()=>updTier("kgStep",Math.min(20,(tc.kgStep??2.5)+0.5)),v=>"+"+v+"kg")}</div>)}
-          {tc.mode==="failure"&&(<div>{row("Reps début","",tc.repsStart,()=>updTier("repsStart",Math.max(8,tc.repsStart-1)),()=>updTier("repsStart",Math.min(tc.repsEnd-1,tc.repsStart+1)))}{row("Reps max","",tc.repsEnd,()=>updTier("repsEnd",Math.max(tc.repsStart+1,tc.repsEnd-1)),()=>updTier("repsEnd",Math.min(25,tc.repsEnd+1)))}{row("kg/cycle","incrément au reset",tc.kgStep??1.25,()=>updTier("kgStep",Math.max(0.25,(tc.kgStep??1.25)-0.25)),()=>updTier("kgStep",Math.min(10,(tc.kgStep??1.25)+0.25)),v=>"+"+v+"kg")}</div>)}
-          {(blockConfig?.deloadWeek||0)>0&&<div style={{marginTop:6}}>{row("Deload","% réduction",tc.deloadPct,()=>updTier("deloadPct",Math.max(10,tc.deloadPct-5)),()=>updTier("deloadPct",Math.min(60,tc.deloadPct+5)),v=>"-"+v+"%")}</div>}
-        </div>);
-      })}
-      <button onClick={onClose} style={{width:"100%",marginTop:8,padding:"13px 0",borderRadius:12,border:"none",background:C.o,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Appliquer</button>
-    </div>
-  </div>);
-}
 
 function CoachWeeklyFeedback({athleteId,sessions,completedSessions,energySessions,currentWeek,blockConfig,exos,sets,wellnessHistory={},C}){
   const tw=blockConfig?.totalWeeks||6;
@@ -374,4 +350,4 @@ function CoachWeeklyFeedback({athleteId,sessions,completedSessions,energySession
 }
 
 
-export { NewBlockModal, CoachConfig, TierConfigModal, CoachWeeklyFeedback };
+export { NewBlockModal, CoachConfig, CoachWeeklyFeedback };

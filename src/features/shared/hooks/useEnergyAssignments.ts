@@ -12,6 +12,7 @@ import type {
   EnergySessionAssignmentRow,
   CreateAssignmentInput,
   AssignmentStatus,
+  BlockLogs,
 } from "@/types/energy";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +176,82 @@ export function useUnassignEnergySession() {
       qc.invalidateQueries({ queryKey: ["cal", athleteId] });
       toast.success("Assignation supprimée");
     },
+  });
+}
+
+/** Valide une séance énergie : status=completed + block_logs + notes optionnels. */
+export function useCompleteEnergyAssignment() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      block_logs,
+      notes,
+      actual_duration_min,
+    }: { id: string; athleteId: string; block_logs: BlockLogs; notes?: string; actual_duration_min?: number | null }) => {
+      const patch: Record<string, unknown> = {
+        status: "completed",
+        block_logs,
+        updated_at: new Date().toISOString(),
+      };
+      if (notes != null) patch.notes = notes;
+      if (actual_duration_min != null) patch.actual_duration_min = actual_duration_min;
+      const { error } = await supabase
+        .from("energy_session_assignments")
+        .update(patch)
+        .eq("id", id);
+      if (error) {
+        // Column may not exist yet — retry without actual_duration_min
+        if (error.message?.includes("actual_duration_min")) {
+          const { actual_duration_min: _drop, ...patchWithout } = patch as Record<string, unknown> & { actual_duration_min?: unknown };
+          const { error: error2 } = await supabase
+            .from("energy_session_assignments")
+            .update(patchWithout)
+            .eq("id", id);
+          if (error2) throw error2;
+        } else {
+          throw error;
+        }
+      }
+    },
+    onSuccess: (_data, { athleteId }) => {
+      qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
+      qc.invalidateQueries({ queryKey: ["cal", athleteId] });
+      qc.invalidateQueries({ queryKey: QK.weeklyRetours() });
+      qc.invalidateQueries({ queryKey: QK.monthlyRetours() });
+      toast.success("Séance validée !");
+    },
+    onError: (err) => {
+      console.error("[useCompleteEnergyAssignment] error:", err);
+      const msg = (err as { message?: string })?.message ?? String(err);
+      toast.error(`Validation échouée : ${msg}`);
+    },
+  });
+}
+
+/** Enregistre le RPE Foster d'une séance énergie. */
+export function useUpsertEnergyRpe() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      rpe_score,
+    }: { id: string; athleteId: string; rpe_score: number }) => {
+      const { error } = await supabase
+        .from("energy_session_assignments")
+        .update({ rpe_score, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { athleteId }) => {
+      qc.invalidateQueries({ queryKey: QK.energyAssignments(athleteId) });
+      qc.invalidateQueries({ queryKey: QK.weeklyRetours() });
+      qc.invalidateQueries({ queryKey: QK.monthlyRetours() });
+      toast.success("RPE enregistré");
+    },
+    onError: () => toast.error("Erreur lors de l'enregistrement du RPE"),
   });
 }
 
