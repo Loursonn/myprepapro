@@ -19,9 +19,10 @@ import { WellnessDetailView } from "../components/retours/WellnessDetailView";
 import { WorkoutsDetailView } from "../components/retours/WorkoutsDetailView";
 import { TestsDetailView } from "../components/retours/TestsDetailView";
 import { CompetitionsDetailView } from "../components/retours/CompetitionsDetailView";
+import { NutritionDetailView } from "../components/retours/NutritionDetailView";
 
 type ViewMode = "month" | "week";
-type DetailView = "wellness" | "workouts" | "tests" | "competitions" | null;
+type DetailView = "wellness" | "workouts" | "tests" | "competitions" | "nutrition" | null;
 
 export default function RetoursPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
@@ -91,6 +92,13 @@ export default function RetoursPage() {
   const compsVal = kpiData?.competitions.length
     ?? (weekCurrent ? weekCurrent.competitions.length : null);
 
+  const nutritionLogs     = kpiData ? (monthData?.nutrition_logs ?? []) : (weekCurrent?.nutrition_logs ?? []);
+  const nutritionStrategy = kpiData ? (monthData?.nutrition_strategy ?? null) : (weekCurrent?.nutrition_strategy ?? null);
+  const calLogs           = nutritionLogs.filter((l) => l.total_calories_consumed != null);
+  const avgKcal           = calLogs.length > 0
+    ? Math.round(calLogs.reduce((s, l) => s + l.total_calories_consumed!, 0) / calLogs.length)
+    : null;
+
   return (
     <div style={{ padding: "16px 20px 80px" }}>
 
@@ -147,12 +155,13 @@ export default function RetoursPage() {
       </div>
 
       {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 160px)", justifyContent: "center", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 140px)", justifyContent: "center", gap: 10, marginBottom: 16 }}>
         {[
           { icon: "❤️",  title: "Wellness moyen", value: avgWellness, subtitle: "/100",                                                    onClick: () => setDetailView("wellness")     },
           { icon: "🏋️", title: "Séances",         value: workoutsVal, subtitle: completionRate != null ? `${completionRate}%` : undefined, subtitle2: avgRpeSubtitle, onClick: () => setDetailView("workouts") },
           { icon: "🧪",  title: "Tests",           value: testsVal,    subtitle: undefined,                                                onClick: () => setDetailView("tests")        },
           { icon: "🏆",  title: "Compétitions",    value: compsVal,    subtitle: undefined,                                                onClick: () => setDetailView("competitions") },
+          { icon: "🍽️", title: "Nutrition",        value: avgKcal,     subtitle: avgKcal != null ? "kcal/j" : undefined,                  onClick: () => setDetailView("nutrition")    },
         ].map((kpi) => (
           <KPICard key={kpi.title} {...kpi} />
         ))}
@@ -244,6 +253,13 @@ export default function RetoursPage() {
               ? (monthData?.competitions ?? [])
               : (weekCurrent?.competitions ?? [])
           }
+          onClose={() => setDetailView(null)}
+        />
+      )}
+      {detailView === "nutrition" && (
+        <NutritionDetailView
+          logs={nutritionLogs}
+          strategy={nutritionStrategy}
           onClose={() => setDetailView(null)}
         />
       )}
