@@ -2,7 +2,12 @@ import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, Plus, Eye, Pencil, Trash2, Check, ChevronDown } from "lucide-react";
-import { snapMonday, snapSunday, chainNextStart, endFromWeeks } from "./utils/planningHelpers";
+import { snapMonday, snapSunday, chainNextStart, endFromWeeks, computeCascade } from "./utils/planningHelpers";
+import { PERIOD_DEFAULTS } from "@/types/planning";
+import { PeriodConflictDialog } from "./dialogs/PeriodConflictDialog";
+import { ChildOverflowDialog } from "./dialogs/ChildOverflowDialog";
+import { ChangeParentDialog } from "./dialogs/ChangeParentDialog";
+import { usePlanningKeyboardShortcuts } from "./hooks/usePlanningKeyboardShortcuts";
 import { C } from "@/lib/theme";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -429,26 +434,36 @@ function CreateModal({
   const [saving,    setSaving]    = useState(false);
   const [selectedParentId, setSelectedParentId] = useState(state.parentId ?? state.parentOptions?.[0]?.id ?? "");
 
+  const defaultWeeks = PERIOD_DEFAULTS[state.level as keyof typeof PERIOD_DEFAULTS] ?? 4;
+
   function handleParentChange(newParentId: string) {
     setSelectedParentId(newParentId);
-    // Compute autoStart from siblings belonging to this specific parent
     if (state.siblingItems) {
       const siblings = state.siblingItems
         .filter((s) => s.parentId === newParentId)
-        .sort((a, b) => b.end_date.localeCompare(a.end_date)); // descending
+        .sort((a, b) => b.end_date.localeCompare(a.end_date));
       const last = siblings[0];
       if (last) {
         const autoStart = chainNextStart(last.end_date);
         setStartDate(autoStart);
-        setEndDate(endFromWeeks(autoStart, 4));
+        setEndDate(endFromWeeks(autoStart, defaultWeeks));
       } else {
-        // No existing children for this parent → use parent's start
         const opt = state.parentOptions?.find((o) => o.id === newParentId);
         const fallback = opt ? snapMonday(opt.start_date) : rangeStart;
         setStartDate(fallback);
-        setEndDate(endFromWeeks(fallback, 4));
+        setEndDate(endFromWeeks(fallback, defaultWeeks));
       }
     }
+  }
+
+  /** Adjust endDate by adding/subtracting weeks from current startDate */
+  function shiftEnd(weeks: number) {
+    if (!startDate) return;
+    const current = endDate ? endDate : startDate;
+    const diffWeeks = Math.max(1, Math.round(
+      (new Date(current).getTime() - new Date(startDate).getTime()) / (7 * 86400_000)
+    ) + 1 + weeks);
+    setEndDate(endFromWeeks(startDate, diffWeeks));
   }
 
   const LEVEL_COLOR: Record<CreateLevel, string> = {
@@ -637,6 +652,28 @@ function CreateModal({
                 onChange={(e) => { if (e.target.value) setEndDate(snapSunday(e.target.value)); }}
                 style={inputStyle}
               />
+            </div>
+          </div>
+
+          {/* Quick duration buttons */}
+          <div>
+            <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>Ajuster la durée</div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {([-4, -1, 1, 4, 13, 26, 52] as const).map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => shiftEnd(w)}
+                  style={{
+                    padding: "3px 8px", borderRadius: 6,
+                    border: "1px solid " + C.brdL, background: C.s2,
+                    color: C.tx3, fontSize: 10, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  {w > 0 ? "+" : ""}{w}s
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -915,6 +952,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const [zoomMacro,      setZoomMacro]      = useState<{ start: Date; end: Date; label: string } | null>(null);
   const [editingComp,    setEditingComp]    = useState<Competition | null>(null);
   const [noParentModal,  setNoParentModal]  = useState<NoParentDragState | null>(null);
+  const [selectedId,     setSelectedId]     = useState<string | null>(null);
 
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -943,7 +981,40 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const { mutate: drag }   = useDragCycle();
   const { mutate: resize } = useResizeCycle();
 
-  const open = useCallback((type: DrawerType, id: string) => setDrawer({ type, id }), []);
+  const open = useCallback((type: DrawerType, id: string) => { setDrawer({ type, id }); setSelectedId(id); }, []);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  usePlanningKeyboardShortcuts({
+    enabled: !createModal && !drawer,
+    onNew: () => openCreate("macrocycle", undefined, rsStr, reStr),
+    onEscape: () => { setDrawer(null); setSelectedId(null); },
+    onDelete: () => {
+      if (!selectedId || !drawer) return;
+      // Handled via drawer's delete confirm flow — open the drawer if not open
+    },
+    onPrevPeriod: () => {
+      if (!selectedId || !drawer) return;
+      const arr = drawer.type === "macrocycle" ? data?.macrocycles
+                : drawer.type === "mesocycle"  ? data?.mesocycles
+                : drawer.type === "cycle"       ? data?.cycles
+                : data?.microcycles;
+      if (!arr) return;
+      const sorted = [...arr].sort((a, b) => a.start_date.localeCompare(b.start_date));
+      const idx = sorted.findIndex((x) => x.id === selectedId);
+      if (idx > 0) { const prev = sorted[idx - 1]; open(drawer.type, prev.id); }
+    },
+    onNextPeriod: () => {
+      if (!selectedId || !drawer) return;
+      const arr = drawer.type === "macrocycle" ? data?.macrocycles
+                : drawer.type === "mesocycle"  ? data?.mesocycles
+                : drawer.type === "cycle"       ? data?.cycles
+                : data?.microcycles;
+      if (!arr) return;
+      const sorted = [...arr].sort((a, b) => a.start_date.localeCompare(b.start_date));
+      const idx = sorted.findIndex((x) => x.id === selectedId);
+      if (idx >= 0 && idx < sorted.length - 1) { const next = sorted[idx + 1]; open(drawer.type, next.id); }
+    },
+  });
 
   function openCreate(
     level: CreateLevel,
@@ -1189,6 +1260,59 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
             ))}
           </div>
         </div>
+
+        {/* ── Breadcrumb (contexte période sélectionnée) ── */}
+        {drawer && data && (
+          <div style={{ padding: "6px 20px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {/* Macrocycle */}
+            {(() => {
+              let macro: typeof data.macrocycles[number] | undefined;
+              let meso: typeof data.mesocycles[number] | undefined;
+              let cycle: typeof data.cycles[number] | undefined;
+              let micro: typeof data.microcycles[number] | undefined;
+
+              if (drawer.type === "macrocycle") {
+                macro = data.macrocycles.find((m) => m.id === drawer.id);
+              } else if (drawer.type === "mesocycle") {
+                meso  = data.mesocycles.find((m) => m.id === drawer.id);
+                macro = meso ? data.macrocycles.find((m) => m.id === meso!.macrocycle_id) : undefined;
+              } else if (drawer.type === "cycle") {
+                cycle = data.cycles.find((c) => c.id === drawer.id);
+                meso  = cycle?.mesocycle_id ? data.mesocycles.find((m) => m.id === cycle!.mesocycle_id) : undefined;
+                macro = meso ? data.macrocycles.find((m) => m.id === meso!.macrocycle_id) : undefined;
+              } else if (drawer.type === "microcycle") {
+                micro = data.microcycles.find((m) => m.id === drawer.id);
+                cycle = micro ? data.cycles.find((c) => c.id === micro!.cycle_id) : undefined;
+                meso  = cycle?.mesocycle_id ? data.mesocycles.find((m) => m.id === cycle!.mesocycle_id) : undefined;
+                macro = meso ? data.macrocycles.find((m) => m.id === meso!.macrocycle_id) : undefined;
+              }
+
+              const crumbs: Array<{ label: string; type: DrawerType; id: string; color: string }> = [];
+              if (macro) crumbs.push({ label: macro.name, type: "macrocycle", id: macro.id, color: LEVEL_COLORS.macrocycle });
+              if (meso)  crumbs.push({ label: meso.name,  type: "mesocycle",  id: meso.id,  color: LEVEL_COLORS.mesocycle });
+              if (cycle) crumbs.push({ label: cycle.name, type: "cycle",      id: cycle.id, color: LEVEL_COLORS.cycle });
+              if (micro) crumbs.push({ label: `S${micro.week_number}`, type: "microcycle", id: micro.id, color: LEVEL_COLORS.microcycle });
+
+              return crumbs.map((crumb, i) => (
+                <span key={crumb.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  {i > 0 && <span style={{ fontSize: 9, color: C.tx3 }}>›</span>}
+                  <button
+                    onClick={() => open(crumb.type, crumb.id)}
+                    style={{
+                      padding: "2px 8px", borderRadius: 5,
+                      border: "none", background: crumb.id === drawer.id ? crumb.color + "30" : "transparent",
+                      color: crumb.id === drawer.id ? crumb.color : C.tx3,
+                      fontSize: 10, fontWeight: crumb.id === drawer.id ? 700 : 400,
+                      cursor: "pointer", fontFamily: "inherit",
+                    }}
+                  >
+                    {crumb.label}
+                  </button>
+                </span>
+              ));
+            })()}
+          </div>
+        )}
 
         {/* ── Scrollable area ── */}
         <div style={{ overflowX: "auto", paddingBottom: 40 }}>
