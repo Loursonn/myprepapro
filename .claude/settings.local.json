@@ -61,7 +61,23 @@
       "Bash(node -e \"const { isPast } = require\\('date-fns'\\); console.log\\(typeof isPast\\);\")",
       "Bash(rtk lint:*)",
       "Bash(git rm:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(unzip:*)",
+      "Read(//private/tmp/**)",
+      "Bash(mkdir -p retours_files)",
+      "Bash(node --input-type=module)",
+      "Bash(2>&1)",
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(sed -n '17,55p' /Users/hugo/myprepapro/src/integrations/supabase/types.ts)",
+      "Bash(sed -n '1437,1560p' /Users/hugo/myprepapro/src/integrations/supabase/types.ts)",
+      "Bash(rtk vitest:*)",
+      "Bash(node:*)",
+      "Bash(node_modules/.bin/esbuild src/features/athlete/pages/TodayPage.tsx --bundle=false --loader=tsx)",
+      "Bash(node_modules/.bin/esbuild --bundle=false --loader=tsx)",
+      "Bash(node_modules/.bin/esbuild --loader=tsx)",
+      "Bash(supabase --version)",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(s.get\\('name'\\), 'dow:', s.get\\('day_of_week'\\), 'weekDays:', s.get\\('weekDays'\\)\\) for s in data['rows'][0]['value']]\")",
+      "Bash(xargs git:*)"
     ]
   }
 }
