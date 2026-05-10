@@ -3,7 +3,6 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { C } from "@/lib/theme";
 import { useCreateCompetition, useUpdateCompetition } from "@/hooks/useCompetitions";
-import { useSeasons } from "@/hooks/usePlanningBlocks";
 import { COMPETITION_META, type CompetitionType, type CompetitionPriority, type Competition } from "@/types/planning";
 
 const PRIORITIES: { value: CompetitionPriority; label: string }[] = [
@@ -27,7 +26,6 @@ interface Props {
 
 export function CompetitionFormModal({ athleteId, coachId, existing, onClose }: Props) {
   const isEdit = !!existing;
-  const { data: seasons = [] } = useSeasons(athleteId);
   const { mutate: create, isPending: creating } = useCreateCompetition();
   const { mutate: update, isPending: updating } = useUpdateCompetition();
   const isPending = creating || updating;
@@ -37,10 +35,6 @@ export function CompetitionFormModal({ athleteId, coachId, existing, onClose }: 
   const [location, setLocation] = useState(existing?.location ?? "");
   const [priority, setPriority] = useState<CompetitionPriority>(existing?.priority ?? "A");
   const [type,     setType]     = useState<CompetitionType>(existing?.type ?? "competition");
-
-  // Find the current active season, if any
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const activeSeason = seasons.find((s) => s.start_date <= todayISO && s.end_date >= todayISO) ?? seasons[0] ?? null;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,15 +54,13 @@ export function CompetitionFormModal({ athleteId, coachId, existing, onClose }: 
     } else {
       create(
         {
-          coach_id:          coachId,
-          athlete_id:        athleteId,
-          season_id:         activeSeason?.id ?? null,
-          planning_block_id: null,
-          name:              name.trim(),
+          coach_id:   coachId,
+          athlete_id: athleteId,
+          name:       name.trim(),
           type,
           date,
-          location:          location.trim() || null,
-          notes:             null,
+          location:   location.trim() || null,
+          notes:      null,
           priority,
         },
         {
@@ -117,10 +109,7 @@ export function CompetitionFormModal({ athleteId, coachId, existing, onClose }: 
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>{isEdit ? "Modifier la compétition" : "Nouvelle compétition"}</div>
-            {!isEdit && activeSeason && (
-              <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>Saison : {activeSeason.name}</div>
-            )}
-          </div>
+            </div>
           <button
             onClick={onClose}
             style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}

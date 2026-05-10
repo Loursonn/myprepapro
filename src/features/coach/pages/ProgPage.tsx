@@ -5,7 +5,6 @@ import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import CoachFourWeekCalendar from "@/components/coach/CoachFourWeekCalendar";
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
-import { PlanningEditor } from "@/components/coach/PlanningEditor";
 import { CoachEnergyProgram } from "@/components/coach/CoachComponents";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -161,7 +160,22 @@ export default function ProgPage() {
       </div>
 
       {progSubTab === "planification" && (
-        <PlanningEditor athleteId={athleteId} coachId={user?.id} sessions={sessions} />
+        <div style={{ textAlign: "center", padding: "40px 20px" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📅</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Planification périodique</div>
+          <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>La frise de planification est disponible dans l'onglet Planning.</div>
+          <a
+            href={`/coach/athletes/${athleteId}/planning?view=timeline`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "9px 18px", borderRadius: 10,
+              background: C.coach, color: "#fff",
+              fontSize: 12, fontWeight: 700, textDecoration: "none",
+            }}
+          >
+            Aller à la frise →
+          </a>
+        </div>
       )}
 
       {progSubTab === "muscu" && (

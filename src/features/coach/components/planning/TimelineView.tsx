@@ -1,7 +1,8 @@
 import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, X, Plus, Eye, Pencil, Trash2, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Plus, Eye, Pencil, Trash2, Check, ChevronDown } from "lucide-react";
+import { snapMonday, snapSunday, chainNextStart, endFromWeeks } from "./utils/planningHelpers";
 import { C } from "@/lib/theme";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -155,7 +156,16 @@ function DrawerShell({
       if (!m) return null;
       title    = m.name;
       subtitle = `${format(parseISO(m.start_date), "d MMM yyyy", { locale: fr })} → ${format(parseISO(m.end_date), "d MMM yyyy", { locale: fr })}`;
-      content  = <MacrocycleDrawer macro={m} athleteId={athleteId} rangeStart={rangeStart} rangeEnd={rangeEnd} onClose={onClose} />;
+      content  = (
+        <MacrocycleDrawer
+          macro={m}
+          siblings={[...data.macrocycles].sort((a, b) => a.start_date.localeCompare(b.start_date))}
+          athleteId={athleteId}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          onClose={onClose}
+        />
+      );
       break;
     }
     case "mesocycle": {
@@ -163,19 +173,36 @@ function DrawerShell({
       if (!m) return null;
       title    = m.name;
       subtitle = `${format(parseISO(m.start_date), "d MMM", { locale: fr })} → ${format(parseISO(m.end_date), "d MMM", { locale: fr })}`;
-      content  = <MesocycleDrawer meso={m} athleteId={athleteId} rangeStart={rangeStart} rangeEnd={rangeEnd} />;
+      const mesoSiblings = [...data.mesocycles]
+        .filter((s) => s.macrocycle_id === m.macrocycle_id)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date));
+      content  = (
+        <MesocycleDrawer
+          meso={m}
+          siblings={mesoSiblings}
+          allMacros={[...data.macrocycles].sort((a, b) => a.start_date.localeCompare(b.start_date))}
+          athleteId={athleteId}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+        />
+      );
       break;
     }
     case "cycle": {
       const c = data.cycles.find((x) => x.id === state.id);
       if (!c) return null;
       const parentMeso = data.mesocycles.find((m) => m.id === c.mesocycle_id);
+      const cycleSiblings = [...data.cycles]
+        .filter((s) => s.mesocycle_id === c.mesocycle_id)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date));
       title    = c.name;
       subtitle = `${format(parseISO(c.start_date), "d MMM", { locale: fr })} → ${format(parseISO(c.end_date), "d MMM", { locale: fr })}`;
       content  = (
         <CycleDrawer
           cycle={c}
           parentMeso={parentMeso}
+          siblings={cycleSiblings}
+          allMesos={data.mesocycles}
           athleteId={athleteId}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
@@ -362,11 +389,20 @@ function buildMicrocycles(cycleId: string, startDate: string, endDate: string) {
 
 type CreateLevel = "macrocycle" | "mesocycle" | "cycle" | "microcycle";
 
+interface ParentOption {
+  id:         string;
+  label:      string;
+  start_date: string; // parent start, used as fallback
+}
+
 interface CreateState {
-  level:        CreateLevel;
-  parentId?:    string;
-  defaultStart: string;
-  defaultEnd:   string;
+  level:          CreateLevel;
+  parentId?:      string;
+  parentOptions?: ParentOption[]; // if set: show parent picker
+  siblingItems?:  Array<{ parentId: string; end_date: string }>; // all children across all parents (for auto-chain)
+  defaultStart:   string;
+  defaultEnd:     string;
+  minStart?:      string; // hard floor: prevent overlapping with previous sibling
 }
 
 function CreateModal({
@@ -381,12 +417,39 @@ function CreateModal({
 }) {
   const qc = useQueryClient();
 
-  const [name,      setName]      = useState(state.level === "microcycle" ? "" : "");
+  const [name,      setName]      = useState("");
   const [weekNum,   setWeekNum]   = useState(1);
   const [isDeload,  setIsDeload]  = useState(false);
-  const [startDate, setStartDate] = useState(state.defaultStart);
-  const [endDate,   setEndDate]   = useState(state.defaultEnd);
+  const [startDate, setStartDate] = useState(() =>
+    state.defaultStart ? snapMonday(state.defaultStart) : state.defaultStart,
+  );
+  const [endDate, setEndDate] = useState(() =>
+    state.defaultEnd ? snapSunday(state.defaultEnd) : state.defaultEnd,
+  );
   const [saving,    setSaving]    = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState(state.parentId ?? state.parentOptions?.[0]?.id ?? "");
+
+  function handleParentChange(newParentId: string) {
+    setSelectedParentId(newParentId);
+    // Compute autoStart from siblings belonging to this specific parent
+    if (state.siblingItems) {
+      const siblings = state.siblingItems
+        .filter((s) => s.parentId === newParentId)
+        .sort((a, b) => b.end_date.localeCompare(a.end_date)); // descending
+      const last = siblings[0];
+      if (last) {
+        const autoStart = chainNextStart(last.end_date);
+        setStartDate(autoStart);
+        setEndDate(endFromWeeks(autoStart, 4));
+      } else {
+        // No existing children for this parent → use parent's start
+        const opt = state.parentOptions?.find((o) => o.id === newParentId);
+        const fallback = opt ? snapMonday(opt.start_date) : rangeStart;
+        setStartDate(fallback);
+        setEndDate(endFromWeeks(fallback, 4));
+      }
+    }
+  }
 
   const LEVEL_COLOR: Record<CreateLevel, string> = {
     macrocycle: C.ac, mesocycle: C.coach, cycle: C.o, microcycle: C.tx3,
@@ -400,6 +463,14 @@ function CreateModal({
   async function handleSubmit() {
     if (!startDate || !endDate) { toast.error("Dates requises"); return; }
     if (state.level !== "microcycle" && !name.trim()) { toast.error("Nom requis"); return; }
+    if ((state.level === "mesocycle" || state.level === "cycle" || state.level === "microcycle") && !selectedParentId) {
+      toast.error("Sélectionne un parent"); return;
+    }
+    // Hard overlap guard: start must be ≥ minStart (next sibling floor)
+    if (state.minStart && startDate < state.minStart) {
+      toast.error(`Début doit être ≥ ${state.minStart} (pas de chevauchement)`);
+      return;
+    }
     setSaving(true);
     let error: unknown = null;
     switch (state.level) {
@@ -411,14 +482,14 @@ function CreateModal({
         break;
       case "mesocycle":
         ({ error } = await supabase.from("mesocycles").insert({
-          macrocycle_id: state.parentId!, name: name.trim(),
+          macrocycle_id: selectedParentId, name: name.trim(),
           start_date: startDate, end_date: endDate,
         }));
         break;
       case "cycle": {
         const { data: newCycle, error: cycleErr } = await supabase
           .from("cycles")
-          .insert({ mesocycle_id: state.parentId!, name: name.trim(), start_date: startDate, end_date: endDate })
+          .insert({ mesocycle_id: selectedParentId, name: name.trim(), start_date: startDate, end_date: endDate })
           .select("id")
           .single();
         error = cycleErr;
@@ -433,7 +504,7 @@ function CreateModal({
       }
       case "microcycle":
         ({ error } = await supabase.from("microcycles").insert({
-          cycle_id: state.parentId!, week_number: weekNum,
+          cycle_id: selectedParentId, week_number: weekNum,
           start_date: startDate, end_date: endDate, is_deload: isDeload,
         }));
         break;
@@ -483,6 +554,25 @@ function CreateModal({
 
         {/* Form */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+          {/* Parent picker */}
+          {state.parentOptions && state.parentOptions.length > 0 && (
+            <div>
+              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>
+                {state.level === "mesocycle" ? "Macrocycle parent" : state.level === "cycle" ? "Mésocycle parent" : "Parent"}
+              </label>
+              <select
+                value={selectedParentId}
+                onChange={(e) => handleParentChange(e.target.value)}
+                style={{ ...inputStyle }}
+              >
+                {state.parentOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {state.level === "microcycle" ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <label style={{ fontSize: 11, color: C.tx3, flexShrink: 0 }}>Semaine n°</label>
@@ -517,12 +607,36 @@ function CreateModal({
 
           <div style={{ display: "flex", gap: 8 }}>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>Début</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={inputStyle} />
+              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>
+                Début <span style={{ fontSize: 9, opacity: 0.6 }}>(snap lundi)</span>
+              </label>
+              <input
+                type="date" value={startDate}
+                min={state.minStart}
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const snapped = snapMonday(e.target.value);
+                  // enforce no-overlap: clamp to minStart
+                  const clamped = state.minStart && snapped < state.minStart ? state.minStart : snapped;
+                  setStartDate(clamped);
+                }}
+                style={inputStyle}
+              />
+              {state.minStart && (
+                <div style={{ fontSize: 9, color: C.tx3, marginTop: 2 }}>
+                  ≥ {state.minStart} (pas de chevauchement)
+                </div>
+              )}
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>Fin</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={inputStyle} />
+              <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>
+                Fin <span style={{ fontSize: 9, opacity: 0.6 }}>(snap dimanche)</span>
+              </label>
+              <input
+                type="date" value={endDate}
+                onChange={(e) => { if (e.target.value) setEndDate(snapSunday(e.target.value)); }}
+                style={inputStyle}
+              />
             </div>
           </div>
         </div>
@@ -548,6 +662,246 @@ function CreateModal({
   );
 }
 
+// ── Add dropdown ─────────────────────────────────────────────────────────────
+
+function AddDropdown({
+  onSelect,
+}: {
+  onSelect: (level: CreateLevel) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const items: Array<{ level: CreateLevel; label: string; color: string }> = [
+    { level: "macrocycle", label: "Macrocycle",  color: C.ac    },
+    { level: "mesocycle",  label: "Mésocycle",   color: C.coach },
+    { level: "cycle",      label: "Cycle",        color: C.o     },
+    { level: "microcycle", label: "Microcycle",   color: C.tx3   },
+  ];
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 5,
+          padding: "6px 12px", borderRadius: 9,
+          border: "1px solid " + C.ac + "60", background: C.ac,
+          color: "#fff", fontSize: 11, fontWeight: 700,
+          cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
+        <Plus size={12} />
+        Ajouter
+        <ChevronDown size={10} style={{ opacity: 0.8 }} />
+      </button>
+
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 30 }} />
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 31,
+            background: C.s1, border: "1px solid " + C.brd, borderRadius: 10,
+            padding: "4px", minWidth: 160,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+          }}>
+            {items.map(({ level, label, color }) => (
+              <button
+                key={level}
+                onClick={() => { setOpen(false); onSelect(level); }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 12px", borderRadius: 7, border: "none",
+                  background: "transparent", color: C.tx,
+                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "inherit", textAlign: "left",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = C.s2)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                <div style={{ width: 8, height: 8, borderRadius: 3, background: color, flexShrink: 0 }} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── No-parent drag modal ──────────────────────────────────────────────────────
+
+interface NoParentDragState {
+  cycleId:  string;
+  newStart: string;
+  newEnd:   string;
+}
+
+function NoParentDragModal({
+  state, macrocycles, mesocycles, athleteId, onClose,
+}: {
+  state:       NoParentDragState;
+  macrocycles: Macrocycle[];
+  mesocycles:  Mesocycle[];
+  athleteId:   string;
+  onClose:     () => void;
+}) {
+  const qc = useQueryClient();
+  const [mesoName, setMesoName] = useState(() =>
+    format(parseISO(state.newStart), "MMMM yyyy", { locale: fr }),
+  );
+  const [saving, setSaving] = useState(false);
+
+  // Existing meso whose dates contain newStart (reassign without creating)
+  const overlappingMeso = mesocycles.find(
+    (m) => state.newStart >= m.start_date && state.newStart <= m.end_date,
+  );
+  // Macro that contains newStart
+  const targetMacro = macrocycles.find(
+    (m) => state.newStart >= m.start_date && state.newStart <= m.end_date,
+  );
+
+  async function handleCreateAndMove() {
+    if (!mesoName.trim()) { toast.error("Nom requis"); return; }
+    if (!targetMacro) { toast.error("Crée d'abord un macrocycle pour cette période"); return; }
+    setSaving(true);
+
+    const { data: newMeso, error: mesoErr } = await supabase
+      .from("mesocycles")
+      .insert({ macrocycle_id: targetMacro.id, name: mesoName.trim(), start_date: state.newStart, end_date: state.newEnd })
+      .select("id")
+      .single();
+
+    if (mesoErr || !newMeso) { toast.error("Erreur création mésocycle"); setSaving(false); return; }
+
+    const { error: cycleErr } = await supabase
+      .from("cycles")
+      .update({ mesocycle_id: newMeso.id, start_date: state.newStart, end_date: state.newEnd })
+      .eq("id", state.cycleId);
+    if (cycleErr) { toast.error("Erreur mise à jour cycle"); setSaving(false); return; }
+
+    await supabase.from("microcycles").delete().eq("cycle_id", state.cycleId);
+    const micros = buildMicrocycles(state.cycleId, state.newStart, state.newEnd);
+    if (micros.length > 0) await supabase.from("microcycles").insert(micros);
+
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+    toast.success("Mésocycle créé — cycle déplacé");
+    setSaving(false);
+    onClose();
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "8px 10px", borderRadius: 8,
+    border: "1px solid " + C.brdL, background: C.s2,
+    color: C.tx, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box",
+  };
+  const btnBase: React.CSSProperties = {
+    padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+    cursor: "pointer", fontFamily: "inherit", border: "none",
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)" }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", zIndex: 61,
+        transform: "translate(-50%, -50%)",
+        width: 420, maxWidth: "92vw",
+        background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+        padding: "20px 24px",
+        animation: "fadeScaleIn 150ms ease-out",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div style={{ width: 4, height: 28, borderRadius: 3, background: C.coach, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9, color: C.coach, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Aucun mésocycle ici
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>Que faire ?</div>
+          </div>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <X size={14} />
+          </button>
+        </div>
+
+        <div style={{ fontSize: 12, color: C.tx2, marginBottom: 16 }}>
+          Nouvelle position :{" "}
+          <b style={{ color: C.tx }}>
+            {format(parseISO(state.newStart), "d MMM", { locale: fr })} → {format(parseISO(state.newEnd), "d MMM yyyy", { locale: fr })}
+          </b>
+        </div>
+
+        {overlappingMeso ? (
+          // Existing meso covers this range — just confirm reassign
+          <div style={{ fontSize: 12, color: C.tx2, marginBottom: 16, padding: "10px 12px", borderRadius: 8, background: C.s2 }}>
+            Mésocycle existant trouvé : <b style={{ color: C.coach }}>{overlappingMeso.name}</b>
+            <br />Le cycle sera rattaché à ce mésocycle.
+          </div>
+        ) : targetMacro ? (
+          // No meso but a macro exists — offer to create meso
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 4 }}>
+              Nom du nouveau mésocycle
+            </label>
+            <input
+              autoFocus
+              value={mesoName}
+              onChange={(e) => setMesoName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreateAndMove()}
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 10, color: C.tx3, marginTop: 4 }}>
+              Parent macrocycle : <b>{targetMacro.name}</b>
+            </div>
+          </div>
+        ) : (
+          // No macro either
+          <div style={{ fontSize: 12, color: C.o, padding: "10px 12px", borderRadius: 8, background: C.oS, marginBottom: 16 }}>
+            Aucun macrocycle pour cette période. Crée d'abord un macrocycle puis déplace à nouveau ce cycle.
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ ...btnBase, background: "transparent", border: "1px solid " + C.brdL, color: C.tx2 }}>
+            Annuler
+          </button>
+          {overlappingMeso && (
+            <button
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                await supabase.from("cycles").update({ mesocycle_id: overlappingMeso.id, start_date: state.newStart, end_date: state.newEnd }).eq("id", state.cycleId);
+                await supabase.from("microcycles").delete().eq("cycle_id", state.cycleId);
+                const micros = buildMicrocycles(state.cycleId, state.newStart, state.newEnd);
+                if (micros.length > 0) await supabase.from("microcycles").insert(micros);
+                qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] });
+                qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+                toast.success("Cycle déplacé");
+                setSaving(false);
+                onClose();
+              }}
+              style={{ ...btnBase, background: C.coach, color: "#fff", opacity: saving ? 0.7 : 1, cursor: saving ? "not-allowed" : "pointer" }}
+            >
+              {saving ? "…" : "Déplacer"}
+            </button>
+          )}
+          {targetMacro && !overlappingMeso && (
+            <button
+              onClick={handleCreateAndMove}
+              disabled={saving}
+              style={{ ...btnBase, background: C.coach, color: "#fff", opacity: saving ? 0.7 : 1, cursor: saving ? "not-allowed" : "pointer" }}
+            >
+              {saving ? "…" : "Créer et déplacer"}
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── TimelineView ──────────────────────────────────────────────────────────────
 
 interface TimelineViewProps { athleteId: string }
@@ -555,12 +909,14 @@ interface TimelineViewProps { athleteId: string }
 const MONTHS_SHOWN = 18;
 
 export function TimelineView({ athleteId }: TimelineViewProps) {
-  const [windowStart, setWindowStart] = useState(() => startOfMonth(new Date()));
-  const [drawer,      setDrawer]      = useState<DrawerState | null>(null);
-  const [createModal, setCreateModal] = useState<CreateState | null>(null);
-  const [zoomMacro,   setZoomMacro]   = useState<{ start: Date; end: Date; label: string } | null>(null);
-  const [editingComp, setEditingComp] = useState<Competition | null>(null);
+  const [windowStart,    setWindowStart]    = useState(() => startOfMonth(new Date()));
+  const [drawer,         setDrawer]         = useState<DrawerState | null>(null);
+  const [createModal,    setCreateModal]    = useState<CreateState | null>(null);
+  const [zoomMacro,      setZoomMacro]      = useState<{ start: Date; end: Date; label: string } | null>(null);
+  const [editingComp,    setEditingComp]    = useState<Competition | null>(null);
+  const [noParentModal,  setNoParentModal]  = useState<NoParentDragState | null>(null);
 
+  const qc = useQueryClient();
   const { user } = useAuth();
   const { mutate: deleteComp } = useDeleteCompetition();
 
@@ -589,22 +945,64 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
 
   const open = useCallback((type: DrawerType, id: string) => setDrawer({ type, id }), []);
 
-  function openCreate(level: CreateLevel, parentId?: string, defaultStart?: string, defaultEnd?: string) {
+  function openCreate(
+    level: CreateLevel,
+    parentId?: string,
+    defaultStart?: string,
+    defaultEnd?: string,
+    minStart?: string,
+    parentOptions?: ParentOption[],
+    siblingItems?: Array<{ parentId: string; end_date: string }>,
+  ) {
     setCreateModal({
-      level, parentId,
+      level, parentId, parentOptions, siblingItems,
       defaultStart: defaultStart ?? rsStr,
       defaultEnd:   defaultEnd   ?? reStr,
+      minStart,
     });
   }
 
   function makeAddHandler(
     childLevel: CreateLevel,
     parentArr: "macrocycles" | "mesocycles" | "cycles",
+    childrenArr: "mesocycles" | "cycles" | "microcycles",
+    parentKey: string,
   ) {
     return (parentId: string) => {
+      if (!parentId) { toast.error("Sélectionne d'abord un parent"); return; }
+
       const parent = (data?.[parentArr] as Array<{ id: string; start_date: string; end_date: string }>)
         ?.find((i) => i.id === parentId);
-      openCreate(childLevel, parentId, parent?.start_date, parent?.end_date);
+
+      // Find last existing child of this parent → auto-chain
+      type AnyItem = { id: string; start_date: string; end_date: string } & Record<string, unknown>;
+      const children = (data?.[childrenArr] as AnyItem[] | undefined)
+        ?.filter((i) => i[parentKey] === parentId)
+        ?.sort((a, b) => b.start_date.localeCompare(a.start_date));
+      const lastChild = children?.[0];
+
+      let defaultStart: string;
+      let defaultEnd: string;
+      let minStart: string | undefined;
+
+      if (lastChild) {
+        // Chain right after last sibling (next Monday)
+        defaultStart = chainNextStart(lastChild.end_date);
+        minStart     = defaultStart; // cannot start before this
+        // preserve last child's week count
+        const lastWeeks = Math.max(1, Math.round(
+          (new Date(lastChild.end_date).getTime() - new Date(lastChild.start_date).getTime())
+          / (7 * 24 * 60 * 60 * 1000)
+        ) + 1);
+        defaultEnd = endFromWeeks(defaultStart, lastWeeks);
+      } else {
+        // No siblings yet: start at parent's start, default 4 weeks
+        defaultStart = parent ? snapMonday(parent.start_date) : rsStr;
+        minStart     = defaultStart;
+        defaultEnd   = endFromWeeks(defaultStart, 4);
+      }
+
+      openCreate(childLevel, parentId, defaultStart, defaultEnd, minStart);
     };
   }
 
@@ -624,6 +1022,45 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     };
   }
 
+  // ── Cycle drag/resize with no-parent detection ───────────────────────────
+
+  function handleCycleDrag(id: string, ns: string, ne: string) {
+    const cycle = data?.cycles.find((c) => c.id === id);
+    if (!cycle) return;
+    const snappedStart = snapMonday(ns);
+    const snappedEnd   = snapSunday(ne);
+    const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
+    if (meso) {
+      // No parentStart/parentEnd: meso lookup already done, skip bounds check in mutation
+      drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+             athleteId, rangeStart: rsStr, rangeEnd: reStr });
+      if (cycle.mesocycle_id !== meso.id) {
+        supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
+          .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+      }
+    } else {
+      setNoParentModal({ cycleId: id, newStart: snappedStart, newEnd: snappedEnd });
+    }
+  }
+
+  function handleCycleResize(id: string, ns: string, ne: string) {
+    const cycle = data?.cycles.find((c) => c.id === id);
+    if (!cycle) return;
+    const snappedStart = snapMonday(ns);
+    const snappedEnd   = snapSunday(ne);
+    const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
+    if (meso) {
+      resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+               athleteId, rangeStart: rsStr, rangeEnd: reStr });
+      if (cycle.mesocycle_id !== meso.id) {
+        supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
+          .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+      }
+    } else {
+      setNoParentModal({ cycleId: id, newStart: snappedStart, newEnd: snappedEnd });
+    }
+  }
+
   // ── Map data → TLRowItem ──────────────────────────────────────────────────
 
   const macroRows: TLRowItem[] = (data?.macrocycles ?? []).map((m) => ({
@@ -635,10 +1072,10 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     return { id: m.id, label: m.name, startDate: m.start_date, endDate: m.end_date, parentStart: parent?.start_date, parentEnd: parent?.end_date };
   });
 
-  const cycleRows: TLRowItem[] = (data?.cycles ?? []).map((c) => {
-    const parent = data?.mesocycles.find((m) => m.id === c.mesocycle_id);
-    return { id: c.id, label: c.name, startDate: c.start_date, endDate: c.end_date, parentStart: parent?.start_date, parentEnd: parent?.end_date };
-  });
+  // No parentStart/parentEnd for cycles: free drag, handled by handleCycleDrag/Resize
+  const cycleRows: TLRowItem[] = (data?.cycles ?? []).map((c) => ({
+    id: c.id, label: c.name, startDate: c.start_date, endDate: c.end_date,
+  }));
 
   const microRows: TLRowItem[] = (data?.microcycles ?? []).map((mi) => {
     const parent = data?.cycles.find((c) => c.id === mi.cycle_id);
@@ -646,6 +1083,30 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   });
 
   const sharedRowProps = { calc, athleteId, rangeStart: rsStr, rangeEnd: reStr };
+
+  /** Build ParentOption[] for cycle creation (no pre-computed dates, computed dynamically) */
+  function buildCycleParentOptions(): ParentOption[] {
+    return (data?.mesocycles ?? []).map((m) => ({
+      id:         m.id,
+      label:      `${m.name} (${m.start_date} → ${m.end_date})`,
+      start_date: m.start_date,
+    }));
+  }
+
+  /** Compute initial start/end for a new cycle under a given meso */
+  function cycleDefaultDates(mesoId: string): { defaultStart: string; defaultEnd: string } {
+    const siblings = (data?.cycles ?? [])
+      .filter((c) => c.mesocycle_id === mesoId)
+      .sort((a, b) => b.end_date.localeCompare(a.end_date)); // descending
+    const last = siblings[0];
+    if (last) {
+      const s = chainNextStart(last.end_date);
+      return { defaultStart: s, defaultEnd: endFromWeeks(s, 4) };
+    }
+    const meso = data?.mesocycles.find((m) => m.id === mesoId);
+    const s = meso ? snapMonday(meso.start_date) : rsStr;
+    return { defaultStart: s, defaultEnd: endFromWeeks(s, 4) };
+  }
 
   return (
     <>
@@ -686,18 +1147,36 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                 >
                   Auj.
                 </button>
-                <button
-                  onClick={() => openCreate("macrocycle", undefined, rsStr, reStr)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "5px 12px", borderRadius: 8,
-                    border: "1px solid " + C.ac + "50", background: C.acS,
-                    color: C.ac, fontSize: 11, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "inherit",
+                <AddDropdown
+                  onSelect={(level) => {
+                    if (level === "macrocycle") {
+                      openCreate("macrocycle", undefined, rsStr, reStr);
+                    } else if (level === "mesocycle") {
+                      const macros = data?.macrocycles ?? [];
+                      if (!macros.length) { toast.error("Crée d'abord un macrocycle"); return; }
+                      const first = macros[0];
+                      openCreate(
+                        "mesocycle", first.id, first.start_date, first.end_date, undefined,
+                        macros.map((m) => ({ id: m.id, label: `${m.name} (${m.start_date} → ${m.end_date})` })),
+                      );
+                    } else if (level === "cycle") {
+                      const opts = buildCycleParentOptions();
+                      if (!opts.length) { toast.error("Crée d'abord un mésocycle"); return; }
+                      const first = opts[0];
+                      const { defaultStart, defaultEnd } = cycleDefaultDates(first.id);
+                      const sibs = (data?.cycles ?? []).map((c) => ({ parentId: c.mesocycle_id ?? "", end_date: c.end_date }));
+                      openCreate("cycle", first.id, defaultStart, defaultEnd, undefined, opts, sibs);
+                    } else if (level === "microcycle") {
+                      const cycles = data?.cycles ?? [];
+                      if (!cycles.length) { toast.error("Crée d'abord un cycle"); return; }
+                      const first = cycles[0];
+                      openCreate(
+                        "microcycle", first.id, first.start_date, first.end_date, undefined,
+                        cycles.map((c) => ({ id: c.id, label: `${c.name} (${c.start_date} → ${c.end_date})` })),
+                      );
+                    }
                   }}
-                >
-                  <Plus size={11} /> Macrocycle
-                </button>
+                />
               </>
             )}
           </div>
@@ -747,7 +1226,6 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
               <div style={{ position: "relative" }}>
                 <TimelineRow level="macrocycle" items={macroRows} {...sharedRowProps}
                   onOpen={(id) => open("macrocycle", id)}
-                  onAdd={makeAddHandler("mesocycle", "macrocycles")}
                   onZoom={(id) => {
                     const macro = data?.macrocycles.find((m) => m.id === id);
                     if (macro) setZoomMacro({ start: parseISO(macro.start_date), end: parseISO(macro.end_date), label: macro.name });
@@ -758,16 +1236,29 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                 />
                 <TimelineRow level="mesocycle" items={mesoRows} {...sharedRowProps}
                   onOpen={(id) => open("mesocycle", id)}
-                  onAdd={makeAddHandler("cycle", "mesocycles")}
-                  onNewRow={() => openCreate("mesocycle", data?.macrocycles[0]?.id, data?.macrocycles[0]?.start_date, data?.macrocycles[0]?.end_date)}
+                  onNewRow={() => {
+                    const macros = data?.macrocycles ?? [];
+                    const first = macros[0];
+                    openCreate(
+                      "mesocycle", first?.id, first?.start_date, first?.end_date, undefined,
+                      macros.map((m) => ({ id: m.id, label: `${m.name} (${m.start_date} → ${m.end_date})` })),
+                    );
+                  }}
                   onDrag={makeDragHandler("mesocycles")}
                   onResize={makeResizeHandler("mesocycles")}
                 />
                 <TimelineRow level="cycle" items={cycleRows} {...sharedRowProps}
                   onOpen={(id) => open("cycle", id)}
-                  onNewRow={() => openCreate("cycle", data?.mesocycles[0]?.id, data?.mesocycles[0]?.start_date, data?.mesocycles[0]?.end_date)}
-                  onDrag={makeDragHandler("cycles")}
-                  onResize={makeResizeHandler("cycles")}
+                  onNewRow={() => {
+                    const opts = buildCycleParentOptions();
+                    if (!opts.length) { toast.error("Crée d'abord un mésocycle"); return; }
+                    const first = opts[0];
+                    const { defaultStart, defaultEnd } = cycleDefaultDates(first.id);
+                    const sibs = (data?.cycles ?? []).map((c) => ({ parentId: c.mesocycle_id ?? "", end_date: c.end_date }));
+                    openCreate("cycle", first.id, defaultStart, defaultEnd, undefined, opts, sibs);
+                  }}
+                  onDrag={handleCycleDrag}
+                  onResize={handleCycleResize}
                 />
                 <TimelineRow level="microcycle" items={microRows} {...sharedRowProps}
                   readOnly
@@ -796,6 +1287,17 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           Drag axe X pour déplacer · Poignées colorées pour redimensionner · + pour détails · Compétitions: 🏆 rose(A) violet(B) gris(C)
         </div>
       </div>
+
+      {/* No-parent drag modal */}
+      {noParentModal && (
+        <NoParentDragModal
+          state={noParentModal}
+          macrocycles={data?.macrocycles ?? []}
+          mesocycles={data?.mesocycles ?? []}
+          athleteId={athleteId}
+          onClose={() => setNoParentModal(null)}
+        />
+      )}
 
       {/* Create modal */}
       {createModal && (
@@ -830,15 +1332,13 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           coachId={user?.id ?? ""}
           existing={{
             ...editingComp,
-            coach_id:          editingComp.coach_id          ?? user?.id ?? "",
-            athlete_id:        editingComp.athlete_id        ?? athleteId,
-            type:              (editingComp.type as import("@/types/planning").CompetitionType) ?? "competition",
-            priority:          (editingComp.priority as import("@/types/planning").CompetitionPriority) ?? "C",
-            planning_block_id: null,
-            season_id:         editingComp.season_id         ?? null,
-            notes:             editingComp.notes             ?? null,
-            location:          editingComp.location          ?? null,
-            created_at:        "",
+            coach_id:   editingComp.coach_id   ?? user?.id ?? "",
+            athlete_id: editingComp.athlete_id ?? athleteId,
+            type:       (editingComp.type as import("@/types/planning").CompetitionType) ?? "competition",
+            priority:   (editingComp.priority as import("@/types/planning").CompetitionPriority) ?? "C",
+            notes:      editingComp.notes    ?? null,
+            location:   editingComp.location ?? null,
+            created_at: "",
           }}
           onClose={() => setEditingComp(null)}
         />

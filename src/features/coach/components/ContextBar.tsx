@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useSelectedAthlete } from "@/features/coach/context/SelectedAthleteContext";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
+import { supabase } from "@/integrations/supabase/client";
+import { QK } from "@/lib/queryKeys";
 import { C } from "@/lib/theme";
 import {
   Popover,
@@ -33,7 +36,6 @@ const TABS = [
 
 const SUB_TABS: Record<string, { key: string; label: string }[]> = {
   planning: [
-    { key: "season",   label: "Saison"   },
     { key: "timeline", label: "Frise"    },
     { key: "month",    label: "Mois"     },
     { key: "summary",  label: "Synthèse" },
@@ -51,6 +53,21 @@ export default function ContextBar() {
   const { selectedAthlete } = useSelectedAthlete();
   const { blockConfig, currentWeek, tw } = useAthleteContext();
   const [comboOpen, setComboOpen] = useState(false);
+
+  // Badge modifications athlète (reschedule + bonus sets)
+  const { data: modifCount = 0 } = useQuery({
+    queryKey: QK.athleteModifications(athleteId ?? ""),
+    enabled: !!athleteId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("workout_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("athlete_id", athleteId!)
+        .or("rescheduled_by_athlete.eq.true,athlete_modifications.not.is.null");
+      return count ?? 0;
+    },
+  });
 
   // Active tab derived from URL segment
   const segments = location.pathname.split("/");
@@ -144,6 +161,24 @@ export default function ContextBar() {
             </span>
           )}
         </div>
+
+        {/* Badge modifications athlète */}
+        {modifCount > 0 && (
+          <button
+            onClick={() => navigate(`/coach/athletes/${athleteId}/retours`)}
+            title="Voir les modifications athlète"
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "3px 8px", borderRadius: 20,
+              border: "1px solid rgba(245,158,11,0.4)",
+              background: "rgba(245,158,11,0.12)",
+              color: "#F59E0B", fontSize: 10, fontWeight: 700,
+              cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+            }}
+          >
+            ⚡ {modifCount}
+          </button>
+        )}
 
         {/* Changer d'athlète — combobox */}
         <Popover open={comboOpen} onOpenChange={setComboOpen}>

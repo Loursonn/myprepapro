@@ -28,17 +28,6 @@ export function useCompetitions(athleteId: string) {
   });
 }
 
-/** Compétitions filtrées pour une saison donnée (filtre client-side). */
-export function useSeasonCompetitions(athleteId: string, seasonId: string | null) {
-  const query = useCompetitions(athleteId);
-  return {
-    ...query,
-    data: seasonId
-      ? (query.data ?? []).filter((c) => c.season_id === seasonId)
-      : (query.data ?? []),
-  };
-}
-
 function invalidate(qc: ReturnType<typeof useQueryClient>, athleteId: string) {
   qc.invalidateQueries({ queryKey: ['competitions', athleteId] });
 }
