@@ -44,7 +44,7 @@ function scoreColor(v: number, max = 10): string {
 
 // ── Component bars ────────────────────────────────────────────────────────────
 
-function ComponentBar({ label, value, max = 10, color }: { label: string; value: number; max?: number; color: string }) {
+function ComponentBar({ label, value, max = 5, color }: { label: string; value: number; max?: number; color: string }) {
   const pct = Math.round((value / max) * 100);
   return (
     <div>
@@ -313,7 +313,7 @@ export function DayDetailPanel({ date, wellness, workouts = [], energySessions =
                   {wellness.score >= 70 ? "Bonne forme" : wellness.score >= 50 ? "Forme correcte" : "Fatigue élevée"}
                 </div>
                 <div style={{ fontSize: 11, color: C.tx3 }}>
-                  Fatigue {wellness.fatigue}/10 · Énergie {wellness.energie}/10
+                  Fatigue {wellness.fatigue}/5 · Énergie {wellness.energie}/5
                 </div>
               </div>
             </div>

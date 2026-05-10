@@ -201,10 +201,10 @@ export function WellnessDetailView({ dailyData, avgWellness, sleepGoals, onClose
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: 20 }}>
           {[
             { label: "Score moy.", value: avgWellness, unit: "/100", color: C.ac },
-            { label: "Fatigue",    value: avgFatigue,  unit: "/10",  color: C.o  },
-            { label: "Sommeil",    value: avgSommeil,  unit: "/10",  color: C.b  },
-            { label: "Stress",     value: avgStress,   unit: "/10",  color: C.r  },
-            { label: "Énergie",    value: avgEnergie,  unit: "/10",  color: C.g  },
+            { label: "Fatigue",    value: avgFatigue,  unit: "/5",   color: C.o  },
+            { label: "Sommeil",    value: avgSommeil,  unit: "/5",   color: C.b  },
+            { label: "Stress",     value: avgStress,   unit: "/5",   color: C.r  },
+            { label: "Énergie",    value: avgEnergie,  unit: "/5",   color: C.g  },
           ].map(({ label, value, unit, color }) => (
             <div key={label} style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>{label}</div>
@@ -255,7 +255,7 @@ export function WellnessDetailView({ dailyData, avgWellness, sleepGoals, onClose
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={composantesData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.tx3 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: C.tx3 }} tickLine={false} axisLine={false} />
+              <YAxis domain={[0, 5]} tick={{ fontSize: 10, fill: C.tx3 }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={TOOLTIP_STYLE} />
               <Legend wrapperStyle={{ fontSize: 10, color: C.tx3 }} />
               <Line type="monotone" dataKey="fatigue" stroke={C.o} strokeWidth={2} dot={false} name="Fatigue" />

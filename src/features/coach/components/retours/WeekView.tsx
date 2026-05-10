@@ -26,6 +26,31 @@ export function WeekView({ weekData, prevWeekData }: WeekViewProps) {
     energyByDate[e.date].push(e);
   }
 
+  const testsByDate: Record<string, typeof weekData.test_sessions> = {};
+  for (const t of weekData.test_sessions) {
+    if (!testsByDate[t.date]) testsByDate[t.date] = [];
+    testsByDate[t.date].push(t);
+  }
+
+  // Detect rescheduled sessions: same session appears completed on another day
+  const completedWorkoutSessionIds = new Set(
+    weekData.workouts.filter(w => w.status === "completed").map(w => w.session_id),
+  );
+  const rescheduledWorkoutIds = new Set(
+    weekData.workouts
+      .filter(w => w.status !== "completed" && completedWorkoutSessionIds.has(w.session_id))
+      .map(w => w.id),
+  );
+
+  const completedEnergyLabels = new Set(
+    weekData.energy_sessions.filter(e => e.status === "completed").map(e => e.session_label),
+  );
+  const rescheduledEnergyIds = new Set(
+    weekData.energy_sessions
+      .filter(e => e.status !== "completed" && completedEnergyLabels.has(e.session_label))
+      .map(e => e.id),
+  );
+
   const prevWorkouts = prevWeekData?.workouts ?? [];
 
   return (
@@ -45,8 +70,11 @@ export function WeekView({ weekData, prevWeekData }: WeekViewProps) {
               date={dateStr}
               workouts={workoutsByDate[dateStr] ?? []}
               energy={energyByDate[dateStr]     ?? []}
+              tests={testsByDate[dateStr]        ?? []}
               wellness={(weekData.daily_wellness[dateStr] as WellnessDay | null) ?? null}
               previousWorkouts={prevWorkouts}
+              rescheduledWorkoutIds={rescheduledWorkoutIds}
+              rescheduledEnergyIds={rescheduledEnergyIds}
             />
           );
         })}

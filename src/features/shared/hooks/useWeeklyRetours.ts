@@ -179,19 +179,19 @@ async function fetchWeekData(
     db.from("workout_logs")
       .select("id, session_id, session_name, scheduled_date, status, duration_s, notes, rpe_score")
       .eq("athlete_id", athleteId)
-      .neq("status", "skipped")
+      // include skipped — coaches want to see them
       .gte("scheduled_date", start)
       .lte("scheduled_date", end)
       .order("scheduled_date"),
 
     db.from("energy_session_assignments")
-      .select("id, scheduled_date, status, notes, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m)")
+      .select("id, scheduled_date, status, notes, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m, intervals)")
       .eq("athlete_id", athleteId)
       .gte("scheduled_date", start)
       .lte("scheduled_date", end),
 
     db.from("test_sessions")
-      .select("id, title, type, date, completed, results_note, coach_validated")
+      .select("id, title, type, date, completed, results_note, results_structured, coach_validated")
       .eq("athlete_id", athleteId)
       .gte("date", start)
       .lte("date", end),
@@ -286,15 +286,28 @@ async function fetchWeekData(
   const energySessions: EnergySessionDetail[] = (energyRes.data ?? []).map((e: any) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const es = (e.energy_sessions as any) ?? {};
+    let note: string | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let stepLog: Record<string, any> | null = null;
+    if (e.notes) {
+      try {
+        const parsed = JSON.parse(e.notes);
+        if (parsed.__type === "step_log_v1") { stepLog = parsed.steps ?? null; note = parsed.session_comment ?? null; }
+        else note = e.notes;
+      } catch { note = e.notes; }
+    }
     return {
       id:            e.id,
       session_label: es.name             ?? "Session énergétique",
       date:          e.scheduled_date,
+      status:        e.status            ?? "planned",
       completed:     e.status === "completed",
       duration_min:  es.total_duration_s != null ? Math.round(es.total_duration_s / 60) : null,
       distance_m:    es.total_distance_m ?? null,
       session_kind:  es.session_kind     ?? null,
-      note:          e.notes             ?? null,
+      note,
+      intervals:     es.intervals        ?? [],
+      step_log:      stepLog,
     };
   });
 
@@ -306,13 +319,14 @@ async function fetchWeekData(
     energy_sessions: energySessions,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     test_sessions: (testsRes.data ?? []).map((t: any) => ({
-      id:              t.id,
-      title:           t.title,
-      type:            t.type,
-      date:            t.date,
-      completed:       t.completed,
-      results_note:    t.results_note    ?? null,
-      coach_validated: t.coach_validated ?? null,
+      id:                  t.id,
+      title:               t.title,
+      type:                t.type,
+      date:                t.date,
+      completed:           t.completed,
+      results_note:        t.results_note        ?? null,
+      results_structured:  t.results_structured  ?? null,
+      coach_validated:     t.coach_validated      ?? null,
     })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     competitions: (compsRes.data ?? []).map((c: any) => ({
