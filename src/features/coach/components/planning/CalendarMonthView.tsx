@@ -299,7 +299,8 @@ function DroppableDay({
       ref={setNodeRef}
       onClick={onClick}
       style={{
-        minHeight: 90,
+        height: 110,
+        overflow: "hidden",
         background: isOver
           ? C.acS
           : today
