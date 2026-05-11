@@ -21,7 +21,7 @@ import { useCalculatePosition } from "./hooks/useCalculatePosition";
 import { useDragCycle }         from "./hooks/useDragCycle";
 import { useResizeCycle }       from "./hooks/useResizeCycle";
 import type {
-  Macrocycle, Mesocycle, Cycle, Microcycle, Competition,
+  Macrocycle, Mesocycle, Cycle, Microcycle, Competition, TimelineData,
 } from "./hooks/useTimelineData";
 
 import { TimeAxis }            from "./TimeAxis";
@@ -1202,8 +1202,65 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const { data, isLoading } = useTimelineData(athleteId, { start: rangeStart, end: rangeEnd });
   const calc = useCalculatePosition(rangeStart, rangeEnd, width - 88); // subtract label col
 
-  const { mutate: drag }   = useDragCycle();
-  const { mutate: resize } = useResizeCycle();
+  const { mutate: _drag }   = useDragCycle();
+  const { mutate: _resize } = useResizeCycle();
+
+  // ── Undo stack ────────────────────────────────────────────────────────────
+  const [undoStack, setUndoStack] = useState<TimelineData[]>([]);
+
+  const pushUndo = useCallback((previous: TimelineData) => {
+    setUndoStack((s) => [...s.slice(-9), previous]);
+  }, []);
+
+  // Wrap drag/resize to capture snapshots into the undo stack on success
+  const drag: typeof _drag = useCallback((vars, opts?) => {
+    _drag(vars as never, {
+      ...(opts as object),
+      onSuccess: (d: unknown, v: unknown, ctx: unknown) => {
+        const c = ctx as { previous?: TimelineData } | undefined;
+        if (c?.previous) pushUndo(c.previous);
+        (opts as { onSuccess?: (...a: unknown[]) => void })?.onSuccess?.(d, v, ctx);
+      },
+    } as never);
+  }, [_drag, pushUndo]);
+
+  const resize: typeof _resize = useCallback((vars, opts?) => {
+    _resize(vars as never, {
+      ...(opts as object),
+      onSuccess: (d: unknown, v: unknown, ctx: unknown) => {
+        const c = ctx as { previous?: TimelineData } | undefined;
+        if (c?.previous) pushUndo(c.previous);
+        (opts as { onSuccess?: (...a: unknown[]) => void })?.onSuccess?.(d, v, ctx);
+      },
+    } as never);
+  }, [_resize, pushUndo]);
+
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0 || !data) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((s) => s.slice(0, -1));
+
+    // Restore cache immediately
+    const qKey = ["timeline-data", athleteId, rsStr, reStr];
+    qc.setQueryData(qKey, previous);
+
+    // Restore changed items in DB
+    const levels = ["macrocycles", "mesocycles", "cycles", "microcycles"] as const;
+    for (const level of levels) {
+      const prevItems = previous[level] as Array<{ id: string; start_date: string; end_date: string }>;
+      const currItems = (data[level] as Array<{ id: string; start_date: string; end_date: string }>);
+      for (const prev of prevItems) {
+        const curr = currItems.find((c) => c.id === prev.id);
+        if (!curr || curr.start_date !== prev.start_date || curr.end_date !== prev.end_date) {
+          await supabase.from(level).update({ start_date: prev.start_date, end_date: prev.end_date }).eq("id", prev.id);
+        }
+      }
+    }
+
+    qc.invalidateQueries({ queryKey: ["timeline-data",    athleteId] });
+    qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+    toast.success("Action annulée");
+  }, [undoStack, data, athleteId, rsStr, reStr, qc]);
 
   const open = useCallback((type: DrawerType, id: string) => { setDrawer({ type, id }); setSelectedId(id); }, []);
 
@@ -1642,6 +1699,15 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                 >
                   Auj.
                 </button>
+                {undoStack.length > 0 && (
+                  <button
+                    onClick={handleUndo}
+                    title="Annuler la dernière action (drag/resize)"
+                    style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid " + C.o + "60", background: C.o + "15", color: C.o, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}
+                  >
+                    ↩ Annuler
+                  </button>
+                )}
                 <AddDropdown
                   onSelect={(level) => {
                     if (level === "macrocycle") {

@@ -401,6 +401,10 @@ function DroppableDay({
 
 // ── Session bank sidebar ──────────────────────────────────────────────────────
 
+const ENERGY_KIND_COLOR: Record<string, string> = {
+  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+};
 const ENERGY_KIND_LABEL: Record<string, string> = {
   vo2: "VO₂", tempo: "Tempo", seuil: "Seuil",
   footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
