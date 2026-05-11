@@ -4,7 +4,7 @@ import { QK } from "@/lib/queryKeys";
 import type {
   WeeklyRetourData, WeekComparisonData,
   PerformedExercise, PerformedSet, PlannedExercise, WellnessDay, EnergySessionDetail,
-  FreeActivityDetail,
+  FreeActivityDetail, NutritionStrategy, NutritionDailyLog,
 } from "@/features/shared/types/retours.types";
 import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
 import { startOfWeek, endOfWeek, subWeeks, format, eachDayOfInterval, addDays } from "date-fns";
@@ -176,7 +176,7 @@ async function fetchWeekData(
   const mergedWH = buildMergedWellness(currentWH, blockHistory);
 
   // ── Parallel DB queries ──────────────────────────────────────────────────────
-  const [workoutsRes, energyRes, testsRes, compsRes] = await Promise.all([
+  const [workoutsRes, energyRes, testsRes, compsRes, nutritionLogsRes, nutritionStrategyRes] = await Promise.all([
     db.from("workout_logs")
       .select("id, session_id, session_name, scheduled_date, status, duration_s, notes, rpe_score")
       .eq("athlete_id", athleteId)
@@ -202,6 +202,18 @@ async function fetchWeekData(
       .eq("athlete_id", athleteId)
       .gte("date", start)
       .lte("date", end),
+
+    db.from("nutrition_daily_log")
+      .select("id, athlete_id, date, active_calories, total_calories_consumed, glucides_consumed, lipides_consumed, proteines_consumed")
+      .eq("athlete_id", athleteId)
+      .gte("date", start)
+      .lte("date", end)
+      .order("date"),
+
+    db.from("nutrition_strategy")
+      .select("id, athlete_id, coach_id, strategy, can_track_calories, total_calories_coach, target_weight, surplus_deficit_min, surplus_deficit_max, macros_glucides, macros_lipides, macros_proteines")
+      .eq("athlete_id", athleteId)
+      .maybeSingle(),
   ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -364,5 +376,17 @@ async function fetchWeekData(
     avg_wellness:    avgWellness,
     daily_wellness:  buildDailyWellness(startDate, endDate, mergedWH),
     free_activities: freeActivities,
+    nutrition_strategy: (nutritionStrategyRes.data as NutritionStrategy | null) ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    nutrition_logs: ((nutritionLogsRes.data ?? []) as any[]).map((n): NutritionDailyLog => ({
+      id:                      n.id,
+      athlete_id:              n.athlete_id,
+      date:                    n.date,
+      active_calories:         n.active_calories         ?? null,
+      total_calories_consumed: n.total_calories_consumed ?? null,
+      glucides_consumed:       n.glucides_consumed       ?? null,
+      lipides_consumed:        n.lipides_consumed        ?? null,
+      proteines_consumed:      n.proteines_consumed      ?? null,
+    })),
   };
 }

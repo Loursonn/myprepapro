@@ -5,6 +5,7 @@ import type {
   MonthlyRetourData, DailyData, WorkoutDetail,
   PerformedExercise, PerformedSet, PlannedExercise, WellnessDay,
   EnergySessionDetail, WorkoutExerciseComment, FreeActivityDetail,
+  NutritionStrategy, NutritionDailyLog,
 } from "@/features/shared/types/retours.types";
 import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
 import { startOfMonth, endOfMonth, format, eachDayOfInterval, addDays } from "date-fns";
@@ -108,7 +109,7 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
   const end   = format(endOfMonth(monthStart),   "yyyy-MM-dd");
 
   // ── 1. Load app_data + DB tables in parallel ─────────────────────────────
-  const [appDataRes, workoutsRes, energyRes, testsRes, compsRes] = await Promise.all([
+  const [appDataRes, workoutsRes, energyRes, testsRes, compsRes, nutritionLogsRes, nutritionStrategyRes] = await Promise.all([
     db.from("app_data")
       .select("key, value")
       .eq("athlete_id", athleteId)
@@ -139,6 +140,18 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
       .eq("athlete_id", athleteId)
       .gte("date", start)
       .lte("date", end),
+
+    db.from("nutrition_daily_log")
+      .select("id, athlete_id, date, active_calories, total_calories_consumed, glucides_consumed, lipides_consumed, proteines_consumed")
+      .eq("athlete_id", athleteId)
+      .gte("date", start)
+      .lte("date", end)
+      .order("date"),
+
+    db.from("nutrition_strategy")
+      .select("id, athlete_id, coach_id, strategy, can_track_calories, total_calories_coach, target_weight, surplus_deficit_min, surplus_deficit_max, macros_glucides, macros_lipides, macros_proteines")
+      .eq("athlete_id", athleteId)
+      .maybeSingle(),
   ]);
 
   // Extract app_data
@@ -363,5 +376,17 @@ async function fetchMonthData(athleteId: string, monthStart: Date): Promise<Mont
       priority:        c.priority        ?? null,
     })),
     free_activities: freeActivities,
+    nutrition_strategy: (nutritionStrategyRes.data as NutritionStrategy | null) ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    nutrition_logs: ((nutritionLogsRes.data ?? []) as any[]).map((n): NutritionDailyLog => ({
+      id:                      n.id,
+      athlete_id:              n.athlete_id,
+      date:                    n.date,
+      active_calories:         n.active_calories         ?? null,
+      total_calories_consumed: n.total_calories_consumed ?? null,
+      glucides_consumed:       n.glucides_consumed       ?? null,
+      lipides_consumed:        n.lipides_consumed        ?? null,
+      proteines_consumed:      n.proteines_consumed      ?? null,
+    })),
   };
 }

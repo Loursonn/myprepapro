@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { todayKey } from "@/lib/date";
 import { checkMilestone } from "@/lib/date";

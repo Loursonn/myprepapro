@@ -1,5 +1,33 @@
 // Types pour les retours hebdomadaires enrichis
 
+// ── Nutrition ─────────────────────────────────────────────────────────────────
+
+export interface NutritionStrategy {
+  id: string;
+  athlete_id: string;
+  coach_id: string;
+  strategy: 'maintenance' | 'seche' | 'prise_de_masse';
+  can_track_calories: boolean;
+  total_calories_coach: number | null;
+  target_weight: number | null;
+  surplus_deficit_min: number | null;  // kcal, e.g. -200 (acceptable undershoot)
+  surplus_deficit_max: number | null;  // kcal, e.g. +100 (acceptable overshoot)
+  macros_glucides: number | null;      // g/j cible
+  macros_lipides: number | null;
+  macros_proteines: number | null;
+}
+
+export interface NutritionDailyLog {
+  id: string;
+  athlete_id: string;
+  date: string;                          // "yyyy-MM-dd"
+  active_calories: number | null;
+  total_calories_consumed: number | null;
+  glucides_consumed: number | null;      // g
+  lipides_consumed: number | null;
+  proteines_consumed: number | null;
+}
+
 export interface WorkoutExerciseComment {
   id: string;
   workout_log_id: string;
@@ -67,11 +95,10 @@ export interface EnergySessionDetail {
   duration_min: number | null;   // energy_sessions.total_duration_s / 60
   distance_m: number | null;     // energy_sessions.total_distance_m
   session_kind: string | null;   // energy_sessions.session_kind
-  note: string | null;           // plain-text note (coach or athlete)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   intervals: any[];              // EnergyStep[] — planned structure
   step_log: Record<string, EnergyStepLog> | null; // per-step completion
-  note: string | null;           // energy_session_assignments.notes
+  note: string | null;           // energy_session_assignments.notes (plain-text or extracted from JSON)
   rpe_score: number | null;
   block_logs: Record<string, { done: boolean; note?: string }> | null;
 }
@@ -136,6 +163,8 @@ export interface WeeklyRetourData {
   avg_wellness: number | null;
   daily_wellness: Record<string, WellnessDay | null>;
   free_activities: FreeActivityDetail[];
+  nutrition_strategy: NutritionStrategy | null;
+  nutrition_logs: NutritionDailyLog[];
 }
 
 export interface WeekComparisonData {
@@ -205,4 +234,6 @@ export interface MonthlyRetourData {
   test_sessions: TestDetail[];
   competitions: CompetitionDetail[];
   free_activities: FreeActivityDetail[];
+  nutrition_strategy: NutritionStrategy | null;
+  nutrition_logs: NutritionDailyLog[];
 }
