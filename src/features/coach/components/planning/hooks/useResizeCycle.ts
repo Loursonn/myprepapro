@@ -262,8 +262,12 @@ export function useResizeCycle() {
     },
 
     onSuccess: (_data, vars) => {
+      if (vars.level === "cycles") {
+        qc.setQueryData(["active-cycle-id", vars.athleteId], vars.item.id);
+      }
       qc.invalidateQueries({ queryKey: ["timeline-data",    vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["planning-summary", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["athlete-cycles",   vars.athleteId] });
     },
   });
 }

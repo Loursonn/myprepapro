@@ -1,9 +1,11 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, isToday,
-  eachDayOfInterval, parseISO,
+  eachDayOfInterval, parseISO, differenceInCalendarWeeks,
 } from "date-fns";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import type { BlockConfig, Session, WellnessData } from "@/features/shared/types/athlete";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Dumbbell, Zap, X as XIcon } from "lucide-react";
@@ -32,6 +34,18 @@ import { useDeleteCalendarEvent } from "@/features/shared/hooks/useUnifiedCalend
 import type { EnergySessionRow } from "@/types/energy";
 import { DayDetailsDrawer } from "./DayDetailsDrawer";
 import { QuickAddDialog } from "./QuickAddDialog";
+
+// ── Cycle auto-detection ──────────────────────────────────────────────────────
+
+function findCurrentCycleId(cycles: Array<{ id: string; start_date: string; end_date: string }>): string | null {
+  if (!cycles.length) return null;
+  const today = format(new Date(), "yyyy-MM-dd");
+  const current  = cycles.find(c => c.start_date <= today && today <= c.end_date);
+  if (current) return current.id;
+  const upcoming = cycles.find(c => c.start_date > today);
+  if (upcoming) return upcoming.id;
+  return cycles[cycles.length - 1].id;
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -590,6 +604,7 @@ export function CalendarMonthView({
     };
   }, [month]);
 
+  const qc = useQueryClient();
   const { data: rawEvents = [], isLoading } = useUnifiedCalendar(athleteId, monthRange);
   const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
   const { mutate: assignWorkout }       = useAssignWorkout();
@@ -597,6 +612,60 @@ export function CalendarMonthView({
   const { data: energySessions = [] }   = useEnergySessions({ created_by: coachId });
   const { mutate: assignEnergy }        = useAssignEnergySession();
   const { mutate: rescheduleEnergy }    = useUpdateEnergyAssignment();
+
+  // ── Fetch all cycles for athlete (to link blockConfig to a Frise cycle) ──
+  const { data: allCycles = [] } = useQuery({
+    queryKey: ["athlete-cycles", athleteId],
+    enabled: !!athleteId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      type CycleRow = { id: string; name: string; start_date: string; end_date: string };
+
+      const { data: sa } = await supabase
+        .from("cycles").select("id, name, start_date, end_date")
+        .eq("athlete_id", athleteId).is("mesocycle_id", null).order("start_date");
+
+      const { data: macros } = await supabase
+        .from("macrocycles").select("id").eq("athlete_id", athleteId);
+
+      let nested: CycleRow[] = [];
+      if (macros?.length) {
+        const macroIds = (macros as { id: string }[]).map(m => m.id);
+        const { data: mesos } = await supabase
+          .from("mesocycles").select("id").in("macrocycle_id", macroIds);
+        if (mesos?.length) {
+          const mesoIds = (mesos as { id: string }[]).map(m => m.id);
+          const { data: cycles } = await supabase
+            .from("cycles").select("id, name, start_date, end_date")
+            .in("mesocycle_id", mesoIds).order("start_date");
+          nested = (cycles ?? []) as CycleRow[];
+        }
+      }
+
+      const all = [...(sa ?? []), ...nested] as CycleRow[];
+      const seen = new Set<string>();
+      return all
+        .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
+        .sort((a, b) => a.start_date.localeCompare(b.start_date));
+    },
+  });
+
+  // ── Frise est maître : sync blockConfig depuis le cycle actif ────────────
+  // Priorité : dernier cycle resizé/déplacé dans Frise > cycleId stocké > auto-détection (aujourd'hui)
+  useEffect(() => {
+    if (!allCycles.length || !setBlockConfig) return;
+    const lastResizedId = qc.getQueryData<string>(["active-cycle-id", athleteId]);
+    const targetId = lastResizedId ?? blockConfig?.cycleId ?? findCurrentCycleId(allCycles);
+    if (!targetId) return;
+    const cycle = allCycles.find(c => c.id === targetId);
+    if (!cycle) return;
+    const newStart = cycle.start_date;
+    const newWeeks = Math.max(1,
+      differenceInCalendarWeeks(parseISO(cycle.end_date), parseISO(cycle.start_date), { weekStartsOn: 1 }) + 1
+    );
+    if (blockConfig?.cycleId === targetId && blockConfig.startDate === newStart && blockConfig.totalWeeks === newWeeks) return;
+    setBlockConfig(prev => ({ ...prev, cycleId: targetId, startDate: newStart, totalWeeks: newWeeks, blockName: cycle.name }));
+  }, [allCycles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Enrich realEvents: override status from completedSessions (source of truth) ──
   const enrichedRealEvents = useMemo(() => {
@@ -815,8 +884,44 @@ export function CalendarMonthView({
               }}
             >
               <span style={{ color: C.tx3, fontWeight: 600 }}>📋 Cycle :</span>
-              {blockConfig.blockName && (
-                <span style={{ color: C.tx, fontWeight: 600 }}>{blockConfig.blockName}</span>
+              {/* Cycle selector — links month view to a Frise cycle so resize auto-syncs dates */}
+              <select
+                value={blockConfig.cycleId ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!id) {
+                    setBlockConfig?.((prev) => ({ ...prev, cycleId: undefined }));
+                    return;
+                  }
+                  const cycle = allCycles.find(c => c.id === id);
+                  if (!cycle || !setBlockConfig) return;
+                  const weeks = Math.max(1,
+                    differenceInCalendarWeeks(parseISO(cycle.end_date), parseISO(cycle.start_date), { weekStartsOn: 1 }) + 1
+                  );
+                  setBlockConfig(prev => ({
+                    ...prev,
+                    cycleId: id,
+                    startDate: cycle.start_date,
+                    totalWeeks: weeks,
+                    blockName: cycle.name,
+                  }));
+                }}
+                style={{
+                  padding: "3px 7px", borderRadius: 6,
+                  border: "1px solid " + (blockConfig.cycleId ? C.ac + "80" : C.brdL),
+                  background: C.s2, color: C.tx, fontSize: 11, fontFamily: "inherit",
+                  maxWidth: 200,
+                }}
+              >
+                <option value="">— lier à un cycle —</option>
+                {allCycles.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.start_date.slice(5)} → {c.end_date.slice(5)})
+                  </option>
+                ))}
+              </select>
+              {blockConfig.cycleId && (
+                <span style={{ color: C.ac, fontSize: 10, fontWeight: 600 }}>🔗 lié</span>
               )}
               <span style={{ color: C.tx3 }}>·</span>
               <label style={{ display: "flex", alignItems: "center", gap: 6, color: C.tx3 }}>
@@ -825,7 +930,7 @@ export function CalendarMonthView({
                   type="date"
                   value={blockConfig.startDate ?? ""}
                   onChange={(e) =>
-                    setBlockConfig?.((prev) => ({ ...prev, startDate: e.target.value || null }))
+                    setBlockConfig?.((prev) => ({ ...prev, startDate: e.target.value || null, cycleId: undefined }))
                   }
                   style={{
                     padding: "3px 7px", borderRadius: 6,
