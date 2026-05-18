@@ -1582,13 +1582,12 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
         conflict,
         onConfirmSnap: (newStart, newEnd) => {
           setSnapDragDialog(null);
+          // Resize always proceeds after conflict resolution
+          resize({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
           const meso = data?.mesocycles.find((m) => newStart >= m.start_date && newStart <= m.end_date);
-          if (meso) {
-            resize({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
-            if (cycle.mesocycle_id !== meso.id)
-              supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
-                .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
-          }
+          if (meso && cycle.mesocycle_id !== meso.id)
+            supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
+              .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
         },
         onCascadeShift: async () => {
           await cascadeShift1Week("cycles", conflict.start_date, cycle.mesocycle_id ?? "", id);
@@ -1600,16 +1599,14 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
       return;
     }
 
+    // Resize always proceeds — no meso parent required (unlike drag)
+    resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+             athleteId, rangeStart: rsStr, rangeEnd: reStr });
+    // Update meso assignment only if start crossed into a different meso
     const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
-    if (meso) {
-      resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
-               athleteId, rangeStart: rsStr, rangeEnd: reStr });
-      if (cycle.mesocycle_id !== meso.id) {
-        supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
-          .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
-      }
-    } else {
-      setNoParentModal({ cycleId: id, newStart: snappedStart, newEnd: snappedEnd });
+    if (meso && cycle.mesocycle_id !== meso.id) {
+      supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
+        .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
     }
   }
 

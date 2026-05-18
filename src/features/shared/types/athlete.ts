@@ -52,6 +52,7 @@ export interface BlockConfig {
   totalWeeks: number;
   deloadWeek: number;
   startDate?: string | null;
+  cycleId?: string;
 }
 
 // ─── Wellness & Body ──────────────────────────────────────────────────────────
