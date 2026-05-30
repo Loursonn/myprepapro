@@ -2,7 +2,7 @@ import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks, addDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, Plus, Eye, Pencil, Trash2, Check, ChevronDown } from "lucide-react";
-import { snapMonday, snapSunday, chainNextStart, endFromWeeks, computeCascade } from "./utils/planningHelpers";
+import { snapMonday, snapSunday, keepWeeks, chainNextStart, endFromWeeks, computeCascade } from "./utils/planningHelpers";
 import { PERIOD_DEFAULTS } from "@/types/planning";
 import { PeriodConflictDialog } from "./dialogs/PeriodConflictDialog";
 import { ChildOverflowDialog } from "./dialogs/ChildOverflowDialog";
@@ -1435,12 +1435,13 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   }
 
   function makeDragHandler(level: "macrocycles" | "mesocycles" | "cycles" | "microcycles") {
-    return (id: string, ns: string, ne: string, ps?: string, pe?: string) => {
+    return (id: string, ns: string, _ne: string, ps?: string, pe?: string) => {
       const item = (data?.[level] as Array<{ id: string; name?: string; start_date: string; end_date: string }>)?.find((i) => i.id === id);
       if (!item) return;
       if (level !== "microcycles") {
         const snappedStart = snapMonday(ns);
-        const snappedEnd   = snapSunday(ne);
+        // Preserve original week count — don't snap ne independently (it's newStart+dur, pre-snap)
+        const snappedEnd   = keepWeeks(snappedStart, item.start_date, item.end_date);
         const conflict = detectDragConflict(level as "macrocycles" | "mesocycles" | "cycles", id, snappedStart, snappedEnd);
         if (conflict) {
           const cascadeParentId = level === "mesocycles" ? (item as unknown as Mesocycle).macrocycle_id
@@ -1510,11 +1511,12 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
 
   // ── Cycle drag/resize with no-parent detection ───────────────────────────
 
-  function handleCycleDrag(id: string, ns: string, ne: string) {
+  function handleCycleDrag(id: string, ns: string, _ne: string) {
     const cycle = data?.cycles.find((c) => c.id === id);
     if (!cycle) return;
     const snappedStart = snapMonday(ns);
-    const snappedEnd   = snapSunday(ne);
+    // Preserve original week count — ne is newStart+dur (pre-snap), not the intended end
+    const snappedEnd   = keepWeeks(snappedStart, cycle.start_date, cycle.end_date);
 
     // Overlap check with same-meso siblings (current meso)
     const conflict = detectDragConflict("cycles", id, snappedStart, snappedEnd);
