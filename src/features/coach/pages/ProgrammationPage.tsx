@@ -529,7 +529,6 @@ export default function ProgrammationPage() {
         .from("cycles")
         .select("id, name, start_date, end_date")
         .eq("athlete_id", athleteId)
-        .is("mesocycle_id", null)
         .order("start_date", { ascending: false })
         .limit(1)
         .maybeSingle();
