@@ -1177,6 +1177,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const [noParentModal,  setNoParentModal]  = useState<NoParentDragState | null>(null);
   const [selectedId,     setSelectedId]     = useState<string | null>(null);
   const [snapDragDialog, setSnapDragDialog] = useState<SnapDragDialogState | null>(null);
+  const [cycleRowResetKey, setCycleRowResetKey] = useState(0);
 
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -1515,7 +1516,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     const snappedStart = snapMonday(ns);
     const snappedEnd   = snapSunday(ne);
 
-    // Overlap check with same-meso siblings
+    // Overlap check with same-meso siblings (current meso)
     const conflict = detectDragConflict("cycles", id, snappedStart, snappedEnd);
     if (conflict) {
       setSnapDragDialog({
@@ -1546,12 +1547,42 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
             setNoParentModal({ cycleId: id, newStart: snappedStart, newEnd: snappedEnd });
           }
         },
-        onCancel: () => setSnapDragDialog(null),
+        onCancel: () => { setSnapDragDialog(null); setCycleRowResetKey((k) => k + 1); },
       });
       return;
     }
 
     const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
+
+    // Cross-meso overlap check: when cycle moves to a DIFFERENT meso, verify no conflict there
+    if (meso && meso.id !== cycle.mesocycle_id) {
+      const targetConflict = data?.cycles.find(
+        (c) => c.mesocycle_id === meso.id && c.id !== id
+            && c.start_date <= snappedEnd && c.end_date >= snappedStart,
+      );
+      if (targetConflict) {
+        setSnapDragDialog({
+          movingLabel: cycle.name,
+          movingStart: snappedStart,
+          movingEnd:   snappedEnd,
+          conflict:    targetConflict,
+          onConfirmSnap: (newStart, newEnd) => {
+            setSnapDragDialog(null);
+            drag({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd),
+                   athleteId, rangeStart: rsStr, rangeEnd: reStr, newMesocycleId: meso.id });
+          },
+          onCascadeShift: async () => {
+            await cascadeShift1Week("cycles", targetConflict.start_date, meso.id, id);
+            setSnapDragDialog(null);
+            drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+                   athleteId, rangeStart: rsStr, rangeEnd: reStr, newMesocycleId: meso.id });
+          },
+          onCancel: () => { setSnapDragDialog(null); setCycleRowResetKey((k) => k + 1); },
+        });
+        return;
+      }
+    }
+
     if (meso) {
       drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
              athleteId, rangeStart: rsStr, rangeEnd: reStr,
@@ -1590,13 +1621,42 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                    athleteId, rangeStart: rsStr, rangeEnd: reStr,
                    newMesocycleId: meso && cycle.mesocycle_id !== meso.id ? meso.id : undefined });
         },
-        onCancel: () => setSnapDragDialog(null),
+        onCancel: () => { setSnapDragDialog(null); setCycleRowResetKey((k) => k + 1); },
       });
       return;
     }
 
-    // Resize always proceeds — no meso parent required (unlike drag)
     const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
+
+    // Cross-meso overlap check for resize
+    if (meso && meso.id !== cycle.mesocycle_id) {
+      const targetConflict = data?.cycles.find(
+        (c) => c.mesocycle_id === meso.id && c.id !== id
+             && c.start_date <= snappedEnd && c.end_date >= snappedStart,
+      );
+      if (targetConflict) {
+        setSnapDragDialog({
+          movingLabel: cycle.name,
+          movingStart: snappedStart,
+          movingEnd:   snappedEnd,
+          conflict:    targetConflict,
+          onConfirmSnap: (newStart, newEnd) => {
+            setSnapDragDialog(null);
+            resize({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd),
+                     athleteId, rangeStart: rsStr, rangeEnd: reStr, newMesocycleId: meso.id });
+          },
+          onCascadeShift: async () => {
+            await cascadeShift1Week("cycles", targetConflict.start_date, meso.id, id);
+            setSnapDragDialog(null);
+            resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+                     athleteId, rangeStart: rsStr, rangeEnd: reStr, newMesocycleId: meso.id });
+          },
+          onCancel: () => { setSnapDragDialog(null); setCycleRowResetKey((k) => k + 1); },
+        });
+        return;
+      }
+    }
+
     resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
              athleteId, rangeStart: rsStr, rangeEnd: reStr,
              newMesocycleId: meso && cycle.mesocycle_id !== meso.id ? meso.id : undefined });
@@ -1852,6 +1912,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                 />
                 <TimelineRow level="cycle" items={cycleRows} {...sharedRowProps}
                   onOpen={(id) => open("cycle", id)}
+                  rowResetKey={cycleRowResetKey}
                   onNewRow={() => {
                     const opts = buildCycleParentOptions();
                     if (!opts.length) { toast.error("Crée d'abord un mésocycle"); return; }
@@ -1901,7 +1962,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           macrocycles={data?.macrocycles ?? []}
           mesocycles={data?.mesocycles ?? []}
           athleteId={athleteId}
-          onClose={() => setNoParentModal(null)}
+          onClose={() => { setNoParentModal(null); setCycleRowResetKey((k) => k + 1); }}
         />
       )}
 

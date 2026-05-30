@@ -208,10 +208,12 @@ interface TimelineRowProps {
   onResize?: (id: string, newStart: string, newEnd: string, parentStart?: string, parentEnd?: string) => void;
   /** Render items as static chips — no drag, no resize */
   readOnly?: boolean;
+  /** Increment to force all TLItems to remount (resets Rnd internal position) */
+  rowResetKey?: number;
 }
 
 export function TimelineRow({
-  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onZoom, onNewRow, onDrag, onResize, readOnly,
+  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onZoom, onNewRow, onDrag, onResize, readOnly, rowResetKey,
 }: TimelineRowProps) {
   const color = LEVEL_COLOR[level];
   const bg    = LEVEL_BG[level];
@@ -319,7 +321,7 @@ export function TimelineRow({
           const dur = differenceInDays(parseISO(item.endDate), parseISO(item.startDate));
           return (
             <TLItem
-              key={item.id}
+              key={`${item.id}-${rowResetKey ?? 0}-${item.startDate}`}
               id={item.id}
               label={item.label}
               isDeload={item.isDeload}
