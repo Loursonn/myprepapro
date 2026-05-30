@@ -13,17 +13,31 @@ import { DateQuickAdjust } from "../DateQuickAdjust";
 // ── Microcycle auto-generation ────────────────────────────────────────────────
 
 async function regenerateMicrocycles(cycleId: string, start: string, end: string) {
-  await supabase.from("microcycles").delete().eq("cycle_id", cycleId);
-  const rows = [];
+  const { data: existing } = await supabase
+    .from("microcycles").select("id, start_date").eq("cycle_id", cycleId);
+
+  const needed: { cycle_id: string; week_number: number; start_date: string; end_date: string; is_deload: boolean }[] = [];
   let weekMon = startOfISOWeek(parseISO(start));
   const ed = parseISO(end);
   let week = 1;
   while (weekMon <= ed) {
-    rows.push({ cycle_id: cycleId, week_number: week, start_date: format(weekMon, "yyyy-MM-dd"), end_date: format(endOfISOWeek(weekMon), "yyyy-MM-dd"), is_deload: false });
+    needed.push({ cycle_id: cycleId, week_number: week, start_date: format(weekMon, "yyyy-MM-dd"), end_date: format(endOfISOWeek(weekMon), "yyyy-MM-dd"), is_deload: false });
     weekMon = addWeeks(weekMon, 1);
     week++;
   }
-  if (rows.length > 0) await supabase.from("microcycles").insert(rows);
+
+  const neededStarts   = new Set(needed.map((m) => m.start_date));
+  const existingStarts = new Set((existing ?? []).map((m) => m.start_date));
+
+  const toDelete = (existing ?? []).filter((m) => !neededStarts.has(m.start_date));
+  if (toDelete.length > 0) {
+    const ids = toDelete.map((m) => m.id);
+    await supabase.from("workout_logs").delete().in("microcycle_id", ids);
+    await supabase.from("microcycles").delete().in("id", ids);
+  }
+
+  const toInsert = needed.filter((m) => !existingStarts.has(m.start_date));
+  if (toInsert.length > 0) await supabase.from("microcycles").insert(toInsert);
 }
 
 // ── Session list ──────────────────────────────────────────────────────────────
