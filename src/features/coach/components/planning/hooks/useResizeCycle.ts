@@ -45,6 +45,7 @@ interface ResizeVars {
   athleteId:   string;
   rangeStart:  string;
   rangeEnd:    string;
+  newMesocycleId?: string;
 }
 
 // ── Child cascade ─────────────────────────────────────────────────────────────
@@ -213,12 +214,15 @@ export function useResizeCycle() {
       }
 
       // Update parent
+      const updatePayload: Record<string, string> = {
+        start_date: format(vars.newStart, "yyyy-MM-dd"),
+        end_date:   format(vars.newEnd,   "yyyy-MM-dd"),
+      };
+      if (vars.newMesocycleId !== undefined) updatePayload.mesocycle_id = vars.newMesocycleId;
+
       const { error } = await supabase
         .from(vars.level)
-        .update({
-          start_date: format(vars.newStart, "yyyy-MM-dd"),
-          end_date:   format(vars.newEnd,   "yyyy-MM-dd"),
-        })
+        .update(updatePayload)
         .eq("id", vars.item.id);
       if (error) throw error;
 

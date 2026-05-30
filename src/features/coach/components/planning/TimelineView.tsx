@@ -1527,10 +1527,9 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           setSnapDragDialog(null);
           const meso = data?.mesocycles.find((m) => newStart >= m.start_date && newStart <= m.end_date);
           if (meso) {
-            drag({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
-            if (cycle.mesocycle_id !== meso.id)
-              supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
-                .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+            drag({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd),
+                   athleteId, rangeStart: rsStr, rangeEnd: reStr,
+                   newMesocycleId: cycle.mesocycle_id !== meso.id ? meso.id : undefined });
           } else {
             setNoParentModal({ cycleId: id, newStart, newEnd });
           }
@@ -1540,10 +1539,9 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           setSnapDragDialog(null);
           const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
           if (meso) {
-            drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
-            if (cycle.mesocycle_id !== meso.id)
-              supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
-                .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+            drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+                   athleteId, rangeStart: rsStr, rangeEnd: reStr,
+                   newMesocycleId: cycle.mesocycle_id !== meso.id ? meso.id : undefined });
           } else {
             setNoParentModal({ cycleId: id, newStart: snappedStart, newEnd: snappedEnd });
           }
@@ -1556,11 +1554,8 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
     if (meso) {
       drag({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
-             athleteId, rangeStart: rsStr, rangeEnd: reStr });
-      if (cycle.mesocycle_id !== meso.id) {
-        supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
-          .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
-      }
+             athleteId, rangeStart: rsStr, rangeEnd: reStr,
+             newMesocycleId: cycle.mesocycle_id !== meso.id ? meso.id : undefined });
     } else {
       setNoParentModal({ cycleId: id, newStart: snappedStart, newEnd: snappedEnd });
     }
@@ -1582,17 +1577,18 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
         conflict,
         onConfirmSnap: (newStart, newEnd) => {
           setSnapDragDialog(null);
-          // Resize always proceeds after conflict resolution
-          resize({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
           const meso = data?.mesocycles.find((m) => newStart >= m.start_date && newStart <= m.end_date);
-          if (meso && cycle.mesocycle_id !== meso.id)
-            supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
-              .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
+          resize({ level: "cycles", item: cycle as never, newStart: parseISO(newStart), newEnd: parseISO(newEnd),
+                   athleteId, rangeStart: rsStr, rangeEnd: reStr,
+                   newMesocycleId: meso && cycle.mesocycle_id !== meso.id ? meso.id : undefined });
         },
         onCascadeShift: async () => {
           await cascadeShift1Week("cycles", conflict.start_date, cycle.mesocycle_id ?? "", id);
           setSnapDragDialog(null);
-          resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd), athleteId, rangeStart: rsStr, rangeEnd: reStr });
+          const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
+          resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+                   athleteId, rangeStart: rsStr, rangeEnd: reStr,
+                   newMesocycleId: meso && cycle.mesocycle_id !== meso.id ? meso.id : undefined });
         },
         onCancel: () => setSnapDragDialog(null),
       });
@@ -1600,14 +1596,10 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     }
 
     // Resize always proceeds — no meso parent required (unlike drag)
-    resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
-             athleteId, rangeStart: rsStr, rangeEnd: reStr });
-    // Update meso assignment only if start crossed into a different meso
     const meso = data?.mesocycles.find((m) => snappedStart >= m.start_date && snappedStart <= m.end_date);
-    if (meso && cycle.mesocycle_id !== meso.id) {
-      supabase.from("cycles").update({ mesocycle_id: meso.id }).eq("id", id)
-        .then(() => qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] }));
-    }
+    resize({ level: "cycles", item: cycle as never, newStart: parseISO(snappedStart), newEnd: parseISO(snappedEnd),
+             athleteId, rangeStart: rsStr, rangeEnd: reStr,
+             newMesocycleId: meso && cycle.mesocycle_id !== meso.id ? meso.id : undefined });
   }
 
   // ── Map data → TLRowItem ──────────────────────────────────────────────────
