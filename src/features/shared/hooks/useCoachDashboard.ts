@@ -103,6 +103,27 @@ export function useCoachDashboard() {
     refetchOnWindowFocus: true,
   });
 
+  // ── 4. Upcoming test sessions ──────────────────────────────────────────────
+  const testsQ = useQuery({
+    queryKey: QK.coachDashboard.upcomingTests(user?.id ?? "", today),
+    queryFn: async () => {
+      const { data, error } = await db
+        .from("test_sessions")
+        .select("id, athlete_id, title, date")
+        .in("athlete_id", athleteIds)
+        .gte("date", today)
+        .eq("completed", false)
+        .order("date", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as {
+        id: string; athlete_id: string; title: string; date: string;
+      }[];
+    },
+    enabled: !!user && athleteIds.length > 0,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
   // ── Merge: today's athletes ─────────────────────────────────────────────────
   const todayAthletes = useMemo<TodayAthlete[]>(() => {
     const wellMap: Record<string, unknown> = {};
@@ -152,10 +173,19 @@ export function useCoachDashboard() {
     });
   }, [missedQ.data, athletes]);
 
+  const upcomingTests = useMemo(() => {
+    return (testsQ.data ?? []).map((t) => {
+      const athlete = athletes.find((a) => a.id === t.athlete_id);
+      return { ...t, athleteName: athlete?.full_name ?? "—" };
+    });
+  }, [testsQ.data, athletes]);
+
   return {
     todayAthletes,
     missedSessions,
+    upcomingTests,
     isLoadingToday:  logsQ.isLoading || wellQ.isLoading,
     isLoadingMissed: missedQ.isLoading,
+    isLoadingTests:  testsQ.isLoading,
   };
 }

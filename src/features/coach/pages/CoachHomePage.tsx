@@ -3,8 +3,8 @@ import { motion } from "framer-motion";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
-  Users, AlertTriangle, Trophy, Activity,
-  TrendingUp, Calendar, CheckCheck, ChevronRight,
+  Users, Trophy, Activity,
+  TrendingUp, Calendar, FlaskConical, ChevronRight,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/features/shared/components/EmptyState";
@@ -12,7 +12,6 @@ import { StatusPill } from "@/features/coach/components/dashboard/StatusPill";
 import { useCoachDashboard } from "@/features/shared/hooks/useCoachDashboard";
 import { usePlanningMargin } from "@/features/shared/hooks/usePlanningMargin";
 import { useRecentRecords } from "@/features/shared/hooks/useRecentRecords";
-import { useOverloadedAthletes } from "@/features/shared/hooks/useOverloadedAthletes";
 import { useUpcomingCompetitions } from "@/features/shared/hooks/useUpcomingCompetitions";
 import { useRecentActivity } from "@/features/shared/hooks/useRecentActivity";
 import { useAuth } from "@/hooks/useAuth";
@@ -87,14 +86,11 @@ export default function CoachHomePage() {
   const { profile, athletes, user } = useAuth();
   const isCoachAthlete = profile?.role === "coach_athlete";
 
-  const { todayAthletes, missedSessions, isLoadingToday, isLoadingMissed } = useCoachDashboard();
+  const { todayAthletes, missedSessions, upcomingTests, isLoadingToday, isLoadingMissed, isLoadingTests } = useCoachDashboard();
   const { cycles: endingSoon, isLoading: loadMargin }   = usePlanningMargin(14);
   const { records, isLoading: loadRecords }             = useRecentRecords(8);
-  const { overloaded, isLoading: loadOverloaded }       = useOverloadedAthletes();
   const { competitions, isLoading: loadCompet }         = useUpcomingCompetitions(30);
   const { activities, isLoading: loadActivity }         = useRecentActivity(8);
-
-  const pendingRecords = records.filter((r) => r.coachValidated === null);
 
   // ── Greeting ─────────────────────────────────────────────────────────────────
   const firstName = profile?.full_name?.split(" ")[0] ?? "Coach";
@@ -127,15 +123,7 @@ export default function CoachHomePage() {
         </motion.div>
 
         {/* Action counters */}
-        <motion.div variants={fadeUp} className="mt-5 grid grid-cols-3 gap-3">
-          <ActionCounter
-            icon={<AlertTriangle size={14} />}
-            label="Surcharges"
-            count={overloaded.length}
-            loading={loadOverloaded}
-            color={overloaded.length > 0 ? C.r : C.tx3}
-            onClick={() => navigate("/coach/athletes")}
-          />
+        <motion.div variants={fadeUp} className="mt-5 grid grid-cols-2 gap-3">
           <ActionCounter
             icon={<Calendar size={14} />}
             label="Manquées hier"
@@ -145,11 +133,11 @@ export default function CoachHomePage() {
             onClick={() => navigate("/coach/athletes")}
           />
           <ActionCounter
-            icon={<CheckCheck size={14} />}
-            label="Perfs à valider"
-            count={pendingRecords.length}
-            loading={loadRecords}
-            color={pendingRecords.length > 0 ? C.b : C.tx3}
+            icon={<FlaskConical size={14} />}
+            label="Tests à venir"
+            count={upcomingTests.length}
+            loading={isLoadingTests}
+            color={upcomingTests.length > 0 ? C.b : C.tx3}
             onClick={() => navigate("/coach/athletes")}
           />
         </motion.div>
@@ -227,66 +215,31 @@ export default function CoachHomePage() {
             </Card>
           </motion.div>
 
-          {/* Alertes — surcharges + séances manquées */}
-          {(overloaded.length > 0 || missedSessions.length > 0) && (
+          {/* Alertes — séances manquées */}
+          {missedSessions.length > 0 && (
             <motion.div variants={fadeUp}>
               <SectionTitle>À traiter</SectionTitle>
-              <div className="flex flex-col gap-3">
-
-                {overloaded.length > 0 && (
-                  <Card>
-                    <p className="text-[11px] font-semibold mb-2" style={{ color: C.r }}>
-                      Athlètes en surcharge
-                    </p>
-                    <div className="flex flex-col gap-1.5">
-                      {overloaded.map((a) => (
-                        <div
-                          key={a.id}
-                          onClick={() => navigate(`/coach/athletes/${a.id}/donnees`)}
-                          className="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-[rgba(239,75,75,0.06)] transition-colors"
-                        >
-                          <InitialAvatar name={a.full_name} color={C.r} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-semibold" style={{ color: C.tx }}>{a.full_name}</p>
-                            <p className="text-[10px]" style={{ color: C.tx3 }}>
-                              {[
-                                a.fatigue > 7 ? `Fatigue ${a.fatigue}/10` : null,
-                                a.sleep < 5   ? `Sommeil ${a.sleep}/10`   : null,
-                                `${a.streak}j consécutifs`,
-                              ].filter(Boolean).join(" · ")}
-                            </p>
-                          </div>
-                          <ChevronRight size={14} style={{ color: C.tx3 }} />
-                        </div>
-                      ))}
+              <Card>
+                <p className="text-[11px] font-semibold mb-2" style={{ color: C.o }}>
+                  Séances manquées hier
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {missedSessions.map((m) => (
+                    <div
+                      key={`${m.athleteId}_${m.date}`}
+                      onClick={() => navigate(`/coach/athletes/${m.athleteId}/planning`)}
+                      className="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-[rgba(251,146,60,0.06)] transition-colors"
+                    >
+                      <InitialAvatar name={m.athleteName} color={C.o} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold" style={{ color: C.tx }}>{m.athleteName}</p>
+                        <p className="text-[10px]" style={{ color: C.tx3 }}>{m.sessionName ?? "Séance"}</p>
+                      </div>
+                      <ChevronRight size={14} style={{ color: C.tx3 }} />
                     </div>
-                  </Card>
-                )}
-
-                {missedSessions.length > 0 && (
-                  <Card>
-                    <p className="text-[11px] font-semibold mb-2" style={{ color: C.o }}>
-                      Séances manquées hier
-                    </p>
-                    <div className="flex flex-col gap-1.5">
-                      {missedSessions.map((m) => (
-                        <div
-                          key={`${m.athleteId}_${m.date}`}
-                          onClick={() => navigate(`/coach/athletes/${m.athleteId}/planning`)}
-                          className="flex items-center gap-3 p-2 rounded-xl cursor-pointer hover:bg-[rgba(251,146,60,0.06)] transition-colors"
-                        >
-                          <InitialAvatar name={m.athleteName} color={C.o} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-semibold" style={{ color: C.tx }}>{m.athleteName}</p>
-                            <p className="text-[10px]" style={{ color: C.tx3 }}>{m.sessionName ?? "Séance"}</p>
-                          </div>
-                          <ChevronRight size={14} style={{ color: C.tx3 }} />
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
-                )}
-              </div>
+                  ))}
+                </div>
+              </Card>
             </motion.div>
           )}
 
