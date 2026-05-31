@@ -32,14 +32,15 @@ export function usePlanningMargin(daysAhead = 14) {
     queryFn: async () => {
       const { data, error } = await db
         .from("cycles")
-        .select("id, athlete_id, name, end_date")
+        .select("id, athlete_id, name, start_date, end_date")
         .in("athlete_id", athleteIds)
+        .lte("start_date", today)   // cycle must have started
         .gte("end_date", today)
         .lte("end_date", limit)
         .order("end_date", { ascending: true });
       if (error) throw error;
       return (data ?? []) as {
-        id: string; athlete_id: string; name: string; end_date: string;
+        id: string; athlete_id: string; name: string; start_date: string; end_date: string;
       }[];
     },
     enabled: !!user && athleteIds.length > 0,
