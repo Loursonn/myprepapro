@@ -127,7 +127,11 @@ export function useCoachDashboard() {
   // ── Merge: today's athletes ─────────────────────────────────────────────────
   const todayAthletes = useMemo<TodayAthlete[]>(() => {
     const wellMap: Record<string, unknown> = {};
-    (wellQ.data ?? []).forEach((r) => { wellMap[r.athlete_id] = r.value; });
+    (wellQ.data ?? []).forEach((r) => {
+      // Only use wellness if it was filled TODAY — otherwise score is stale
+      const v = r.value as { date?: string } | null;
+      if (v?.date === today) wellMap[r.athlete_id] = r.value;
+    });
 
     const logsByAthlete: Record<string, (typeof logsQ.data)[number][]> = {};
     (logsQ.data ?? []).forEach((r) => {

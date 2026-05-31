@@ -2,7 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Users, Calendar, FlaskConical, ChevronRight } from "lucide-react";
+import {
+  Users, Calendar, FlaskConical, ChevronRight,
+  Heart, Dumbbell, Trophy, Layers, ArrowUpRight,
+} from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/features/shared/components/EmptyState";
 import { StatusPill } from "@/features/coach/components/dashboard/StatusPill";
@@ -38,39 +41,28 @@ const STATUS_EMOJI: Record<SessionStatus, string> = {
   skipped:     "⏩",
 };
 
-const WELL_EMOJI = (s: number) => s >= 70 ? "💚" : s >= 50 ? "🟡" : "🔴";
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-const ACTIVITY_EMOJI: Record<string, string> = {
-  session:  "💪",
-  wellness: "🧘",
-  pr:       "🏆",
-};
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function SectionTitle({ emoji, children }: { emoji?: string; children: React.ReactNode }) {
   return (
     <p className="text-[10px] font-bold uppercase tracking-[0.6px] text-[#7C7480] mb-3 flex items-center gap-1.5">
-      {emoji && <span className="text-[12px]">{emoji}</span>}
+      {emoji && <span className="text-[11px]">{emoji}</span>}
       {children}
     </p>
   );
 }
 
-function Card({ children, className = "", onClick }: {
-  children: React.ReactNode;
-  className?: string;
-  onClick?: () => void;
-}) {
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div
-      onClick={onClick}
-      className={[
-        "bg-[#252327] border border-[rgba(124,116,128,0.15)] rounded-2xl p-4",
-        onClick ? "cursor-pointer transition-colors hover:border-[rgba(168,85,247,0.4)]" : "",
-        className,
-      ].join(" ")}
-    >
+    <div className={`bg-[#252327] border border-[rgba(124,116,128,0.15)] rounded-2xl overflow-hidden ${className}`}>
       {children}
     </div>
   );
@@ -78,21 +70,23 @@ function Card({ children, className = "", onClick }: {
 
 function SkeletonRows({ n = 3 }: { n?: number }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 p-4">
       {Array.from({ length: n }).map((_, i) => (
-        <Skeleton key={i} className="h-10 w-full rounded-xl bg-[#2A282C]" />
+        <Skeleton key={i} className="h-12 w-full rounded-xl bg-[#2A282C]" />
       ))}
     </div>
   );
 }
 
-function InitialAvatar({ name, color }: { name: string; color?: string }) {
+// ── Athlete avatar (2 letters) ─────────────────────────────────────────────────
+function Avatar({ name, color }: { name: string; color?: string }) {
+  const c = color ?? C.ac;
   return (
     <div
-      className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
-      style={{ background: (color ?? C.ac) + "25", color: color ?? C.ac }}
+      className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
+      style={{ background: c + "22", color: c, border: `1.5px solid ${c}40` }}
     >
-      {name.charAt(0).toUpperCase()}
+      {initials(name)}
     </div>
   );
 }
@@ -160,47 +154,62 @@ export default function CoachHomePage() {
         {/* ── Left column (2/3) ── */}
         <motion.div variants={stagger} initial="hidden" animate="show" className="lg:col-span-2 flex flex-col gap-6">
 
-          {/* Aujourd'hui */}
+          {/* ── Aujourd'hui ── */}
           <motion.div variants={fadeUp}>
             <SectionTitle emoji="📅">Aujourd'hui</SectionTitle>
             <Card>
               {isLoadingToday ? (
                 <SkeletonRows n={3} />
               ) : todayAthletes.length === 0 ? (
-                <p className="text-[12px] text-center py-4" style={{ color: C.tx3 }}>
+                <p className="text-[12px] text-center py-6" style={{ color: C.tx3 }}>
                   Aucune séance planifiée aujourd'hui
                 </p>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  {todayAthletes.map((a) => (
+                <div>
+                  {todayAthletes.map((a, i) => (
                     <div
                       key={a.athleteId}
                       onClick={() => navigate(`/coach/athletes/${a.athleteId}/planning`)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                      className="flex items-center gap-4 px-4 py-3 cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.03)]"
                       style={{
-                        borderLeft: `3px solid ${a.wellnessScore != null ? a.wellnessColor : C.brdL}`,
+                        borderBottom: i < todayAthletes.length - 1
+                          ? "1px solid rgba(124,116,128,0.1)"
+                          : undefined,
                       }}
                     >
-                      <InitialAvatar
+                      {/* Avatar */}
+                      <Avatar
                         name={a.athleteName}
                         color={a.wellnessScore != null ? a.wellnessColor : undefined}
                       />
 
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold truncate" style={{ color: C.tx }}>
+                      {/* Name + program */}
+                      <div className="w-[130px] shrink-0 min-w-0">
+                        <p className="text-[13px] font-bold truncate" style={{ color: C.tx }}>
                           {a.athleteName}
                         </p>
+                        <p className="text-[10px] truncate mt-0.5" style={{ color: C.tx3 }}>
+                          {/* fallback subtitle */}
+                          {a.sessions[0]?.sessionName ? "—" : "Pas de séance"}
+                        </p>
+                      </div>
+
+                      {/* Séance du jour */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: C.tx3 }}>
+                          Séance du jour
+                        </p>
                         {a.sessions.length > 0 ? (
-                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {a.sessions.map((s) => (
-                              <span key={s.id} className="flex items-center gap-1">
-                                <span className="text-[11px]">{STATUS_EMOJI[s.status]}</span>
-                                <span className="text-[11px] truncate max-w-[110px]" style={{ color: C.tx2 }}>
+                              <span key={s.id} className="flex items-center gap-1.5">
+                                <span className="text-[12px]">{STATUS_EMOJI[s.status]}</span>
+                                <span className="text-[12px] font-bold truncate max-w-[100px]" style={{ color: C.tx }}>
                                   {s.sessionName ?? "Séance"}
                                 </span>
                                 <StatusPill status={s.status} />
                                 {s.rpeScore != null && (
-                                  <span className="text-[10px] font-bold px-1.5 py-px rounded bg-[rgba(59,141,240,0.12)] text-[#3B8DF0] border border-[rgba(59,141,240,0.25)]">
+                                  <span className="text-[10px] font-bold px-1.5 py-px rounded bg-[rgba(59,141,240,0.12)] text-[#3B8DF0] border border-[rgba(59,141,240,0.2)]">
                                     RPE {s.rpeScore}
                                   </span>
                                 )}
@@ -208,23 +217,34 @@ export default function CoachHomePage() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-[11px] mt-0.5" style={{ color: C.tx3 }}>Pas de séance planifiée</p>
+                          <p className="text-[11px]" style={{ color: C.tx3 }}>Repos</p>
                         )}
                       </div>
 
-                      {a.wellnessScore != null && (
-                        <div className="flex flex-col items-center shrink-0 gap-0.5">
-                          <span className="text-[14px] leading-none">{WELL_EMOJI(a.wellnessScore)}</span>
+                      {/* Wellness */}
+                      <div className="shrink-0 text-right min-w-[60px]">
+                        <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: C.tx3 }}>
+                          Wellness
+                        </p>
+                        <div className="flex items-center justify-end gap-1">
+                          <Heart
+                            size={13}
+                            style={{
+                              color:       a.wellnessScore != null ? a.wellnessColor : C.tx3,
+                              fill:        a.wellnessScore != null ? a.wellnessColor + "50" : "none",
+                              strokeWidth: 2,
+                            }}
+                          />
                           <span
-                            className="text-[11px] font-bold leading-none"
-                            style={{ color: a.wellnessColor }}
+                            className="text-[14px] font-extrabold leading-none"
+                            style={{ color: a.wellnessScore != null ? a.wellnessColor : C.tx3 }}
                           >
-                            {a.wellnessScore}
+                            {a.wellnessScore ?? "—"}
                           </span>
                         </div>
-                      )}
+                      </div>
 
-                      <ChevronRight size={14} style={{ color: C.tx3 }} className="shrink-0" />
+                      <ChevronRight size={13} style={{ color: C.tx3 }} className="shrink-0 ml-1" />
                     </div>
                   ))}
                 </div>
@@ -232,67 +252,78 @@ export default function CoachHomePage() {
             </Card>
           </motion.div>
 
-          {/* Alertes — séances manquées */}
+          {/* ── À traiter — séances manquées ── */}
           {missedSessions.length > 0 && (
             <motion.div variants={fadeUp}>
               <SectionTitle emoji="⚠️">À traiter</SectionTitle>
               <Card>
-                <p className="text-[11px] font-semibold mb-2 flex items-center gap-1.5" style={{ color: C.o }}>
-                  <span>❌</span> Séances manquées hier
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {missedSessions.map((m) => (
-                    <div
-                      key={`${m.athleteId}_${m.date}`}
-                      onClick={() => navigate(`/coach/athletes/${m.athleteId}/planning`)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-[rgba(251,146,60,0.06)] transition-colors"
-                      style={{ borderLeft: `3px solid ${C.o}` }}
-                    >
-                      <InitialAvatar name={m.athleteName} color={C.o} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold" style={{ color: C.tx }}>{m.athleteName}</p>
-                        <p className="text-[10px]" style={{ color: C.tx3 }}>{m.sessionName ?? "Séance"}</p>
-                      </div>
-                      <ChevronRight size={14} style={{ color: C.tx3 }} />
+                {missedSessions.map((m, i) => (
+                  <div
+                    key={`${m.athleteId}_${m.date}`}
+                    onClick={() => navigate(`/coach/athletes/${m.athleteId}/planning`)}
+                    className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-[rgba(251,146,60,0.05)] transition-colors"
+                    style={{
+                      borderBottom: i < missedSessions.length - 1
+                        ? "1px solid rgba(124,116,128,0.1)"
+                        : undefined,
+                      borderLeft: `3px solid ${C.o}`,
+                    }}
+                  >
+                    <Avatar name={m.athleteName} color={C.o} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-bold" style={{ color: C.tx }}>{m.athleteName}</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: C.tx3 }}>
+                        ❌ {m.sessionName ?? "Séance"} — non réalisée hier
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    <ChevronRight size={13} style={{ color: C.tx3 }} />
+                  </div>
+                ))}
               </Card>
             </motion.div>
           )}
 
-          {/* Activité récente */}
+          {/* ── Activité récente ── */}
           <motion.div variants={fadeUp}>
             <SectionTitle emoji="🕐">Activité récente</SectionTitle>
             <Card>
               {loadActivity ? (
                 <SkeletonRows n={4} />
               ) : activities.length === 0 ? (
-                <p className="text-[12px] text-center py-4" style={{ color: C.tx3 }}>
+                <p className="text-[12px] text-center py-6" style={{ color: C.tx3 }}>
                   Aucune activité récente
                 </p>
               ) : (
-                <div className="flex flex-col gap-0.5">
-                  {activities.map((act) => (
-                    <div
-                      key={act.id}
-                      onClick={() => navigate(`/coach/athletes/${act.athleteId}/planning`)}
-                      className="flex items-center gap-3 px-2 py-2.5 rounded-xl cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-                    >
+                <div>
+                  {activities.map((act, i) => {
+                    const cfg =
+                      act.type === "session"  ? { Icon: Dumbbell, bg: C.acS,  color: C.ac  } :
+                      act.type === "wellness" ? { Icon: Heart,    bg: C.gS,   color: C.g   } :
+                                                { Icon: Trophy,   bg: C.yS,   color: C.y   };
+                    return (
                       <div
-                        className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-[15px]"
+                        key={act.id}
+                        onClick={() => navigate(`/coach/athletes/${act.athleteId}/planning`)}
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
                         style={{
-                          background: act.type === "session" ? C.acS : act.type === "wellness" ? C.gS : C.yS,
+                          borderBottom: i < activities.length - 1
+                            ? "1px solid rgba(124,116,128,0.08)"
+                            : undefined,
                         }}
                       >
-                        {ACTIVITY_EMOJI[act.type] ?? "📌"}
+                        <div
+                          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                          style={{ background: cfg.bg }}
+                        >
+                          <cfg.Icon size={14} style={{ color: cfg.color }} strokeWidth={2} />
+                        </div>
+                        <p className="flex-1 text-[12px] truncate" style={{ color: C.tx2 }}>{act.label}</p>
+                        <p className="text-[11px] shrink-0" style={{ color: C.tx3 }}>
+                          {formatDistanceToNow(act.updatedAt, { locale: fr, addSuffix: true })}
+                        </p>
                       </div>
-                      <p className="flex-1 text-[12px] truncate" style={{ color: C.tx2 }}>{act.label}</p>
-                      <p className="text-[10px] shrink-0" style={{ color: C.tx3 }}>
-                        {formatDistanceToNow(act.updatedAt, { locale: fr, addSuffix: true })}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </Card>
@@ -304,25 +335,25 @@ export default function CoachHomePage() {
               <SectionTitle emoji="🏋️">Mon programme</SectionTitle>
               <button
                 onClick={() => navigate(`/coach/athletes/${user.id}/planning`)}
-                className="w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-colors hover:border-[rgba(168,85,247,0.5)]"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-colors hover:border-[rgba(168,85,247,0.5)]"
                 style={{ background: C.acS, border: `1px solid ${C.ac}40`, fontFamily: "inherit" }}
               >
                 <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
-                  style={{ background: C.ac + "25", color: C.ac }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
+                  style={{ background: C.ac + "22", color: C.ac, border: `1.5px solid ${C.ac}40` }}
                 >
-                  {(profile?.full_name || "?").charAt(0).toUpperCase()}
+                  {initials(profile?.full_name ?? "?")}
                 </div>
                 <div>
-                  <p className="text-[13px] font-semibold" style={{ color: C.tx }}>{profile?.full_name}</p>
-                  <p className="text-[10px]" style={{ color: C.ac }}>Mon programme personnel</p>
+                  <p className="text-[13px] font-bold" style={{ color: C.tx }}>{profile?.full_name}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: C.ac }}>Mon programme personnel</p>
                 </div>
                 <ChevronRight size={14} style={{ color: C.ac }} className="ml-auto" />
               </button>
             </motion.div>
           )}
 
-          {/* Empty state: no athletes */}
+          {/* Empty state */}
           {athletes.length === 0 && !isCoachAthlete && (
             <motion.div variants={fadeUp}>
               <EmptyState
@@ -338,44 +369,65 @@ export default function CoachHomePage() {
         {/* ── Right column (1/3) ── */}
         <motion.div variants={stagger} initial="hidden" animate="show" className="flex flex-col gap-6">
 
-          {/* À anticiper */}
+          {/* ── À anticiper ── */}
           <motion.div variants={fadeUp}>
             <SectionTitle emoji="📆">À anticiper</SectionTitle>
             <Card>
               {loadMargin ? (
                 <SkeletonRows n={3} />
               ) : endingSoon.length === 0 ? (
-                <p className="text-[11px] text-center py-3" style={{ color: C.tx3 }}>
+                <p className="text-[11px] text-center py-5" style={{ color: C.tx3 }}>
                   Aucun cycle se terminant bientôt
                 </p>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {endingSoon.map((c) => {
+                <div>
+                  {endingSoon.map((c, i) => {
                     const urgent = c.daysLeft <= 7;
                     const color  = urgent ? C.r : C.o;
                     return (
                       <div
                         key={c.cycleId}
                         onClick={() => navigate(`/coach/athletes/${c.athleteId}/planning`)}
-                        className="flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-colors"
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-[rgba(255,255,255,0.03)]"
                         style={{
-                          background:  color + "0D",
-                          border:      `1px solid ${color}30`,
+                          borderBottom: i < endingSoon.length - 1
+                            ? "1px solid rgba(124,116,128,0.1)"
+                            : undefined,
                         }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = color + "1A")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = color + "0D")}
                       >
-                        <span className="text-[16px] shrink-0">{urgent ? "🔴" : "🟠"}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold truncate" style={{ color: C.tx }}>{c.athleteName}</p>
-                          <p className="text-[10px] truncate" style={{ color: C.tx3 }}>{c.cycleName}</p>
-                        </div>
-                        <span
-                          className="text-[11px] font-bold px-2 py-0.5 rounded-lg shrink-0"
-                          style={{ background: color + "25", color }}
+                        {/* Icon */}
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                          style={{ background: color + "18" }}
                         >
-                          J-{c.daysLeft}
-                        </span>
+                          <Layers size={15} style={{ color }} strokeWidth={2} />
+                        </div>
+
+                        {/* Text */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-bold truncate" style={{ color: C.tx }}>
+                            {c.athleteName} · fin du cycle
+                          </p>
+                          <p className="text-[10px] truncate mt-0.5" style={{ color: C.tx3 }}>
+                            Dans {c.daysLeft}j · jusqu'au {format(parseISO(c.endDate), "d MMM", { locale: fr })}
+                          </p>
+                        </div>
+
+                        {/* Action */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/coach/athletes/${c.athleteId}/planning`); }}
+                          className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-colors"
+                          style={{
+                            color,
+                            borderColor: color + "50",
+                            background:  color + "12",
+                            fontFamily: "inherit",
+                          }}
+                          onMouseEnter={(el) => ((el.currentTarget as HTMLElement).style.background = color + "22")}
+                          onMouseLeave={(el) => ((el.currentTarget as HTMLElement).style.background = color + "12")}
+                        >
+                          Planifier
+                        </button>
                       </div>
                     );
                   })}
@@ -384,38 +436,42 @@ export default function CoachHomePage() {
             </Card>
           </motion.div>
 
-          {/* Records & tests */}
+          {/* ── Records & tests ── */}
           <motion.div variants={fadeUp}>
             <SectionTitle emoji="🏅">Records & tests</SectionTitle>
             <Card>
               {loadRecords ? (
                 <SkeletonRows n={3} />
               ) : records.length === 0 ? (
-                <p className="text-[11px] text-center py-3" style={{ color: C.tx3 }}>
+                <p className="text-[11px] text-center py-5" style={{ color: C.tx3 }}>
                   Aucun résultat récent
                 </p>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  {records.map((r) => (
+                <div>
+                  {records.map((r, i) => (
                     <div
                       key={r.id}
                       onClick={() => navigate(`/coach/athletes/${r.athleteId}/tests`)}
-                      className="flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+                      style={{
+                        borderBottom: i < records.length - 1
+                          ? "1px solid rgba(124,116,128,0.08)"
+                          : undefined,
+                      }}
                     >
-                      <span className="text-[16px] shrink-0">
+                      <span className="text-[18px] shrink-0 leading-none">
                         {r.coachValidated === true ? "🏆" : r.coachValidated === null ? "🔵" : "📊"}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-semibold truncate" style={{ color: C.tx }}>
-                          {r.metricName}
-                        </p>
-                        <p className="text-[10px]" style={{ color: C.tx3 }}>{r.athleteName}</p>
+                        <p className="text-[12px] font-bold truncate" style={{ color: C.tx }}>{r.metricName}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: C.tx3 }}>{r.athleteName}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[13px] font-extrabold" style={{ color: C.ac }}>
-                          {r.value} <span className="text-[10px] font-normal" style={{ color: C.tx3 }}>{r.unit}</span>
+                        <p className="text-[13px] font-extrabold leading-none" style={{ color: C.ac }}>
+                          {r.value}
+                          <span className="text-[10px] font-normal ml-0.5" style={{ color: C.tx3 }}>{r.unit}</span>
                         </p>
-                        <p className="text-[10px]" style={{ color: C.tx3 }}>
+                        <p className="text-[10px] mt-0.5" style={{ color: C.tx3 }}>
                           {format(parseISO(r.date), "dd/MM")}
                         </p>
                       </div>
@@ -426,68 +482,45 @@ export default function CoachHomePage() {
             </Card>
           </motion.div>
 
-          {/* Compétitions */}
+          {/* ── Compétitions ── */}
           <motion.div variants={fadeUp}>
             <SectionTitle emoji="🏆">Compétitions</SectionTitle>
             <Card>
               {loadCompet ? (
                 <SkeletonRows n={3} />
               ) : competitions.length === 0 ? (
-                <p className="text-[11px] text-center py-3" style={{ color: C.tx3 }}>
+                <p className="text-[11px] text-center py-5" style={{ color: C.tx3 }}>
                   Aucune compétition dans les 30 jours
                 </p>
               ) : (
-                <div className="flex flex-col gap-2">
-                  {compA.length > 0 && (
-                    <>
-                      <p className="text-[10px] font-bold flex items-center gap-1" style={{ color: C.r }}>
-                        <span>🔴</span> Priorité A — imminentes
-                      </p>
-                      {compA.map((c) => {
-                        const meta = COMPETITION_META[c.type];
-                        return (
-                          <div
-                            key={c.id}
-                            onClick={() => navigate(`/coach/athletes/${c.athlete_id}/planning`)}
-                            className="flex items-center gap-2 p-2.5 rounded-xl cursor-pointer transition-colors"
-                            style={{ background: C.rS, border: `1px solid ${C.r}30` }}
-                            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(239,75,75,0.14)")}
-                            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = C.rS)}
-                          >
-                            <span className="text-[16px] shrink-0">{meta.emoji}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[12px] font-semibold truncate" style={{ color: C.tx }}>{c.name}</p>
-                              <p className="text-[10px]" style={{ color: C.tx3 }}>{c.athleteName}</p>
-                            </div>
-                            <span className="text-[12px] font-bold shrink-0" style={{ color: C.r }}>
-                              J-{c.daysUntil}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {compA.length > 0 && compBC.length > 0 && (
-                    <div className="border-t" style={{ borderColor: C.brd }} />
-                  )}
-
-                  {compBC.map((c) => {
-                    const meta = COMPETITION_META[c.type];
+                <div>
+                  {[...compA, ...compBC].map((c, i, arr) => {
+                    const meta   = COMPETITION_META[c.type];
+                    const isUrgent = compA.includes(c);
+                    const color  = isUrgent ? C.r : C.tx3;
                     return (
                       <div
                         key={c.id}
                         onClick={() => navigate(`/coach/athletes/${c.athlete_id}/planning`)}
-                        className="flex items-center gap-2 p-2 rounded-xl cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+                        style={{
+                          borderBottom: i < arr.length - 1
+                            ? "1px solid rgba(124,116,128,0.08)"
+                            : undefined,
+                          background: isUrgent ? C.rS : "transparent",
+                        }}
                       >
-                        <span className="text-[16px] shrink-0">{meta.emoji}</span>
+                        <span className="text-[18px] shrink-0 leading-none">{meta.emoji}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold truncate" style={{ color: C.tx }}>{c.name}</p>
-                          <p className="text-[10px]" style={{ color: C.tx3 }}>
+                          <p className="text-[12px] font-bold truncate" style={{ color: C.tx }}>{c.name}</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: C.tx3 }}>
                             {c.athleteName} · {c.priority}
                           </p>
                         </div>
-                        <span className="text-[11px] font-bold shrink-0" style={{ color: C.tx3 }}>
+                        <span
+                          className="text-[12px] font-extrabold shrink-0"
+                          style={{ color }}
+                        >
                           J-{c.daysUntil}
                         </span>
                       </div>
@@ -530,10 +563,7 @@ function ActionCounter({ emoji, label, count, loading, color, onClick }: ActionC
       {loading ? (
         <Skeleton className="h-7 w-10 rounded bg-[#2A282C]" />
       ) : (
-        <p
-          className="text-[26px] font-extrabold leading-none"
-          style={{ color: count > 0 ? color : "#7C7480" }}
-        >
+        <p className="text-[26px] font-extrabold leading-none" style={{ color: count > 0 ? color : "#7C7480" }}>
           {count}
         </p>
       )}
