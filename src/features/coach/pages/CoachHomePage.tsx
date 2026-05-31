@@ -111,7 +111,7 @@ export default function CoachHomePage() {
   const compBC = competitions.filter((c) => !(c.priority === "A" && c.daysUntil <= 14));
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-6 pb-20">
+    <div className="w-full px-6 py-6 pb-20">
 
       {/* ── Header ── */}
       <motion.div variants={stagger} initial="hidden" animate="show" className="mb-8">
