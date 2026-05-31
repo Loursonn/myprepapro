@@ -36,4 +36,13 @@ export const QK = {
   workoutLogsWeek: (aid: string, mondayISO: string) => ['workout-logs-week', aid, mondayISO] as const,
   // ── Modifications athlète (reschedule + bonus, pour coach) ───────────────────
   athleteModifications: (aid: string) => ['athleteModifications', aid] as const,
+  // ── Coach dashboard ───────────────────────────────────────────────────────────
+  coachDashboard: {
+    today:         (cid: string, date: string) => ['coachDashboard', 'today',         cid, date] as const,
+    wellness:      (cid: string, date: string) => ['coachDashboard', 'wellness',      cid, date] as const,
+    missed:        (cid: string, date: string) => ['coachDashboard', 'missed',        cid, date] as const,
+    planningMargin: (cid: string)               => ['coachDashboard', 'planningMargin', cid]       as const,
+    recentRecords:  (cid: string)               => ['coachDashboard', 'recentRecords',  cid]       as const,
+    upcomingTests:  (cid: string, date: string) => ['coachDashboard', 'upcomingTests',  cid, date] as const,
+  },
 } as const;

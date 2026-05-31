@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BlockConfig, Session, WellnessData } from "@/features/shared/types/athlete";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Dumbbell, Zap, X as XIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, X as XIcon } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -25,12 +25,14 @@ import {
   useUnifiedCalendar,
   useAssignWorkout,
   useRescheduleWorkout,
+  useCreateTestSession,
   toCalEvent,
 } from "@/features/shared/hooks/useUnifiedCalendar";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession, useUpdateEnergyAssignment } from "@/features/shared/hooks/useEnergyAssignments";
 import { useDeleteCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
+import { useTestDefinitions } from "@/features/shared/hooks/tests/useTestDefinitions";
 import type { EnergySessionRow } from "@/types/energy";
 import { DayDetailsDrawer } from "./DayDetailsDrawer";
 import { QuickAddDialog } from "./QuickAddDialog";
@@ -228,7 +230,7 @@ function DraggableEventChip({
 
 // ── DraggableSession ─────────────────────────────────────────────────────────
 
-type BankItemType = "workout" | "energy";
+type BankItemType = "workout" | "energy" | "test";
 
 function DraggableSession({
   session,
@@ -239,8 +241,8 @@ function DraggableSession({
   sessionType: BankItemType;
   isDragging: boolean;
 }) {
-  const color  = sessionType === "energy" ? "#A855F7" : C.ac;
-  const colorS = sessionType === "energy" ? "#A855F720" : C.acS;
+  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "test" ? TEST_COLOR : C.ac;
+  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "test" ? TEST_COLOR + "20" : C.acS;
 
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: session.id,
@@ -270,7 +272,7 @@ function DraggableSession({
         display: "flex", alignItems: "center", gap: 6,
       }}
     >
-      {sessionType === "energy" ? <Zap size={11} /> : <Dumbbell size={11} />}
+      {sessionType === "energy" ? <Zap size={11} /> : sessionType === "test" ? <FlaskConical size={11} /> : <Dumbbell size={11} />}
       {name}
     </div>
   );
@@ -556,6 +558,83 @@ function SessionBank({
   );
 }
 
+// ── TestBank ──────────────────────────────────────────────────────────────────
+
+function TestBank({
+  testDefinitions,
+  activeDragId,
+}: {
+  testDefinitions: Array<{ id: string; name: string; kind?: string }>;
+  activeDragId: string | null;
+}) {
+  const [search, setSearch] = useState("");
+
+  const filtered = testDefinitions.filter((t) =>
+    t.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div
+      style={{
+        width: 200, flexShrink: 0,
+        background: C.s1,
+        borderRadius: 14,
+        border: "1px solid " + C.brd,
+        display: "flex", flexDirection: "column",
+        overflow: "hidden",
+        maxHeight: 320,
+      }}
+    >
+      {/* Header */}
+      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+          <FlaskConical size={11} color={TEST_COLOR} />
+          Banque de tests
+        </div>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filtrer..."
+          style={{
+            width: "100%", padding: "5px 8px", borderRadius: 7,
+            border: "1px solid " + C.brdL, background: C.s2,
+            color: C.tx, fontSize: 11, fontFamily: "inherit", outline: "none",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+
+      {/* List */}
+      <div
+        style={{
+          flex: 1, overflowY: "auto", padding: "8px",
+          display: "flex", flexDirection: "column", gap: 5,
+          scrollbarWidth: "none",
+        }}
+      >
+        {filtered.length === 0 ? (
+          <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucun test</div>
+        ) : (
+          filtered.map((t) => (
+            <DraggableSession
+              key={t.id}
+              session={{ id: t.id, name: t.name }}
+              sessionType="test"
+              isDragging={activeDragId === t.id}
+            />
+          ))
+        )}
+      </div>
+
+      <div style={{ padding: "8px 10px", borderTop: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 9, color: C.tx3, textAlign: "center" }}>
+          ↕ Glisser sur le calendrier
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── CalendarMonthView ─────────────────────────────────────────────────────────
 
 interface CalendarMonthViewProps {
@@ -612,6 +691,8 @@ export function CalendarMonthView({
   const { data: energySessions = [] }   = useEnergySessions({ created_by: coachId });
   const { mutate: assignEnergy }        = useAssignEnergySession();
   const { mutate: rescheduleEnergy }    = useUpdateEnergyAssignment();
+  const { data: testDefinitions = [] }  = useTestDefinitions(coachId);
+  const { mutate: createTestSession }   = useCreateTestSession();
 
   // ── Fetch all cycles for athlete (to link blockConfig to a Frise cycle) ──
   const { data: allCycles = [] } = useQuery({
@@ -802,6 +883,14 @@ export function CalendarMonthView({
           scheduled_date: dateStr,
           status: "planned",
         });
+      } else if (sess.sessionType === "test") {
+        createTestSession({
+          athleteId,
+          coachId,
+          title: sess.name ?? "Test",
+          type:  "musculation",
+          date:  dateStr,
+        });
       } else {
         assignWorkout({
           sessionId: sess.id,
@@ -812,13 +901,17 @@ export function CalendarMonthView({
         });
       }
     },
-    [assignWorkout, assignEnergy, reschedule, rescheduleEnergy, athleteId, coachId],
+    [assignWorkout, assignEnergy, createTestSession, reschedule, rescheduleEnergy, athleteId, coachId],
   );
 
   const activeDragSession = activeDragId
-    ? (sessions.find((s) => s.id === activeDragId) ?? energySessions.find((s) => s.id === activeDragId) ?? null)
+    ? (sessions.find((s) => s.id === activeDragId)
+        ?? energySessions.find((s) => s.id === activeDragId)
+        ?? testDefinitions.find((s) => s.id === activeDragId)
+        ?? null)
     : null;
   const activeDragIsEnergy = activeDragId ? energySessions.some((s) => s.id === activeDragId) : false;
+  const activeDragIsTest   = activeDragId ? testDefinitions.some((s) => s.id === activeDragId) : false;
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -1044,8 +1137,11 @@ export function CalendarMonthView({
           )}
         </div>
 
-        {/* ── Session Bank ── */}
-        <SessionBank sessions={sessions} energySessions={energySessions} activeDragId={activeDragId} />
+        {/* ── Banks sidebar ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+          <SessionBank sessions={sessions} energySessions={energySessions} activeDragId={activeDragId} />
+          <TestBank testDefinitions={testDefinitions} activeDragId={activeDragId} />
+        </div>
       </div>
 
       {/* Drag overlay — ghost of the dragged item */}
@@ -1067,16 +1163,16 @@ export function CalendarMonthView({
           <div
             style={{
               padding: "7px 10px", borderRadius: 8,
-              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : C.ac) + "60",
-              background: activeDragIsEnergy ? "#A855F7" : C.ac,
+              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : C.ac) + "60",
+              background: activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : C.ac,
               color: "#fff",
               fontSize: 11, fontWeight: 600,
-              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : "rgba(59,141,240,0.4)"}`,
+              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : activeDragIsTest ? "rgba(196,154,108,0.4)" : "rgba(59,141,240,0.4)"}`,
               pointerEvents: "none",
               display: "flex", alignItems: "center", gap: 6,
             }}
           >
-            {activeDragIsEnergy ? <Zap size={12} /> : <Dumbbell size={12} />}
+            {activeDragIsEnergy ? <Zap size={12} /> : activeDragIsTest ? <FlaskConical size={12} /> : <Dumbbell size={12} />}
             {activeDragSession.name ?? (activeDragSession as Session).label ?? "Séance"}
           </div>
         ) : null}
