@@ -17,6 +17,7 @@ interface DragVars {
   athleteId:  string;
   rangeStart: string;
   rangeEnd:   string;
+  newMesocycleId?: string;
 }
 
 const TABLE: Record<Level, string> = {
@@ -73,34 +74,51 @@ export function useDragCycle() {
         }
       }
 
+      const updatePayload: Record<string, string> = {
+        start_date: format(vars.newStart, "yyyy-MM-dd"),
+        end_date:   format(vars.newEnd,   "yyyy-MM-dd"),
+      };
+      if (vars.newMesocycleId !== undefined) updatePayload.mesocycle_id = vars.newMesocycleId;
+
       const { error } = await supabase
         .from(TABLE[vars.level])
-        .update({
-          start_date: format(vars.newStart, "yyyy-MM-dd"),
-          end_date:   format(vars.newEnd,   "yyyy-MM-dd"),
-        })
+        .update(updatePayload)
         .eq("id", vars.item.id);
       if (error) throw error;
 
-      // When dragging a cycle, regenerate microcycles aligned to new ISO weeks
+      // When dragging a cycle, smart-regenerate microcycles aligned to new ISO weeks
       if (vars.level === "cycles") {
-        await supabase.from("microcycles").delete().eq("cycle_id", vars.item.id);
-        const rows: { cycle_id: string; week_number: number; start_date: string; end_date: string; is_deload: boolean }[] = [];
+        const { data: existing } = await supabase
+          .from("microcycles").select("id, start_date").eq("cycle_id", vars.item.id);
+
+        const needed: { cycle_id: string; week_number: number; start_date: string; end_date: string; is_deload: boolean }[] = [];
         let weekMon = startOfISOWeek(vars.newStart);
         let week = 1;
         while (weekMon <= vars.newEnd) {
-          rows.push({
-            cycle_id: vars.item.id,
+          needed.push({
+            cycle_id:    vars.item.id,
             week_number: week,
-            start_date: format(weekMon, "yyyy-MM-dd"),
-            end_date: format(endOfISOWeek(weekMon), "yyyy-MM-dd"),
-            is_deload: false,
+            start_date:  format(weekMon,               "yyyy-MM-dd"),
+            end_date:    format(endOfISOWeek(weekMon), "yyyy-MM-dd"),
+            is_deload:   false,
           });
           weekMon = addWeeks(weekMon, 1);
           week++;
         }
-        if (rows.length > 0) {
-          await supabase.from("microcycles").insert(rows);
+
+        const neededStarts   = new Set(needed.map((m) => m.start_date));
+        const existingStarts = new Set((existing ?? []).map((m) => m.start_date));
+
+        const toDelete = (existing ?? []).filter((m) => !neededStarts.has(m.start_date));
+        if (toDelete.length > 0) {
+          const ids = toDelete.map((m) => m.id);
+          await supabase.from("workout_logs").delete().in("microcycle_id", ids);
+          await supabase.from("microcycles").delete().in("id", ids);
+        }
+
+        const toInsert = needed.filter((m) => !existingStarts.has(m.start_date));
+        if (toInsert.length > 0) {
+          await supabase.from("microcycles").insert(toInsert);
         }
       }
     },

@@ -25,10 +25,25 @@ function buildMicrocycles(cycleId: string, start: Date, end: Date) {
 }
 
 async function regenerateMicrocycles(cycleId: string, newStart: Date, newEnd: Date) {
-  await supabase.from("microcycles").delete().eq("cycle_id", cycleId);
-  const rows = buildMicrocycles(cycleId, newStart, newEnd);
-  if (rows.length > 0) {
-    const { error } = await supabase.from("microcycles").insert(rows);
+  const { data: existing } = await supabase
+    .from("microcycles").select("id, start_date").eq("cycle_id", cycleId);
+
+  const needed = buildMicrocycles(cycleId, newStart, newEnd);
+  const neededStarts   = new Set(needed.map((m) => m.start_date));
+  const existingStarts = new Set((existing ?? []).map((m) => m.start_date));
+
+  // Delete microcycles (and their workout_logs) outside the new range
+  const toDelete = (existing ?? []).filter((m) => !neededStarts.has(m.start_date));
+  if (toDelete.length > 0) {
+    const ids = toDelete.map((m) => m.id);
+    await supabase.from("workout_logs").delete().in("microcycle_id", ids);
+    await supabase.from("microcycles").delete().in("id", ids);
+  }
+
+  // Insert only weeks not already covered
+  const toInsert = needed.filter((m) => !existingStarts.has(m.start_date));
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from("microcycles").insert(toInsert);
     if (error) console.error("[regenerate-microcycles]", error.message);
   }
 }
@@ -45,6 +60,7 @@ interface ResizeVars {
   athleteId:   string;
   rangeStart:  string;
   rangeEnd:    string;
+  newMesocycleId?: string;
 }
 
 // ── Child cascade ─────────────────────────────────────────────────────────────
@@ -213,12 +229,15 @@ export function useResizeCycle() {
       }
 
       // Update parent
+      const updatePayload: Record<string, string> = {
+        start_date: format(vars.newStart, "yyyy-MM-dd"),
+        end_date:   format(vars.newEnd,   "yyyy-MM-dd"),
+      };
+      if (vars.newMesocycleId !== undefined) updatePayload.mesocycle_id = vars.newMesocycleId;
+
       const { error } = await supabase
         .from(vars.level)
-        .update({
-          start_date: format(vars.newStart, "yyyy-MM-dd"),
-          end_date:   format(vars.newEnd,   "yyyy-MM-dd"),
-        })
+        .update(updatePayload)
         .eq("id", vars.item.id);
       if (error) throw error;
 
