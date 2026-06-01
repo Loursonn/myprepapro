@@ -16,8 +16,9 @@ import type {
   ValueType,
   BetterWhen,
   TestCategory,
+  TestFillMode,
 } from '@/features/shared/types/tests';
-import { TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, TEST_CATEGORY_ORDER } from '@/features/shared/types/tests';
+import { TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, TEST_CATEGORY_ORDER, ARTICULATIONS } from '@/features/shared/types/tests';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ const VALUE_TYPE_OPTIONS: { value: ValueType; label: string }[] = [
   { value: 'number',   label: 'Nombre' },
   { value: 'pace',     label: 'Allure' },
   { value: 'duration', label: 'Durée' },
+  { value: 'scale5',   label: 'Échelle /5' },
 ];
 
 const BETTER_WHEN_OPTIONS: { value: BetterWhen; label: string }[] = [
@@ -45,13 +47,16 @@ const EMPTY_VAR: CreateVariableInput = {
 interface TestForm {
   name: string;
   category: TestCategory | null;
+  articulation: string;
+  media_url: string;
+  fill_mode: TestFillMode;
   description: string;
   protocol: string;
   variables: CreateVariableInput[];
 }
 
 const EMPTY_FORM: TestForm = {
-  name: '', category: null, description: '', protocol: '', variables: [{ ...EMPTY_VAR }],
+  name: '', category: null, articulation: '', media_url: '', fill_mode: 'self', description: '', protocol: '', variables: [{ ...EMPTY_VAR }],
 };
 
 function VariableRow({
@@ -178,6 +183,13 @@ function TestCard({
               </span>
             );
           })()}
+          <span style={{
+            fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+            background: C.s2, color: test.fill_mode === 'coach' ? C.o : C.tx3,
+            border: '1px solid ' + C.brdL, whiteSpace: 'nowrap',
+          }} title={test.fill_mode === 'coach' ? 'Rempli par le coach (vidéo à envoyer)' : 'Rempli par l’athlète'}>
+            {test.fill_mode === 'coach' ? '🎬 Coach' : '🧍 Athlète'}
+          </span>
           {test.kind === 'preset' && (
             <span style={{
               fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
@@ -304,19 +316,60 @@ function TestFormPanel({
         />
       </div>
 
-      {/* Catégorie */}
+      {/* Catégorie + mode de remplissage */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <label style={labelStyle}>Catégorie</label>
+          <select
+            value={form.category ?? ''}
+            onChange={e => setForm(f => ({ ...f, category: (e.target.value || null) as TestCategory | null }))}
+            style={selectStyle}
+          >
+            <option value="">Aucune</option>
+            {TEST_CATEGORY_ORDER.map(c => (
+              <option key={c} value={c}>{TEST_CATEGORY_LABEL[c]}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Remplissage</label>
+          <select
+            value={form.fill_mode}
+            onChange={e => setForm(f => ({ ...f, fill_mode: e.target.value as TestFillMode }))}
+            style={selectStyle}
+          >
+            <option value="self">Par l’athlète</option>
+            <option value="coach">Par le coach (vidéo)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Articulation (uniquement bilan articulaire) */}
+      {form.category === 'bilan_articulaire' && (
+        <div>
+          <label style={labelStyle}>Articulation</label>
+          <input
+            value={form.articulation}
+            onChange={e => setForm(f => ({ ...f, articulation: e.target.value }))}
+            placeholder="Épaule, Hanche, Genou, Cheville…"
+            list="articulations-list"
+            style={inputStyle}
+          />
+          <datalist id="articulations-list">
+            {ARTICULATIONS.map(a => <option key={a} value={a} />)}
+          </datalist>
+        </div>
+      )}
+
+      {/* Média explicatif (photo / vidéo) */}
       <div>
-        <label style={labelStyle}>Catégorie</label>
-        <select
-          value={form.category ?? ''}
-          onChange={e => setForm(f => ({ ...f, category: (e.target.value || null) as TestCategory | null }))}
-          style={selectStyle}
-        >
-          <option value="">Aucune</option>
-          {TEST_CATEGORY_ORDER.map(c => (
-            <option key={c} value={c}>{TEST_CATEGORY_LABEL[c]}</option>
-          ))}
-        </select>
+        <label style={labelStyle}>Média explicatif (lien photo / vidéo)</label>
+        <input
+          value={form.media_url}
+          onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
+          placeholder="https://…"
+          style={inputStyle}
+        />
       </div>
 
       {/* Description */}
@@ -419,8 +472,9 @@ export default function CoachTestsBankPage() {
   function handleCreate(form: TestForm) {
     createMut.mutate(
       {
-        name: form.name, category: form.category, description: form.description,
-        protocol: form.protocol, variables: form.variables,
+        name: form.name, category: form.category, articulation: form.articulation || null,
+        media_url: form.media_url || null, fill_mode: form.fill_mode,
+        description: form.description, protocol: form.protocol, variables: form.variables,
       },
       { onSuccess: () => setMode('idle') },
     );
@@ -430,7 +484,8 @@ export default function CoachTestsBankPage() {
     if (!editTarget) return;
     updateMut.mutate(
       {
-        id: editTarget.id, name: form.name, category: form.category,
+        id: editTarget.id, name: form.name, category: form.category, articulation: form.articulation || null,
+        media_url: form.media_url || null, fill_mode: form.fill_mode,
         description: form.description, protocol: form.protocol, variables: form.variables,
       },
       { onSuccess: () => { setMode('idle'); setEditTarget(null); } },
@@ -439,8 +494,11 @@ export default function CoachTestsBankPage() {
 
   function formFromTest(t: TestDefinitionWithVariables): TestForm {
     return {
-      name:        t.name,
-      category:    t.category,
+      name:         t.name,
+      category:     t.category,
+      articulation: t.articulation ?? '',
+      media_url:    t.media_url ?? '',
+      fill_mode:    t.fill_mode ?? 'self',
       description: t.description ?? '',
       protocol:    t.protocol?.text ?? '',
       variables:   t.test_variables.map(v => ({

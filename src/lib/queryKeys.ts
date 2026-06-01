@@ -20,6 +20,9 @@ export const QK = {
   athleteCurrentValues: (aid: string) => ['athleteCurrentValues', aid] as const,
   // ── Mensurations / photos ──────────────────────────────────────────────────
   measurementLogs:      (aid: string) => ['measurementLogs', aid]      as const,
+  // ── Profil sportif par catégorie ────────────────────────────────────────────
+  profileItems:         (aid: string) => ['profileItems', aid]         as const,
+  articularProfile:     (aid: string) => ['articularProfile', aid]     as const,
   // ── Compétitions ─────────────────────────────────────────────────────────
   competitions:         (aid?: string) => aid ? ['competitions', aid] : ['competitions'] as const,
   // ── Retours hebdomadaires ─────────────────────────────────────────────────

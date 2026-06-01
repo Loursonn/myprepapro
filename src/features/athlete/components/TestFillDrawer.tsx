@@ -90,7 +90,9 @@ function VariableInput({
   const placeholder =
     variable.value_type === "pace"     ? "ex: 4:30" :
     variable.value_type === "duration" ? "ex: 12:34" :
+    variable.value_type === "scale5"   ? "0–5" :
     "ex: 95";
+  const isNum = variable.value_type === "number" || variable.value_type === "scale5";
 
   return (
     <div style={{
@@ -102,8 +104,11 @@ function VariableInput({
           {variable.label}
         </div>
         <input
-          type={variable.value_type === "number" ? "number" : "text"}
-          inputMode={variable.value_type === "number" ? "decimal" : "text"}
+          type={isNum ? "number" : "text"}
+          inputMode={isNum ? "decimal" : "text"}
+          min={variable.value_type === "scale5" ? 0 : undefined}
+          max={variable.value_type === "scale5" ? 5 : undefined}
+          step={variable.value_type === "scale5" ? 0.5 : undefined}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           readOnly={readOnly}
@@ -195,14 +200,15 @@ export function TestFillDrawer({ testId, athleteId, onClose }: TestFillDrawerPro
   }, [testId]);
 
   const tc = TYPE_COLOR[test?.type ?? ""] ?? "#6B7280";
-  const hasVariables = (definition?.test_variables.length ?? 0) > 0;
+  const coachFilled = definition?.fill_mode === "coach";
+  const hasVariables = !coachFilled && (definition?.test_variables.length ?? 0) > 0;
 
   async function handleSubmit() {
     if (!test) return;
     setSaving(true);
 
     let results_note_val: string | null = null;
-    let results_structured: Record<string, unknown> = {};
+    const results_structured: Record<string, unknown> = {};
 
     if (hasVariables && definition) {
       const varMap: Record<string, number | null> = {};
@@ -300,8 +306,18 @@ export function TestFillDrawer({ testId, athleteId, onClose }: TestFillDrawerPro
               </div>
             )}
 
+            {/* Test rempli par le coach : pas de saisie athlète */}
+            {coachFilled && (
+              <div style={{ background: C.s2, borderRadius: 10, padding: "12px 14px", border: "1px solid " + C.o + "40" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.o, marginBottom: 4 }}>🎬 Rempli par ton coach</div>
+                <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.5 }}>
+                  Ce test est noté par ton coach. Envoie-lui ta vidéo (hors application). Tu peux marquer la séance comme réalisée une fois la vidéo envoyée.
+                </div>
+              </div>
+            )}
+
             {/* Variable inputs */}
-            {hasVariables ? (
+            {coachFilled ? null : hasVariables ? (
               <div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
                   {test.completed ? "Résultats" : "Saisir les résultats"}
@@ -377,7 +393,7 @@ export function TestFillDrawer({ testId, athleteId, onClose }: TestFillDrawerPro
                 disabled={saving}
                 style={{
                   width: "100%", padding: "13px 0", borderRadius: 12,
-                  border: "none", background: saving ? C.s2 : tc,
+                  border: "none", background: saving ? C.s2 : (coachFilled ? C.g : tc),
                   color: saving ? C.tx3 : "#fff",
                   fontSize: 14, fontWeight: 700,
                   cursor: saving ? "default" : "pointer",
@@ -385,7 +401,7 @@ export function TestFillDrawer({ testId, athleteId, onClose }: TestFillDrawerPro
                   transition: "all 150ms",
                 }}
               >
-                {saving ? "Enregistrement…" : "Marquer comme réalisé ✓"}
+                {saving ? "Enregistrement…" : coachFilled ? "VALIDÉ ✓ — envoyer au coach" : "Marquer comme réalisé ✓"}
               </button>
             )}
           </div>

@@ -14,9 +14,9 @@ import { C } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import MeasurementComparison from "@/features/coach/components/MeasurementComparison";
+import CategoryProfiles from "@/features/coach/components/CategoryProfiles";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { WeightChart } from "@/components/athlete/StatsCharts";
-import AthleteTestsPanel from "@/features/coach/pages/TestPage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ const METRICS: MetricDef[] = [
   { key: "FCrepos", label: "FC repos", unit: "bpm",       description: "Fréquence cardiaque de repos",      min: 30,  max: 100, step: 1,   category: "cardio"    },
   { key: "VMA",     label: "VMA",      unit: "km/h",      description: "Vitesse Maximale Aérobie",          min: 8,   max: 30,  step: 0.1, category: "vitesse"   },
   { key: "Vmax",    label: "Vmax",     unit: "km/h",      description: "Vitesse maximale atteinte (sprint)", min: 10,  max: 45,  step: 0.1, category: "vitesse"   },
-  { key: "VO2max",  label: "VO₂max",   unit: "mL/kg/min", description: "Consommation maximale d'oxygène",   min: 20,  max: 90,  step: 0.1, category: "vitesse"   },
+  { key: "VC",      label: "VC",       unit: "km/h",      description: "Vitesse Critique", min: 8, max: 28, step: 0.1, category: "vitesse"   },
   { key: "FTP",     label: "FTP",      unit: "W",         description: "Functional Threshold Power (vélo)", min: 50,  max: 600, step: 5,   category: "puissance" },
   { key: "PMA",     label: "PMA",      unit: "W",         description: "Puissance Maximale Aérobie",        min: 50,  max: 900, step: 5,   category: "puissance" },
   // Note: "poids" est dérivé automatiquement depuis le wellness (moyenne 3 dernières saisies)
@@ -815,11 +815,8 @@ export default function ProfilSportifPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* ── Haut : données de performance (gauche) + tests (droite) ── */}
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-
-            {/* Colonne gauche : Cardiaque + Vitesse/Puissance + Personnalisées */}
-            <div style={{ flex: "1 1 380px", minWidth: 320, display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* ── PROFIL PAR CATÉGORIE (synthèse) ── */}
+              <CategoryProfiles athleteId={athleteId!} />
 
               {/* ── CARDIAQUE ── */}
               <Panel title="Cardiaque" color={CATEGORY_COLOR.cardio}>
@@ -873,17 +870,8 @@ export default function ProfilSportifPage() {
                   </div>
                 )}
               </Panel>
-            </div>
 
-            {/* Colonne droite : Tests */}
-            <div style={{ flex: "1 1 380px", minWidth: 320 }}>
-              <Panel title="Tests" color={C.ac}>
-                <AthleteTestsPanel embedded />
-              </Panel>
-            </div>
-          </div>
-
-          {/* ── BIOMÉTRIE (pleine largeur) ── */}
+          {/* ── BIOMÉTRIE ── */}
           <Panel title="Biométrie" color={CATEGORY_COLOR.corpo}>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "stretch" }}>
               <div style={{ flex: "1 1 200px", minWidth: 200, maxWidth: 300, display: "flex" }}>

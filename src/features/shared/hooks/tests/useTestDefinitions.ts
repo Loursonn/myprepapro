@@ -43,10 +43,13 @@ export function useCreateTestDefinition(coachId: string) {
       const { data: def, error: defErr } = await supabase
         .from('test_definitions')
         .insert({
-          name:       input.name.trim(),
-          kind:       'custom',
-          category:   input.category ?? null,
-          created_by: coachId,
+          name:         input.name.trim(),
+          kind:         'custom',
+          category:     input.category ?? null,
+          articulation: input.category === 'bilan_articulaire' ? (input.articulation?.trim() || null) : null,
+          media_url:    input.media_url?.trim() || null,
+          fill_mode:    input.fill_mode ?? 'self',
+          created_by:   coachId,
           is_global:  false,
           description: input.description.trim() || null,
           protocol:   input.protocol.trim() ? { text: input.protocol.trim() } : null,
@@ -83,8 +86,11 @@ export function useUpdateTestDefinition(coachId: string) {
       const { error } = await supabase
         .from('test_definitions')
         .update({
-          name:       input.name.trim(),
-          category:   input.category ?? null,
+          name:         input.name.trim(),
+          category:     input.category ?? null,
+          articulation: input.category === 'bilan_articulaire' ? (input.articulation?.trim() || null) : null,
+          media_url:    input.media_url?.trim() || null,
+          fill_mode:    input.fill_mode ?? 'self',
           description: input.description.trim() || null,
           protocol:   input.protocol.trim() ? { text: input.protocol.trim() } : null,
           updated_at: new Date().toISOString(),

@@ -1,5 +1,5 @@
 export type TestKind    = 'preset' | 'custom';
-export type ValueType   = 'number' | 'pace' | 'duration';
+export type ValueType   = 'number' | 'pace' | 'duration' | 'scale5';
 export type BetterWhen  = 'higher' | 'lower';
 
 export type TestCategory =
@@ -25,11 +25,23 @@ export const TEST_CATEGORY_ORDER: TestCategory[] = [
   'bilan_articulaire', 'endurance', 'force', 'explosivite', 'vitesse',
 ];
 
+export type TestFillMode = 'self' | 'coach';
+
+export const TEST_FILL_MODE_LABEL: Record<TestFillMode, string> = {
+  self:  'Rempli par l’athlète',
+  coach: 'Rempli par le coach (vidéo à envoyer)',
+};
+
+export const ARTICULATIONS = ['Épaule', 'Hanche', 'Genou', 'Cheville'] as const;
+
 export interface TestDefinition {
   id: string;
   name: string;
   kind: TestKind;
   category: TestCategory | null;
+  articulation: string | null;
+  media_url: string | null;
+  fill_mode: TestFillMode;
   created_by: string | null;
   is_global: boolean;
   description: string | null;
@@ -98,6 +110,9 @@ export interface CreateVariableInput {
 export interface CreateTestDefinitionInput {
   name: string;
   category: TestCategory | null;
+  articulation: string | null;
+  media_url: string | null;
+  fill_mode: TestFillMode;
   description: string;
   protocol: string;
   variables: CreateVariableInput[];
@@ -107,6 +122,9 @@ export interface UpdateTestDefinitionInput {
   id: string;
   name: string;
   category: TestCategory | null;
+  articulation: string | null;
+  media_url: string | null;
+  fill_mode: TestFillMode;
   description: string;
   protocol: string;
   variables: CreateVariableInput[];
