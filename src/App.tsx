@@ -39,7 +39,6 @@ const SettingsPage       = lazy(() => import("./features/coach/pages/SettingsPag
 // Pages coach par athlète (lazy)
 const PlanningPage      = lazy(() => import("./features/coach/pages/PlanningPage.tsx"));
 const ProgrammationPage = lazy(() => import("./features/coach/pages/ProgrammationPage.tsx"));
-const StatsPage         = lazy(() => import("./features/coach/pages/StatsPage.tsx"));
 const DonneesPage       = lazy(() => import("./features/coach/pages/DonneesPage.tsx"));
 const RetoursPage       = lazy(() => import("./features/coach/pages/RetoursPage.tsx"));
 const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx"));
@@ -120,7 +119,6 @@ function AnimatedRoutes() {
               <Route path="planning"       element={<PlanningPage />} />
               <Route path="programmation"  element={<ProgrammationPage />} />
               <Route path="profil-sportif" element={<ProfilSportifPage />} />
-              <Route path="stats"          element={<StatsPage />} />
               <Route path="donnees"       element={<DonneesPage />} />
               <Route path="retours"       element={<RetoursPage />} />
               <Route path="tests"         element={<CoachTestPage />} />

@@ -1,11 +1,47 @@
 export type TestKind    = 'preset' | 'custom';
-export type ValueType   = 'number' | 'pace' | 'duration';
+export type ValueType   = 'number' | 'pace' | 'duration' | 'scale5';
 export type BetterWhen  = 'higher' | 'lower';
+
+export type TestCategory =
+  | 'bilan_articulaire' | 'endurance' | 'force' | 'explosivite' | 'vitesse';
+
+export const TEST_CATEGORY_LABEL: Record<TestCategory, string> = {
+  bilan_articulaire: 'Bilan articulaire',
+  endurance:         'Endurance',
+  force:             'Force',
+  explosivite:       'Explosivité',
+  vitesse:           'Vitesse',
+};
+
+export const TEST_CATEGORY_COLOR: Record<TestCategory, string> = {
+  bilan_articulaire: '#3B8DF0', // bleu
+  endurance:         '#22C993', // vert
+  force:             '#EF4B4B', // rouge
+  explosivite:       '#FB923C', // orange
+  vitesse:           '#A855F7', // violet
+};
+
+export const TEST_CATEGORY_ORDER: TestCategory[] = [
+  'bilan_articulaire', 'endurance', 'force', 'explosivite', 'vitesse',
+];
+
+export type TestFillMode = 'self' | 'coach';
+
+export const TEST_FILL_MODE_LABEL: Record<TestFillMode, string> = {
+  self:  'Rempli par l’athlète',
+  coach: 'Rempli par le coach (vidéo à envoyer)',
+};
+
+export const ARTICULATIONS = ['Épaule', 'Hanche', 'Genou', 'Cheville'] as const;
 
 export interface TestDefinition {
   id: string;
   name: string;
   kind: TestKind;
+  category: TestCategory | null;
+  articulation: string | null;
+  media_url: string | null;
+  fill_mode: TestFillMode;
   created_by: string | null;
   is_global: boolean;
   description: string | null;
@@ -13,6 +49,18 @@ export interface TestDefinition {
   created_at: string;
   updated_at: string;
 }
+
+export type ExtrapOp = 'div' | 'mul';
+
+export const PHYSIO_METRICS: { key: string; label: string; unit: string }[] = [
+  { key: 'VMA',    label: 'VMA',     unit: 'km/h' },
+  { key: 'Vmax',   label: 'Vmax',    unit: 'km/h' },
+  { key: 'VC',     label: 'VC',      unit: 'km/h' },
+  { key: 'VO2max', label: 'VO₂max',  unit: 'mL/kg/min' },
+  { key: 'PMA',    label: 'PMA',     unit: 'W' },
+  { key: 'FTP',    label: 'FTP',     unit: 'W' },
+  { key: 'FCmax',  label: 'FCmax',   unit: 'bpm' },
+];
 
 export interface TestVariable {
   id: string;
@@ -22,6 +70,9 @@ export interface TestVariable {
   unit: string;
   value_type: ValueType;
   better_when: BetterWhen;
+  extrap_metric: string | null;
+  extrap_op: ExtrapOp | null;
+  extrap_factor: number | null;
   created_at: string;
 }
 
@@ -69,10 +120,17 @@ export interface CreateVariableInput {
   unit: string;
   value_type: ValueType;
   better_when: BetterWhen;
+  extrap_metric: string | null;
+  extrap_op: ExtrapOp | null;
+  extrap_factor: number | null;
 }
 
 export interface CreateTestDefinitionInput {
   name: string;
+  category: TestCategory | null;
+  articulation: string | null;
+  media_url: string | null;
+  fill_mode: TestFillMode;
   description: string;
   protocol: string;
   variables: CreateVariableInput[];
@@ -81,8 +139,13 @@ export interface CreateTestDefinitionInput {
 export interface UpdateTestDefinitionInput {
   id: string;
   name: string;
+  category: TestCategory | null;
+  articulation: string | null;
+  media_url: string | null;
+  fill_mode: TestFillMode;
   description: string;
   protocol: string;
+  variables: CreateVariableInput[];
 }
 
 export interface CreateTestResultInput {

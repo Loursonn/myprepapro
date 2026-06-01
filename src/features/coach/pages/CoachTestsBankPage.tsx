@@ -15,7 +15,11 @@ import type {
   CreateVariableInput,
   ValueType,
   BetterWhen,
+  TestCategory,
+  TestFillMode,
 } from '@/features/shared/types/tests';
+import { TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, TEST_CATEGORY_ORDER, ARTICULATIONS, PHYSIO_METRICS } from '@/features/shared/types/tests';
+import type { ExtrapOp } from '@/features/shared/types/tests';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -27,6 +31,7 @@ const VALUE_TYPE_OPTIONS: { value: ValueType; label: string }[] = [
   { value: 'number',   label: 'Nombre' },
   { value: 'pace',     label: 'Allure' },
   { value: 'duration', label: 'Durée' },
+  { value: 'scale5',   label: 'Échelle /5' },
 ];
 
 const BETTER_WHEN_OPTIONS: { value: BetterWhen; label: string }[] = [
@@ -36,19 +41,24 @@ const BETTER_WHEN_OPTIONS: { value: BetterWhen; label: string }[] = [
 
 const EMPTY_VAR: CreateVariableInput = {
   key: '', label: '', unit: '', value_type: 'number', better_when: 'higher',
+  extrap_metric: null, extrap_op: null, extrap_factor: null,
 };
 
 // ── Formulaire de création / édition ─────────────────────────────────────────
 
 interface TestForm {
   name: string;
+  category: TestCategory | null;
+  articulation: string;
+  media_url: string;
+  fill_mode: TestFillMode;
   description: string;
   protocol: string;
   variables: CreateVariableInput[];
 }
 
 const EMPTY_FORM: TestForm = {
-  name: '', description: '', protocol: '', variables: [{ ...EMPTY_VAR }],
+  name: '', category: null, articulation: '', media_url: '', fill_mode: 'self', description: '', protocol: '', variables: [{ ...EMPTY_VAR }],
 };
 
 function VariableRow({
@@ -61,61 +71,101 @@ function VariableRow({
   onRemove: (i: number) => void;
 }) {
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: '1fr 80px 1fr 1fr auto',
-      gap: 8, alignItems: 'start',
-    }}>
-      {/* Label */}
-      <input
-        value={variable.label}
-        onChange={e => {
-          const label = e.target.value;
-          onChange(index, { ...variable, label, key: slugify(label) });
-        }}
-        placeholder="Ex: VMA"
-        style={inputStyle}
-      />
-      {/* Unit */}
-      <input
-        value={variable.unit}
-        onChange={e => onChange(index, { ...variable, unit: e.target.value })}
-        placeholder="km/h"
-        style={inputStyle}
-      />
-      {/* value_type */}
-      <select
-        value={variable.value_type}
-        onChange={e => onChange(index, { ...variable, value_type: e.target.value as ValueType })}
-        style={selectStyle}
-      >
-        {VALUE_TYPE_OPTIONS.map(o => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      {/* better_when */}
-      <select
-        value={variable.better_when}
-        onChange={e => onChange(index, { ...variable, better_when: e.target.value as BetterWhen })}
-        style={selectStyle}
-      >
-        {BETTER_WHEN_OPTIONS.map(o => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      {/* Supprimer */}
-      <button
-        onClick={() => onRemove(index)}
-        disabled={total <= 1}
-        style={{
-          width: 30, height: 30, borderRadius: 6, border: 'none',
-          background: total <= 1 ? 'transparent' : 'rgba(239,75,75,0.12)',
-          color: total <= 1 ? C.tx3 : '#EF4B4B',
-          cursor: total <= 1 ? 'default' : 'pointer', fontSize: 14,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        ×
-      </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 80px 1fr 1fr auto',
+        gap: 8, alignItems: 'start',
+      }}>
+        {/* Label */}
+        <input
+          value={variable.label}
+          onChange={e => {
+            const label = e.target.value;
+            onChange(index, { ...variable, label, key: slugify(label) });
+          }}
+          placeholder="Ex: VMA"
+          style={inputStyle}
+        />
+        {/* Unit */}
+        <input
+          value={variable.unit}
+          onChange={e => onChange(index, { ...variable, unit: e.target.value })}
+          placeholder="km/h"
+          style={inputStyle}
+        />
+        {/* value_type */}
+        <select
+          value={variable.value_type}
+          onChange={e => onChange(index, { ...variable, value_type: e.target.value as ValueType })}
+          style={selectStyle}
+        >
+          {VALUE_TYPE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {/* better_when */}
+        <select
+          value={variable.better_when}
+          onChange={e => onChange(index, { ...variable, better_when: e.target.value as BetterWhen })}
+          style={selectStyle}
+        >
+          {BETTER_WHEN_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {/* Supprimer */}
+        <button
+          onClick={() => onRemove(index)}
+          disabled={total <= 1}
+          style={{
+            width: 30, height: 30, borderRadius: 6, border: 'none',
+            background: total <= 1 ? 'transparent' : 'rgba(239,75,75,0.12)',
+            color: total <= 1 ? C.tx3 : '#EF4B4B',
+            cursor: total <= 1 ? 'default' : 'pointer', fontSize: 14,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Extrapolation → valeur physiologique */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 4 }}>
+        <span style={{ fontSize: 10, color: C.tx3 }}>→ extrapolation</span>
+        <select
+          value={variable.extrap_metric ?? ''}
+          onChange={e => {
+            const m = e.target.value || null;
+            onChange(index, { ...variable, extrap_metric: m, extrap_op: m ? (variable.extrap_op ?? 'div') : null, extrap_factor: m ? (variable.extrap_factor ?? 100) : null });
+          }}
+          style={{ ...selectStyle, width: 'auto', flex: '0 0 auto' }}
+        >
+          <option value="">Aucune</option>
+          {PHYSIO_METRICS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
+        {variable.extrap_metric && (
+          <>
+            <select
+              value={variable.extrap_op ?? 'div'}
+              onChange={e => onChange(index, { ...variable, extrap_op: e.target.value as ExtrapOp })}
+              style={{ ...selectStyle, width: 56, flex: '0 0 auto' }}
+            >
+              <option value="div">÷</option>
+              <option value="mul">×</option>
+            </select>
+            <input
+              type="number"
+              value={variable.extrap_factor ?? ''}
+              onChange={e => onChange(index, { ...variable, extrap_factor: e.target.value ? parseFloat(e.target.value) : null })}
+              placeholder="100"
+              style={{ ...inputStyle, width: 80, flex: '0 0 auto' }}
+            />
+            <span style={{ fontSize: 10, color: C.tx3 }}>
+              = {PHYSIO_METRICS.find(m => m.key === variable.extrap_metric)?.unit}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -163,6 +213,25 @@ function TestCard({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {test.category && (() => {
+            const cc = TEST_CATEGORY_COLOR[test.category as TestCategory] ?? C.tx3;
+            return (
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                background: cc + '1A', color: cc, border: '1px solid ' + cc + '40',
+                textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap',
+              }}>
+                {TEST_CATEGORY_LABEL[test.category as TestCategory] ?? test.category}
+              </span>
+            );
+          })()}
+          <span style={{
+            fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+            background: C.s2, color: test.fill_mode === 'coach' ? C.o : C.tx3,
+            border: '1px solid ' + C.brdL, whiteSpace: 'nowrap',
+          }} title={test.fill_mode === 'coach' ? 'Rempli par le coach (vidéo à envoyer)' : 'Rempli par l’athlète'}>
+            {test.fill_mode === 'coach' ? '🎬 Coach' : '🧍 Athlète'}
+          </span>
           {test.kind === 'preset' && (
             <span style={{
               fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
@@ -289,6 +358,62 @@ function TestFormPanel({
         />
       </div>
 
+      {/* Catégorie + mode de remplissage */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div>
+          <label style={labelStyle}>Catégorie</label>
+          <select
+            value={form.category ?? ''}
+            onChange={e => setForm(f => ({ ...f, category: (e.target.value || null) as TestCategory | null }))}
+            style={selectStyle}
+          >
+            <option value="">Aucune</option>
+            {TEST_CATEGORY_ORDER.map(c => (
+              <option key={c} value={c}>{TEST_CATEGORY_LABEL[c]}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Remplissage</label>
+          <select
+            value={form.fill_mode}
+            onChange={e => setForm(f => ({ ...f, fill_mode: e.target.value as TestFillMode }))}
+            style={selectStyle}
+          >
+            <option value="self">Par l’athlète</option>
+            <option value="coach">Par le coach (vidéo)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Articulation (uniquement bilan articulaire) */}
+      {form.category === 'bilan_articulaire' && (
+        <div>
+          <label style={labelStyle}>Articulation</label>
+          <input
+            value={form.articulation}
+            onChange={e => setForm(f => ({ ...f, articulation: e.target.value }))}
+            placeholder="Épaule, Hanche, Genou, Cheville…"
+            list="articulations-list"
+            style={inputStyle}
+          />
+          <datalist id="articulations-list">
+            {ARTICULATIONS.map(a => <option key={a} value={a} />)}
+          </datalist>
+        </div>
+      )}
+
+      {/* Média explicatif (photo / vidéo) */}
+      <div>
+        <label style={labelStyle}>Média explicatif (lien photo / vidéo)</label>
+        <input
+          value={form.media_url}
+          onChange={e => setForm(f => ({ ...f, media_url: e.target.value }))}
+          placeholder="https://…"
+          style={inputStyle}
+        />
+      </div>
+
       {/* Description */}
       <div>
         <label style={labelStyle}>Description</label>
@@ -389,8 +514,9 @@ export default function CoachTestsBankPage() {
   function handleCreate(form: TestForm) {
     createMut.mutate(
       {
-        name: form.name, description: form.description,
-        protocol: form.protocol, variables: form.variables,
+        name: form.name, category: form.category, articulation: form.articulation || null,
+        media_url: form.media_url || null, fill_mode: form.fill_mode,
+        description: form.description, protocol: form.protocol, variables: form.variables,
       },
       { onSuccess: () => setMode('idle') },
     );
@@ -399,9 +525,30 @@ export default function CoachTestsBankPage() {
   function handleUpdate(form: TestForm) {
     if (!editTarget) return;
     updateMut.mutate(
-      { id: editTarget.id, name: form.name, description: form.description, protocol: form.protocol },
+      {
+        id: editTarget.id, name: form.name, category: form.category, articulation: form.articulation || null,
+        media_url: form.media_url || null, fill_mode: form.fill_mode,
+        description: form.description, protocol: form.protocol, variables: form.variables,
+      },
       { onSuccess: () => { setMode('idle'); setEditTarget(null); } },
     );
+  }
+
+  function formFromTest(t: TestDefinitionWithVariables): TestForm {
+    return {
+      name:         t.name,
+      category:     t.category,
+      articulation: t.articulation ?? '',
+      media_url:    t.media_url ?? '',
+      fill_mode:    t.fill_mode ?? 'self',
+      description: t.description ?? '',
+      protocol:    t.protocol?.text ?? '',
+      variables:   t.test_variables.map(v => ({
+        key: v.key, label: v.label, unit: v.unit,
+        value_type: v.value_type, better_when: v.better_when,
+        extrap_metric: v.extrap_metric ?? null, extrap_op: v.extrap_op ?? null, extrap_factor: v.extrap_factor ?? null,
+      })),
+    };
   }
 
   function startEdit(test: TestDefinitionWithVariables) {
@@ -438,7 +585,7 @@ export default function CoachTestsBankPage() {
         )}
       </div>
 
-      {/* Formulaire création */}
+      {/* Formulaire création / édition (en haut) */}
       {mode === 'create' && (
         <div style={{ marginBottom: 28 }}>
           <TestFormPanel
@@ -449,27 +596,70 @@ export default function CoachTestsBankPage() {
           />
         </div>
       )}
+      {mode === 'edit' && editTarget && (
+        <div style={{ marginBottom: 28 }}>
+          <TestFormPanel
+            initial={formFromTest(editTarget)}
+            onSave={handleUpdate}
+            onCancel={() => { setMode('idle'); setEditTarget(null); }}
+            saving={updateMut.isPending}
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <ListSkeleton rows={5} />
       ) : (
         <>
-          {/* Presets */}
-          <section style={{ marginBottom: 32 }}>
-            <div style={{
-              fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: 'uppercase',
-              letterSpacing: '0.6px', marginBottom: 12,
-            }}>
-              Presets — {presets.length}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {presets.map(t => (
-                <TestCard
-                  key={t.id} test={t} isOwned={false}
-                  onEdit={() => {}} onDelete={() => {}}
-                />
-              ))}
-            </div>
+          {/* Presets groupés par catégorie */}
+          <section style={{ marginBottom: 32, display: 'flex', flexDirection: 'column', gap: 22 }}>
+            {TEST_CATEGORY_ORDER.map(cat => {
+              const inCat = presets.filter(t => t.category === cat);
+              if (inCat.length === 0) return null;
+              const cc = TEST_CATEGORY_COLOR[cat];
+              return (
+                <div key={cat}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, color: cc, textTransform: 'uppercase',
+                    letterSpacing: '0.5px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    <div style={{ width: 22, height: 3, borderRadius: 2, background: cc }} />
+                    {TEST_CATEGORY_LABEL[cat]} — {inCat.length}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {inCat.map(t => (
+                      mode === 'edit' && editTarget?.id === t.id ? null : (
+                        <TestCard
+                          key={t.id} test={t} isOwned
+                          onEdit={() => startEdit(t)}
+                          onDelete={() => deleteMut.mutate(t.id)}
+                        />
+                      )
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Presets sans catégorie (legacy) */}
+            {presets.filter(t => !t.category).length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+                  Autres — {presets.filter(t => !t.category).length}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {presets.filter(t => !t.category).map(t => (
+                    mode === 'edit' && editTarget?.id === t.id ? null : (
+                      <TestCard
+                        key={t.id} test={t} isOwned
+                        onEdit={() => startEdit(t)}
+                        onDelete={() => deleteMut.mutate(t.id)}
+                      />
+                    )
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Tests custom */}
@@ -480,26 +670,6 @@ export default function CoachTestsBankPage() {
             }}>
               Mes tests — {custom.length}
             </div>
-
-            {/* Formulaire édition inline */}
-            {mode === 'edit' && editTarget && (
-              <div style={{ marginBottom: 12 }}>
-                <TestFormPanel
-                  initial={{
-                    name:        editTarget.name,
-                    description: editTarget.description ?? '',
-                    protocol:    editTarget.protocol?.text ?? '',
-                    variables:   editTarget.test_variables.map(v => ({
-                      key: v.key, label: v.label, unit: v.unit,
-                      value_type: v.value_type, better_when: v.better_when,
-                    })),
-                  }}
-                  onSave={handleUpdate}
-                  onCancel={() => { setMode('idle'); setEditTarget(null); }}
-                  saving={updateMut.isPending}
-                />
-              </div>
-            )}
 
             {custom.length === 0 && mode !== 'create' ? (
               <EmptyState

@@ -117,9 +117,9 @@ function InjuriesView({injuries,addInjury,updateInjury,deleteInjury}){
   </div>);
 }
 
-function MuscleVolumeCard({exos,exMeta,sets,sessions,weeksArr,tw}){
+function MuscleVolumeCard({exos,exMeta,sets,sessions,weeksArr,tw,initialWeek}){
   const wks=weeksArr||Array.from({length:tw||6},(_,i)=>i+1);
-  const[wk,setWk]=useState(wks[0]);
+  const[wk,setWk]=useState(initialWeek&&wks.includes(initialWeek)?initialWeek:wks[0]);
   const[showSubs,setShowSubs]=useState(false);
   const[panel,setPanel]=useState(null);
   const muscleData=useMemo(()=>{

@@ -4,7 +4,7 @@
  * Références de performance + zones FC ajustables + métriques personnalisées.
  * Route : /coach/athletes/:athleteId/profil-sportif
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { WellnessData } from "@/features/shared/types/athlete";
@@ -13,6 +13,10 @@ import { Plus, Pencil, X, Check } from "lucide-react";
 import { C } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import MeasurementComparison from "@/features/coach/components/MeasurementComparison";
+import CategoryProfiles from "@/features/coach/components/CategoryProfiles";
+import { useAthleteContext } from "@/features/shared/context/AthleteContext";
+import { WeightChart } from "@/components/athlete/StatsCharts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,21 +41,13 @@ const METRICS: MetricDef[] = [
   { key: "FCrepos", label: "FC repos", unit: "bpm",       description: "Fréquence cardiaque de repos",      min: 30,  max: 100, step: 1,   category: "cardio"    },
   { key: "VMA",     label: "VMA",      unit: "km/h",      description: "Vitesse Maximale Aérobie",          min: 8,   max: 30,  step: 0.1, category: "vitesse"   },
   { key: "Vmax",    label: "Vmax",     unit: "km/h",      description: "Vitesse maximale atteinte (sprint)", min: 10,  max: 45,  step: 0.1, category: "vitesse"   },
-  { key: "VO2max",  label: "VO₂max",   unit: "mL/kg/min", description: "Consommation maximale d'oxygène",   min: 20,  max: 90,  step: 0.1, category: "vitesse"   },
+  { key: "VC",      label: "VC",       unit: "km/h",      description: "Vitesse Critique", min: 8, max: 28, step: 0.1, category: "vitesse"   },
   { key: "FTP",     label: "FTP",      unit: "W",         description: "Functional Threshold Power (vélo)", min: 50,  max: 600, step: 5,   category: "puissance" },
   { key: "PMA",     label: "PMA",      unit: "W",         description: "Puissance Maximale Aérobie",        min: 50,  max: 900, step: 5,   category: "puissance" },
   // Note: "poids" est dérivé automatiquement depuis le wellness (moyenne 3 dernières saisies)
 ];
 
 const PREDEFINED_KEYS = new Set(METRICS.map((m) => m.key));
-
-const CATEGORY_LABEL: Record<Category, string> = {
-  cardio:    "Cardiaque",
-  vitesse:   "Vitesse / Endurance",
-  puissance: "Puissance",
-  corpo:     "Corporel",
-  custom:    "Personnalisées",
-};
 
 const CATEGORY_COLOR: Record<Category, string> = {
   cardio:    "#EF4444",
@@ -214,6 +210,7 @@ function useLastWeights(athleteId: string) {
 
 function MetricCard({
   metric, currentValue, currentDate, onSave, onDelete, saving,
+  derivedValue, derivedLabel,
 }: {
   metric: MetricDef;
   currentValue?: number;
@@ -221,10 +218,13 @@ function MetricCard({
   onSave: (value: number) => void;
   onDelete?: () => void;
   saving: boolean;
+  derivedValue?: number;   // valeur auto-calculée affichée quand rien n'est saisi
+  derivedLabel?: string;   // badge ex. "auto 85%"
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const color = CATEGORY_COLOR[metric.category];
+  const showDerived = currentValue == null && derivedValue != null;
 
   function handleSave() {
     const v = parseFloat(draft);
@@ -253,7 +253,7 @@ function MetricCard({
         <div style={{ display: "flex", gap: 4 }}>
           {!editing && (
             <button
-              onClick={() => { setDraft(currentValue?.toString() ?? ""); setEditing(true); }}
+              onClick={() => { setDraft((currentValue ?? derivedValue)?.toString() ?? ""); setEditing(true); }}
               style={{
                 padding: "3px 8px", borderRadius: 6, border: "1px solid " + C.brdL,
                 background: "transparent", color: C.tx3, fontSize: 11,
@@ -313,6 +313,14 @@ function MetricCard({
             </span>
           )}
         </div>
+      ) : showDerived ? (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontSize: 24, fontWeight: 800, color: C.tx2 }}>{derivedValue}</span>
+          <span style={{ fontSize: 12, color: C.tx3 }}>{metric.unit}</span>
+          <span style={{ fontSize: 9, fontWeight: 700, color, background: color + "1A", padding: "2px 6px", borderRadius: 5, marginLeft: "auto", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {derivedLabel ?? "auto"}
+          </span>
+        </div>
       ) : (
         <div style={{ fontSize: 12, color: C.tx3, fontStyle: "italic" }}>Non renseigné</div>
       )}
@@ -322,7 +330,25 @@ function MetricCard({
 
 // ── WeightDerivedCard ─────────────────────────────────────────────────────────
 
-function WeightDerivedCard({ athleteId }: { athleteId: string }) {
+/** Parse robuste : gère "2026-06-01", "2026-6-1", ou un timestamp ISO. Retourne null si invalide. */
+function safeDate(s?: string | null): Date | null {
+  if (!s) return null;
+  let iso = s;
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) iso = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}T12:00:00`;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+type StrategyKey = "maintenance" | "seche" | "prise_de_masse";
+const STRATEGY_LABEL: Record<StrategyKey, string> = {
+  maintenance: "Maintenance", seche: "Sèche", prise_de_masse: "Prise de masse",
+};
+const STRATEGY_COLOR: Record<StrategyKey, string> = {
+  maintenance: C.b, seche: C.r, prise_de_masse: C.g,
+};
+
+function WeightDerivedCard({ athleteId, strategy }: { athleteId: string; strategy?: StrategyKey | null }) {
   const { data, isLoading } = useLastWeights(athleteId);
   const color = CATEGORY_COLOR.corpo;
 
@@ -330,31 +356,52 @@ function WeightDerivedCard({ athleteId }: { athleteId: string }) {
     <div
       style={{
         background: C.s1, border: "1px solid " + C.brd, borderRadius: 12,
-        padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8,
+        padding: "16px", display: "flex", flexDirection: "column", gap: 12,
+        alignItems: "center", justifyContent: "center", textAlign: "center",
         opacity: isLoading ? 0.6 : 1,
+        height: "100%", boxSizing: "border-box",
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = color + "50")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.brd)}
     >
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
-          Poids
-        </div>
-        <div style={{ fontSize: 10, color: C.tx3 }}>Moyenne des {data?.count ?? 3} dernières saisies wellness</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        Poids
       </div>
+
       {data ? (
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 24, fontWeight: 800, color: C.tx }}>{data.avg}</span>
-          <span style={{ fontSize: 12, color: C.tx3 }}>kg</span>
-          <span style={{ fontSize: 10, color: C.tx3, marginLeft: "auto" }}>
-            {new Date(data.lastDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-          </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+            <span style={{ fontSize: 34, fontWeight: 800, color: C.tx, lineHeight: 1 }}>{data.avg}</span>
+            <span style={{ fontSize: 14, color: C.tx3 }}>kg</span>
+          </div>
+          <div style={{ fontSize: 9, color: C.tx3 }}>
+            moy. {data.count} dernières
+            {safeDate(data.lastDate) && " · " + safeDate(data.lastDate)!.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+          </div>
         </div>
       ) : (
         <div style={{ fontSize: 12, color: C.tx3, fontStyle: "italic" }}>
-          {isLoading ? "…" : "Aucune saisie de poids dans le wellness"}
+          {isLoading ? "…" : "Aucune saisie de poids"}
         </div>
       )}
+
+      {/* Stratégie nutrition actuelle */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Stratégie
+        </div>
+        {strategy ? (
+          <span style={{
+            fontSize: 12, fontWeight: 700, color: STRATEGY_COLOR[strategy],
+            background: STRATEGY_COLOR[strategy] + "1A", border: "1px solid " + STRATEGY_COLOR[strategy] + "40",
+            padding: "4px 12px", borderRadius: 20,
+          }}>
+            {STRATEGY_LABEL[strategy]}
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, color: C.tx3, fontStyle: "italic" }}>Non définie</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -704,11 +751,11 @@ function ZoneTableSimple({ title, rows }: {
 
 export default function ProfilSportifPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
+  const { weightLog, weightMilestones, bodyWeight, nutritionStrategy } = useAthleteContext();
   const { data: refs = {}, isLoading } = useAthleteRefs(athleteId!);
   const upsert = useUpsertRef(athleteId!);
   const deleteRef = useDeleteRef(athleteId!);
 
-  const predefined = METRICS;
   const customEntries = Object.entries(refs).filter(
     ([k]) => !PREDEFINED_KEYS.has(k) && !k.startsWith("FCzone_") && k !== "FCzone_Z0_min"
   );
@@ -731,14 +778,29 @@ export default function ProfilSportifPage() {
     }
   }
 
-  const categories = (["cardio", "vitesse", "puissance", "corpo"] as const);
+  const metricsOf = (cat: Category) => METRICS.filter((m) => m.category === cat);
+
+  function renderMetric(metric: MetricDef, derived?: { value: number; label?: string }) {
+    return (
+      <MetricCard
+        key={metric.key}
+        metric={metric}
+        currentValue={refs[metric.key]?.value}
+        currentDate={refs[metric.key]?.date}
+        derivedValue={derived?.value}
+        derivedLabel={derived?.label}
+        onSave={(v) => upsert.mutate({ metricName: metric.key, value: v, unit: metric.unit })}
+        saving={upsert.isPending}
+      />
+    );
+  }
 
   return (
-    <div style={{ padding: "0 24px 60px", maxWidth: 960, margin: "0 auto" }}>
+    <div style={{ padding: "0 24px 60px" }}>
 
       {/* Header */}
       <div style={{ padding: "20px 0 16px" }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: C.tx }}>Profil sportif</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.tx }}>Profil sportif</div>
         <div style={{ fontSize: 12, color: C.tx3, marginTop: 4 }}>
           Références de performance — alimentent les calculs de zones et l'éditeur de séances énergétiques.
         </div>
@@ -751,38 +813,90 @@ export default function ProfilSportifPage() {
           ))}
         </div>
       ) : (
-        <>
-          {/* ── Predefined metrics ── */}
-          {categories.map((cat) => {
-            const metricsInCat = predefined.filter((m) => m.category === cat);
-            return (
-              <div key={cat} style={{ marginBottom: 24 }}>
-                <SectionTitle label={CATEGORY_LABEL[cat]} color={CATEGORY_COLOR[cat]} />
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-                  {metricsInCat.map((metric) => (
-                    <MetricCard
-                      key={metric.key}
-                      metric={metric}
-                      currentValue={refs[metric.key]?.value}
-                      currentDate={refs[metric.key]?.date}
-                      onSave={(v) => upsert.mutate({ metricName: metric.key, value: v, unit: metric.unit })}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* ── PROFIL PAR CATÉGORIE (synthèse) ── */}
+              <CategoryProfiles athleteId={athleteId!} />
+
+              {/* ── CARDIAQUE ── */}
+              <Panel title="Cardiaque" color={CATEGORY_COLOR.cardio}>
+                <MetricGrid>
+                  {metricsOf("cardio").map((m) =>
+                    renderMetric(
+                      m,
+                      m.key === "FCseuil" && fcmax != null
+                        ? { value: Math.round(fcmax * 0.85), label: "auto 85%" }
+                        : undefined,
+                    ),
+                  )}
+                </MetricGrid>
+                {fcmax && (
+                  <>
+                    <FcZoneEditor
+                      fcmax={fcmax}
+                      fcrep={fcrep}
+                      storedZones={storedFcZones}
+                      onSaveZones={saveZones}
                       saving={upsert.isPending}
                     />
-                  ))}
-                  {/* Corporel : poids dérivé du wellness */}
-                  {cat === "corpo" && <WeightDerivedCard athleteId={athleteId!} />}
-                  {/* Vitesse : VRA calculée depuis Vmax − VMA */}
-                  {cat === "vitesse" && <VraDerivedCard vmax={vmax} vma={vma} />}
+                    <div style={{ padding: "10px 14px", borderRadius: 10, background: C.ac + "10", border: "1px solid " + C.ac + "30", fontSize: 11, color: C.tx2 }}>
+                      💡 Les zones FC personnalisées s'appliquent dans l'aperçu de séance et le calendrier planning. Les bornes définissent l'interpolation d'intensité pour les cibles en bpm.
+                    </div>
+                  </>
+                )}
+              </Panel>
+
+              {/* ── VITESSE - PUISSANCE - ÉNERGÉTIQUE ── */}
+              <Panel title="Vitesse — Puissance — Énergétique" color={CATEGORY_COLOR.vitesse}>
+                <MetricGrid>
+                  {metricsOf("vitesse").map((m) => renderMetric(m))}
+                  <VraDerivedCard vmax={vmax} vma={vma} />
+                  {metricsOf("puissance").map((m) => renderMetric(m))}
+                </MetricGrid>
+                {(vma || ftp) && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                    {vma && (
+                      <ZoneTableSimple
+                        title={`Zones allure — VMA ${vma} km/h`}
+                        rows={vmaZones(vma).map((z) => ({ label: z.label, min: z.min + "/km", max: z.max + "/km", color: z.color }))}
+                      />
+                    )}
+                    {ftp && (
+                      <ZoneTableSimple
+                        title={`Zones puissance — FTP ${ftp} W`}
+                        rows={ftpZones(ftp).map((z) => ({ label: z.label, range: z.range, color: z.color }))}
+                      />
+                    )}
+                  </div>
+                )}
+              </Panel>
+
+          {/* ── BIOMÉTRIE ── */}
+          <Panel title="Biométrie" color={CATEGORY_COLOR.corpo}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "stretch" }}>
+              <div style={{ flex: "1 1 200px", minWidth: 200, maxWidth: 300, display: "flex" }}>
+                <div style={{ flex: 1 }}>
+                  <WeightDerivedCard athleteId={athleteId!} strategy={nutritionStrategy?.strategy ?? null} />
                 </div>
               </div>
-            );
-          })}
+              <div style={{ flex: "3 1 320px", minWidth: 300, background: C.s1, border: "1px solid " + C.brd, borderRadius: 12, padding: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: CATEGORY_COLOR.corpo, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10 }}>
+                  Évolution du poids
+                </div>
+                {Object.keys(weightLog).length > 0 ? (
+                  <WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy} />
+                ) : (
+                  <div style={{ textAlign: "center", color: C.tx3, fontSize: 11, padding: "14px 0" }}>Aucune mesure</div>
+                )}
+              </div>
+            </div>
+            <MeasurementComparison athleteId={athleteId!} />
+          </Panel>
 
-          {/* ── Custom metrics ── */}
-          <div style={{ marginBottom: 28 }}>
-            <SectionTitle label={CATEGORY_LABEL.custom} color={CATEGORY_COLOR.custom} />
+          {/* ── DONNÉES PERSONNALISÉES (pleine largeur, tout en bas) ── */}
+          <Panel title="Données personnalisées" color={CATEGORY_COLOR.custom}>
             {customEntries.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10, marginBottom: 10 }}>
+              <MetricGrid>
                 {customEntries.map(([key, ref]) => (
                   <MetricCard
                     key={key}
@@ -794,7 +908,7 @@ export default function ProfilSportifPage() {
                     saving={upsert.isPending}
                   />
                 ))}
-              </div>
+              </MetricGrid>
             )}
             <CustomMetricForm
               saving={upsert.isPending}
@@ -802,60 +916,33 @@ export default function ProfilSportifPage() {
                 upsert.mutate({ metricName: name, value, unit, metricType: "custom" })
               }
             />
-          </div>
+          </Panel>
 
-          {/* ── Zones calculées ── */}
-          {(fcmax || vma || ftp) && (
-            <div style={{ marginBottom: 28 }}>
-              <SectionTitle label="Zones calculées" color={C.tx3} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-
-                {/* FC zones — with custom editor */}
-                {fcmax && (
-                  <FcZoneEditor
-                    fcmax={fcmax}
-                    fcrep={fcrep}
-                    storedZones={storedFcZones}
-                    onSaveZones={saveZones}
-                    saving={upsert.isPending}
-                  />
-                )}
-
-                {/* VMA + FTP zones */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                  {vma && (
-                    <ZoneTableSimple
-                      title={`Zones allure — VMA ${vma} km/h`}
-                      rows={vmaZones(vma).map((z) => ({ label: z.label, min: z.min + "/km", max: z.max + "/km", color: z.color }))}
-                    />
-                  )}
-                  {ftp && (
-                    <ZoneTableSimple
-                      title={`Zones puissance — FTP ${ftp} W`}
-                      rows={ftpZones(ftp).map((z) => ({ label: z.label, range: z.range, color: z.color }))}
-                    />
-                  )}
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, background: C.ac + "10", border: "1px solid " + C.ac + "30", fontSize: 11, color: C.tx2 }}>
-                💡 Les zones FC personnalisées s'appliquent dans l'aperçu de séance et le calendrier planning. Les bornes définissent l'interpolation d'intensité pour les cibles en bpm.
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-// ── SectionTitle ──────────────────────────────────────────────────────────────
+// ── Panel & MetricGrid ────────────────────────────────────────────────────────
 
-function SectionTitle({ label, color }: { label: string; color: string }) {
+function Panel({ title, color, children }: { title: string; color: string; children: ReactNode }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{ width: 24, height: 2, background: color, borderRadius: 1 }} />
-      {label}
+    <section style={{ border: "1px solid " + C.brd, borderRadius: 16, overflow: "hidden" }}>
+      <div style={{ padding: "13px 18px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 10, background: color + "14" }}>
+        <div style={{ width: 4, height: 18, borderRadius: 2, background: color, flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 800, color: C.tx, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</span>
+      </div>
+      <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 16 }}>{children}</div>
+    </section>
+  );
+}
+
+function MetricGrid({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
+      {children}
     </div>
   );
 }
+
