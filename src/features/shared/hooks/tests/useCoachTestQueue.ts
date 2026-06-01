@@ -77,6 +77,9 @@ export function useFillCoachTestSession(athleteId: string) {
       qc.invalidateQueries({ queryKey: QK.athleteTestResults(athleteId) });
       qc.invalidateQueries({ queryKey: QK.athleteCurrentValues(athleteId) });
       qc.invalidateQueries({ queryKey: QK.articularProfile(athleteId) });
+      qc.invalidateQueries({ queryKey: ['athlete-refs-full', athleteId] });
+      qc.invalidateQueries({ queryKey: ['athlete-references', athleteId] });
+      qc.invalidateQueries({ queryKey: ['categoryTestSeries', athleteId] });
       toast.success('Test noté ✓');
     },
     onError: () => toast.error('Erreur lors de la saisie'),

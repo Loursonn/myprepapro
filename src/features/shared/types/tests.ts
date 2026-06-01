@@ -50,6 +50,18 @@ export interface TestDefinition {
   updated_at: string;
 }
 
+export type ExtrapOp = 'div' | 'mul';
+
+export const PHYSIO_METRICS: { key: string; label: string; unit: string }[] = [
+  { key: 'VMA',    label: 'VMA',     unit: 'km/h' },
+  { key: 'Vmax',   label: 'Vmax',    unit: 'km/h' },
+  { key: 'VC',     label: 'VC',      unit: 'km/h' },
+  { key: 'VO2max', label: 'VO₂max',  unit: 'mL/kg/min' },
+  { key: 'PMA',    label: 'PMA',     unit: 'W' },
+  { key: 'FTP',    label: 'FTP',     unit: 'W' },
+  { key: 'FCmax',  label: 'FCmax',   unit: 'bpm' },
+];
+
 export interface TestVariable {
   id: string;
   test_definition_id: string;
@@ -58,6 +70,9 @@ export interface TestVariable {
   unit: string;
   value_type: ValueType;
   better_when: BetterWhen;
+  extrap_metric: string | null;
+  extrap_op: ExtrapOp | null;
+  extrap_factor: number | null;
   created_at: string;
 }
 
@@ -105,6 +120,9 @@ export interface CreateVariableInput {
   unit: string;
   value_type: ValueType;
   better_when: BetterWhen;
+  extrap_metric: string | null;
+  extrap_op: ExtrapOp | null;
+  extrap_factor: number | null;
 }
 
 export interface CreateTestDefinitionInput {

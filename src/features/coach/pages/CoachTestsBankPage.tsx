@@ -18,7 +18,8 @@ import type {
   TestCategory,
   TestFillMode,
 } from '@/features/shared/types/tests';
-import { TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, TEST_CATEGORY_ORDER, ARTICULATIONS } from '@/features/shared/types/tests';
+import { TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, TEST_CATEGORY_ORDER, ARTICULATIONS, PHYSIO_METRICS } from '@/features/shared/types/tests';
+import type { ExtrapOp } from '@/features/shared/types/tests';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ const BETTER_WHEN_OPTIONS: { value: BetterWhen; label: string }[] = [
 
 const EMPTY_VAR: CreateVariableInput = {
   key: '', label: '', unit: '', value_type: 'number', better_when: 'higher',
+  extrap_metric: null, extrap_op: null, extrap_factor: null,
 };
 
 // ── Formulaire de création / édition ─────────────────────────────────────────
@@ -69,61 +71,101 @@ function VariableRow({
   onRemove: (i: number) => void;
 }) {
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: '1fr 80px 1fr 1fr auto',
-      gap: 8, alignItems: 'start',
-    }}>
-      {/* Label */}
-      <input
-        value={variable.label}
-        onChange={e => {
-          const label = e.target.value;
-          onChange(index, { ...variable, label, key: slugify(label) });
-        }}
-        placeholder="Ex: VMA"
-        style={inputStyle}
-      />
-      {/* Unit */}
-      <input
-        value={variable.unit}
-        onChange={e => onChange(index, { ...variable, unit: e.target.value })}
-        placeholder="km/h"
-        style={inputStyle}
-      />
-      {/* value_type */}
-      <select
-        value={variable.value_type}
-        onChange={e => onChange(index, { ...variable, value_type: e.target.value as ValueType })}
-        style={selectStyle}
-      >
-        {VALUE_TYPE_OPTIONS.map(o => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      {/* better_when */}
-      <select
-        value={variable.better_when}
-        onChange={e => onChange(index, { ...variable, better_when: e.target.value as BetterWhen })}
-        style={selectStyle}
-      >
-        {BETTER_WHEN_OPTIONS.map(o => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      {/* Supprimer */}
-      <button
-        onClick={() => onRemove(index)}
-        disabled={total <= 1}
-        style={{
-          width: 30, height: 30, borderRadius: 6, border: 'none',
-          background: total <= 1 ? 'transparent' : 'rgba(239,75,75,0.12)',
-          color: total <= 1 ? C.tx3 : '#EF4B4B',
-          cursor: total <= 1 ? 'default' : 'pointer', fontSize: 14,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        ×
-      </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 80px 1fr 1fr auto',
+        gap: 8, alignItems: 'start',
+      }}>
+        {/* Label */}
+        <input
+          value={variable.label}
+          onChange={e => {
+            const label = e.target.value;
+            onChange(index, { ...variable, label, key: slugify(label) });
+          }}
+          placeholder="Ex: VMA"
+          style={inputStyle}
+        />
+        {/* Unit */}
+        <input
+          value={variable.unit}
+          onChange={e => onChange(index, { ...variable, unit: e.target.value })}
+          placeholder="km/h"
+          style={inputStyle}
+        />
+        {/* value_type */}
+        <select
+          value={variable.value_type}
+          onChange={e => onChange(index, { ...variable, value_type: e.target.value as ValueType })}
+          style={selectStyle}
+        >
+          {VALUE_TYPE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {/* better_when */}
+        <select
+          value={variable.better_when}
+          onChange={e => onChange(index, { ...variable, better_when: e.target.value as BetterWhen })}
+          style={selectStyle}
+        >
+          {BETTER_WHEN_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        {/* Supprimer */}
+        <button
+          onClick={() => onRemove(index)}
+          disabled={total <= 1}
+          style={{
+            width: 30, height: 30, borderRadius: 6, border: 'none',
+            background: total <= 1 ? 'transparent' : 'rgba(239,75,75,0.12)',
+            color: total <= 1 ? C.tx3 : '#EF4B4B',
+            cursor: total <= 1 ? 'default' : 'pointer', fontSize: 14,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Extrapolation → valeur physiologique */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 4 }}>
+        <span style={{ fontSize: 10, color: C.tx3 }}>→ extrapolation</span>
+        <select
+          value={variable.extrap_metric ?? ''}
+          onChange={e => {
+            const m = e.target.value || null;
+            onChange(index, { ...variable, extrap_metric: m, extrap_op: m ? (variable.extrap_op ?? 'div') : null, extrap_factor: m ? (variable.extrap_factor ?? 100) : null });
+          }}
+          style={{ ...selectStyle, width: 'auto', flex: '0 0 auto' }}
+        >
+          <option value="">Aucune</option>
+          {PHYSIO_METRICS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
+        {variable.extrap_metric && (
+          <>
+            <select
+              value={variable.extrap_op ?? 'div'}
+              onChange={e => onChange(index, { ...variable, extrap_op: e.target.value as ExtrapOp })}
+              style={{ ...selectStyle, width: 56, flex: '0 0 auto' }}
+            >
+              <option value="div">÷</option>
+              <option value="mul">×</option>
+            </select>
+            <input
+              type="number"
+              value={variable.extrap_factor ?? ''}
+              onChange={e => onChange(index, { ...variable, extrap_factor: e.target.value ? parseFloat(e.target.value) : null })}
+              placeholder="100"
+              style={{ ...inputStyle, width: 80, flex: '0 0 auto' }}
+            />
+            <span style={{ fontSize: 10, color: C.tx3 }}>
+              = {PHYSIO_METRICS.find(m => m.key === variable.extrap_metric)?.unit}
+            </span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -504,6 +546,7 @@ export default function CoachTestsBankPage() {
       variables:   t.test_variables.map(v => ({
         key: v.key, label: v.label, unit: v.unit,
         value_type: v.value_type, better_when: v.better_when,
+        extrap_metric: v.extrap_metric ?? null, extrap_op: v.extrap_op ?? null, extrap_factor: v.extrap_factor ?? null,
       })),
     };
   }

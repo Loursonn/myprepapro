@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2, Check } from 'lucide-react';
 import { C } from '@/lib/theme';
 import {
-  TEST_CATEGORY_ORDER, TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR,
+  TEST_CATEGORY_ORDER, TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, PHYSIO_METRICS,
   type TestCategory,
 } from '@/features/shared/types/tests';
 import {
@@ -14,6 +14,7 @@ import {
   type ProfileItem,
 } from '@/features/shared/hooks/useProfileItems';
 import { useArticularProfile, type ArticularAction } from '@/features/shared/hooks/useArticularProfile';
+import { useCategoryTestSeries } from '@/features/shared/hooks/useCategoryTestSeries';
 import { Film } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -169,6 +170,82 @@ function EvolutionModal({ item, onClose }: { item: ArticularAction; onClose: () 
   );
 }
 
+// ── Vue Endurance (VMA extrapolée du Demi-Cooper : distance / 100) ─────────────
+function MiniBars({ points, color, fmt }: { points: { date: string; value: number }[]; color: string; fmt: (n: number) => string }) {
+  const max = Math.max(...points.map(p => p.value), 1);
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 90, marginTop: 12 }}>
+      {points.map((p, i) => (
+        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, height: '100%', justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color }}>{fmt(p.value)}</span>
+          <div style={{ width: '100%', maxWidth: 30, height: `${Math.max((p.value / max) * 100, 4)}%`, background: color, borderRadius: '4px 4px 0 0' }} />
+          <span style={{ fontSize: 9, color: C.tx3 }}>{format(new Date(p.date + 'T12:00:00'), 'd MMM', { locale: fr })}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function applyExtrap(value: number, op: 'div' | 'mul' | null, factor: number | null): number {
+  if (!op || !factor) return value;
+  const r = op === 'div' ? value / factor : value * factor;
+  return Math.round(r * 10) / 10;
+}
+
+function CategoryDerivedProfile({ athleteId, category }: { athleteId: string; category: 'endurance' | 'force' | 'explosivite' | 'vitesse' }) {
+  const color = TEST_CATEGORY_COLOR[category];
+  const { data: series = [], isLoading } = useCategoryTestSeries(athleteId, category);
+
+  if (isLoading) return <div style={{ fontSize: 12, color: C.tx3 }}>Chargement…</div>;
+  if (series.length === 0) return <div style={{ fontSize: 12, color: C.tx3, fontStyle: 'italic' }}>Aucune donnée pour cette catégorie.</div>;
+
+  const extrap = series.filter(s => s.extrapMetric);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Valeurs physiologiques extrapolées */}
+      {extrap.map(s => {
+        const metric = PHYSIO_METRICS.find(m => m.key === s.extrapMetric);
+        const pts = s.points.map(p => ({ date: p.date, value: applyExtrap(p.value, s.extrapOp, s.extrapFactor) }));
+        const last = pts[pts.length - 1];
+        const lastRaw = s.points[s.points.length - 1];
+        const opSym = s.extrapOp === 'mul' ? '×' : '÷';
+        return (
+          <div key={'x' + s.testId + s.varId} style={{ background: C.s1, border: '1px solid ' + color + '40', borderRadius: 12, padding: '14px 16px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {metric?.label ?? s.extrapMetric} extrapolé{metric?.label?.endsWith('A') ? 'e' : ''}
+            </div>
+            <div style={{ fontSize: 10, color: C.tx3, marginBottom: 8 }}>
+              {s.testName} — {s.varLabel} {opSym} {s.extrapFactor}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 34, fontWeight: 800, color: C.tx, lineHeight: 1 }}>{last.value}</span>
+              <span style={{ fontSize: 13, color: C.tx3 }}>{metric?.unit}</span>
+              <span style={{ fontSize: 11, color: C.tx3, marginLeft: 'auto' }}>
+                {lastRaw.value} {s.unit} · {format(new Date(last.date + 'T12:00:00'), 'd MMM yyyy', { locale: fr })}
+              </span>
+            </div>
+            {pts.length > 1 && <MiniBars points={pts} color={color} fmt={n => `${n}`} />}
+          </div>
+        );
+      })}
+
+      {/* Valeurs brutes des tests */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {series.map(s => {
+          const last = s.points[s.points.length - 1];
+          return (
+            <div key={s.testId + s.varId} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.s1, border: '1px solid ' + C.brd, borderRadius: 10, padding: '8px 12px' }}>
+              <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: C.tx }}>{s.testName}{s.varLabel && s.varLabel !== s.testName ? ` · ${s.varLabel}` : ''}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color }}>{last.value % 1 === 0 ? last.value : last.value.toFixed(1)}<span style={{ fontSize: 10, color: C.tx3, fontWeight: 500 }}> {s.unit}</span></span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ArticularProfile({ athleteId }: { athleteId: string }) {
   const { data: groups = [], isLoading } = useArticularProfile(athleteId);
   const [selected, setSelected] = useState<ArticularAction | null>(null);
@@ -269,6 +346,8 @@ export default function CategoryProfiles({ athleteId }: { athleteId: string }) {
       <div style={{ padding: 18 }}>
         {selectedCat === 'bilan_articulaire' ? (
           <ArticularProfile athleteId={athleteId} />
+        ) : selectedCat === 'endurance' ? (
+          <CategoryDerivedProfile athleteId={athleteId} category="endurance" />
         ) : (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>

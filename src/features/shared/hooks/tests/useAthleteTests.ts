@@ -95,6 +95,10 @@ export function useCreateTestResult(athleteId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.athleteTestResults(athleteId) });
       qc.invalidateQueries({ queryKey: QK.athleteCurrentValues(athleteId) });
+      qc.invalidateQueries({ queryKey: ['athlete-refs-full', athleteId] });
+      qc.invalidateQueries({ queryKey: ['athlete-references', athleteId] });
+      qc.invalidateQueries({ queryKey: ['categoryTestSeries', athleteId] });
+      qc.invalidateQueries({ queryKey: ['articularProfile', athleteId] });
       toast.success('Résultat enregistré');
     },
     onError: () => toast.error("Erreur lors de l'enregistrement"),
@@ -135,6 +139,10 @@ export function useUpdateTestResult(athleteId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.athleteTestResults(athleteId) });
       qc.invalidateQueries({ queryKey: QK.athleteCurrentValues(athleteId) });
+      qc.invalidateQueries({ queryKey: ['athlete-refs-full', athleteId] });
+      qc.invalidateQueries({ queryKey: ['athlete-references', athleteId] });
+      qc.invalidateQueries({ queryKey: ['categoryTestSeries', athleteId] });
+      qc.invalidateQueries({ queryKey: ['articularProfile', athleteId] });
       toast.success('Résultat mis à jour');
     },
     onError: () => toast.error('Erreur lors de la mise à jour'),
