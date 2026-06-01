@@ -15,7 +15,9 @@ import type {
   CreateVariableInput,
   ValueType,
   BetterWhen,
+  TestCategory,
 } from '@/features/shared/types/tests';
+import { TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, TEST_CATEGORY_ORDER } from '@/features/shared/types/tests';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,13 +44,14 @@ const EMPTY_VAR: CreateVariableInput = {
 
 interface TestForm {
   name: string;
+  category: TestCategory | null;
   description: string;
   protocol: string;
   variables: CreateVariableInput[];
 }
 
 const EMPTY_FORM: TestForm = {
-  name: '', description: '', protocol: '', variables: [{ ...EMPTY_VAR }],
+  name: '', category: null, description: '', protocol: '', variables: [{ ...EMPTY_VAR }],
 };
 
 function VariableRow({
@@ -163,6 +166,18 @@ function TestCard({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {test.category && (() => {
+            const cc = TEST_CATEGORY_COLOR[test.category as TestCategory] ?? C.tx3;
+            return (
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                background: cc + '1A', color: cc, border: '1px solid ' + cc + '40',
+                textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap',
+              }}>
+                {TEST_CATEGORY_LABEL[test.category as TestCategory] ?? test.category}
+              </span>
+            );
+          })()}
           {test.kind === 'preset' && (
             <span style={{
               fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
@@ -289,6 +304,21 @@ function TestFormPanel({
         />
       </div>
 
+      {/* Catégorie */}
+      <div>
+        <label style={labelStyle}>Catégorie</label>
+        <select
+          value={form.category ?? ''}
+          onChange={e => setForm(f => ({ ...f, category: (e.target.value || null) as TestCategory | null }))}
+          style={selectStyle}
+        >
+          <option value="">Aucune</option>
+          {TEST_CATEGORY_ORDER.map(c => (
+            <option key={c} value={c}>{TEST_CATEGORY_LABEL[c]}</option>
+          ))}
+        </select>
+      </div>
+
       {/* Description */}
       <div>
         <label style={labelStyle}>Description</label>
@@ -389,7 +419,7 @@ export default function CoachTestsBankPage() {
   function handleCreate(form: TestForm) {
     createMut.mutate(
       {
-        name: form.name, description: form.description,
+        name: form.name, category: form.category, description: form.description,
         protocol: form.protocol, variables: form.variables,
       },
       { onSuccess: () => setMode('idle') },
@@ -399,9 +429,25 @@ export default function CoachTestsBankPage() {
   function handleUpdate(form: TestForm) {
     if (!editTarget) return;
     updateMut.mutate(
-      { id: editTarget.id, name: form.name, description: form.description, protocol: form.protocol },
+      {
+        id: editTarget.id, name: form.name, category: form.category,
+        description: form.description, protocol: form.protocol, variables: form.variables,
+      },
       { onSuccess: () => { setMode('idle'); setEditTarget(null); } },
     );
+  }
+
+  function formFromTest(t: TestDefinitionWithVariables): TestForm {
+    return {
+      name:        t.name,
+      category:    t.category,
+      description: t.description ?? '',
+      protocol:    t.protocol?.text ?? '',
+      variables:   t.test_variables.map(v => ({
+        key: v.key, label: v.label, unit: v.unit,
+        value_type: v.value_type, better_when: v.better_when,
+      })),
+    };
   }
 
   function startEdit(test: TestDefinitionWithVariables) {
@@ -438,7 +484,7 @@ export default function CoachTestsBankPage() {
         )}
       </div>
 
-      {/* Formulaire création */}
+      {/* Formulaire création / édition (en haut) */}
       {mode === 'create' && (
         <div style={{ marginBottom: 28 }}>
           <TestFormPanel
@@ -449,27 +495,70 @@ export default function CoachTestsBankPage() {
           />
         </div>
       )}
+      {mode === 'edit' && editTarget && (
+        <div style={{ marginBottom: 28 }}>
+          <TestFormPanel
+            initial={formFromTest(editTarget)}
+            onSave={handleUpdate}
+            onCancel={() => { setMode('idle'); setEditTarget(null); }}
+            saving={updateMut.isPending}
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <ListSkeleton rows={5} />
       ) : (
         <>
-          {/* Presets */}
-          <section style={{ marginBottom: 32 }}>
-            <div style={{
-              fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: 'uppercase',
-              letterSpacing: '0.6px', marginBottom: 12,
-            }}>
-              Presets — {presets.length}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {presets.map(t => (
-                <TestCard
-                  key={t.id} test={t} isOwned={false}
-                  onEdit={() => {}} onDelete={() => {}}
-                />
-              ))}
-            </div>
+          {/* Presets groupés par catégorie */}
+          <section style={{ marginBottom: 32, display: 'flex', flexDirection: 'column', gap: 22 }}>
+            {TEST_CATEGORY_ORDER.map(cat => {
+              const inCat = presets.filter(t => t.category === cat);
+              if (inCat.length === 0) return null;
+              const cc = TEST_CATEGORY_COLOR[cat];
+              return (
+                <div key={cat}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, color: cc, textTransform: 'uppercase',
+                    letterSpacing: '0.5px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    <div style={{ width: 22, height: 3, borderRadius: 2, background: cc }} />
+                    {TEST_CATEGORY_LABEL[cat]} — {inCat.length}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {inCat.map(t => (
+                      mode === 'edit' && editTarget?.id === t.id ? null : (
+                        <TestCard
+                          key={t.id} test={t} isOwned
+                          onEdit={() => startEdit(t)}
+                          onDelete={() => deleteMut.mutate(t.id)}
+                        />
+                      )
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Presets sans catégorie (legacy) */}
+            {presets.filter(t => !t.category).length > 0 && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>
+                  Autres — {presets.filter(t => !t.category).length}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {presets.filter(t => !t.category).map(t => (
+                    mode === 'edit' && editTarget?.id === t.id ? null : (
+                      <TestCard
+                        key={t.id} test={t} isOwned
+                        onEdit={() => startEdit(t)}
+                        onDelete={() => deleteMut.mutate(t.id)}
+                      />
+                    )
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Tests custom */}
@@ -480,26 +569,6 @@ export default function CoachTestsBankPage() {
             }}>
               Mes tests — {custom.length}
             </div>
-
-            {/* Formulaire édition inline */}
-            {mode === 'edit' && editTarget && (
-              <div style={{ marginBottom: 12 }}>
-                <TestFormPanel
-                  initial={{
-                    name:        editTarget.name,
-                    description: editTarget.description ?? '',
-                    protocol:    editTarget.protocol?.text ?? '',
-                    variables:   editTarget.test_variables.map(v => ({
-                      key: v.key, label: v.label, unit: v.unit,
-                      value_type: v.value_type, better_when: v.better_when,
-                    })),
-                  }}
-                  onSave={handleUpdate}
-                  onCancel={() => { setMode('idle'); setEditTarget(null); }}
-                  saving={updateMut.isPending}
-                />
-              </div>
-            )}
 
             {custom.length === 0 && mode !== 'create' ? (
               <EmptyState

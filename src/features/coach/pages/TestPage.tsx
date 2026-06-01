@@ -278,7 +278,7 @@ function AddResultForm({
 
 // ── Page principale ───────────────────────────────────────────────────────────
 
-export default function TestPage() {
+export default function TestPage({ embedded = false }: { embedded?: boolean }) {
   const { profile } = useAuth();
   const { athleteId } = useAthleteContext();
   const coachId = profile?.id ?? '';
@@ -291,7 +291,7 @@ export default function TestPage() {
   const [addingResult, setAddingResult] = useState(false);
 
   return (
-    <div style={{ padding: '24px', maxWidth: 800, margin: '0 auto' }}>
+    <div style={embedded ? { display: 'flex', flexDirection: 'column' } : { padding: '24px', maxWidth: 800, margin: '0 auto' }}>
 
       {/* Valeurs courantes (PR) */}
       <section style={{ marginBottom: 32 }}>

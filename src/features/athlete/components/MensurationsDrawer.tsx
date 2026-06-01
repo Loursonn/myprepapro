@@ -65,10 +65,10 @@ function LogCard({
           {filled.map(f => (
             <div key={f.key} style={{
               padding: '4px 10px', borderRadius: 7,
-              background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)',
+              background: 'rgba(34,201,147,0.08)', border: '1px solid rgba(34,201,147,0.15)',
             }}>
               <span style={{ fontSize: 11, color: C.tx3 }}>{f.label} </span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.ac }}>{log[f.key]} cm</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.g }}>{log[f.key]} cm</span>
             </div>
           ))}
         </div>
@@ -215,7 +215,7 @@ function EntryForm({
 
       {/* Mensurations */}
       <div>
-        <SectionLabel icon={<Ruler size={12} color={C.ac} />} text="Mensurations (cm)" />
+        <SectionLabel icon={<Ruler size={12} color={C.g} />} text="Mensurations (cm)" />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {MEASUREMENT_FIELDS.map(f => (
             <div key={f.key} style={{ background: C.s2, borderRadius: 10, padding: '8px 12px' }}>
@@ -240,7 +240,7 @@ function EntryForm({
 
       {/* Photos */}
       <div>
-        <SectionLabel icon={<Camera size={12} color={C.ac} />} text="Photos (optionnel)" />
+        <SectionLabel icon={<Camera size={12} color={C.g} />} text="Photos (optionnel)" />
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
           {PHOTO_SLOTS.map(s => {
             const newPrev = previews[s.key];
@@ -253,7 +253,7 @@ function EntryForm({
                 <label style={{ cursor: 'pointer', display: 'block' }}>
                   <div style={{
                     width: 72, height: 92, borderRadius: 10, overflow: 'hidden',
-                    background: C.s2, border: '1px dashed ' + (hasImg ? C.ac + '60' : C.brdL),
+                    background: C.s2, border: '1px dashed ' + (hasImg ? C.g + '60' : C.brdL),
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
                     {imgUrl ? (
@@ -289,7 +289,7 @@ function EntryForm({
         onClick={handleSave} disabled={saving}
         style={{
           width: '100%', padding: '13px 0', borderRadius: 12, border: 'none',
-          background: saving ? C.s2 : C.ac, color: saving ? C.tx3 : '#fff',
+          background: saving ? C.s2 : C.g, color: saving ? C.tx3 : '#fff',
           fontSize: 14, fontWeight: 700, cursor: saving ? 'default' : 'pointer',
           fontFamily: 'inherit', minHeight: 44,
         }}
@@ -336,8 +336,8 @@ export function MensurationsDrawer({ athleteId, viewOnly, onClose }: Props) {
                 <ChevronLeft size={20} />
               </button>
             )}
-            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: C.acS, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Ruler size={18} color={C.ac} />
+            <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: C.gS, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Ruler size={18} color={C.g} />
             </div>
             <DrawerTitle style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
               {mode.kind === 'new' ? 'Nouvelle saisie' : mode.kind === 'edit' ? 'Modifier la saisie' : 'Mensurations / Photos'}
@@ -360,7 +360,7 @@ export function MensurationsDrawer({ athleteId, viewOnly, onClose }: Props) {
                   onClick={() => setMode({ kind: 'new' })}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    padding: '12px 0', borderRadius: 12, border: 'none', background: C.ac,
+                    padding: '12px 0', borderRadius: 12, border: 'none', background: C.g,
                     color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', minHeight: 44,
                   }}
                 >

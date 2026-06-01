@@ -45,6 +45,7 @@ export function useCreateTestDefinition(coachId: string) {
         .insert({
           name:       input.name.trim(),
           kind:       'custom',
+          category:   input.category ?? null,
           created_by: coachId,
           is_global:  false,
           description: input.description.trim() || null,
@@ -78,16 +79,41 @@ export function useUpdateTestDefinition(coachId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpdateTestDefinitionInput) => {
+      // 1. Champs de la définition
       const { error } = await supabase
         .from('test_definitions')
         .update({
           name:       input.name.trim(),
+          category:   input.category ?? null,
           description: input.description.trim() || null,
           protocol:   input.protocol.trim() ? { text: input.protocol.trim() } : null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', input.id);
       if (error) throw error;
+
+      // 2. Synchronisation des variables (ajout / modif / suppression)
+      const { data: existing, error: exErr } = await supabase
+        .from('test_variables')
+        .select('id, key')
+        .eq('test_definition_id', input.id);
+      if (exErr) throw exErr;
+
+      const formKeys = new Set(input.variables.map(v => v.key));
+      const toDelete = (existing ?? []).filter(e => !formKeys.has(e.key));
+      if (toDelete.length > 0) {
+        const { error: delErr } = await supabase
+          .from('test_variables')
+          .delete()
+          .in('id', toDelete.map(d => d.id));
+        if (delErr) throw delErr;
+      }
+
+      const rows = input.variables.map(v => ({ ...v, test_definition_id: input.id }));
+      const { error: upErr } = await supabase
+        .from('test_variables')
+        .upsert(rows, { onConflict: 'test_definition_id,key' });
+      if (upErr) throw upErr;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.testDefinitions(coachId) });

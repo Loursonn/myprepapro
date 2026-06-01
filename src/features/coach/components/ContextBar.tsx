@@ -26,10 +26,9 @@ import {
 const TABS = [
   { key: "planning",        label: "Planning"        },
   { key: "programmation",   label: "Programmation"   },
-  { key: "profil-sportif",  label: "Profil sportif"  },
-  { key: "stats",           label: "Stats"           },
-  { key: "donnees",         label: "Données"         },
   { key: "retours",         label: "Retours"         },
+  { key: "profil-sportif",  label: "Profil sportif"  },
+  { key: "donnees",         label: "Données"         },
   { key: "tests",           label: "Tests"           },
   { key: "athlete-view",    label: "👁 Vue athlète"  },
 ] as const;

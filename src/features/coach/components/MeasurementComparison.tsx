@@ -66,9 +66,9 @@ function MeasurementsTab({ logs }: { logs: MeasurementLog[] }) {
               style={{
                 padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                 fontFamily: 'inherit', cursor: has ? 'pointer' : 'default',
-                border: '1px solid ' + (active ? C.ac : C.brdL),
-                background: active ? C.acS : 'transparent',
-                color: active ? C.ac : has ? C.tx2 : C.tx3,
+                border: '1px solid ' + (active ? C.g : C.brdL),
+                background: active ? C.gS : 'transparent',
+                color: active ? C.g : has ? C.tx2 : C.tx3,
                 opacity: has ? 1 : 0.4,
               }}
             >
@@ -163,9 +163,9 @@ function PhotosTab({ logs }: { logs: MeasurementLog[] }) {
               style={{
                 padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                 fontFamily: 'inherit', cursor: has ? 'pointer' : 'default',
-                border: '1px solid ' + (active ? C.ac : C.brdL),
-                background: active ? C.acS : 'transparent',
-                color: active ? C.ac : has ? C.tx2 : C.tx3,
+                border: '1px solid ' + (active ? C.g : C.brdL),
+                background: active ? C.gS : 'transparent',
+                color: active ? C.g : has ? C.tx2 : C.tx3,
                 opacity: has ? 1 : 0.4,
               }}
             >
@@ -214,8 +214,8 @@ export default function MeasurementComparison({ athleteId }: { athleteId: string
 
   return (
     <div style={{ marginBottom: 28 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.ac, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 24, height: 2, background: C.ac, borderRadius: 1 }} />
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.g, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 24, height: 2, background: C.g, borderRadius: 1 }} />
         Mensurations &amp; photos
       </div>
 
@@ -239,9 +239,9 @@ export default function MeasurementComparison({ athleteId }: { athleteId: string
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: '7px 14px', borderRadius: 9, fontSize: 12, fontWeight: 700,
                     fontFamily: 'inherit', cursor: 'pointer',
-                    border: '1px solid ' + (active ? C.ac + '60' : C.brdL),
-                    background: active ? C.acS : 'transparent',
-                    color: active ? C.ac : C.tx3,
+                    border: '1px solid ' + (active ? C.g + '60' : C.brdL),
+                    background: active ? C.gS : 'transparent',
+                    color: active ? C.g : C.tx3,
                   }}
                 >
                   <Icon size={13} /> {label}

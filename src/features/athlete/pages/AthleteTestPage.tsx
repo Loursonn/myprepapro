@@ -98,8 +98,8 @@ export default function AthleteTestPage() {
           marginBottom: 28, textAlign: 'left',
         }}
       >
-        <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: C.acS, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Ruler size={20} color={C.ac} />
+        <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: C.gS, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Ruler size={20} color={C.g} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>MENSURATIONS / PHOTOS</div>

@@ -8,6 +8,8 @@ import {
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { C } from "@/lib/theme";
+import { MuscleVolumeCard } from "@/components/athlete/StatsViews";
+import { stC, ALL_BZ } from "@/lib/muscles";
 import { PageSkeleton } from "@/features/shared/components/skeletons";
 import { KPICard } from "@/features/coach/components/KPICard";
 import { useMonthlyRetours } from "@/features/shared/hooks/useMonthlyRetours";
@@ -26,7 +28,7 @@ type DetailView = "wellness" | "workouts" | "tests" | "competitions" | "nutritio
 
 export default function RetoursPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
-  const { goals } = useAthleteContext();
+  const { goals, exos, exMeta, sets, sessions, weeksArr, tw, currentWeek, injuries, activeInjuries } = useAthleteContext();
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()));
   const [selectedWeek, setSelectedWeek]   = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -344,6 +346,34 @@ export default function RetoursPage() {
           </div>
         </div>
       )}
+
+      {/* ── Séries par muscle par semaine ── */}
+      <div style={{ marginTop: 24 }}>
+        <MuscleVolumeCard exos={exos} exMeta={exMeta} sets={sets} sessions={sessions} weeksArr={weeksArr} tw={tw} initialWeek={currentWeek} />
+      </div>
+
+      {/* ── Blessures ── */}
+      <div style={{ marginTop: 16 }}>
+        {injuries.length > 0 ? (
+          <div style={{ background: C.s1, borderRadius: 14, padding: 14, border: "1px solid " + C.r + "30" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.r, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 10 }}>Blessures ({activeInjuries.length} active{activeInjuries.length > 1 ? "s" : ""})</div>
+            {injuries.map(inj => {
+              const sc = stC(inj.status);
+              const zn = ALL_BZ.filter((z: { id: string; label: string }) => inj.zones.includes(z.id)).map((z: { label: string }) => z.label).join(", ") || "Zone non précisée";
+              return (
+                <div key={inj.id} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + sc + "30", marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div><div style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>{zn}</div><div style={{ fontSize: 10, color: C.tx3 }}>{inj.type || "Type non précisé"} - Intensité {inj.intensity}/10</div></div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: sc, padding: "2px 8px", borderRadius: 5, background: sc + "15" }}>{inj.status}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ background: C.s1, borderRadius: 14, padding: "14px", border: "1px solid " + C.g + "30", textAlign: "center" }}>
+            <span style={{ fontSize: 12, color: C.g, fontWeight: 600 }}>Aucune blessure</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

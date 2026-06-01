@@ -1,10 +1,7 @@
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
-import { MuscleVolumeCard } from "@/components/athlete/StatsViews";
-import { MiniChart, WeightChart } from "@/components/athlete/StatsCharts";
+import { MiniChart } from "@/components/athlete/StatsCharts";
 import { getBig3, get1rmByWeek } from "@/lib/calculations";
-import { stC } from "@/lib/muscles";
-import { ALL_BZ } from "@/lib/muscles";
 
 function fmtTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -14,9 +11,9 @@ function fmtTime(seconds: number): string {
 
 export default function StatsPage() {
   const {
-    athleteId, exos, sets, sessions, blockConfig, injuries, activeInjuries,
-    prs, weeksArr, tw, currentWeek, weightLog, weightMilestones, bodyWeight,
-    wellnessHistory, nutritionStrategy, exMeta,
+    athleteId, exos, sessions, blockConfig,
+    prs, tw, currentWeek,
+    wellnessHistory,
     sessionLogs,
   } = useAthleteContext();
 
@@ -52,40 +49,6 @@ export default function StatsPage() {
           );
         })}
       </div>
-
-      {/* Poids de corps */}
-      <div style={{ background: C.s1, borderRadius: 14, padding: 14, border: "1px solid " + C.brd, marginBottom: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Poids de corps</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.ac }}>{bodyWeight.current} <span style={{ fontSize: 10, fontWeight: 400, color: C.tx3 }}>/ {bodyWeight.target} kg</span></div>
-        </div>
-        {Object.keys(weightLog).length > 0
-          ? <WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy} />
-          : <div style={{ textAlign: "center", color: C.tx3, fontSize: 11, padding: "14px 0" }}>Aucune mesure</div>}
-      </div>
-
-      <MuscleVolumeCard exos={exos} exMeta={exMeta} sets={sets} sessions={sessions} weeksArr={weeksArr} tw={tw} />
-
-      {/* Blessures */}
-      {injuries.length > 0 ? (
-        <div style={{ background: C.s1, borderRadius: 14, padding: 14, border: "1px solid " + C.r + "30", marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.r, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 10 }}>Blessures ({activeInjuries.length} active{activeInjuries.length > 1 ? "s" : ""})</div>
-          {injuries.map(inj => {
-            const sc = stC(inj.status);
-            const zn = ALL_BZ.filter((z: { id: string; label: string }) => inj.zones.includes(z.id)).map((z: { label: string }) => z.label).join(", ") || "Zone non précisée";
-            return (
-              <div key={inj.id} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + sc + "30", marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div><div style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>{zn}</div><div style={{ fontSize: 10, color: C.tx3 }}>{inj.type || "Type non précisé"} - Intensité {inj.intensity}/10</div></div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: sc, padding: "2px 8px", borderRadius: 5, background: sc + "15" }}>{inj.status}</span>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div style={{ background: C.s1, borderRadius: 14, padding: "14px", border: "1px solid " + C.g + "30", textAlign: "center", marginBottom: 14 }}>
-          <span style={{ fontSize: 12, color: C.g, fontWeight: 600 }}>Aucune blessure</span>
-        </div>
-      )}
 
       {/* Comptes rendus de séances */}
       {Object.keys(sessionLogs).filter(k => sessionLogs[k]?.note || sessionLogs[k]?.forme).length > 0 && (() => {

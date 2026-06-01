@@ -2,10 +2,34 @@ export type TestKind    = 'preset' | 'custom';
 export type ValueType   = 'number' | 'pace' | 'duration';
 export type BetterWhen  = 'higher' | 'lower';
 
+export type TestCategory =
+  | 'bilan_articulaire' | 'endurance' | 'force' | 'explosivite' | 'vitesse';
+
+export const TEST_CATEGORY_LABEL: Record<TestCategory, string> = {
+  bilan_articulaire: 'Bilan articulaire',
+  endurance:         'Endurance',
+  force:             'Force',
+  explosivite:       'Explosivité',
+  vitesse:           'Vitesse',
+};
+
+export const TEST_CATEGORY_COLOR: Record<TestCategory, string> = {
+  bilan_articulaire: '#3B8DF0', // bleu
+  endurance:         '#22C993', // vert
+  force:             '#EF4B4B', // rouge
+  explosivite:       '#FB923C', // orange
+  vitesse:           '#A855F7', // violet
+};
+
+export const TEST_CATEGORY_ORDER: TestCategory[] = [
+  'bilan_articulaire', 'endurance', 'force', 'explosivite', 'vitesse',
+];
+
 export interface TestDefinition {
   id: string;
   name: string;
   kind: TestKind;
+  category: TestCategory | null;
   created_by: string | null;
   is_global: boolean;
   description: string | null;
@@ -73,6 +97,7 @@ export interface CreateVariableInput {
 
 export interface CreateTestDefinitionInput {
   name: string;
+  category: TestCategory | null;
   description: string;
   protocol: string;
   variables: CreateVariableInput[];
@@ -81,8 +106,10 @@ export interface CreateTestDefinitionInput {
 export interface UpdateTestDefinitionInput {
   id: string;
   name: string;
+  category: TestCategory | null;
   description: string;
   protocol: string;
+  variables: CreateVariableInput[];
 }
 
 export interface CreateTestResultInput {
