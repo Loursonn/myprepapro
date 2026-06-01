@@ -13,6 +13,7 @@ import { Plus, Pencil, X, Check } from "lucide-react";
 import { C } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import MeasurementComparison from "@/features/coach/components/MeasurementComparison";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -803,6 +804,9 @@ export default function ProfilSportifPage() {
               }
             />
           </div>
+
+          {/* ── Mensurations & photos ── */}
+          <MeasurementComparison athleteId={athleteId!} />
 
           {/* ── Zones calculées ── */}
           {(fcmax || vma || ftp) && (

@@ -18,6 +18,8 @@ export const QK = {
   testDefinitions:      (cid: string) => ['testDefinitions', cid]      as const,
   athleteTestResults:   (aid: string) => ['athleteTestResults', aid]   as const,
   athleteCurrentValues: (aid: string) => ['athleteCurrentValues', aid] as const,
+  // ── Mensurations / photos ──────────────────────────────────────────────────
+  measurementLogs:      (aid: string) => ['measurementLogs', aid]      as const,
   // ── Compétitions ─────────────────────────────────────────────────────────
   competitions:         (aid?: string) => aid ? ['competitions', aid] : ['competitions'] as const,
   // ── Retours hebdomadaires ─────────────────────────────────────────────────

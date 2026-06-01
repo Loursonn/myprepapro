@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useAthleteContext } from '@/features/shared/context/AthleteContext';
 import { useAthleteCurrentValues, useAthleteTestResults } from '@/features/shared/hooks/tests/useAthleteTests';
 import { C } from '@/lib/theme';
 import { ListSkeleton, CardSkeleton } from '@/features/shared/components/skeletons';
 import { EmptyState } from '@/features/shared/components/EmptyState';
-import { FlaskConical, Trophy } from 'lucide-react';
+import { FlaskConical, Trophy, Ruler, ChevronRight } from 'lucide-react';
+import { MensurationsDrawer } from '@/features/athlete/components/MensurationsDrawer';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { AthleteCurrentValue, AthleteTestResult } from '@/features/shared/types/tests';
@@ -77,13 +79,36 @@ function ResultRow({ result }: { result: AthleteTestResult }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AthleteTestPage() {
-  const { athleteId } = useAthleteContext();
+  const { athleteId, viewOnly } = useAthleteContext();
+  const [mensuOpen, setMensuOpen] = useState(false);
 
   const { data: currentValues = [], isLoading: loadingCurrent } = useAthleteCurrentValues(athleteId);
   const { data: results = [], isLoading: loadingResults } = useAthleteTestResults(athleteId);
 
   return (
     <div style={{ padding: '20px 16px 60px', maxWidth: 480, margin: '0 auto' }}>
+
+      {/* Test permanent : Mensurations / Photos */}
+      <button
+        onClick={() => setMensuOpen(true)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+          background: C.s1, borderRadius: 12, border: '1px solid ' + C.brd,
+          padding: '14px 16px', cursor: 'pointer', fontFamily: 'inherit',
+          marginBottom: 28, textAlign: 'left',
+        }}
+      >
+        <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: C.acS, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Ruler size={20} color={C.ac} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>MENSURATIONS / PHOTOS</div>
+          <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>
+            Saisir tes mensurations &amp; photos, ou consulter ton historique
+          </div>
+        </div>
+        <ChevronRight size={18} color={C.tx3} />
+      </button>
 
       {/* Valeurs courantes */}
       <section style={{ marginBottom: 28 }}>
@@ -127,6 +152,14 @@ export default function AthleteTestPage() {
           </div>
         )}
       </section>
+
+      {mensuOpen && (
+        <MensurationsDrawer
+          athleteId={athleteId}
+          viewOnly={viewOnly}
+          onClose={() => setMensuOpen(false)}
+        />
+      )}
     </div>
   );
 }
