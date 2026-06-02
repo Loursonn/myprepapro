@@ -75,8 +75,9 @@ export function useAthleteLogic(d: LogicDeps) {
     if (!loaded || backfillDoneRef.current || !athleteId || !blockConfig?.startDate) return;
     backfillDoneRef.current = true;
 
+    // On ne sort PAS si completedSessions est vide : l'auto-nettoyage des séances
+    // hors-cycle (plus bas) doit pouvoir tourner même sans complétions locales.
     const allEntries = Object.entries(completedSessions) as [string, string[]][];
-    if (allEntries.length === 0) return;
 
     const blockStart = new Date(blockConfig.startDate + "T12:00:00");
     const dow0 = blockStart.getDay();
@@ -85,6 +86,43 @@ export function useAthleteLogic(d: LogicDeps) {
     blockMonday.setDate(blockStart.getDate() + (dow0 === 0 ? -6 : 1 - dow0));
 
     (async () => {
+      // Bornes des cycles réels de l'athlète : on ne matérialise une complétion
+      // QUE si sa date tombe dans un cycle existant. Évite que des semaines
+      // "faites" stockées en localStorage (completedSessions) recréent des
+      // séances validées hors cycle (ex. après avoir raccourci/stoppé un cycle).
+      const { data: cyclesRows } = await supabase
+        .from("cycles").select("start_date, end_date").eq("athlete_id", athleteId);
+      const cycles = cyclesRows ?? [];
+      const hasCycles = cycles.length > 0;
+      const inAnyCycle = (dateStr: string) =>
+        cycles.some((c) => dateStr >= c.start_date && dateStr <= c.end_date);
+      const todayStr = new Date().toISOString().split("T")[0];
+
+      // Auto-nettoyage : si des cycles existent, on supprime les séances tombées
+      // HORS de tout cycle (phantoms laissés par d'anciens backfills, ex. après
+      // avoir stoppé/raccourci un cycle). Sinon, repart proprement.
+      if (hasCycles) {
+        const { data: allLogs } = await supabase
+          .from("workout_logs").select("id, scheduled_date").eq("athlete_id", athleteId);
+        const orphanIds = (allLogs ?? [])
+          .filter((l) => !inAnyCycle(l.scheduled_date))
+          .map((l) => l.id);
+        if (orphanIds.length > 0) {
+          await supabase.from("workout_logs").delete().in("id", orphanIds);
+        }
+      }
+
+      // Auto-réparation : une séance FUTURE ne peut pas être réalisée. On repasse
+      // en "planned" tous les logs "completed" dont la date est dans le futur
+      // (erreurs de backfills antérieurs, completedSessions par semaine non fiable).
+      const { data: futureDone } = await supabase
+        .from("workout_logs").select("id")
+        .eq("athlete_id", athleteId).eq("status", "completed").gt("scheduled_date", todayStr);
+      const futureDoneIds = (futureDone ?? []).map((l) => l.id);
+      if (futureDoneIds.length > 0) {
+        await supabase.from("workout_logs").update({ status: "planned" }).in("id", futureDoneIds);
+      }
+
       for (const [weekStr, sessIds] of allEntries) {
         const week = Number(weekStr);
         if (!Number.isFinite(week) || week < 1 || sessIds.length === 0) continue;
@@ -98,6 +136,17 @@ export function useAthleteLogic(d: LogicDeps) {
 
         for (const sessId of sessIds) {
           const sess = sessions.find(s => s.id === sessId);
+
+          // Date planifiée de la séance dans cette semaine
+          const dow = (sess?.weekDays?.[weekStr] ?? sess?.day_of_week) as number | undefined;
+          const scheduledDate = dow != null
+            ? (() => { const d = new Date(monday); d.setDate(monday.getDate() + dow); return d.toISOString().split("T")[0]; })()
+            : weekStart;
+
+          // Hors de tout cycle réel → on ne matérialise pas la complétion
+          if (hasCycles && !inAnyCycle(scheduledDate)) continue;
+          // Séance future → jamais marquée réalisée par le backfill
+          if (scheduledDate > todayStr) continue;
 
           // Check if a workout_log already exists for this session in this week
           const { data: rows } = await supabase
@@ -116,11 +165,6 @@ export function useAthleteLogic(d: LogicDeps) {
               await supabase.from("workout_logs").update({ status: "completed" }).eq("id", existing.id);
             }
           } else {
-            // Compute the scheduled_date for this session
-            const dow = (sess?.weekDays?.[weekStr] ?? sess?.day_of_week) as number | undefined;
-            const scheduledDate = dow != null
-              ? (() => { const d = new Date(monday); d.setDate(monday.getDate() + dow); return d.toISOString().split("T")[0]; })()
-              : weekStart;
             await supabase.from("workout_logs").insert({
               athlete_id:     athleteId,
               session_id:     sessId,

@@ -244,6 +244,17 @@ export function useResizeCycle() {
       // Cascade clip children (or regenerate for cycles)
       if (vars.level === "cycles") {
         await regenerateMicrocycles(vars.item.id, vars.newStart, vars.newEnd);
+
+        // Borne dure : raccourcir la fin d'un cycle supprime les séances au-delà
+        // de la nouvelle fin (comme une modif manuelle de la date de fin). Couvre
+        // aussi les logs date-based (microcycle_id null) que regenerate ne touche pas.
+        const newEndStr = format(vars.newEnd, "yyyy-MM-dd");
+        if (newEndStr < vars.item.end_date) {
+          await supabase.from("workout_logs").delete()
+            .eq("athlete_id", vars.athleteId)
+            .gt("scheduled_date", newEndStr)
+            .lte("scheduled_date", vars.item.end_date);
+        }
       }
 
       const childUpdates = await cascadeClipChildren(
@@ -287,6 +298,10 @@ export function useResizeCycle() {
       qc.invalidateQueries({ queryKey: ["timeline-data",    vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["planning-summary", vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["athlete-cycles",   vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["cycle-sessions",   vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["calendar-events",  vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["micro-days",       vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["micro-stats",      vars.athleteId] });
     },
   });
 }
