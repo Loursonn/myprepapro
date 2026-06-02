@@ -17,9 +17,14 @@ export function useCalculatePosition(
   }
 
   function position(startStr: string, endStr: string): Position {
-    const x = dateToX(startStr);
-    const days = Math.max(1, differenceInDays(parseISO(endStr), parseISO(startStr)));
-    return { x, width: Math.max(days * pixPerDay, minWidth) };
+    const startOffset = differenceInDays(parseISO(startStr), rangeStart);
+    const x = Math.max(0, startOffset) * pixPerDay;
+    const span = Math.max(1, differenceInDays(parseISO(endStr), parseISO(startStr)));
+    // Si le début est avant la fenêtre visible, on retire la partie hors-champ
+    // de la largeur (sinon la barre déborde à droite et est mal alignée).
+    const clip = startOffset < 0 ? -startOffset : 0;
+    const visibleDays = span - clip;
+    return { x, width: Math.max(visibleDays * pixPerDay, minWidth) };
   }
 
   function xToDate(x: number): Date {

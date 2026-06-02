@@ -66,12 +66,14 @@ interface TLItemProps {
   onZoom?:    () => void;
   onDragStop: (newX: number) => void;
   onResizeStop: (newX: number, newWidth: number) => void;
+  /** Lock the start date: no drag (move), no left-resize. Only the end can be resized. */
+  lockStart?: boolean;
 }
 
 /** Handle zone width (px) — must match paddingLeft/paddingRight on content div */
 const HANDLE_W = 14;
 
-function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoom, onDragStop, onResizeStop }: TLItemProps) {
+function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoom, onDragStop, onResizeStop, lockStart }: TLItemProps) {
   const [dragging, setDragging] = useState(false);
 
   return (
@@ -81,9 +83,10 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoo
       // -1px gap so adjacent items don't visually bleed into each other
       size={{ width: Math.max(width - 1, MIN_W_PX), height: ITEM_H }}
       dragAxis="x"
+      disableDragging={lockStart}
       minWidth={MIN_W_PX}
       enableResizing={{
-        left: true, right: true,
+        left: !lockStart, right: true,
         top: false, bottom: false,
         topLeft: false, topRight: false, bottomLeft: false, bottomRight: false,
       }}
@@ -115,7 +118,7 @@ function TLItem({ id, label, isDeload, x, width, color, bg, onOpen, onAdd, onZoo
           display: "flex", alignItems: "center",
           // Padding matches handle zone so text never hides behind grips
           paddingLeft: HANDLE_W + 4, paddingRight: HANDLE_W + 4,
-          cursor: dragging ? "grabbing" : "grab",
+          cursor: lockStart ? "pointer" : (dragging ? "grabbing" : "grab"),
           userSelect: "none",
           overflow: "hidden",
           opacity: dragging ? 0.78 : 1,
@@ -210,10 +213,12 @@ interface TimelineRowProps {
   readOnly?: boolean;
   /** Increment to force all TLItems to remount (resets Rnd internal position) */
   rowResetKey?: number;
+  /** Lock start date for all items: no drag, no left-resize (only end resize) */
+  lockStart?: boolean;
 }
 
 export function TimelineRow({
-  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onZoom, onNewRow, onDrag, onResize, readOnly, rowResetKey,
+  level, items, calc, rangeStart, rangeEnd, athleteId, onOpen, onAdd, onZoom, onNewRow, onDrag, onResize, readOnly, rowResetKey, lockStart,
 }: TimelineRowProps) {
   const color = LEVEL_COLOR[level];
   const bg    = LEVEL_BG[level];
@@ -281,6 +286,10 @@ export function TimelineRow({
         })}
 
         {items.map((item) => {
+          // N'affiche pas un élément entièrement hors de la fenêtre visible
+          // (ex. cycle passé qui sinon laisse un résidu collé au bord gauche).
+          if (item.endDate < rangeStart || item.startDate > rangeEnd) return null;
+
           const { x, width } = calc.position(item.startDate, item.endDate);
 
           // ── Static chip (microcycles) ────────────────────────────────────
@@ -332,6 +341,7 @@ export function TimelineRow({
               onOpen={() => onOpen(item.id)}
               onAdd={onAdd ? () => onAdd(item.id) : undefined}
               onZoom={onZoom ? () => onZoom(item.id) : undefined}
+              lockStart={lockStart}
               onDragStop={(newX) => {
                 let fx = newX;
                 if (item.parentStart && item.parentEnd) {

@@ -52,6 +52,8 @@ export interface AthleteContextValue {
   visibilitySettings: VisibilitySettings; setVisibilitySettings: (v: VisibilitySettings) => Promise<void>;
   testSessions: unknown[]; setTestSessions: (v: unknown[]) => void;
   loaded: boolean; saveStatus: "saved" | "error" | null;
+  // Cycle ouvert : exos/sessions/completedSessions sont scopés sur lui
+  openCycleId: string | null; setOpenCycleId: (id: string | null) => void;
 
   // Energy
   energySessions: EnergySession[]; setEnergySessions: (v: EnergySession[]) => void;

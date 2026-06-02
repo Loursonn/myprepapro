@@ -702,9 +702,11 @@ export function CalendarMonthView({
     queryFn: async () => {
       type CycleRow = { id: string; name: string; start_date: string; end_date: string };
 
+      // Tous les cycles portant directement l'athlète (standalone OU rattachés à un
+      // méso mais avec athlete_id renseigné — cas des cycles créés par l'assistant).
       const { data: sa } = await supabase
         .from("cycles").select("id, name, start_date, end_date")
-        .eq("athlete_id", athleteId).is("mesocycle_id", null).order("start_date");
+        .eq("athlete_id", athleteId).order("start_date");
 
       const { data: macros } = await supabase
         .from("macrocycles").select("id").eq("athlete_id", athleteId);
@@ -748,24 +750,20 @@ export function CalendarMonthView({
     setBlockConfig(prev => ({ ...prev, cycleId: targetId, startDate: newStart, totalWeeks: newWeeks, blockName: cycle.name }));
   }, [allCycles]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Enrich realEvents: override status from completedSessions (source of truth) ──
+  // ── Enrich realEvents: le statut vient des vrais workout_logs (source de vérité).
+  // On NE dérive PLUS la complétion de completedSessions (carte par semaine, globale,
+  // non scopée au cycle) : elle marquait des séances futures/non faites comme validées.
+  // Une séance n'est "réalisée" que si son log DB l'est. Une séance planifiée passée
+  // (non loggée) est affichée "manquée".
   const enrichedRealEvents = useMemo(() => {
-    if (!blockConfig?.startDate) return realEvents;
-    const blockStart = startOfWeek(parseISO(blockConfig.startDate), { weekStartsOn: 1 });
-    const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
+    const todayStr = format(new Date(), "yyyy-MM-dd");
     return realEvents.map(e => {
-      if (e.type !== "workout" || !e.raw?.session_id) return e;
-      // Preserve explicit skipped status from DB — never override to "missed"
-      if (e.status === "skipped") return e;
-      const sessId = e.raw.session_id as string;
-      const weekNum = Math.floor((parseISO(e.date).getTime() - blockStart.getTime()) / MS_WEEK) + 1;
-      if (weekNum < 1) return e;
-      const raw = { ...e.raw, week: weekNum };
-      if ((completedSessions[weekNum] ?? []).includes(sessId)) return { ...e, status: "completed", raw };
-      if (weekNum < currentWeek) return { ...e, status: "missed", raw };
-      return { ...e, raw };
+      if (e.type !== "workout") return e;
+      if (e.status === "skipped" || e.status === "completed") return e;
+      if (e.status === "planned" && e.date < todayStr) return { ...e, status: "missed" };
+      return e;
     });
-  }, [realEvents, blockConfig, completedSessions, currentWeek]);
+  }, [realEvents]);
 
   // ── Project block sessions onto calendar dates ────────────────────────────
   const projectedEvents = useMemo<CalEvent[]>(() => {
@@ -773,6 +771,14 @@ export function CalendarMonthView({
 
     // Snap to Monday of the week containing startDate
     const blockStart = startOfWeek(parseISO(blockConfig.startDate), { weekStartsOn: 1 });
+
+    // Borne dure = dates réelles du cycle DB. La projection legacy (blockConfig +
+    // completedSessions) ne doit JAMAIS dépasser la fin réelle du cycle, sinon des
+    // séances fantômes apparaissent après la fin (ex. cycle stoppé au 31 mai).
+    // Fallback sur le cycle le plus récent si blockConfig.cycleId ne résout pas
+    // (sinon aucune borne → projection sur des semaines fantômes).
+    const activeCyc = allCycles.find((c) => c.id === blockConfig?.cycleId)
+      ?? [...allCycles].sort((a, b) => b.end_date.localeCompare(a.end_date))[0];
 
     // Build set of already-logged session_id:date to avoid duplication
     const logged = new Set(
@@ -792,12 +798,15 @@ export function CalendarMonthView({
         if (d < gridStartDate || d > gridEndDate) continue;
 
         const dateStr = format(d, "yyyy-MM-dd");
+        // Hors des bornes réelles du cycle → on ne projette pas.
+        if (activeCyc && (dateStr < activeCyc.start_date || dateStr > activeCyc.end_date)) continue;
         if (logged.has(`${sess.id}:${dateStr}`)) continue;
 
         const weekNum = w + 1;
-        const isDone = (completedSessions[weekNum] ?? []).includes(sess.id);
-        const isPast = weekNum < currentWeek;
-        const projStatus = isDone ? "completed" : isPast ? "missed" : "planned";
+        // Une séance projetée n'a PAS de log → jamais "réalisée".
+        // Passée = manquée, présente/future = planifiée ("prévu").
+        const todayStr = format(new Date(), "yyyy-MM-dd");
+        const projStatus = dateStr < todayStr ? "missed" : "planned";
 
         out.push({
           id:     `block-${sess.id}-w${weekNum}`,
@@ -810,7 +819,7 @@ export function CalendarMonthView({
       }
     }
     return out;
-  }, [blockConfig, sessions, gridStartDate, gridEndDate, enrichedRealEvents, completedSessions, currentWeek]);
+  }, [blockConfig, sessions, gridStartDate, gridEndDate, enrichedRealEvents, allCycles]);
 
   const events = useMemo(
     () => [...enrichedRealEvents.filter(e => e.status !== "skipped"), ...projectedEvents],

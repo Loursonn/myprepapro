@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { QK } from "@/lib/queryKeys";
 import { formatS, formatTarget } from "@/lib/energy/formatTarget";
 import { TestFillDrawer } from "@/features/athlete/components/TestFillDrawer";
-import type { ActiveMesocycle, WeekDay, WeekSession, TestBrief } from "@/features/shared/hooks/useActivePlan";
+import type { ActiveMesocycle, PastCycle, WeekDay, WeekSession, TestBrief } from "@/features/shared/hooks/useActivePlan";
 import type { EnergyStep, EnergySessionRow } from "@/types/energy";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -481,6 +481,34 @@ function ActivePlanCard({ meso, weekSessionCount }: { meso: ActiveMesocycle; wee
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Past cycle card (historique athlète) ───────────────────────────────────────
+
+function fmtShort(iso: string): string {
+  const d = new Date(iso + "T12:00:00");
+  return `${d.getDate()} ${MONTHS_FR[d.getMonth()]}`;
+}
+
+function PastCycleCard({ cycle }: { cycle: PastCycle }) {
+  return (
+    <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {cycle.name}
+        </div>
+        <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>
+          {fmtShort(cycle.startDate)} → {fmtShort(cycle.endDate)} · {cycle.totalWeeks} sem.
+        </div>
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: cycle.completionPct >= 80 ? C.g : C.tx2 }}>
+          {cycle.completionPct}%
+        </div>
+        <div style={{ fontSize: 9, color: C.tx3 }}>{cycle.completedLogs}/{cycle.totalLogs} séances</div>
+      </div>
     </div>
   );
 }
@@ -1123,17 +1151,28 @@ export default function ProgramPage() {
             <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
               Plan actif
             </div>
-            {data?.mesocycle ? (
-              <ActivePlanCard meso={data.mesocycle} weekSessionCount={data.weekSessionCount} />
+            {data?.cycle ? (
+              <ActivePlanCard meso={data.cycle} weekSessionCount={data.weekSessionCount} />
             ) : (
               <EmptyState
                 icon={CalendarDays}
-                title="Aucun plan actif"
-                description="Ton coach n'a pas encore assigné de programme pour cette période."
-                cta={{ label: "Demande à ton coach", onClick: () => {} }}
+                title="Aucun cycle en cours"
+                description="Tu n'es dans aucun cycle pour le moment. Ton coach programmera la suite."
               />
             )}
           </section>
+
+          {/* ── Cycles précédents ── */}
+          {data?.pastCycles && data.pastCycles.length > 0 && (
+            <section>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 12 }}>
+                Cycles précédents
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {data.pastCycles.map((c) => <PastCycleCard key={c.id} cycle={c} />)}
+              </div>
+            </section>
+          )}
 
           {/* ── Cette semaine ── */}
           <section>

@@ -25,6 +25,23 @@ export const SKEYS = {
   freeSessions:   "asp:freesess",
 } as const;
 
+/**
+ * Clé scopée par cycle : `asp:exos::<cycleId>`.
+ * Permet à chaque cycle de garder ses propres exos/séances/validations, au lieu
+ * d'un blob global unique qui s'écrasait à chaque changement de cycle.
+ */
+export function cycleKey(base: string, cycleId: string): string {
+  return `${base}::${cycleId}`;
+}
+
+export function sLoadCycle<T>(base: string, cycleId: string, fb: T, aid: string | null | undefined): Promise<T> {
+  return sLoad<T>(cycleKey(base, cycleId), fb, aid);
+}
+
+export function sSaveCycle(base: string, cycleId: string, v: unknown, aid: string | null | undefined): Promise<void> {
+  return sSave(cycleKey(base, cycleId), v, aid);
+}
+
 export async function sLoad<T>(k: string, fb: T, aid: string | null | undefined): Promise<T> {
   if (!aid) return fb;
   try {

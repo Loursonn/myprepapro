@@ -71,8 +71,24 @@ export interface WeekDay {
   tests: TestBrief[];
 }
 
+/** Cycle terminé (fin < aujourd'hui) — pour l'historique côté athlète. */
+export interface PastCycle {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  totalWeeks: number;
+  completionPct: number;
+  completedLogs: number;
+  totalLogs: number;
+}
+
 export interface ActivePlanResult {
   mesocycle: ActiveMesocycle | null;
+  /** Cycle couvrant aujourd'hui (source de vérité = cycles DB, comme le coach). */
+  cycle: ActiveMesocycle | null;
+  /** Cycles déjà terminés, du plus récent au plus ancien. */
+  pastCycles: PastCycle[];
   weekDays: WeekDay[];
   /** Total planned sessions (workout + energy) in the current week */
   weekSessionCount: number;
@@ -192,6 +208,68 @@ export function useActivePlan(athleteId: string) {
         }
       }
 
+      // ── 3bis. Cycles de l'athlète (même source que le coach) ───────────────
+      // Cycle actif = celui qui couvre aujourd'hui ; sinon « aucun cycle en cours ».
+      const { data: cyclesRows } = await supabase
+        .from("cycles")
+        .select("id, name, objective, start_date, end_date")
+        .eq("athlete_id", athleteId)
+        .order("start_date", { ascending: false });
+      const allCycles = cyclesRows ?? [];
+
+      async function cycleStats(c: { start_date: string; end_date: string }) {
+        const { data: logs } = await supabase
+          .from("workout_logs")
+          .select("status")
+          .eq("athlete_id", athleteId)
+          .neq("status", "skipped")
+          .gte("scheduled_date", c.start_date)
+          .lte("scheduled_date", c.end_date);
+        const totalLogs = logs?.length ?? 0;
+        const completedLogs = logs?.filter((l) => l.status === "completed").length ?? 0;
+        return { totalLogs, completedLogs, totalWeeks: weeksBetween(c.start_date, c.end_date) };
+      }
+
+      const currentCycleRow = allCycles.find((c) => c.start_date <= today && today <= c.end_date) ?? null;
+      let cycle: ActiveMesocycle | null = null;
+      if (currentCycleRow) {
+        const { totalLogs, completedLogs, totalWeeks } = await cycleStats(currentCycleRow);
+        cycle = {
+          id:            currentCycleRow.id,
+          name:          currentCycleRow.name,
+          objective:     currentCycleRow.objective ?? null,
+          startDate:     currentCycleRow.start_date,
+          endDate:       currentCycleRow.end_date,
+          frequency:     null,
+          totalWeeks,
+          currentWeek:   currentWeekOf(currentCycleRow.start_date, totalWeeks),
+          progressPct:   timeProgressPct(currentCycleRow.start_date, currentCycleRow.end_date),
+          completionPct: totalLogs > 0 ? Math.round((completedLogs / totalLogs) * 100) : 0,
+          totalLogs,
+          completedLogs,
+          macroName:     "",
+          macroId:       "",
+        };
+      }
+
+      const pastCycles: PastCycle[] = await Promise.all(
+        allCycles
+          .filter((c) => c.end_date < today)
+          .map(async (c) => {
+            const { totalLogs, completedLogs, totalWeeks } = await cycleStats(c);
+            return {
+              id:            c.id,
+              name:          c.name,
+              startDate:     c.start_date,
+              endDate:       c.end_date,
+              totalWeeks,
+              completionPct: totalLogs > 0 ? Math.round((completedLogs / totalLogs) * 100) : 0,
+              completedLogs,
+              totalLogs,
+            };
+          }),
+      );
+
       // ── 4. Current week: workout_logs + energy_assignments + tests (parallel) ─
       const [{ data: wLogs }, { data: eAssigns }, { data: tSessions }] = await Promise.all([
         supabase
@@ -282,7 +360,7 @@ export function useActivePlan(athleteId: string) {
       // ── 7. Week session count (planned + completed, all types) ────────────
       const weekSessionCount = weekDays.reduce((sum, day) => sum + day.sessions.length, 0);
 
-      return { mesocycle, weekDays, weekSessionCount };
+      return { mesocycle, cycle, pastCycles, weekDays, weekSessionCount };
     },
   });
 }

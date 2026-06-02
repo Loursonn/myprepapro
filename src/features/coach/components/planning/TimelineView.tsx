@@ -2,7 +2,7 @@ import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { startOfMonth, addMonths, subMonths, format, parseISO, startOfISOWeek, endOfISOWeek, addWeeks, addDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, X, Plus, Eye, Pencil, Trash2, Check, ChevronDown } from "lucide-react";
-import { snapMonday, snapSunday, keepWeeks, chainNextStart, endFromWeeks, computeCascade } from "./utils/planningHelpers";
+import { snapMonday, snapSunday, keepWeeks, chainNextStart, endFromWeeks, computeCascade, buildMicrocycles } from "./utils/planningHelpers";
 import { PERIOD_DEFAULTS } from "@/types/planning";
 import { PeriodConflictDialog } from "./dialogs/PeriodConflictDialog";
 import { ChildOverflowDialog } from "./dialogs/ChildOverflowDialog";
@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useDeleteCompetition } from "@/hooks/useCompetitions";
 import { CompetitionFormModal } from "./CompetitionFormModal";
+import { CreateCycleAssistant } from "./CreateCycleAssistant";
 
 import { useTimelineData }      from "./hooks/useTimelineData";
 import { useCalculatePosition } from "./hooks/useCalculatePosition";
@@ -371,25 +372,6 @@ function DrawerShell({
 // Generates one microcycle per ISO week (Mon→Sun) covering the cycle range.
 // First week = Monday of the week containing startDate.
 // Last week = week whose Monday is still ≤ endDate.
-function buildMicrocycles(cycleId: string, startDate: string, endDate: string) {
-  const rows: { cycle_id: string; week_number: number; start_date: string; end_date: string; is_deload: boolean }[] = [];
-  const ed = parseISO(endDate);
-  let weekMon = startOfISOWeek(parseISO(startDate)); // always Monday
-  let week = 1;
-  while (weekMon <= ed) {
-    rows.push({
-      cycle_id:    cycleId,
-      week_number: week,
-      start_date:  format(weekMon,                 "yyyy-MM-dd"),
-      end_date:    format(endOfISOWeek(weekMon),   "yyyy-MM-dd"), // always Sunday
-      is_deload:   false,
-    });
-    weekMon = addWeeks(weekMon, 1);
-    week++;
-  }
-  return rows;
-}
-
 // ── Create modal ──────────────────────────────────────────────────────────────
 
 type CreateLevel = "macrocycle" | "mesocycle" | "cycle" | "microcycle";
@@ -1172,6 +1154,12 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   const [windowStart,    setWindowStart]    = useState(() => startOfMonth(new Date()));
   const [drawer,         setDrawer]         = useState<DrawerState | null>(null);
   const [createModal,    setCreateModal]    = useState<CreateState | null>(null);
+  const [cycleAssistant, setCycleAssistant] = useState<{
+    parentMesoId:  string;
+    parentOptions: { id: string; label: string }[];
+    defaultStart:  string;
+    defaultEnd:    string;
+  } | null>(null);
   const [zoomMacro,      setZoomMacro]      = useState<{ start: Date; end: Date; label: string } | null>(null);
   const [editingComp,    setEditingComp]    = useState<Competition | null>(null);
   const [noParentModal,  setNoParentModal]  = useState<NoParentDragState | null>(null);
@@ -1597,7 +1585,11 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
   function handleCycleResize(id: string, ns: string, ne: string) {
     const cycle = data?.cycles.find((c) => c.id === id);
     if (!cycle) return;
-    const snappedStart = snapMonday(ns);
+    // Date de début VERROUILLÉE : on ignore ns et on garde le début d'origine.
+    // Seule la fin peut bouger (rallonger/raccourcir le cycle) sans décaler les
+    // semaines déjà réalisées. Le début se modifie via les détails du cycle.
+    void ns;
+    const snappedStart = cycle.start_date;
     const snappedEnd   = snapSunday(ne);
 
     // Overlap check with same-meso siblings
@@ -1696,6 +1688,20 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
     }));
   }
 
+  /** Open the cycle-creation assistant (name/dates/parent + reuse last cycle's sessions) */
+  function openCycleAssistant() {
+    const opts = buildCycleParentOptions();
+    if (!opts.length) { toast.error("Crée d'abord un mésocycle"); return; }
+    const first = opts[0];
+    const { defaultStart, defaultEnd } = cycleDefaultDates(first.id);
+    setCycleAssistant({
+      parentMesoId:  first.id,
+      parentOptions: opts.map((o) => ({ id: o.id, label: o.label })),
+      defaultStart,
+      defaultEnd,
+    });
+  }
+
   /** Compute initial start/end for a new cycle under a given meso */
   function cycleDefaultDates(mesoId: string): { defaultStart: string; defaultEnd: string } {
     const siblings = (data?.cycles ?? [])
@@ -1772,12 +1778,7 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                         macros.map((m) => ({ id: m.id, label: `${m.name} (${m.start_date} → ${m.end_date})` })),
                       );
                     } else if (level === "cycle") {
-                      const opts = buildCycleParentOptions();
-                      if (!opts.length) { toast.error("Crée d'abord un mésocycle"); return; }
-                      const first = opts[0];
-                      const { defaultStart, defaultEnd } = cycleDefaultDates(first.id);
-                      const sibs = (data?.cycles ?? []).map((c) => ({ parentId: c.mesocycle_id ?? "", end_date: c.end_date }));
-                      openCreate("cycle", first.id, defaultStart, defaultEnd, undefined, opts, sibs);
+                      openCycleAssistant();
                     } else if (level === "microcycle") {
                       const cycles = data?.cycles ?? [];
                       if (!cycles.length) { toast.error("Crée d'abord un cycle"); return; }
@@ -1913,16 +1914,10 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
                   onResize={makeResizeHandler("mesocycles")}
                 />
                 <TimelineRow level="cycle" items={cycleRows} {...sharedRowProps}
+                  lockStart
                   onOpen={(id) => open("cycle", id)}
                   rowResetKey={cycleRowResetKey}
-                  onNewRow={() => {
-                    const opts = buildCycleParentOptions();
-                    if (!opts.length) { toast.error("Crée d'abord un mésocycle"); return; }
-                    const first = opts[0];
-                    const { defaultStart, defaultEnd } = cycleDefaultDates(first.id);
-                    const sibs = (data?.cycles ?? []).map((c) => ({ parentId: c.mesocycle_id ?? "", end_date: c.end_date }));
-                    openCreate("cycle", first.id, defaultStart, defaultEnd, undefined, opts, sibs);
-                  }}
+                  onNewRow={() => openCycleAssistant()}
                   onDrag={handleCycleDrag}
                   onResize={handleCycleResize}
                 />
@@ -1977,6 +1972,19 @@ export function TimelineView({ athleteId }: TimelineViewProps) {
           rangeStart={rsStr}
           rangeEnd={reStr}
           onClose={() => setCreateModal(null)}
+        />
+      )}
+
+      {/* Cycle creation assistant (reuse last cycle's sessions/exos) */}
+      {cycleAssistant && (
+        <CreateCycleAssistant
+          athleteId={athleteId}
+          coachId={user?.id ?? ""}
+          parentMesoId={cycleAssistant.parentMesoId}
+          parentOptions={cycleAssistant.parentOptions}
+          defaultStart={cycleAssistant.defaultStart}
+          defaultEnd={cycleAssistant.defaultEnd}
+          onClose={() => setCycleAssistant(null)}
         />
       )}
 

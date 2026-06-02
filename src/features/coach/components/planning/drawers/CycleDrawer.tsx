@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { format, parseISO, differenceInWeeks, startOfISOWeek, endOfISOWeek, addWeeks, addDays } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Edit3, Check, CheckCircle2, Clock, Circle } from "lucide-react";
+import { Edit3, Check, CheckCircle2, Clock, Circle, FolderOpen } from "lucide-react";
 import { C } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import type { Cycle, Mesocycle } from "../hooks/useTimelineData";
 import { snapMonday, snapSunday, computeCascade, chainNextStart } from "../utils/planningHelpers";
 import { DateQuickAdjust } from "../DateQuickAdjust";
@@ -53,6 +55,9 @@ function useCycleSessions(athleteId: string, startDate: string, endDate: string)
     enabled:  !!athleteId && !!startDate && !!endDate,
     staleTime: 60_000,
     queryFn: async (): Promise<WorkoutRow[]> => {
+      // Scope by the cycle's date span. Cycles are sequential (non-overlapping),
+      // and most logs are date-based (microcycle_id null), so date range is the
+      // reliable scope here.
       const { data } = await supabase
         .from("workout_logs")
         .select("id, session_name, scheduled_date, status, workout_rpe(rpe_score)")
@@ -176,9 +181,27 @@ export function CycleDrawer({
 }: Props) {
   void rangeStart; void rangeEnd;
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { setOpenCycleId, setBlockConfig } = useAthleteContext();
   const { data: sessions = [], isLoading: loadingSessions } = useCycleSessions(
     athleteId, cycle.start_date, cycle.end_date,
   );
+
+  // Ouvre ce cycle dans Programmation : charge SES exos/séances (stockage par cycle)
+  // et cale le bloc legacy (nom, début, nb de semaines) dessus.
+  function openThisCycle() {
+    setOpenCycleId(cycle.id);
+    setBlockConfig((prev) => ({
+      ...prev,
+      cycleId:    cycle.id,
+      blockName:  cycle.name,
+      startDate:  cycle.start_date,
+      totalWeeks: numWeeks,
+      deloadWeek: 0,
+    }));
+    onClose?.();
+    navigate("../programmation");
+  }
 
   const [editingObj,    setEditingObj]    = useState(false);
   const [objective,     setObjective]     = useState(cycle.objective ?? "");
@@ -191,6 +214,7 @@ export function CycleDrawer({
   const [parentId,      setParentId]      = useState(cycle.mesocycle_id ?? "");
   const [editingParent, setEditingParent] = useState(false);
   const [savingParent,  setSavingParent]  = useState(false);
+  const [confirmStartChange,   setConfirmStartChange]   = useState(false);
 
   // modals
   const [cascadeModal, setCascadeModal] = useState<{
@@ -235,8 +259,20 @@ export function CycleDrawer({
     const updatePayload: Record<string, string> = { start_date: newStart, end_date: newEnd };
     if (newMesoId) updatePayload.mesocycle_id = newMesoId;
 
+    const oldEnd = cycle.end_date;
     const { error } = await supabase.from("cycles").update(updatePayload).eq("id", cycle.id);
     if (!error) await regenerateMicrocycles(cycle.id, newStart, newEnd);
+
+    // Borne dure : si on raccourcit la fin (sans cascade), on supprime les séances
+    // au-delà de la nouvelle fin. Permet de "stopper" un cycle à une date donnée
+    // (ex. fin = hier) pour repartir proprement, sans logs résiduels (y compris les
+    // logs hérités date-based marqués validés par erreur).
+    if (!error && !cascade && newEnd < oldEnd) {
+      await supabase.from("workout_logs").delete()
+        .eq("athlete_id", athleteId)
+        .gt("scheduled_date", newEnd)
+        .lte("scheduled_date", oldEnd);
+    }
 
     if (!error && cascade) {
       const updates = computeCascade(newEnd, laterCycles);
@@ -251,6 +287,13 @@ export function CycleDrawer({
     if (error) { toast.error("Erreur"); return; }
     qc.invalidateQueries({ queryKey: ["timeline-data", athleteId] });
     qc.invalidateQueries({ queryKey: ["planning-summary", athleteId] });
+    qc.invalidateQueries({ queryKey: ["cycle-sessions", athleteId] });
+    qc.invalidateQueries({ queryKey: ["athlete-cycles", athleteId] });
+    qc.invalidateQueries({ queryKey: ["athlete-cycles-list", athleteId] });
+    qc.invalidateQueries({ queryKey: ["active-cycle", athleteId] });
+    qc.invalidateQueries({ queryKey: ["calendar-events", athleteId] });
+    qc.invalidateQueries({ queryKey: ["micro-days", athleteId] });
+    qc.invalidateQueries({ queryKey: ["micro-stats", athleteId] });
     setCascadeModal(null);
     setMesoModal(null);
     setEditingDates(false);
@@ -263,7 +306,19 @@ export function CycleDrawer({
 
   // ── save flow: cascade → meso reassign ───────────────────────────────────
 
+  // Garde-fou : changer le DÉBUT décale les semaines ; raccourcir la FIN supprime
+  // les séances au-delà de la nouvelle fin. On confirme avant d'appliquer.
+  const startChanged = snapMonday(startDate) !== cycle.start_date;
+  const endShortened = snapSunday(endDate)   <  cycle.end_date;
   function handleSaveDates() {
+    if (startChanged || endShortened) {
+      setConfirmStartChange(true);
+      return;
+    }
+    runSaveDates();
+  }
+
+  function runSaveDates() {
     if (!startDate || !endDate || startDate >= endDate) { toast.error("Dates invalides"); return; }
     let snStart = snapMonday(startDate);
     const snEnd = snapSunday(endDate);
@@ -372,6 +427,7 @@ export function CycleDrawer({
     toast.success("Cycle supprimé");
     qc.invalidateQueries({ queryKey: ["timeline-data"] });
     qc.invalidateQueries({ queryKey: ["active-cycle"] });
+    qc.invalidateQueries({ queryKey: ["athlete-cycles-list"] });
     qc.invalidateQueries({ queryKey: ["cal-range"] });
     onClose?.();
   }
@@ -381,6 +437,20 @@ export function CycleDrawer({
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* Ouvrir ce cycle dans Programmation (charge ses exos/séances) */}
+        <button
+          onClick={openThisCycle}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
+            background: C.coach, color: "#fff", fontSize: 13, fontWeight: 700,
+            cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          <FolderOpen size={15} />
+          Ouvrir ce cycle (séances & exos)
+        </button>
 
         {/* Dates + duration */}
         <div>
@@ -611,6 +681,39 @@ export function CycleDrawer({
           onReassign={() => doSaveDates(mesoModal.newStart, mesoModal.newEnd, mesoModal.newMeso.id, mesoModal.cascade, mesoModal.cascade ? mesoModal.later : [])}
           onKeep={() => doSaveDates(mesoModal.newStart, mesoModal.newEnd, undefined, mesoModal.cascade, mesoModal.cascade ? mesoModal.later : [])}
         />
+      )}
+
+      {/* Confirmation changement de date de début */}
+      {confirmStartChange && (
+        <>
+          <div onClick={() => setConfirmStartChange(false)} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.55)" }} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", zIndex: 71,
+            transform: "translate(-50%,-50%)",
+            width: 380, maxWidth: "92vw",
+            background: C.s1, borderRadius: 14, border: "1px solid " + C.brd,
+            padding: "20px 22px",
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx, marginBottom: 8 }}>⚠ Modifier les dates du cycle ?</div>
+            <div style={{ fontSize: 13, color: C.tx2, marginBottom: 18, lineHeight: 1.5 }}>
+              {startChanged && (
+                <>Décaler le <strong>début</strong> déplace toutes les semaines ; des séances déjà réalisées peuvent se retrouver au mauvais endroit. </>
+              )}
+              {endShortened && (
+                <>Raccourcir la <strong>fin</strong> <strong style={{ color: C.r }}>supprimera toutes les séances après le {format(parseISO(snapSunday(endDate)), "d MMM", { locale: fr })}</strong> (y compris validées). </>
+              )}
+              À ne faire que si tu sais ce que tu fais.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button onClick={() => { setConfirmStartChange(false); runSaveDates(); }} style={{ width: "100%", padding: "11px 0", borderRadius: 10, border: "none", background: C.o, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                Oui, appliquer
+              </button>
+              <button onClick={() => setConfirmStartChange(false)} style={{ width: "100%", padding: "9px 0", borderRadius: 10, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </>
   );

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { SKEYS, sLoad, sSave } from "@/lib/storage";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { SKEYS, sLoad, sSave, cycleKey, sSaveCycle } from "@/lib/storage";
 import { DEF_SESSIONS, DEF_BLOCK_CONFIG } from "@/lib/exercises";
 import { getNutritionStrategy } from "@/lib/nutrition";
 import { todayKey } from "@/lib/date";
@@ -15,9 +15,41 @@ const DEF_VISIBILITY: VisibilitySettings = {
   nutrition: true, pr: true, weight: true,
 };
 
+/** Cycle ouvert par défaut : celui qui couvre aujourd'hui, sinon le plus récent. */
+async function determineActiveCycleId(athleteId: string): Promise<string | null> {
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const { data } = await supabase
+    .from("cycles")
+    .select("id, start_date, end_date")
+    .eq("athlete_id", athleteId)
+    .order("start_date", { ascending: false });
+  const rows = (data ?? []) as { id: string; start_date: string; end_date: string }[];
+  if (rows.length === 0) return null;
+  const covering = rows.find((c) => c.start_date <= today && today <= c.end_date);
+  return (covering ?? rows[0]).id;
+}
+
 export function useAthletePersistedState(athleteId: string) {
   const load = useCallback(<T>(k: string, fb: T) => sLoad<T>(k, fb, athleteId), [athleteId]);
   const save = useCallback((k: string, v: unknown) => sSave(k, v, athleteId), [athleteId]);
+
+  // Cycle actuellement ouvert. exos/sessions/completed sont scopés sur lui.
+  // null = aucun cycle en base (back-compat : on retombe sur les clés globales).
+  const [openCycleId, setOpenCycleIdState] = useState<string | null>(null);
+  const openCycleRef = useRef<string | null>(null);
+  // Résout la clé de stockage selon le cycle ouvert (scopée) ou legacy (globale).
+  const keyFor = useCallback(
+    (base: string) => (openCycleRef.current ? cycleKey(base, openCycleRef.current) : base),
+    [],
+  );
+  // Écrit la clé scopée + un miroir sur la clé legacy (consommée par les vues coach).
+  const saveBoth = useCallback((base: string, val: unknown) => {
+    const k = keyFor(base);
+    const p = sSave(k, val, athleteId);
+    if (k !== base) sSave(base, val, athleteId).catch(() => {});
+    return p;
+  }, [keyFor, athleteId]);
 
   const [exos, setExosRaw] = useState<ExosMap>({});
   const [exMeta, setExMetaRaw] = useState<Record<string, unknown>>({});
@@ -48,22 +80,21 @@ export function useAthletePersistedState(athleteId: string) {
   // ── Initial load ───────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      const [e, m, s, w, wh, bw, cs, g, an, cm, wl, wmil, inj, sess, bc, bh, ws, ns, nl, sl, fs] =
+      // exos / sessions / completedSessions ne sont PLUS chargés ici : ils sont
+      // scopés par cycle (voir l'effet dédié plus bas). Tout le reste est global.
+      const [m, s, w, wh, bw, g, an, cm, wl, wmil, inj, bc, bh, ws, ns, nl, sl, fs] =
         await Promise.all([
-          load<ExosMap>(SKEYS.exos, {}),
           load<Record<string, unknown>>(SKEYS.exMeta, {}),
           load<SetsMap>(SKEYS.sets, {}),
           load<WellnessData | null>(SKEYS.wellness, null),
           load<Record<string, WellnessData>>(SKEYS.wellnessHistory, {}),
           load<BodyWeight>(SKEYS.bw, { current: 0, target: 0 }),
-          load<Record<number, string[]>>(SKEYS.completed, {}),
           load<Goals>(SKEYS.goals, { sessionsPerWeek: 6, sleepTarget: 8 }),
           load<Record<string, string>>(SKEYS.anotes, {}),
           load<unknown[]>(SKEYS.custMethods, []),
           load<Record<string, number>>(SKEYS.weightLog, {}),
           load<Array<{ date: string; kg: number }>>(SKEYS.weightMilestones, []),
           load<Injury[]>(SKEYS.injuries, []),
-          load<Session[]>(SKEYS.sessions, DEF_SESSIONS as Session[]),
           load<BlockConfig>(SKEYS.blockConfig, DEF_BLOCK_CONFIG as BlockConfig),
           load<ArchivedBlock[]>(SKEYS.blockHistory, []),
           load<Record<string, unknown>>(SKEYS.weekSchedule, {}),
@@ -74,16 +105,76 @@ export function useAthletePersistedState(athleteId: string) {
         ]);
       const todayW = w?.date === todayKey() ? w : null;
       if (w && !todayW) save(SKEYS.wellness, null).catch(() => {});
-      setExosRaw(e); setExMetaRaw(m); setSetsRaw(s); setWellnessRaw(todayW);
-      setWellnessHistoryRaw(wh); setBodyWeightRaw(bw); setCompletedSessionsRaw(cs);
+      setExMetaRaw(m); setSetsRaw(s); setWellnessRaw(todayW);
+      setWellnessHistoryRaw(wh); setBodyWeightRaw(bw);
       setGoalsRaw(g); setAthleteNotesRaw(an); setCustomMethodsRaw(cm);
       setWeightLogRaw(wl); setWeightMilestonesRaw(wmil); setInjuriesRaw(inj);
-      setSessionsRaw(sess); setBlockConfigRaw(bc); setBlockHistoryRaw(bh || []);
+      setBlockConfigRaw(bc); setBlockHistoryRaw(bh || []);
       setWeekScheduleRaw(ws || {}); setNutritionStrategy(ns);
       setNutritionLogRaw(nl || {}); setSessionLogsRaw(sl); setFreeSessionsRaw(fs);
+
+      // ── Cycle ouvert + migration legacy → par-cycle (une seule fois) ────────
+      const activeCycleId = await determineActiveCycleId(athleteId);
+      const migrated = await load<boolean>("asp:percycle_migrated", false);
+      if (!migrated) {
+        if (activeCycleId) {
+          // Garde-fou : ne recopier le legacy QUE si le cycle actif n'a pas déjà
+          // ses propres données scopées (sinon on écraserait un cycle créé via
+          // le nouvel assistant). Le blob legacy appartenait au cycle actif.
+          const alreadyScoped = await sLoad<ExosMap | null>(cycleKey(SKEYS.exos, activeCycleId), null, athleteId);
+          if (alreadyScoped === null) {
+            const [le, lsess, lcs] = await Promise.all([
+              load<ExosMap | null>(SKEYS.exos, null),
+              load<Session[] | null>(SKEYS.sessions, null),
+              load<Record<number, string[]> | null>(SKEYS.completed, null),
+            ]);
+            if (le)    await sSaveCycle(SKEYS.exos, activeCycleId, le, athleteId).catch(() => {});
+            if (lsess) await sSaveCycle(SKEYS.sessions, activeCycleId, lsess, athleteId).catch(() => {});
+            if (lcs)   await sSaveCycle(SKEYS.completed, activeCycleId, lcs, athleteId).catch(() => {});
+          }
+        }
+        await save("asp:percycle_migrated", true).catch(() => {});
+      }
+      openCycleRef.current = activeCycleId;
+      setOpenCycleIdState(activeCycleId);
       setLoaded(true);
     })();
   }, [athleteId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Charge exos / sessions / completed du cycle ouvert ─────────────────────
+  // Rejoué à chaque changement de cycle ouvert (ouverture d'un ancien cycle,
+  // création d'un nouveau). Clés scopées si cycle, sinon legacy globales.
+  useEffect(() => {
+    if (!athleteId) return;
+    let cancelled = false;
+    (async () => {
+      const id = openCycleId;
+      const exKey = id ? cycleKey(SKEYS.exos, id)      : SKEYS.exos;
+      const seKey = id ? cycleKey(SKEYS.sessions, id)  : SKEYS.sessions;
+      const csKey = id ? cycleKey(SKEYS.completed, id) : SKEYS.completed;
+      const [e, sess, cs] = await Promise.all([
+        load<ExosMap>(exKey, {}),
+        load<Session[]>(seKey, DEF_SESSIONS as Session[]),
+        load<Record<number, string[]>>(csKey, {}),
+      ]);
+      if (cancelled) return;
+      openCycleRef.current = id;
+      const exosVal = e || {};
+      const sessVal = sess && sess.length ? sess : (DEF_SESSIONS as Session[]);
+      const compVal = cs || {};
+      setExosRaw(exosVal);
+      setSessionsRaw(sessVal);
+      setCompletedSessionsRaw(compVal);
+      // Miroir legacy : les vues coach (overview, retours, missed) lisent encore
+      // les clés globales. On les aligne sur le cycle ouvert pour ne rien régresser.
+      if (id) {
+        save(SKEYS.exos, exosVal).catch(() => {});
+        save(SKEYS.sessions, sessVal).catch(() => {});
+        save(SKEYS.completed, compVal).catch(() => {});
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [openCycleId, athleteId, load, save]);
 
   // ── Visibility settings + test sessions from Supabase ────────────────────
   useEffect(() => {
@@ -112,8 +203,14 @@ export function useAthletePersistedState(athleteId: string) {
 
   // ── Wrapped setters (persist on write) ────────────────────────────────────
   const setExos = useCallback((v: ExosMap | ((p: ExosMap) => ExosMap)) => {
-    setExosRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.exos, val).then(() => flash(true)).catch(() => flash(false)); return val; });
-  }, [save, flash]);
+    setExosRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; saveBoth(SKEYS.exos, val).then(() => flash(true)).catch(() => flash(false)); return val; });
+  }, [saveBoth, flash]);
+
+  // Ouvre un autre cycle : maj du ref (synchrone) + état → recharge exos/séances.
+  const setOpenCycleId = useCallback((id: string | null) => {
+    openCycleRef.current = id;
+    setOpenCycleIdState(id);
+  }, []);
 
   const setExMeta = useCallback((v: Record<string, unknown> | ((p: Record<string, unknown>) => Record<string, unknown>)) => {
     setExMetaRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.exMeta, val).then(() => flash(true)).catch(() => flash(false)); return val; });
@@ -126,7 +223,7 @@ export function useAthletePersistedState(athleteId: string) {
     setGoalsRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.goals, val).then(() => flash(true)).catch(() => flash(false)); return val; });
   }, [save, flash]);
 
-  const setCompletedSessions = useCallback((v: Record<number, string[]>) => { setCompletedSessionsRaw(v); save(SKEYS.completed, v).catch(() => {}); }, [save]);
+  const setCompletedSessions = useCallback((v: Record<number, string[]>) => { setCompletedSessionsRaw(v); saveBoth(SKEYS.completed, v).catch(() => {}); }, [saveBoth]);
   const setAthleteNotes = useCallback((v: Record<string, string>) => { setAthleteNotesRaw(v); save(SKEYS.anotes, v).catch(() => {}); }, [save]);
 
   const setCustomMethods = useCallback((v: unknown[]) => {
@@ -134,8 +231,8 @@ export function useAthletePersistedState(athleteId: string) {
   }, [save, flash]);
 
   const setSessions = useCallback((v: Session[] | ((p: Session[]) => Session[])) => {
-    setSessionsRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.sessions, val).then(() => flash(true)).catch(() => flash(false)); return val; });
-  }, [save, flash]);
+    setSessionsRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; saveBoth(SKEYS.sessions, val).then(() => flash(true)).catch(() => flash(false)); return val; });
+  }, [saveBoth, flash]);
 
   const setBlockConfig = useCallback((v: BlockConfig | ((p: BlockConfig) => BlockConfig)) => {
     setBlockConfigRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.blockConfig, val).then(() => flash(true)).catch(() => flash(false)); return val; });
@@ -193,6 +290,8 @@ export function useAthletePersistedState(athleteId: string) {
     sessionLogs, freeSessions, nutritionStrategy, setNutritionStrategy,
     nutritionLog, visibilitySettings, testSessions, setTestSessions: setTestSessionsRaw,
     loaded, saveStatus,
+    // Cycle ouvert (stockage exos/séances scopé par cycle)
+    openCycleId, setOpenCycleId,
     // Wrapped setters (write + persist)
     setExos, setExMeta, setSets, setBodyWeight, setGoals, setCompletedSessions,
     setAthleteNotes, setCustomMethods, setSessions, setBlockConfig, setBlockHistory,

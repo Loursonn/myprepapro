@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, Zap, Plus, Library, X, Check, Copy } from "lucide-react";
@@ -509,6 +509,7 @@ export default function ProgrammationPage() {
     showNewBlock, setShowNewBlock, showBlockHistory, setShowBlockHistory,
     blockHistory, setBlockHistory,
     archiveAndNewBlock, updateSessionDay,
+    openCycleId, setOpenCycleId,
   } = useAthleteContext();
 
   const [subTab, setSubTab] = useState("muscu");
@@ -516,41 +517,76 @@ export default function ProgrammationPage() {
   const [showAddMuscu, setShowAddMuscu] = useState(false);
   const [openDrawer, setOpenDrawer] = useState<{ sessId: string; sessName: string } | null>(null);
   const [dayPicker, setDayPicker] = useState<{ sessId: string; sessName: string; currentDay: number } | null>(null);
-  const autoCreateAttempted = useRef(false);
   const qc = useQueryClient();
 
-  // Cherche le cycle standalone le plus récent (pas forcément actif aujourd'hui)
-  const { data: activeCycle, isLoading: cycleLoading } = useQuery({
-    queryKey: ["active-cycle", athleteId],
+  // Tous les cycles de l'athlète (passés, en cours, futurs), triés par date.
+  type CycleLite = { id: string; name: string; start_date: string; end_date: string };
+  const { data: cyclesList = [], isLoading: cycleLoading } = useQuery({
+    queryKey: ["athlete-cycles-list", athleteId],
     enabled: !!athleteId,
     staleTime: 30_000,
-    queryFn: async () => {
+    queryFn: async (): Promise<CycleLite[]> => {
       const { data } = await supabase
         .from("cycles")
         .select("id, name, start_date, end_date")
         .eq("athlete_id", athleteId)
-        .order("start_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data ?? null;
+        .order("start_date", { ascending: true });
+      return (data ?? []) as CycleLite[];
     },
   });
 
   const createCycle = useCreateCycleFromBloc();
 
-  // Auto-transformation bloc → cycle au premier chargement
-  useEffect(() => {
-    if (autoCreateAttempted.current) return;
-    if (cycleLoading || activeCycle || !loaded) return;
-    if (!user || !blockConfig?.startDate || sessions.length === 0) return;
-    if (createCycle.isPending) return;
-    autoCreateAttempted.current = true;
-    createCycle.mutate({ blockConfig, sessions, athleteId, coachId: user.id });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cycleLoading, activeCycle, loaded]);
+  // NOTE: la transformation bloc → cycle ne se fait plus automatiquement.
+  // La création de cycle passe désormais explicitement par l'assistant de la frise
+  // (CreateCycleAssistant) ou par le bouton « Créer le cycle » ci-dessous.
+  // L'auto-création silencieuse programmait des séances sans choix de l'utilisateur.
 
   const formatDate = (d: string) =>
     new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+
+  const todayISO = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
+
+  // Cycle par défaut = celui qui couvre AUJOURD'HUI ; sinon le plus récent.
+  const coveringToday = cyclesList.find((c) => c.start_date <= todayISO && todayISO <= c.end_date) ?? null;
+  const mostRecent    = cyclesList.length ? cyclesList[cyclesList.length - 1] : null;
+  const defaultCycle  = coveringToday ?? mostRecent;
+  // Cycle affiché = cycle ouvert (sélecteur) sinon défaut.
+  const activeCycle   = cyclesList.find((c) => c.id === openCycleId) ?? defaultCycle ?? null;
+
+  const weeksOf = (s: string, e: string) =>
+    Math.max(1, Math.ceil((new Date(e + "T12:00:00").getTime() - new Date(s + "T12:00:00").getTime()) / (7 * 86_400_000)));
+
+  // Ouvre un cycle : charge son contenu (exos/séances) + cale le bloc legacy dessus.
+  const selectCycle = useCallback((c: CycleLite) => {
+    setOpenCycleId(c.id);
+    setBlockConfig((prev) => ({
+      ...prev,
+      cycleId:    c.id,
+      blockName:  c.name,
+      startDate:  c.start_date,
+      totalWeeks: weeksOf(c.start_date, c.end_date),
+      deloadWeek: prev.cycleId === c.id ? prev.deloadWeek : 0,
+    }));
+  }, [setOpenCycleId, setBlockConfig]);
+
+  // Au chargement / changement de cycle : aligne openCycleId + blockConfig sur le
+  // cycle par défaut (couvrant aujourd'hui) si rien n'est encore ouvert/aligné.
+  useEffect(() => {
+    if (!cyclesList.length) return;
+    const target = cyclesList.find((c) => c.id === openCycleId) ?? defaultCycle;
+    if (!target) return;
+    if (openCycleId !== target.id) setOpenCycleId(target.id);
+    if (blockConfig?.cycleId !== target.id) selectCycle(target);
+  }, [cyclesList, openCycleId, blockConfig?.cycleId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Un cycle dont la date de fin est passée n'est plus « en cours » → dernier cycle.
+  const cycleEnded = !!activeCycle && activeCycle.end_date < todayISO;
+  const cycleStatusLabel = !activeCycle
+    ? ""
+    : activeCycle.end_date < todayISO   ? "Cycle passé"
+    : activeCycle.start_date > todayISO ? "Cycle à venir"
+    : "Cycle en cours";
 
   const sortedSessions = [...sessions].sort((a, b) => (a.day_of_week ?? 7) - (b.day_of_week ?? 7));
 
@@ -609,22 +645,47 @@ export default function ProgrammationPage() {
             <span style={{ fontSize: 12, color: C.tx3 }}>Création du cycle…</span>
           </div>
         ) : activeCycle ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{
-                fontSize: 11, fontWeight: 600, color: C.b,
-                textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 4,
-              }}>Cycle en cours</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>{activeCycle.name}</div>
-              <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>
-                {formatDate(activeCycle.start_date)} → {formatDate(activeCycle.end_date)} · S{currentWeek}/{tw}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 600, color: cycleEnded ? C.tx3 : C.b,
+                  textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 4,
+                }}>{cycleStatusLabel}</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>{activeCycle.name}</div>
+                <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>
+                  {formatDate(activeCycle.start_date)} → {formatDate(activeCycle.end_date)}
+                  {cycleEnded ? " · terminé" : activeCycle.start_date > todayISO ? " · à venir" : ` · S${currentWeek}/${tw}`}
+                </div>
               </div>
+              {dw > 0 && (
+                <span style={{
+                  padding: "4px 8px", borderRadius: 6,
+                  background: C.bS, color: C.b, fontSize: 10, fontWeight: 700,
+                }}>Deload S{dw}</span>
+              )}
             </div>
-            {dw > 0 && (
-              <span style={{
-                padding: "4px 8px", borderRadius: 6,
-                background: C.bS, color: C.b, fontSize: 10, fontWeight: 700,
-              }}>Deload S{dw}</span>
+
+            {/* Sélecteur : tous les cycles (passés / en cours / futurs) */}
+            {cyclesList.length > 1 && (
+              <select
+                value={activeCycle.id}
+                onChange={(e) => { const c = cyclesList.find((x) => x.id === e.target.value); if (c) selectCycle(c); }}
+                style={{
+                  width: "100%", padding: "7px 9px", borderRadius: 8,
+                  border: "1px solid " + C.brdL, background: C.s2, color: C.tx,
+                  fontSize: 12, fontFamily: "inherit",
+                }}
+              >
+                {cyclesList.map((c) => {
+                  const status = c.end_date < todayISO ? "Passé" : c.start_date > todayISO ? "À venir" : "En cours";
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {status} · {c.name} ({formatDate(c.start_date)} → {formatDate(c.end_date)})
+                    </option>
+                  );
+                })}
+              </select>
             )}
           </div>
         ) : (
