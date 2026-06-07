@@ -598,6 +598,7 @@ export function WorkoutSplitModal({
     lockedSessId:       sessionId,
     defaultWeek:        rightWeekIndex,
     hideSplitControls:  true,
+    athleteId,
   };
 
   if (!open) return null;

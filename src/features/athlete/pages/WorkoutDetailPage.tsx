@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -11,6 +11,8 @@ import { useCompleteWorkout } from "@/features/shared/hooks/useCompleteWorkout";
 import { useWorkoutLog } from "@/features/shared/hooks/useWorkoutLog";
 import { useAddBonusSet } from "@/features/shared/hooks/useAddBonusSet";
 import { useAddCustomExercise } from "@/features/shared/hooks/useAddCustomExercise";
+import { usePRsByRef } from "@/features/shared/hooks/usePRLogs";
+import { useAutoComputePRs, effectiveRmRef } from "@/features/shared/hooks/useAutoComputePRs";
 import type { SetRow } from "@/features/shared/types/athlete";
 import { RpeSheet } from "../components/RpeSheet";
 
@@ -286,17 +288,31 @@ function BonusSetSection({
 export default function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { athleteId } = useAthleteContext();
+  const { athleteId, sets: setsMap } = useAthleteContext();
 
   const { session, exercises, isCompleted, currentWeek } = useWorkoutDetail(id ?? "");
   const { mutate: updateSet } = useUpdateSet();
-  const { mutate: completeWorkout } = useCompleteWorkout();
+  const { mutate: completeWorkoutBase } = useCompleteWorkout();
+  const computePRs = useAutoComputePRs();
+
+  const completeWorkout = useCallback((sessionId: string) => {
+    completeWorkoutBase(sessionId);
+    if (athleteId) {
+      computePRs({
+        athleteId,
+        exercises: exercises.map(e => e.exercise),
+        sets: setsMap,
+        currentWeek,
+      });
+    }
+  }, [completeWorkoutBase, computePRs, athleteId, exercises, setsMap, currentWeek]);
   const [showRpe, setShowRpe] = useState(false);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
 
   const weekMondayISO = localMonday();
 
   const { data: workoutLog } = useWorkoutLog(athleteId ?? "", id ?? "");
+  const { byRef: prByRef } = usePRsByRef(athleteId ?? undefined);
 
   const { mutate: addCustomEx } = useAddCustomExercise();
   const [customExercises, setCustomExercises] = useState<Array<{
@@ -382,10 +398,31 @@ export default function WorkoutDetailPage() {
           </div>
         ) : (
           exercises.map(({ exercise, sets, prevSets, prevWeekNum }) => {
+            const wk = exercise.weeks?.[currentWeek] ?? exercise.weeks?.[1];
             const exSets = sets.length > 0
               ? sets
-              : Array.from({ length: exercise.weeks?.[1]?.sets ?? 3 }, (): SetRow => ({}));
+              : Array.from({ length: wk?.sets ?? 3 }, (): SetRow => ({}));
             const bonusSets = bonusSetsMap.get(exercise.id) ?? [];
+
+            // Method reference weight calculation (from kg on the exercise)
+            const methodRef = wk?.method_attachment?.reference;
+            const methodRefKg = (() => {
+              if (!methodRef || !wk?.kg) return null;
+              const m = methodRef.trim().match(/^(\d+(?:\.\d+)?)%$/);
+              if (!m) return null;
+              return Math.round(parseFloat(m[1]) / 100 * wk.kg * 2) / 2;
+            })();
+
+            // %RM programming: derive kg from athlete PR
+            const pctRm = wk?.pct_rm;
+            const rmRef = effectiveRmRef(exercise); // rm_ref ou nom de l'exercice
+            const rmKg = (() => {
+              if (pctRm == null || !rmRef) return null;
+              const prs = prByRef[rmRef];
+              if (!prs?.length) return null;
+              const best = prs.reduce((m, p) => p.kg > m.kg ? p : m, prs[0]);
+              return Math.round(pctRm / 100 * best.kg * 2) / 2;
+            })();
 
             return (
               <div
@@ -400,6 +437,50 @@ export default function WorkoutDetailPage() {
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{exercise.name}</div>
                   {exercise.bloc && (
                     <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>{exercise.bloc}</div>
+                  )}
+                  {/* %RM badge */}
+                  {pctRm != null && (
+                    <div style={{
+                      marginTop: 8, padding: "6px 10px", borderRadius: 8,
+                      background: `${C.g}12`, border: `1px solid ${C.g}30`,
+                      display: "flex", alignItems: "center", gap: 8,
+                    }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: C.g }}>%RM</span>
+                      <span style={{ fontSize: 10, color: C.tx3 }}>{rmRef ?? "—"}</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: C.tx, marginLeft: "auto" }}>
+                        {pctRm}%
+                        {rmKg != null ? ` → ${rmKg} kg` : <span style={{ fontSize: 10, color: C.o }}> (aucun PR)</span>}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Method badge */}
+                  {wk?.method_attachment && (
+                    <div style={{
+                      marginTop: 8, padding: "6px 10px", borderRadius: 8,
+                      background: `${C.ac}12`, border: `1px solid ${C.ac}30`,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: C.ac }}>
+                          {wk.method_attachment.method_name ?? "Méthode"}
+                        </span>
+                        {wk.method_attachment.applied_to_sets && wk.method_attachment.applied_to_sets.length > 0 && (
+                          <span style={{ fontSize: 10, color: C.tx3 }}>
+                            · sets {wk.method_attachment.applied_to_sets.join(", ")}
+                          </span>
+                        )}
+                        {methodRefKg !== null && (
+                          <span style={{ fontSize: 11, fontWeight: 800, color: C.tx, marginLeft: "auto" }}>
+                            {methodRef} → {methodRefKg} kg
+                          </span>
+                        )}
+                      </div>
+                      {wk.method_attachment.prescription && (
+                        <div style={{ fontSize: 10, color: C.tx2, marginTop: 4, fontFamily: "monospace" }}>
+                          {wk.method_attachment.prescription}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 

@@ -313,6 +313,7 @@ export default function ProgPage() {
           weekSchedule={weekSchedule as Record<string, unknown>}
           setWeekSchedule={setWeekSchedule}
           onClose={() => setOpenDrawer(null)}
+          athleteId={athleteId ?? undefined}
         />
       )}
     </>

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useState, useRef } from "react";
+import { X, Check } from "lucide-react";
 import { C } from "@/lib/theme";
 import { CoachProgramEditor } from "@/components/coach/CoachProgramEditor";
 import type { Session, BlockConfig } from "@/features/shared/types/athlete";
@@ -27,6 +27,7 @@ interface Props {
   setWeekSchedule: (v: unknown) => void;
   onDayChange?:    (newDay: number) => void;
   onClose:         () => void;
+  athleteId?:      string;
 }
 
 type Tab = "prev" | "current" | "next";
@@ -37,10 +38,23 @@ export function SessionWeekDrawer({
   sessId, sessName, currentWeek, tw, dw, blockConfig,
   exos, setExos, sessions, setSessions, sets, completedSessions,
   athleteNotes, allMethods, customMethods, setCustomMethods,
-  exMeta, setExMeta, weekSchedule, setWeekSchedule, onDayChange, onClose,
+  exMeta, setExMeta, weekSchedule, setWeekSchedule, onDayChange, onClose, athleteId,
 }: Props) {
   const [tab, setTab] = useState<Tab>("current");
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(sessName);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  function confirmRename() {
+    const trimmed = nameValue.trim();
+    if (trimmed && trimmed !== sessName) {
+      (setSessions as (v: (prev: Session[]) => Session[]) => void)(
+        prev => prev.map(s => s.id === sessId ? { ...s, name: trimmed } : s)
+      );
+    }
+    setEditingName(false);
+  }
 
   const sess = sessions.find(s => s.id === sessId);
   const currentDay = sess?.day_of_week ?? null;
@@ -65,6 +79,7 @@ export function SessionWeekDrawer({
     currentWeek,
     hideWeekNav: true,
     lockedSessId: sessId,
+    athleteId,
   };
 
   return (
@@ -93,7 +108,50 @@ export function SessionWeekDrawer({
           display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
         }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>{sessName}</div>
+            {editingName ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  ref={nameInputRef}
+                  autoFocus
+                  value={nameValue}
+                  onChange={e => setNameValue(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") confirmRename();
+                    else if (e.key === "Escape") { setNameValue(sessName); setEditingName(false); }
+                  }}
+                  style={{
+                    flex: 1, padding: "4px 8px", borderRadius: 7,
+                    border: "1px solid " + C.coach, background: C.s2,
+                    color: C.tx, fontSize: 15, fontWeight: 800,
+                    fontFamily: "inherit", outline: "none",
+                  }}
+                />
+                <button
+                  onClick={confirmRename}
+                  style={{
+                    width: 26, height: 26, borderRadius: 6, border: "none",
+                    background: C.coach, color: "#fff", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}
+                ><Check size={13} /></button>
+                <button
+                  onClick={() => { setNameValue(sessName); setEditingName(false); }}
+                  style={{
+                    width: 26, height: 26, borderRadius: 6, border: "1px solid " + C.brdL,
+                    background: "transparent", color: C.tx3, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}
+                ><X size={13} /></button>
+              </div>
+            ) : (
+              <div
+                onClick={() => { setNameValue(nameValue); setEditingName(true); }}
+                title="Cliquer pour renommer"
+                style={{ fontSize: 15, fontWeight: 800, color: C.tx, cursor: "text", display: "inline-block" }}
+              >
+                {nameValue}
+              </div>
+            )}
             {dayLabel && (
               <button
                 onClick={() => onDayChange && setDayPickerOpen(o => !o)}

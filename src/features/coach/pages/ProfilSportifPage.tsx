@@ -17,6 +17,7 @@ import MeasurementComparison from "@/features/coach/components/MeasurementCompar
 import CategoryProfiles from "@/features/coach/components/CategoryProfiles";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { WeightChart } from "@/components/athlete/StatsCharts";
+import { PRLogsSection } from "@/features/coach/components/PRLogsSection";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -751,7 +752,7 @@ function ZoneTableSimple({ title, rows }: {
 
 export default function ProfilSportifPage() {
   const { athleteId } = useParams<{ athleteId: string }>();
-  const { weightLog, weightMilestones, bodyWeight, nutritionStrategy } = useAthleteContext();
+  const { weightLog, weightMilestones, bodyWeight, nutritionStrategy, exos, setExos } = useAthleteContext();
   const { data: refs = {}, isLoading } = useAthleteRefs(athleteId!);
   const upsert = useUpsertRef(athleteId!);
   const deleteRef = useDeleteRef(athleteId!);
@@ -891,6 +892,25 @@ export default function ProfilSportifPage() {
               </div>
             </div>
             <MeasurementComparison athleteId={athleteId!} />
+          </Panel>
+
+          {/* ── RECORDS PERSONNELS ── */}
+          <Panel title="Records personnels (1RM)" color="#F59E0B">
+            <PRLogsSection
+              athleteId={athleteId!}
+              exercises={Object.values(exos).flat()}
+              onUpdateExerciseRef={(exId, rmRef) => {
+                setExos((prev: import("@/features/shared/types/athlete").ExosMap) => {
+                  const next = { ...prev };
+                  for (const sid of Object.keys(next)) {
+                    next[sid] = next[sid].map(e =>
+                      e.id === exId ? { ...e, rm_ref: rmRef } : e
+                    );
+                  }
+                  return next;
+                });
+              }}
+            />
           </Panel>
 
           {/* ── DONNÉES PERSONNALISÉES (pleine largeur, tout en bas) ── */}

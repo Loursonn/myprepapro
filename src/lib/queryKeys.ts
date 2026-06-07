@@ -50,4 +50,11 @@ export const QK = {
     recentRecords:  (cid: string)               => ['coachDashboard', 'recentRecords',  cid]       as const,
     upcomingTests:  (cid: string, date: string) => ['coachDashboard', 'upcomingTests',  cid, date] as const,
   },
+  // ── Méthodes d'entraînement ───────────────────────────────────────────────────
+  trainingMethods: (filters?: object) => ['training_methods', filters ?? {}] as const,
+  trainingMethod:  (id: string)       => ['training_methods', id]            as const,
+  // ── Roadmap ───────────────────────────────────────────────────────────────────
+  roadmapPhases: ['roadmap-phases'] as const,
+  roadmapItems:  (phaseId?: string) => phaseId ? ['roadmap-items', phaseId] : ['roadmap-items'] as const,
+  roadmapVotes:  (userId: string)   => ['roadmap-votes', userId]             as const,
 } as const;
