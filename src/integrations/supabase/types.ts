@@ -1351,6 +1351,56 @@ export type Database = {
           },
         ]
       }
+      training_methods: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          scope: string
+          category: string
+          config: Json
+          is_official: boolean
+          created_by: string | null
+          tags: string[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          scope: string
+          category: string
+          config?: Json
+          is_official?: boolean
+          created_by?: string | null
+          tags?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          scope?: string
+          category?: string
+          config?: Json
+          is_official?: boolean
+          created_by?: string | null
+          tags?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_methods_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tests: {
         Row: {
           category: string | null

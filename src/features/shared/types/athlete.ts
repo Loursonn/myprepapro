@@ -1,4 +1,5 @@
 import type { NutritionStrategy } from "@/lib/nutrition";
+import type { MethodAttachment } from "@/types/trainingMethods";
 
 // ─── Block & Session ─────────────────────────────────────────────────────────
 
@@ -12,6 +13,9 @@ export interface WeekConfig {
   methodParams?: Record<string, unknown>;
   coachNote?: string;
   tempo?: string;
+  method_attachment?: MethodAttachment;
+  /** Programme en %RM : pourcentage du record athlète (0–200) */
+  pct_rm?: number;
 }
 
 export interface Exercise {
@@ -23,6 +27,9 @@ export interface Exercise {
   isFlexibility?: boolean;
   exercise_id?: string;
   weeks: Record<number, WeekConfig>;
+  /** Référence canonique pour les 1RM (ex: "Développé couché").
+   *  Plusieurs exercices peuvent partager la même ref → même pool de force. */
+  rm_ref?: string;
 }
 
 export type ExosMap = Record<string, Exercise[]>;
