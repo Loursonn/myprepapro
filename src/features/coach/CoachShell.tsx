@@ -22,12 +22,13 @@ import { Search } from "lucide-react";
 // ── Navigation items ──────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { icon: "🏠", label: "Home",       path: "/coach",          exact: true,  certified: false },
-  { icon: "👥", label: "Athlètes",   path: "/coach/athletes", exact: false, certified: false },
-  { icon: "📚", label: "Banque",     path: "/coach/library",  exact: false, certified: false },
-  { icon: "🧪", label: "Tests",      path: "/coach/tests",    exact: false, certified: false },
-  { icon: "🎖️", label: "Coachs",    path: "/coach/coaches",  exact: false, certified: true  },
-  { icon: "⚙️", label: "Paramètres", path: "/coach/settings", exact: false, certified: false },
+  { icon: "🏠", label: "Home",       path: "/coach",          exact: true,  certified: false, roadmap: false },
+  { icon: "👥", label: "Athlètes",   path: "/coach/athletes", exact: false, certified: false, roadmap: false },
+  { icon: "📚", label: "Banque",     path: "/coach/library",  exact: false, certified: false, roadmap: false },
+  { icon: "🧪", label: "Tests",      path: "/coach/tests",    exact: false, certified: false, roadmap: false },
+  { icon: "🎖️", label: "Coachs",    path: "/coach/coaches",  exact: false, certified: true,  roadmap: false },
+  { icon: "🗺️", label: "Roadmap",   path: "/coach/roadmap",  exact: false, certified: false, roadmap: true  },
+  { icon: "⚙️", label: "Paramètres", path: "/coach/settings", exact: false, certified: false, roadmap: false },
 ] as const;
 
 // ── Sidebar styles (CSS vars overridden via inline style on provider) ─────────
@@ -119,7 +120,10 @@ function CoachShellInner() {
         {/* Nav items */}
         <SidebarContent style={{ padding: "8px 0" }}>
           <SidebarMenu>
-            {NAV_ITEMS.filter(item => !item.certified || profile?.is_certified_coach).map((item) => {
+            {NAV_ITEMS.filter(item =>
+            (!item.certified || profile?.is_certified_coach) &&
+            (!item.roadmap   || profile?.is_certified_coach || profile?.is_admin)
+          ).map((item) => {
               const active = isActive(item.path, item.exact);
               return (
                 <SidebarMenuItem key={item.path}>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Zap, Plus, Library, X, Check, Copy } from "lucide-react";
+import { ChevronRight, Zap, Plus, Library, X, Check, Copy, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
+import type { Session } from "@/features/shared/types/athlete";
 import { useEnergySessions, useCreateEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import type { EnergySessionRow } from "@/types/energy";
 import { SessionPreviewModal, KIND_COLOR, KIND_LABEL } from "@/features/coach/components/energy/SessionPreviewModal";
@@ -517,6 +518,11 @@ export default function ProgrammationPage() {
   const [showAddMuscu, setShowAddMuscu] = useState(false);
   const [openDrawer, setOpenDrawer] = useState<{ sessId: string; sessName: string } | null>(null);
   const [dayPicker, setDayPicker] = useState<{ sessId: string; sessName: string; currentDay: number } | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionName, setEditingSessionName] = useState("");
+  const [trashedSessions, setTrashedSessions] = useState<Array<{ session: Session; exos: unknown[] }>>([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ sessId: string; sessName: string } | null>(null);
   const qc = useQueryClient();
 
   // Tous les cycles de l'athlète (passés, en cours, futurs), triés par date.
@@ -754,7 +760,29 @@ export default function ProgrammationPage() {
         <>
           {/* Header avec bouton créer (toujours visible si pas viewOnly) */}
           {!viewOnly && sortedSessions.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <button
+                onClick={() => setShowTrash(true)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "7px 12px", borderRadius: 9,
+                  border: "1px solid " + C.brdL, background: "transparent",
+                  color: trashedSessions.length > 0 ? C.r : C.tx3,
+                  fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  position: "relative" as const,
+                }}
+              >
+                <Trash2 size={13} />
+                Corbeille
+                {trashedSessions.length > 0 && (
+                  <span style={{
+                    position: "absolute", top: -6, right: -6,
+                    background: C.r, color: "#fff", borderRadius: "50%",
+                    width: 16, height: 16, fontSize: 9, fontWeight: 800,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>{trashedSessions.length}</span>
+                )}
+              </button>
               <button
                 onClick={() => setShowAddMuscu(true)}
                 style={{
@@ -808,17 +836,12 @@ export default function ProgrammationPage() {
                   const exoCount = ((exos as Record<string, unknown[]>)[sess.id] || []).length;
                   const isPonctuelle = sess.recurrence === "once";
                   return (
-                    <button
+                    <div
                       key={sess.id}
-                      onClick={() => setOpenDrawer({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" })}
-                      onDoubleClick={(e) => {
-                        e.preventDefault();
-                        if (!isPonctuelle) setDayPicker({ sessId: sess.id, sessName: sess.name || sess.short || "Séance", currentDay: sess.day_of_week ?? 0 });
-                      }}
                       style={{
                         padding: "12px 14px", borderRadius: 12,
                         border: "1px solid " + C.brdL, background: C.s1,
-                        cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+                        fontFamily: "inherit", textAlign: "left" as const,
                         display: "flex", flexDirection: "column" as const, gap: 6,
                         position: "relative" as const,
                       }}
@@ -845,20 +868,121 @@ export default function ProgrammationPage() {
                           }}
                         >⚠ Jour non défini</span>
                       )}
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, paddingRight: 20 }}>
-                        {sess.name || sess.short || "Séance"}
+                      {editingSessionId === sess.id ? (
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+                          <input
+                            autoFocus
+                            value={editingSessionName}
+                            onChange={e => setEditingSessionName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                if (editingSessionName.trim()) setSessions(prev => prev.map(s => s.id === sess.id ? { ...s, name: editingSessionName.trim() } : s));
+                                setEditingSessionId(null);
+                              } else if (e.key === "Escape") {
+                                setEditingSessionId(null);
+                              }
+                            }}
+                            style={{
+                              flex: 1, padding: "4px 8px", borderRadius: 7,
+                              border: "1px solid " + C.coach, background: C.s2,
+                              color: C.tx, fontSize: 13, fontWeight: 700,
+                              fontFamily: "inherit", outline: "none",
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              if (editingSessionName.trim()) setSessions(prev => prev.map(s => s.id === sess.id ? { ...s, name: editingSessionName.trim() } : s));
+                              setEditingSessionId(null);
+                            }}
+                            style={{
+                              width: 24, height: 24, borderRadius: 6, border: "none",
+                              background: C.coach, color: "#fff", cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            }}
+                          ><Check size={12} /></button>
+                          <button
+                            onClick={() => setEditingSessionId(null)}
+                            style={{
+                              width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.brdL,
+                              background: "transparent", color: C.tx3, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            }}
+                          ><X size={12} /></button>
+                        </div>
+                      ) : (
+                        <div
+                          style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+                          onClick={() => setOpenDrawer({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" })}
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            if (!isPonctuelle) setDayPicker({ sessId: sess.id, sessName: sess.name || sess.short || "Séance", currentDay: sess.day_of_week ?? 0 });
+                          }}
+                        >
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, flex: 1, paddingRight: 4 }}>
+                            {sess.name || sess.short || "Séance"}
+                          </div>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              setEditingSessionId(sess.id);
+                              setEditingSessionName(sess.name || sess.short || "");
+                            }}
+                            style={{
+                              width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.brdL,
+                              background: "transparent", color: C.tx3, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            }}
+                          ><Pencil size={11} /></button>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div
+                          style={{ fontSize: 10, color: C.tx3, cursor: "pointer" }}
+                          onClick={() => editingSessionId !== sess.id && setOpenDrawer({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" })}
+                        >
+                          {exoCount} exercice{exoCount !== 1 ? "s" : ""}
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            title="Dupliquer la séance"
+                            onClick={e => {
+                              e.stopPropagation();
+                              const newId = crypto.randomUUID();
+                              setSessions(prev => [...prev, { ...sess, id: newId, name: (sess.name || sess.short || "Séance") + " (copie)", day_of_week: undefined }]);
+                              setExos(prev => ({ ...(prev as Record<string, unknown[]>), [newId]: [...((prev as Record<string, unknown[]>)[sess.id] || [])] }));
+                              toast.success("Séance dupliquée");
+                            }}
+                            style={{
+                              width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.brdL,
+                              background: "transparent", color: C.tx3, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
+                          ><Copy size={11} /></button>
+                          <button
+                            title="Supprimer la séance"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setConfirmDelete({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" });
+                            }}
+                            style={{
+                              width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.r + "40",
+                              background: C.rS, color: C.r, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
+                          ><Trash2 size={11} /></button>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 10, color: C.tx3 }}>
-                        {exoCount} exercice{exoCount !== 1 ? "s" : ""}
-                      </div>
-                      <ChevronRight
-                        size={14}
-                        style={{
-                          position: "absolute", right: 12,
-                          top: "50%", transform: "translateY(-50%)", color: C.tx3,
-                        }}
-                      />
-                    </button>
+                      {editingSessionId !== sess.id && (
+                        <ChevronRight
+                          size={14}
+                          style={{
+                            position: "absolute", right: 12,
+                            top: "50%", transform: "translateY(-50%)", color: C.tx3,
+                            pointerEvents: "none",
+                          }}
+                        />
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -926,6 +1050,122 @@ export default function ProgrammationPage() {
           }}
           onClose={() => setShowAddMuscu(false)}
         />
+      )}
+
+      {/* ── Corbeille ── */}
+      {showTrash && (
+        <>
+          <div onClick={() => setShowTrash(false)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(0,0,0,0.6)" }} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", zIndex: 81,
+            transform: "translate(-50%, -50%)",
+            background: C.bg, borderRadius: 16, padding: "20px",
+            width: "min(92vw, 380px)", boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+            display: "flex", flexDirection: "column", gap: 14,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.tx, display: "flex", alignItems: "center", gap: 8 }}>
+                <Trash2 size={16} style={{ color: C.r }} />
+                Corbeille
+                <span style={{ fontSize: 11, fontWeight: 400, color: C.tx3 }}>({trashedSessions.length} séance{trashedSessions.length !== 1 ? "s" : ""})</span>
+              </div>
+              <button onClick={() => setShowTrash(false)} style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={13} /></button>
+            </div>
+            {trashedSessions.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "24px 0", color: C.tx3, fontSize: 13 }}>Corbeille vide</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "60vh", overflowY: "auto" }}>
+                {trashedSessions.map(({ session: s }) => (
+                  <div key={s.id} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 12px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s1,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{s.name || s.short || "Séance"}</div>
+                      {s.day_of_week != null && <div style={{ fontSize: 10, color: C.tx3 }}>{DOW[s.day_of_week]}</div>}
+                    </div>
+                    <button
+                      title="Restaurer"
+                      onClick={() => {
+                        const item = trashedSessions.find(t => t.session.id === s.id);
+                        if (!item) return;
+                        setSessions(prev => [...prev, item.session]);
+                        setExos(prev => ({ ...(prev as Record<string, unknown[]>), [s.id]: item.exos }));
+                        setTrashedSessions(prev => prev.filter(t => t.session.id !== s.id));
+                        toast.success(`"${s.name || s.short}" restaurée`);
+                      }}
+                      style={{
+                        padding: "4px 10px", borderRadius: 7, border: "1px solid " + C.coach,
+                        background: C.coachS, color: C.coach, fontSize: 11, fontWeight: 700,
+                        cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                      }}
+                    >Restaurer</button>
+                    <button
+                      title="Supprimer définitivement"
+                      onClick={() => {
+                        setTrashedSessions(prev => prev.filter(t => t.session.id !== s.id));
+                        toast.success("Supprimée définitivement");
+                      }}
+                      style={{
+                        width: 26, height: 26, borderRadius: 6, border: "1px solid " + C.r + "40",
+                        background: C.rS, color: C.r, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      }}
+                    ><Trash2 size={12} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Confirm suppression ── */}
+      {confirmDelete && (
+        <>
+          <div onClick={() => setConfirmDelete(null)} style={{ position: "fixed", inset: 0, zIndex: 82, background: "rgba(0,0,0,0.6)" }} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", zIndex: 83,
+            transform: "translate(-50%, -50%)",
+            background: C.bg, borderRadius: 14, padding: "20px 20px",
+            width: "min(88vw, 320px)", boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+            display: "flex", flexDirection: "column", gap: 16,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>Déplacer vers la corbeille ?</div>
+            <div style={{ fontSize: 13, color: C.tx2 }}>
+              <span style={{ fontWeight: 700 }}>"{confirmDelete.sessName}"</span> sera déplacée dans la corbeille. Tu pourras la restaurer.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setConfirmDelete(null)}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 9,
+                  border: "1px solid " + C.brdL, background: "transparent",
+                  color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >Annuler</button>
+              <button
+                onClick={() => {
+                  const { sessId, sessName } = confirmDelete;
+                  const sessObj = sessions.find(s => s.id === sessId);
+                  if (sessObj) {
+                    const sessExos = ((exos as Record<string, unknown[]>)[sessId] || []);
+                    setTrashedSessions(prev => [...prev, { session: sessObj, exos: sessExos }]);
+                    setSessions(prev => prev.filter(s => s.id !== sessId));
+                    setExos(prev => { const next = { ...(prev as Record<string, unknown[]>) }; delete next[sessId]; return next; });
+                    toast.success(`"${sessName}" déplacée dans la corbeille`);
+                  }
+                  setConfirmDelete(null);
+                }}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 9,
+                  border: "none", background: C.r, color: "#fff",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >Supprimer</button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ── Modals ── */}
