@@ -5,8 +5,8 @@
 import { useState } from "react";
 import { Pencil, Copy, Trash2, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { C } from "@/lib/theme";
-import { MethodPreview } from "./MethodPreview";
-import type { TrainingMethod, MethodScope } from "@/types/trainingMethods";
+import { MethodPreview, methodConfigToText } from "./MethodPreview";
+import type { TrainingMethod, MethodScope, FullWeekConfig, MethodConfig } from "@/types/trainingMethods";
 
 // ─── Labels / colors ──────────────────────────────────────────────────────────
 
@@ -42,6 +42,8 @@ export function MethodCard({
   const [confirmDel, setConfirmDel] = useState(false);
 
   const scopeColor = SCOPE_COLOR[method.scope] ?? C.tx3;
+  const weeklyConfigs = (method.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[] | undefined;
+  const weekCount = weeklyConfigs?.length ?? 0;
 
   return (
     <div style={{
@@ -76,6 +78,15 @@ export function MethodCard({
                   {method.category}
                 </span>
               )}
+              {/* Multi-week badge */}
+              {weekCount > 0 && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                  background: "rgba(123,111,255,0.15)", color: "#7B6FFF",
+                }}>
+                  📅 {weekCount} sem.
+                </span>
+              )}
               {/* Official badge */}
               {method.is_official && (
                 <span style={{
@@ -103,6 +114,20 @@ export function MethodCard({
 
         {/* Preview compact */}
         <MethodPreview config={method.config} compact />
+
+        {/* Weekly protocol display */}
+        {weekCount > 0 && weeklyConfigs && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+            {weeklyConfigs.map((wc) => (
+              <div key={wc.week} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: "#7B6FFF", flexShrink: 0, minWidth: 20 }}>S{wc.week}</span>
+                <span style={{ fontSize: 10, color: C.tx3, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {wc.config ? methodConfigToText(wc.config as MethodConfig) : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Tags */}
         {method.tags.length > 0 && (

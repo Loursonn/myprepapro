@@ -16,6 +16,10 @@ export interface WeekConfig {
   method_attachment?: MethodAttachment;
   /** Programme en %RM : pourcentage du record athlète (0–200) */
   pct_rm?: number;
+  /** Charges individuelles par série (override kg global) */
+  setKgs?: number[];
+  /** %RM individuels par série (override pct_rm global) */
+  setPctRms?: number[];
 }
 
 export interface Exercise {

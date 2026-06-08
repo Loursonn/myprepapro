@@ -879,7 +879,7 @@ export function WorkoutSplitModal({
             {/* CoachProgramEditor */}
             <div style={{ flex: 1, overflowY: "auto", opacity: isPast ? 0.7 : 1 }}>
               {/* @ts-expect-error CoachProgramEditor is JSX */}
-              <CoachProgramEditor key={`split-${rightWeekIndex}`} {...editorProps} />
+              <CoachProgramEditor {...editorProps} />
             </div>
           </div>
         </div>

@@ -3,15 +3,15 @@
  * 2 étapes : informations générales → paramètres selon scope.
  * React Hook Form + Zod. Aucun nom de méthode inscrit en dur.
  */
-import { useState, useRef } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X, Plus, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { C } from "@/lib/theme";
-import { MethodPreview, formValuesToConfig } from "./MethodPreview";
+import { MethodPreview, formValuesToConfig, methodConfigToText } from "./MethodPreview";
 import { useTrainingMethods } from "@/features/shared/hooks/useTrainingMethods";
-import type { TrainingMethod } from "@/types/trainingMethods";
+import type { TrainingMethod, FullWeekConfig, MethodScope, MethodConfig, ClassicMethodConfig, SetMethodConfig, ExerciseMethodConfig } from "@/types/trainingMethods";
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
@@ -35,6 +35,7 @@ const schema = z.object({
   set_load_type:            z.enum(["same", "free", "decreasing_pct", "increasing_pct", "custom"]).default("same"),
   set_load_pct_change:      z.number().min(1).max(100).default(10),
   set_load_custom_values:   z.string().default(""),
+  set_load_values_unit:     z.enum(["kg", "pct"]).default("kg"),
   set_load_reference:       z.string().default(""),
   set_rir_required:         z.boolean().default(false),
 
@@ -49,7 +50,8 @@ const schema = z.object({
   ex_rest_max_s:       z.number().min(0).max(600).default(180),
   ex_load_type:        z.enum(["same", "ascending", "descending", "custom"]).default("same"),
   ex_load_1rm_mode:    z.boolean().default(false),
-  ex_load_rm_kg:       z.number().min(0).max(500).default(0),
+  ex_load_values:      z.string().default(""),
+  ex_load_values_unit: z.enum(["kg", "pct"]).default("kg"),
   ex_load_pct_1rm:     z.number().min(1).max(100).default(75),
   ex_tempo_enabled:    z.boolean().default(false),
   ex_tempo_eccentric:  z.number().min(0).max(10).default(3),
@@ -70,6 +72,7 @@ const schema = z.object({
   cl_load_type:          z.enum(["same", "ascending", "descending", "custom"]).default("same"),
   cl_load_pct_change:    z.number().min(1).max(100).default(5),
   cl_load_custom_values: z.string().default(""),
+  cl_load_values_unit:   z.enum(["kg", "pct"]).default("kg"),
   cl_load_reference:     z.string().default(""),
   cl_rir_required:       z.boolean().default(false),
 });
@@ -323,11 +326,12 @@ function Step1({
 
 // ─── Step 2 — Classic scope ──────────────────────────────────────────────────
 
-function Step2Classic({ control, watch }: { control: ReturnType<typeof useForm<FormValues>>["control"]; watch: ReturnType<typeof useForm<FormValues>>["watch"] }) {
-  const repsType   = watch("cl_reps_type");
-  const restType   = watch("cl_rest_type");
-  const loadType   = watch("cl_load_type");
-  const setsCount  = watch("cl_sets_count") || 4;
+function Step2Classic({ control }: { control: ReturnType<typeof useForm<FormValues>>["control"] }) {
+  const repsType       = useWatch({ control, name: "cl_reps_type" });
+  const restType       = useWatch({ control, name: "cl_rest_type" });
+  const loadType       = useWatch({ control, name: "cl_load_type" });
+  const loadValuesUnit = useWatch({ control, name: "cl_load_values_unit" });
+  const setsCount      = (useWatch({ control, name: "cl_sets_count" }) as number) || 4;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -436,11 +440,22 @@ function Step2Classic({ control, watch }: { control: ReturnType<typeof useForm<F
         )}
         {loadType === "custom" && (
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 10 }}>
-              Valeur par série (kg, %, RPE… au choix)
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: C.tx3 }}>Valeur par série</span>
+              <Controller name="cl_load_values_unit" control={control} render={({ field }) => (
+                <div style={{ display: "flex", gap: 4 }}>
+                  {([["kg", "kg"], ["pct", "% 1RM"]] as const).map(([v, lbl]) => (
+                    <button key={v} type="button" onClick={() => field.onChange(v)}
+                      style={{ ...toggleBtn(field.value === v), padding: "3px 8px", fontSize: 10 }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              )} />
             </div>
             <Controller name="cl_load_custom_values" control={control} render={({ field }) => (
-              <SubSetValuesInput value={field.value} count={setsCount} onChange={field.onChange} />
+              <SubSetValuesInput value={field.value} count={setsCount} onChange={field.onChange}
+                labelPrefix="S" unit={loadValuesUnit as "kg" | "pct"} />
             )} />
           </div>
         )}
@@ -475,10 +490,14 @@ function SubSetValuesInput({
   value,
   count,
   onChange,
+  labelPrefix = "SS",
+  unit,
 }: {
   value: string;
   count: number;
   onChange: (v: string) => void;
+  labelPrefix?: string;
+  unit?: "kg" | "pct";
 }) {
   const parts = value.split(",").map((s) => s.trim());
   const items = Array.from({ length: count }, (_, i) => parts[i] ?? "");
@@ -493,16 +512,22 @@ function SubSetValuesInput({
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
       {items.map((v, i) => (
         <div key={i} style={{ textAlign: "center" as const }}>
-          <span style={label({ marginBottom: 4 })}>SS{i + 1}</span>
-          <input
-            type="number"
-            value={v}
-            onChange={(e) => update(i, e.target.value)}
-            placeholder="—"
-            style={numInput({ width: 64 })}
-            step={0.5}
-            min={0}
-          />
+          <span style={label({ marginBottom: 4 })}>{labelPrefix}{i + 1}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <input
+              type="number"
+              value={v}
+              onChange={(e) => update(i, e.target.value)}
+              placeholder="—"
+              style={numInput({ width: 56 })}
+              step={unit === "pct" ? 1 : 0.5}
+              min={0}
+              max={unit === "pct" ? 100 : undefined}
+            />
+            {unit === "pct" && (
+              <span style={{ fontSize: 11, color: C.tx3, flexShrink: 0 }}>%</span>
+            )}
+          </div>
         </div>
       ))}
     </div>
@@ -511,13 +536,14 @@ function SubSetValuesInput({
 
 // ─── Step 2 — Set scope ───────────────────────────────────────────────────────
 
-function Step2Set({ control, watch }: { control: ReturnType<typeof useForm<FormValues>>["control"]; watch: ReturnType<typeof useForm<FormValues>>["watch"] }) {
-  const countType  = watch("set_sub_sets_count_type");
-  const countValue = watch("set_sub_sets_count_value");
-  const countMax   = watch("set_sub_sets_count_max");
-  const repsType   = watch("set_reps_type");
-  const restType   = watch("set_rest_intra_type");
-  const loadType   = watch("set_load_type");
+function Step2Set({ control }: { control: ReturnType<typeof useForm<FormValues>>["control"] }) {
+  const countType      = useWatch({ control, name: "set_sub_sets_count_type" });
+  const countValue     = useWatch({ control, name: "set_sub_sets_count_value" }) as number;
+  const countMax       = useWatch({ control, name: "set_sub_sets_count_max" }) as number;
+  const repsType       = useWatch({ control, name: "set_reps_type" });
+  const restType       = useWatch({ control, name: "set_rest_intra_type" });
+  const loadType       = useWatch({ control, name: "set_load_type" });
+  const loadValuesUnit = useWatch({ control, name: "set_load_values_unit" });
   // number of individual inputs = fixed value or range max
   const subSetCount = countType === "fixed" ? (countValue || 3) : (countMax || 5);
 
@@ -633,14 +659,25 @@ function Step2Set({ control, watch }: { control: ReturnType<typeof useForm<FormV
         )}
         {loadType === "custom" && (
           <div>
-            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 10 }}>
-              Valeur par sous-série (kg, %, RPE… au choix)
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: C.tx3 }}>Valeur par sous-série</span>
+              <Controller name="set_load_values_unit" control={control} render={({ field }) => (
+                <div style={{ display: "flex", gap: 4 }}>
+                  {([["kg", "kg"], ["pct", "% 1RM"]] as const).map(([v, lbl]) => (
+                    <button key={v} type="button" onClick={() => field.onChange(v)}
+                      style={{ ...toggleBtn(field.value === v), padding: "3px 8px", fontSize: 10 }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              )} />
             </div>
             <Controller name="set_load_custom_values" control={control} render={({ field }) => (
               <SubSetValuesInput
                 value={field.value}
                 count={subSetCount}
                 onChange={field.onChange}
+                unit={loadValuesUnit as "kg" | "pct"}
               />
             )} />
           </div>
@@ -672,12 +709,14 @@ function Step2Set({ control, watch }: { control: ReturnType<typeof useForm<FormV
 
 // ─── Step 2 — Exercise scope ──────────────────────────────────────────────────
 
-function Step2Exercise({ control, watch }: { control: ReturnType<typeof useForm<FormValues>>["control"]; watch: ReturnType<typeof useForm<FormValues>>["watch"] }) {
-  const repsType     = watch("ex_reps_type");
-  const restType     = watch("ex_rest_type");
-  const loadType     = watch("ex_load_type");
-  const load1rmMode  = watch("ex_load_1rm_mode");
-  const tempoEnabled = watch("ex_tempo_enabled");
+function Step2Exercise({ control }: { control: ReturnType<typeof useForm<FormValues>>["control"] }) {
+  const repsType     = useWatch({ control, name: "ex_reps_type" });
+  const restType     = useWatch({ control, name: "ex_rest_type" });
+  const loadType     = useWatch({ control, name: "ex_load_type" });
+  const load1rmMode    = useWatch({ control, name: "ex_load_1rm_mode" });
+  const loadValuesUnit = useWatch({ control, name: "ex_load_values_unit" });
+  const tempoEnabled   = useWatch({ control, name: "ex_tempo_enabled" });
+  const setsCount      = (useWatch({ control, name: "ex_sets_count" }) as number) || 4;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -771,60 +810,72 @@ function Step2Exercise({ control, watch }: { control: ReturnType<typeof useForm<
           </div>
         )} />
 
-        {/* 1RM section — only visible when custom */}
+        {/* Custom load — per-set values OR % 1RM auto */}
         {loadType === "custom" && (
           <div style={{
             padding: "12px 14px", borderRadius: 8,
             background: C.s2, border: `1px solid ${C.brdL}`,
             display: "flex", flexDirection: "column", gap: 12,
           }}>
+            {/* Mode toggle */}
             <Controller name="ex_load_1rm_mode" control={control} render={({ field }) => (
-              <button
-                type="button"
-                onClick={() => field.onChange(!field.value)}
-                style={{ ...toggleBtn(field.value, C.b), display: "flex", alignItems: "center", gap: 6, alignSelf: "flex-start" }}
-              >
-                <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${field.value ? C.b : C.brdL}`, background: field.value ? C.b : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {field.value && <Check size={9} color="#fff" />}
-                </div>
-                En % du 1RM
-              </button>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" onClick={() => field.onChange(false)} style={toggleBtn(!field.value)}>
+                  Valeurs par série
+                </button>
+                <button type="button" onClick={() => field.onChange(true)} style={toggleBtn(field.value, C.b)}>
+                  % du 1RM (auto)
+                </button>
+              </div>
             )} />
 
+            {/* Per-set values */}
+            {!load1rmMode && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: C.tx3 }}>Valeur par série</span>
+                  <Controller name="ex_load_values_unit" control={control} render={({ field }) => (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {([["kg", "kg"], ["pct", "% 1RM"]] as const).map(([v, lbl]) => (
+                        <button key={v} type="button" onClick={() => field.onChange(v)}
+                          style={{ ...toggleBtn(field.value === v), padding: "3px 8px", fontSize: 10 }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  )} />
+                </div>
+                <Controller name="ex_load_values" control={control} render={({ field }) => (
+                  <SubSetValuesInput
+                    value={field.value}
+                    count={setsCount}
+                    onChange={field.onChange}
+                    labelPrefix="S"
+                    unit={loadValuesUnit as "kg" | "pct"}
+                  />
+                )} />
+              </div>
+            )}
+
+            {/* 1RM auto mode */}
             {load1rmMode && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <span style={label()}>1RM de référence (kg)</span>
-                    <Controller name="ex_load_rm_kg" control={control} render={({ field }) => (
-                      <input
-                        type="number"
-                        {...field}
-                        onChange={e => field.onChange(+e.target.value)}
-                        placeholder="0 = non défini"
-                        style={{ ...numInput(), width: "100%", textAlign: "left" as const, padding: "7px 10px" }}
-                        min={0} max={500}
-                      />
-                    )} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <span style={label()}>% du 1RM cible</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Controller name="ex_load_pct_1rm" control={control} render={({ field }) => (
-                        <input
-                          type="number"
-                          {...field}
-                          onChange={e => field.onChange(+e.target.value)}
-                          style={numInput({ width: "100%" })}
-                          min={1} max={100}
-                        />
-                      )} />
-                      <span style={{ color: C.tx3, fontSize: 13 }}>%</span>
-                    </div>
-                  </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={label({ marginBottom: 0 })}>% du 1RM cible</span>
+                  <Controller name="ex_load_pct_1rm" control={control} render={({ field }) => (
+                    <input
+                      type="number"
+                      {...field}
+                      onChange={e => field.onChange(+e.target.value)}
+                      style={numInput({ width: 64 })}
+                      min={1} max={100}
+                    />
+                  )} />
+                  <span style={{ color: C.tx3, fontSize: 13 }}>%</span>
                 </div>
-                <div style={{ fontSize: 11, color: C.tx3 }}>
-                  Le 1RM peut être laissé à 0 pour que l'athlète le renseigne au moment de la séance.
+                <div style={{ fontSize: 11, color: C.tx3, lineHeight: 1.5 }}>
+                  Le 1RM est récupéré automatiquement depuis les PRs de l'athlète pour cet exercice.
+                  Si aucun PR n'existe, l'athlète saisit sa charge directement lors de la séance.
                 </div>
               </div>
             )}
@@ -881,6 +932,190 @@ function buildConfig(vals: FormValues) {
   return formValuesToConfig(vals as unknown as Record<string, unknown>);
 }
 
+// ─── Config → Form defaults (reverse of formValuesToConfig) ──────────────────
+
+function configToFormDefaults(config: Partial<MethodConfig> | undefined, scope: MethodScope): Partial<FormValues> {
+  if (!config) return {};
+  if (scope === "classic" && config.scope === "classic") {
+    const c = config as ClassicMethodConfig;
+    return {
+      cl_sets_count:        c.sets?.count ?? 4,
+      cl_reps_type:         c.reps?.type ?? "range",
+      cl_reps_value:        c.reps?.value ?? 10,
+      cl_reps_min:          c.reps?.min ?? 10,
+      cl_reps_max:          c.reps?.max ?? 12,
+      cl_rest_type:         c.rest_between?.type ?? "fixed",
+      cl_rest_seconds:      c.rest_between?.seconds ?? 90,
+      cl_rest_min_s:        c.rest_between?.min_s ?? 60,
+      cl_rest_max_s:        c.rest_between?.max_s ?? 180,
+      cl_load_type:         c.load?.type ?? "same",
+      cl_load_pct_change:   c.load?.pct_change ?? 5,
+      cl_load_custom_values: (c.load?.values ?? []).join(","),
+      cl_load_values_unit:   (c.load?.values_unit ?? "kg") as "kg" | "pct",
+      cl_load_reference:    c.load?.reference ?? "",
+      cl_rir_required:      c.rir_required ?? false,
+    };
+  }
+  if (scope === "set" && config.scope === "set") {
+    const c = config as SetMethodConfig;
+    return {
+      set_sub_sets_count_type:  c.sub_sets?.count?.type ?? "fixed",
+      set_sub_sets_count_value: c.sub_sets?.count?.value ?? 3,
+      set_sub_sets_count_min:   c.sub_sets?.count?.min ?? 2,
+      set_sub_sets_count_max:   c.sub_sets?.count?.max ?? 5,
+      set_reps_type:            c.sub_sets?.reps?.type ?? "fixed",
+      set_reps_value:           c.sub_sets?.reps?.value ?? 5,
+      set_reps_pattern:         (c.sub_sets?.reps?.pattern ?? []).join(","),
+      set_rest_intra_type:      c.sub_sets?.rest_intra?.type ?? "fixed",
+      set_rest_intra_seconds:   c.sub_sets?.rest_intra?.seconds ?? 15,
+      set_load_type:            c.load?.type ?? "same",
+      set_load_pct_change:      c.load?.pct_change ?? 10,
+      set_load_custom_values:   (c.load?.values ?? []).join(","),
+      set_load_values_unit:     (c.load?.values_unit ?? "kg") as "kg" | "pct",
+      set_load_reference:       c.load?.reference ?? "",
+      set_rir_required:         c.rir_required ?? false,
+    };
+  }
+  if (scope === "exercise" && config.scope === "exercise") {
+    const c = config as ExerciseMethodConfig;
+    return {
+      ex_sets_count:       c.sets?.count ?? 4,
+      ex_reps_type:        c.reps?.type ?? "fixed",
+      ex_reps_value:       c.reps?.value ?? 8,
+      ex_reps_pattern:     (c.reps?.pattern ?? []).join(","),
+      ex_rest_type:        c.rest_between?.type ?? "fixed",
+      ex_rest_seconds:     c.rest_between?.seconds ?? 90,
+      ex_rest_min_s:       c.rest_between?.min_s ?? 60,
+      ex_rest_max_s:       c.rest_between?.max_s ?? 180,
+      ex_load_type:        c.load?.type ?? "same",
+      ex_load_1rm_mode:    c.load?.mode === "pct_1rm",
+      ex_load_values:      (c.load?.values ?? []).join(","),
+      ex_load_values_unit: (c.load?.values_unit ?? "kg") as "kg" | "pct",
+      ex_load_pct_1rm:     c.load?.pct_of_1rm ?? 75,
+      ex_tempo_enabled:    !!c.tempo,
+      ex_tempo_eccentric:  c.tempo?.eccentric_s ?? 3,
+      ex_tempo_pause:      c.tempo?.pause_s ?? 0,
+      ex_tempo_concentric: c.tempo?.concentric_s ?? 1,
+      ex_rir_required:     c.rir_required ?? false,
+    };
+  }
+  return {};
+}
+
+// ─── WeekFormSlot — one week's full method config ────────────────────────────
+
+const BASE_FORM_DEFAULTS: FormValues = {
+  name: "", description: "", scope: "classic", category: "", tags: [],
+  set_sub_sets_count_type: "fixed", set_sub_sets_count_value: 3,
+  set_sub_sets_count_min: 2, set_sub_sets_count_max: 5,
+  set_reps_type: "fixed", set_reps_value: 5, set_reps_pattern: "",
+  set_rest_intra_type: "fixed", set_rest_intra_seconds: 15,
+  set_load_type: "same", set_load_pct_change: 10,
+  set_load_custom_values: "", set_load_values_unit: "kg", set_load_reference: "", set_rir_required: false,
+  ex_sets_count: 4, ex_reps_type: "fixed", ex_reps_value: 8,
+  ex_reps_pattern: "", ex_rest_type: "fixed", ex_rest_seconds: 90,
+  ex_rest_min_s: 60, ex_rest_max_s: 180, ex_load_type: "same",
+  ex_load_1rm_mode: false, ex_load_values: "", ex_load_values_unit: "kg", ex_load_pct_1rm: 75,
+  ex_tempo_enabled: false, ex_tempo_eccentric: 3, ex_tempo_pause: 0,
+  ex_tempo_concentric: 1, ex_rir_required: false,
+  cl_sets_count: 4, cl_reps_type: "range", cl_reps_value: 10,
+  cl_reps_min: 10, cl_reps_max: 12, cl_rest_type: "fixed",
+  cl_rest_seconds: 90, cl_rest_min_s: 60, cl_rest_max_s: 180,
+  cl_load_type: "same", cl_load_pct_change: 5,
+  cl_load_custom_values: "", cl_load_values_unit: "kg", cl_load_reference: "", cl_rir_required: false,
+};
+
+function WeekFormSlot({
+  week, scope, initialConfig, isDeload, onChange,
+}: {
+  week: number;
+  scope: MethodScope;
+  initialConfig?: Partial<MethodConfig>;
+  isDeload: boolean;
+  onChange: (week: number, config: Partial<MethodConfig>) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const defaults: FormValues = {
+    ...BASE_FORM_DEFAULTS,
+    scope,
+    ...configToFormDefaults(initialConfig, scope),
+  };
+
+  const { control, watch, getValues } = useForm<FormValues>({ defaultValues: defaults });
+
+  // Stable ref for onChange to avoid re-subscriptions
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; });
+
+  useEffect(() => {
+    // Fire with initial defaults on mount
+    const init = getValues();
+    const initCfg = formValuesToConfig({ ...init, scope } as Record<string, unknown>);
+    if (initCfg) onChangeRef.current(week, initCfg);
+
+    // Subscribe to all subsequent changes
+    const subscription = watch((vals) => {
+      const cfg = formValuesToConfig({ ...vals, scope } as Record<string, unknown>);
+      if (cfg) onChangeRef.current(week, cfg);
+    });
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [week, scope]);
+
+  const currentVals = useWatch({ control });
+  const currentConfig = formValuesToConfig({ ...currentVals, scope } as Record<string, unknown>);
+  const preview = currentConfig ? methodConfigToText(currentConfig as MethodConfig) : "—";
+
+  return (
+    <div style={{
+      borderRadius: 8,
+      border: `1px solid ${expanded ? "#7B6FFF" : C.brdL}`,
+      overflow: "hidden",
+      marginBottom: 6,
+    }}>
+      {/* Header */}
+      <div
+        onClick={() => setExpanded((p) => !p)}
+        style={{
+          padding: "9px 14px",
+          background: expanded ? "rgba(123,111,255,0.08)" : C.s2,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 700, color: expanded ? "#7B6FFF" : C.tx2, flexShrink: 0 }}>
+          S{week}{isDeload ? " 🔄" : ""}
+        </span>
+        <span style={{
+          flex: 1, fontSize: 10, color: C.tx3,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          fontFamily: "monospace",
+        }}>
+          {preview}
+        </span>
+        <span style={{ fontSize: 10, color: C.tx3 }}>{expanded ? "▲" : "▼"}</span>
+      </div>
+
+      {/* Expanded form */}
+      {expanded && (
+        <div style={{ padding: "16px", borderTop: `1px solid ${C.brd}` }}>
+          {scope === "classic"  && <Step2Classic  control={control} />}
+          {scope === "set"      && <Step2Set      control={control} />}
+          {scope === "exercise" && <Step2Exercise control={control} />}
+          {currentConfig && (
+            <div style={{ marginTop: 16 }}>
+              <MethodPreview config={currentConfig} compact />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MethodBuilder ────────────────────────────────────────────────────────────
 
 interface MethodBuilderProps {
@@ -893,6 +1128,29 @@ interface MethodBuilderProps {
 
 export function MethodBuilder({ initial, coachId: _coachId, onSubmit, onCancel, loading }: MethodBuilderProps) {
   const [step, setStep] = useState(1);
+
+  // ── Multi-week protocol state ─────────────────────────────────────────────
+  const initWC = (initial?.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[] | undefined;
+  const [multiWeek, setMultiWeek] = useState(() => !!initWC?.length);
+  const [weekCount, setWeekCount] = useState(() => initWC?.length || 6);
+  const [weeklyConfigs, setWeeklyConfigs] = useState<FullWeekConfig[]>(() =>
+    initWC ?? Array.from({ length: 6 }, (_, i) => ({ week: i + 1, config: {} as MethodConfig }))
+  );
+
+  const updateWeekConfig = useCallback((week: number, config: Partial<MethodConfig>) => {
+    setWeeklyConfigs((prev) =>
+      prev.map((wc) => wc.week === week ? { ...wc, config: config as MethodConfig } : wc)
+    );
+  }, []);
+
+  function resizeWC(n: number) {
+    setWeekCount(n);
+    setWeeklyConfigs((prev) => {
+      const next = [...prev];
+      while (next.length < n) next.push({ week: next.length + 1, config: {} as MethodConfig });
+      return next.slice(0, n);
+    });
+  }
 
   const { data: methods = [] } = useTrainingMethods();
   const existingCategories = [...new Set(methods.map((m) => m.category).filter(Boolean))];
@@ -916,6 +1174,7 @@ export function MethodBuilder({ initial, coachId: _coachId, onSubmit, onCancel, 
     set_load_type:            "same",
     set_load_pct_change:      10,
     set_load_custom_values:   "",
+    set_load_values_unit:     "kg",
     set_load_reference:       "",
     set_rir_required:         false,
 
@@ -929,7 +1188,8 @@ export function MethodBuilder({ initial, coachId: _coachId, onSubmit, onCancel, 
     ex_rest_max_s:       180,
     ex_load_type:        "same",
     ex_load_1rm_mode:    false,
-    ex_load_rm_kg:       0,
+    ex_load_values:      "",
+    ex_load_values_unit: "kg",
     ex_load_pct_1rm:     75,
     ex_tempo_enabled:    false,
     ex_tempo_eccentric:  3,
@@ -949,6 +1209,7 @@ export function MethodBuilder({ initial, coachId: _coachId, onSubmit, onCancel, 
     cl_load_type:          "same",
     cl_load_pct_change:    5,
     cl_load_custom_values: "",
+    cl_load_values_unit:   "kg",
     cl_load_reference:     "",
     cl_rir_required:       false,
   };
@@ -964,7 +1225,13 @@ export function MethodBuilder({ initial, coachId: _coachId, onSubmit, onCancel, 
 
   async function handleNext() {
     if (step === 1) { setStep(2); return; }
-    await handleSubmit(onSubmit)();
+    await handleSubmit((vals) => {
+      const hasData = weeklyConfigs.some((wc) => wc.config && Object.keys(wc.config).length > 1);
+      onSubmit({
+        ...vals,
+        weekly_configs: (multiWeek && hasData ? weeklyConfigs : undefined) as unknown as undefined,
+      });
+    })();
   }
 
   return (
@@ -992,14 +1259,71 @@ export function MethodBuilder({ initial, coachId: _coachId, onSubmit, onCancel, 
             existingCategories={existingCategories}
           />
         )}
-        {step === 2 && scope === "classic"  && <Step2Classic  control={control} watch={watch} />}
-        {step === 2 && scope === "set"      && <Step2Set      control={control} watch={watch} />}
-        {step === 2 && scope === "exercise" && <Step2Exercise control={control} watch={watch} />}
+        {step === 2 && scope === "classic"  && <Step2Classic  control={control} />}
+        {step === 2 && scope === "set"      && <Step2Set      control={control} />}
+        {step === 2 && scope === "exercise" && <Step2Exercise control={control} />}
 
         {/* Preview live */}
         {step === 2 && (
           <div style={{ marginTop: 24 }}>
             <MethodPreview config={preview} />
+          </div>
+        )}
+
+        {/* Multi-week protocol */}
+        {step === 2 && (
+          <div style={{ marginTop: 20, paddingTop: 18, borderTop: `1px solid ${C.brd}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!multiWeek) {
+                    setWeeklyConfigs(Array.from({ length: weekCount }, (_, i) => ({
+                      week: i + 1,
+                      config: {} as MethodConfig,
+                    })));
+                  }
+                  setMultiWeek(!multiWeek);
+                }}
+                style={{ ...toggleBtn(multiWeek, "#7B6FFF"), display: "flex", alignItems: "center", gap: 6 }}
+              >
+                <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${multiWeek ? "#7B6FFF" : C.brdL}`, background: multiWeek ? "#7B6FFF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {multiWeek && <Check size={9} color="#fff" />}
+                </div>
+                📅 Protocole multi-semaines
+              </button>
+              {multiWeek && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={label({ marginBottom: 0 })}>Semaines</span>
+                  <input
+                    type="number"
+                    value={weekCount}
+                    min={2}
+                    max={16}
+                    onChange={(e) => resizeWC(Math.max(2, Math.min(16, +e.target.value || 2)))}
+                    style={{ ...numInput(), width: 52 }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {multiWeek && (
+              <div>
+                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 10, lineHeight: 1.5 }}>
+                  Configure chaque semaine individuellement. Clique sur une semaine pour l'ouvrir.
+                </div>
+                {weeklyConfigs.map((wc) => (
+                  <WeekFormSlot
+                    key={wc.week}
+                    week={wc.week}
+                    scope={scope}
+                    initialConfig={wc.config && Object.keys(wc.config).length > 1 ? wc.config : undefined}
+                    isDeload={false}
+                    onChange={updateWeekConfig}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

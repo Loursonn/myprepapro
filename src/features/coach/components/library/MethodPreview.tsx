@@ -4,7 +4,7 @@
  * Aucun nom de méthode inscrit en dur : purement paramétrique.
  */
 import { C } from "@/lib/theme";
-import type { MethodConfig, SetMethodConfig, ExerciseMethodConfig, ClassicMethodConfig } from "@/types/trainingMethods";
+import type { MethodConfig, SetMethodConfig, ExerciseMethodConfig, ClassicMethodConfig, FullWeekConfig } from "@/types/trainingMethods";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,10 +40,13 @@ function formatLoadSet(load: SetMethodConfig["load"]): string {
     case "free":           return "charge libre";
     case "decreasing_pct": return `charge -${load.pct_change ?? "?"}% par sous-série${ref}`;
     case "increasing_pct": return `charge +${load.pct_change ?? "?"}% par sous-série${ref}`;
-    case "custom":
-      return (load.values?.length
-        ? `charge [${load.values.join(" → ")}]`
-        : "charge custom") + ref;
+    case "custom": {
+      if (load.values?.length) {
+        const unit = load.values_unit === "pct" ? "%" : "";
+        return `charge [${load.values.map(v => `${v}${unit}`).join(" → ")}]` + ref;
+      }
+      return `charge custom${ref}`;
+    }
     default: return "charge ?";
   }
 }
@@ -89,8 +92,10 @@ function formatLoadEx(load: ExerciseMethodConfig["load"]): string {
     case "custom":
       if (load.mode === "pct_1rm") {
         const pct = load.pct_of_1rm ? `${load.pct_of_1rm}%` : "?%";
-        const rm  = load.rm_kg      ? ` (1RM ${load.rm_kg}kg)` : "";
-        return `charge ${pct} du 1RM${rm}`;
+        return `charge ${pct} du 1RM (auto)`;
+      }
+      if (load.values?.length) {
+        return `charge [${load.values.join(" → ")}]`;
       }
       return "charge custom";
     default: return "charge ?";
@@ -134,8 +139,13 @@ function formatLoadClassic(load: ClassicMethodConfig["load"]): string {
     case "same":       return `charge identique${ref}`;
     case "ascending":  return `charge +${load.pct_change ?? "?"}% par série${ref}`;
     case "descending": return `charge -${load.pct_change ?? "?"}% par série${ref}`;
-    case "custom":
-      return (load.values?.length ? `charge [${load.values.join(" → ")}]` : "charge custom") + ref;
+    case "custom": {
+      if (load.values?.length) {
+        const unit = load.values_unit === "pct" ? "%" : "";
+        return `charge [${load.values.map(v => `${v}${unit}`).join(" → ")}]` + ref;
+      }
+      return `charge custom${ref}`;
+    }
     default: return "charge ?";
   }
 }
@@ -254,6 +264,7 @@ export function MethodPreview({ config, compact = false }: MethodPreviewProps) {
 export function formValuesToConfig(vals: Record<string, unknown>): Partial<MethodConfig> | null {
   const scope = vals.scope as "set" | "exercise" | undefined;
   if (!scope) return null;
+  const weekly_configs = vals.weekly_configs as FullWeekConfig[] | undefined;
 
   if (scope === "classic") {
     return {
@@ -278,9 +289,11 @@ export function formValuesToConfig(vals: Record<string, unknown>): Partial<Metho
         values: vals.cl_load_type === "custom"
           ? String(vals.cl_load_custom_values ?? "").split(",").map((s) => parseFloat(s.trim())).filter((n) => !isNaN(n) && n > 0)
           : undefined,
+        values_unit: vals.cl_load_type === "custom" && vals.cl_load_values_unit === "pct" ? "pct" : undefined,
         reference: String(vals.cl_load_reference ?? "").trim() || undefined,
       },
       rir_required: Boolean(vals.cl_rir_required),
+      ...(weekly_configs?.length ? { weekly_configs } : {}),
     } as ClassicMethodConfig;
   }
 
@@ -317,9 +330,11 @@ export function formValuesToConfig(vals: Record<string, unknown>): Partial<Metho
               .map((s) => parseFloat(s.trim()))
               .filter((n) => !isNaN(n) && n > 0)
           : undefined,
+        values_unit: vals.set_load_type === "custom" && vals.set_load_values_unit === "pct" ? "pct" : undefined,
         reference: String(vals.set_load_reference ?? "").trim() || undefined,
       },
       rir_required: Boolean(vals.set_rir_required),
+      ...(weekly_configs?.length ? { weekly_configs } : {}),
     } as SetMethodConfig;
   }
 
@@ -345,8 +360,12 @@ export function formValuesToConfig(vals: Record<string, unknown>): Partial<Metho
       type:       (vals.ex_load_type as ExerciseMethodConfig["load"]["type"]) ?? "same",
       ...(vals.ex_load_type === "custom" && vals.ex_load_1rm_mode ? {
         mode:       "pct_1rm" as const,
-        rm_kg:      Number(vals.ex_load_rm_kg)  || undefined,
         pct_of_1rm: Number(vals.ex_load_pct_1rm) || undefined,
+      } : {}),
+      ...(vals.ex_load_type === "custom" && !vals.ex_load_1rm_mode ? {
+        values: String(vals.ex_load_values ?? "")
+          .split(",").map((s) => parseFloat(s.trim())).filter((n) => !isNaN(n) && n > 0),
+        values_unit: vals.ex_load_values_unit === "pct" ? "pct" as const : undefined,
       } : {}),
     },
     tempo: tempoEnabled ? {
@@ -355,5 +374,6 @@ export function formValuesToConfig(vals: Record<string, unknown>): Partial<Metho
       concentric_s: Number(vals.ex_tempo_concentric)  || undefined,
     } : undefined,
     rir_required: Boolean(vals.ex_rir_required),
+    ...(weekly_configs?.length ? { weekly_configs } : {}),
   } as ExerciseMethodConfig;
 }
