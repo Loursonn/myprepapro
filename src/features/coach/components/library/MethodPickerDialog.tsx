@@ -64,11 +64,15 @@ export function MethodPickerDialog({ setsCount, onAttach, onClose }: MethodPicke
   function handleApply() {
     if (!selected) return;
     const ref = extractReference(selected);
+    const weeklyConfigs = (selected.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[] | undefined;
+    const prescription = weeklyConfigs?.length
+      ? `Multi-semaines (${weeklyConfigs.length} sem.)`
+      : methodConfigToText(selected.config);
     const attachment: MethodAttachment = {
       method_id:    selected.id,
       scope:        selected.scope,
       method_name:  selected.name,
-      prescription: methodConfigToText(selected.config),
+      prescription,
       ...(selected.scope === "set" && appliedSets.length > 0 && { applied_to_sets: [...appliedSets].sort() }),
       ...(ref && { reference: ref }),
     };

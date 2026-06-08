@@ -16,6 +16,23 @@ export const parseReps = (r: unknown): number => {
   return m ? +m[1] : 0;
 };
 
+/**
+ * Parse repsRange en tableau de reps par série.
+ * "8-10" → [9,9,...] (mid-point, pour estimation 1RM)
+ * "8"    → [8,8,...]
+ * "3,2,1" → [3,2,1] (séparateur , = série distincte)
+ * AMRAP  → [99,...]
+ */
+export const parseRepsArr = (repsRange: unknown, sets: number): number[] => {
+  const s = String(repsRange || "").trim();
+  if (!s || s.toUpperCase() === "AMRAP") return Array.from({ length: sets }, () => s.toUpperCase() === "AMRAP" ? 99 : 0);
+  if (s.includes(",")) {
+    const parts = s.split(",").map((p) => parseReps(p.trim()));
+    return Array.from({ length: sets }, (_, i) => parts[i] ?? parts[parts.length - 1] ?? 0);
+  }
+  return Array.from({ length: sets }, () => parseReps(s));
+};
+
 export const e1rm = (kg: number, reps: number) =>
   reps === 1 ? kg : Math.round(kg * (1 + reps / 30));
 
@@ -97,18 +114,20 @@ export const fmtMR = (method: string, mp: any, sets: number, repsRange: string) 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const generateRows = (planned: any, method: string, mp: any) => {
   const sets = planned?.sets || 3, kg = planned?.kg || 0;
-  const reps = parseReps(planned?.repsRange), rir = planned?.rir ?? 2;
+  const repsArr = parseRepsArr(planned?.repsRange, sets);
+  const reps = repsArr[0] || 0; // fallback pour méthodes mono-valeur
+  const rir = planned?.rir ?? 2;
   const p = mp || MDEF[method as keyof typeof MDEF] || {};
-  if (!method) return Array.from({ length: sets }, () => ({ type: "set", kg, reps, rir, done: false }));
+  if (!method) return Array.from({ length: sets }, (_, i) => ({ type: "set", kg, reps: repsArr[i] ?? reps, rir, done: false }));
   if (method === "dropset") {
     const rows: object[] = [];
     for (let s = 0; s < sets; s++) {
-      rows.push({ type: "set", setIdx: s+1, kg, reps, rir, done: false });
+      rows.push({ type: "set", setIdx: s+1, kg, reps: repsArr[s] ?? reps, rir, done: false });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (let d = 0; d < ((p as any).drops || 2); d++) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const dkg = (p as any).dropWeights?.[d] ?? Math.round(kg * Math.pow(1 - ((p as any).pct || 20) / 100, d+1) / 2.5) * 2.5;
-        rows.push({ type: "drop", setIdx: s+1, dropIdx: d+1, kg: dkg, reps, done: false });
+        rows.push({ type: "drop", setIdx: s+1, dropIdx: d+1, kg: dkg, reps: repsArr[s] ?? reps, done: false });
       }
     }
     return rows;
@@ -123,7 +142,7 @@ export const generateRows = (planned: any, method: string, mp: any) => {
     return rows;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (method === "restpause") return Array.from({ length: (p as any).rounds || 3 }, (_, i) => ({ type: "round", idx: i+1, kg, reps, rir, done: false, pauseSec: (p as any).pause || 15 }));
+  if (method === "restpause") return Array.from({ length: (p as any).rounds || 3 }, (_, i) => ({ type: "round", idx: i+1, kg, reps: repsArr[i] ?? reps, rir, done: false, pauseSec: (p as any).pause || 15 }));
   if (method === "cluster") {
     const rows: object[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +156,7 @@ export const generateRows = (planned: any, method: string, mp: any) => {
   if (method === "amrap") return [{ type: "amrap", kg, reps: 0, done: false, timed: (p as any).type === "timed", duration: (p as any).duration || 30 }];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (method === "isometrique") return Array.from({ length: (p as any).positions || 2 }, (_, i) => ({ type: "iso", idx: i+1, holdSec: (p as any).hold_sec || 30, done: false }));
-  return Array.from({ length: sets }, () => ({ type: "set", kg, reps, rir, done: false }));
+  return Array.from({ length: sets }, (_, i) => ({ type: "set", kg, reps: repsArr[i] ?? reps, rir, done: false }));
 };
 
 // ── Exercise tier lookup (used for PR grouping in stats) ─────────────────────

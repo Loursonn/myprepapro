@@ -912,7 +912,13 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     <span style={{fontSize:13,fontWeight:600}}>{ex.name}</span>{occIndex>0&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:C.bS,color:C.b,fontWeight:700,flexShrink:0}}>({occIndex})</span>}
                     {eType!=="muscu"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:typeColors[eType]+"20",color:typeColors[eType],fontWeight:600}}>{typeLabels[eType]}</span>}
                   </div>
-                  {!isFlex&&(wd.pdc||wd.kg)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(wd.method,wd.methodParams,wd.sets,wd.repsRange)}{(!wd.method||wd.method==="dropset"||wd.method==="restpause")?" - ":""}{(!wd.method||wd.method==="dropset"||wd.method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>
+                  {!isFlex&&(wd.pdc||wd.kg!=null||wd.pct_rm!=null||wd.sets||wd.method_attachment)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>
+                    {wd.pdc?"PDC":wd.pct_rm!=null?wd.pct_rm+"%RM":wd.kg!=null?wd.kg+"kg":wd.method_attachment?.method_name||""}
+                    {(wd.pdc||wd.kg!=null||wd.pct_rm!=null)?" - ":""}
+                    {wd.sets||wd.repsRange?fmtMR(wd.method,wd.methodParams,wd.sets||"?",wd.repsRange):""}
+                    {(!wd.method||wd.method==="dropset"||wd.method==="restpause")?" - ":""}
+                    {(!wd.method||wd.method==="dropset"||wd.method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}
+                  </div>
                   :isFlex&&wd.sets?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>
                   :<div style={{fontSize:11,color:C.tx3,marginTop:2}}>Aucune prescription</div>}
                 </div>
