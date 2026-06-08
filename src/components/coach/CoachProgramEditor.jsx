@@ -454,7 +454,11 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const tw=blockConfig?.totalWeeks||6;const dw=blockConfig?.deloadWeek||0;const progPct=blockConfig?.progressionPct||2.5;const deloadPct=blockConfig?.deloadPct||40;
   const blockStarted=!blockConfig?.startDate||Math.floor((Date.now()-new Date(blockConfig.startDate).getTime())/86400000)>=0;
   const weeksArr=Array.from({length:tw},(_,i)=>i+1);
-  const[_sess,setSess]=useState(0);const[week,setWeek]=useState(defaultWeek||currentWeek||1);const[openEx,setOpenEx]=useState(null);const[methodPickerEx,setMethodPickerEx]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
+  const[_sess,setSess]=useState(0);const[week,setWeek]=useState(defaultWeek||currentWeek||1);const[openEx,setOpenEx]=useState(null);const[methodPickerEx,setMethodPickerEx]=useState(null);
+  const[multiWeekExs,setMultiWeekExs]=useState(new Set());
+  const isMultiWeek=id=>multiWeekExs.has(id);
+  const toggleMultiWeek=id=>setMultiWeekExs(prev=>{const n=new Set(prev);if(n.has(id))n.delete(id);else n.add(id);return n;});
+  const[expandedMethodWeek,setExpandedMethodWeek]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
   const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#7B6FFF",e:"NEW"});
   const dropRef=useRef(null);
   const[showAI,setShowAI]=useState(false);
@@ -465,6 +469,8 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   // normalizeExName is now defined at the top level
   // Close dropdown on click outside
   useEffect(()=>{if(!showExDropdown)return;const h=e=>{if(dropRef.current&&!dropRef.current.contains(e.target))setShowExDropdown(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[showExDropdown]);
+  // Sync week when parent navigates (WorkoutSplitModal changes defaultWeek without remounting)
+  useEffect(()=>{if(defaultWeek)setWeek(defaultWeek);},[defaultWeek]);
   // Fetch exercises from Supabase DB on mount
   useEffect(()=>{supabase.from('exercises').select('id,name,target,ex_type,secondary,youtube_id,image_url').order('name').then(({data})=>{if(data)setSupabaseExos(data);});},[]);
   // Inject drag shake keyframe
@@ -637,6 +643,9 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const moveExToBloc=(fromId,toId,targetBlocId)=>{setExos(prev=>{const list=[...(prev[sid]||[])];const fi=list.findIndex(e=>e.id===fromId);const ti=list.findIndex(e=>e.id===toId);if(fi<0||ti<0)return prev;const moved={...list[fi],bloc:targetBlocId||null};list.splice(fi,1);const nti=list.findIndex(e=>e.id===toId);list.splice(nti>=0?nti:ti,0,moved);return{...prev,[sid]:list};});};
   const updField=(eid,f,val)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),[f]:f==="sets"||f==="kg"||f==="rir"||f==="pct_rm"?isNaN(+val)?val:+val:val}}}:e)}));
   const updExField=(eid,f,val)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,[f]:val}:e)}));
+  const updWeekN=(eid,weekN,f,val)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,weeks:{...e.weeks,[weekN]:{...(e.weeks[weekN]||{}),[f]:f==="sets"||f==="kg"||f==="rir"||f==="pct_rm"?isNaN(+val)?val:+val:val}}}:e)}));
+  const updWeekNMethod=(eid,weekN,mk)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,weeks:{...e.weeks,[weekN]:{...(e.weeks[weekN]||{}),method:mk||null,methodParams:mk?(MDEF[mk]||null):null}}}:e)}));
+  const updWeekNMP=(eid,weekN,p)=>setExos(prev=>({...prev,[sid]:prev[sid].map(e=>e.id===eid?{...e,weeks:{...e.weeks,[weekN]:{...(e.weeks[weekN]||{}),methodParams:p}}}:e)}));
   const updMP=(eid,p)=>setExos(prev=>{
     const list=(prev[sid]||[]).map(e=>e.id===eid?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),methodParams:p}}}:e);
     return{...prev,[sid]:list};
@@ -916,6 +925,71 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 </div>
               </div>
               {isOpen&&(<div onMouseDown={e=>e.stopPropagation()} style={{padding:"0 13px 16px",borderTop:"1px solid "+C.brd}}>
+                {/* Multi-week planning toggle */}
+                <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,marginBottom:8}}>
+                  <button onClick={()=>toggleMultiWeek(ex.id)} style={{padding:"3px 10px",borderRadius:6,border:"1px solid "+(isMultiWeek(ex.id)?C.coach:C.brdL),background:isMultiWeek(ex.id)?C.coachS:"transparent",color:isMultiWeek(ex.id)?C.coach:C.tx3,fontSize:10,fontWeight:isMultiWeek(ex.id)?700:400,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:4}}>
+                    📅 {isMultiWeek(ex.id)?"Multi-semaines actif":"Planifier multi-semaines"}
+                  </button>
+                </div>
+                {/* Multi-week table */}
+                {isMultiWeek(ex.id)&&(()=>{
+                  const cellSt=(w)=>({width:44,textAlign:"center",padding:"4px 2px",borderRadius:5,border:"1px solid "+(w===week?C.coach:C.brdL),background:w===week?C.coachS:C.s2,color:C.tx,fontSize:11,fontWeight:700,fontFamily:"inherit",boxSizing:"border-box"});
+                  const lSt={fontSize:9,color:C.tx3,whiteSpace:"nowrap",paddingRight:6,paddingTop:2};
+                  return(<div style={{marginBottom:12,overflowX:"auto",background:C.s2,borderRadius:10,padding:"10px 10px 6px",border:"1px solid "+C.coach+"30"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:C.coach,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Planification — toutes les semaines</div>
+                    <table style={{borderCollapse:"collapse",width:"100%"}}>
+                      <thead><tr>
+                        <td style={{...lSt,color:"transparent"}}>──</td>
+                        {weeksArr.map(w=><td key={w} style={{textAlign:"center",padding:"0 3px 4px",fontSize:9,fontWeight:w===week?800:400,color:w===dw?C.o:w===week?C.coach:C.tx3}}>S{w}{w===dw?"🔄":""}</td>)}
+                      </tr></thead>
+                      <tbody>
+                        <tr>
+                          <td style={lSt}>Séries</td>
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};return(<td key={w} style={{padding:"2px 3px"}}><input type="number" value={wD.sets||""} placeholder="-" onChange={e=>updWeekN(ex.id,w,"sets",e.target.value)} style={cellSt(w)}/></td>);})}
+                        </tr>
+                        {!isFlex&&<tr>
+                          <td style={lSt}>Charge</td>
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const isRm=wD.pct_rm!=null||wd.pct_rm!=null;const val=isRm?wD.pct_rm:wD.kg;return(<td key={w} style={{padding:"2px 3px"}}><input type="number" step={isRm?1:0.5} value={val??""} placeholder="-" onChange={e=>updWeekN(ex.id,w,isRm?"pct_rm":"kg",e.target.value)} style={{...cellSt(w),color:isRm?C.g:C.tx,background:isRm?(w===week?C.g+"25":C.g+"10"):w===week?C.coachS:C.s2}}/></td>);})}
+                        </tr>}
+                        {!isFlex&&<tr>
+                          <td style={{...lSt,fontSize:8}}>{(wd.pct_rm!=null||weeksArr.some(w=>ex.weeks[w]?.pct_rm!=null))?"%RM":"kg"}</td>
+                          {weeksArr.map(w=>{
+                            const wD=ex.weeks[w]||{};const isRm=wD.pct_rm!=null||wd.pct_rm!=null;
+                            if(!isRm||!athleteId)return <td key={w}/>;
+                            const ref=effectiveRmRef(ex);const prs=ref?prByRef[ref]:null;
+                            if(!prs?.length)return <td key={w} style={{textAlign:"center",fontSize:8,color:C.tx3}}>-</td>;
+                            const best=prs.reduce((m,p)=>p.kg>m.kg?p:m,prs[0]);
+                            const calc=Math.round((wD.pct_rm||0)/100*best.kg*2)/2;
+                            return <td key={w} style={{textAlign:"center",fontSize:8,color:C.g,fontWeight:700,paddingBottom:2}}>{calc||"-"}kg</td>;
+                          })}
+                        </tr>}
+                        <tr>
+                          <td style={lSt}>Reps</td>
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};return(<td key={w} style={{padding:"2px 3px"}}><input type="text" value={wD.repsRange||""} placeholder="-" onChange={e=>updWeekN(ex.id,w,"repsRange",e.target.value)} style={{...cellSt(w),fontSize:10}}/></td>);})}
+                        </tr>
+                        {!isFlex&&<tr>
+                          <td style={lSt}>RIR</td>
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};return(<td key={w} style={{padding:"2px 3px"}}><input type="number" min={0} max={5} value={wD.rir??""} placeholder="-" onChange={e=>updWeekN(ex.id,w,"rir",e.target.value)} style={{...cellSt(w),color:rC(wD.rir??2)}}/></td>);})}
+                        </tr>}
+                        {!isFlex&&<tr>
+                          <td style={lSt}>Méthode</td>
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const mk=wD.method||null;const mDat=mk?(DEF_METHODS[mk]||allMethods?.[mk]):null;const mc=mDat?.c||C.tx3;return(<td key={w} style={{padding:"2px 3px"}}><select value={mk||""} onChange={e=>{e.stopPropagation();updWeekNMethod(ex.id,w,e.target.value||null);}} style={{width:44,padding:"3px 1px",borderRadius:5,border:"1px solid "+(mk?mc:C.brdL),background:mk?mc+"20":C.s2,color:mk?mc:C.tx3,fontSize:8,fontWeight:mk?700:400,fontFamily:"inherit",cursor:"pointer"}}><option value="">—</option>{Object.entries(allMethods||{}).map(([k,m])=><option key={k} value={k}>{m.label.slice(0,7)}</option>)}</select></td>);})}
+                        </tr>}
+                      </tbody>
+                    </table>
+                    {weeksArr.some(w=>ex.weeks[w]?.method)&&(<div style={{marginTop:10}}>
+                      <div style={{fontSize:9,color:C.coach,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Paramètres méthode par semaine</div>
+                      {weeksArr.filter(w=>ex.weeks[w]?.method).map(w=>{const wD=ex.weeks[w]||{};const mk=wD.method;const mDat=DEF_METHODS[mk]||allMethods?.[mk];const mc=mDat?.c||C.ac;const isExp=expandedMethodWeek?.exId===ex.id&&expandedMethodWeek?.week===w;return(<div key={w} style={{marginBottom:4,borderRadius:7,border:"1px solid "+mc+"40",overflow:"hidden"}}>
+                        <div onClick={()=>setExpandedMethodWeek(isExp?null:{exId:ex.id,week:w})} style={{padding:"6px 10px",background:mc+"15",display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+                          <span style={{fontSize:10,fontWeight:700,color:mc}}>S{w}{w===dw?"🔄":""}</span>
+                          <span style={{flex:1,fontSize:10,color:mc}}>{mDat?.label||mk}</span>
+                          <span style={{fontSize:9,color:C.tx3}}>{isExp?"▲":"▼"}</span>
+                        </div>
+                        {isExp&&(<div style={{padding:"0 10px 10px"}}><MethodParamsForm method={mk} params={wD.methodParams} onChange={p=>updWeekNMP(ex.id,w,p)} exosInSession={exList} currentExId={ex.id} plannedKg={wD.pdc?null:wD.kg}/></div>)}
+                      </div>);})}
+                    </div>)}
+                  </div>);
+                })()}
                 {aNote&&<div style={{margin:"12px 0",padding:"10px 12px",borderRadius:8,background:C.b+"12",border:"1px solid "+C.b+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.b,textTransform:"uppercase",marginBottom:4}}>Retour S{week}</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.5,fontStyle:"italic"}}>"{aNote}"</div></div>}
                 {(()=>{
                   if(week<=1)return null;
@@ -1000,6 +1074,36 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     </div>
                     {/* rm_ref hint when in %RM mode and no PR found */}
                     {wd.pct_rm!=null&&athleteId&&(()=>{const effR=effectiveRmRef(ex);return(!effR||!prByRef[effR])&&<div style={{marginTop:4,fontSize:9,color:C.o,padding:"3px 6px",borderRadius:5,background:C.oS}}>⚠ Aucun PR trouvé pour "{effR||ex.name}". Complète une séance ou ajoute un PR manuellement.</div>;})()}
+                    {/* Per-set charge config */}
+                    {(wd.sets>=2)&&!wd.pdc&&(()=>{
+                      const isRm=wd.pct_rm!=null;
+                      const hasPerSet=isRm?(wd.setPctRms&&wd.setPctRms.length>0):(wd.setKgs&&wd.setKgs.length>0);
+                      const togglePerSet=()=>{
+                        if(hasPerSet){updField(ex.id,"setKgs",undefined);updField(ex.id,"setPctRms",undefined);}
+                        else if(isRm){updField(ex.id,"setPctRms",Array.from({length:wd.sets},()=>wd.pct_rm??80));}
+                        else{updField(ex.id,"setKgs",Array.from({length:wd.sets},()=>wd.kg??0));}
+                      };
+                      const vals=isRm?(wd.setPctRms||[]):(wd.setKgs||[]);
+                      const key=isRm?"setPctRms":"setKgs";
+                      const ref=effectiveRmRef(ex);const prs=athleteId&&ref?prByRef[ref]:null;const best=prs?.length?prs.reduce((m,p)=>p.kg>m.kg?p:m,prs[0]):null;
+                      return(<div style={{marginTop:8}}>
+                        <button onClick={togglePerSet} style={{padding:"2px 8px",borderRadius:5,border:"1px solid "+(hasPerSet?C.ac:C.brdL),background:hasPerSet?C.acS:"transparent",color:hasPerSet?C.ac:C.tx3,fontSize:9,fontWeight:hasPerSet?700:400,cursor:"pointer",fontFamily:"inherit"}}>
+                          ⚡ {hasPerSet?"Charge globale":"Par série"}
+                        </button>
+                        {hasPerSet&&(<div style={{display:"flex",gap:4,marginTop:6,overflowX:"auto",paddingBottom:2}}>
+                          {Array.from({length:wd.sets},(_,i)=>{
+                            const val=vals[i]??(isRm?wd.pct_rm??80:wd.kg??0);
+                            const calcKg=isRm&&best?Math.round((val||0)/100*best.kg*2)/2:null;
+                            return(<div key={i} style={{textAlign:"center",minWidth:44}}>
+                              <div style={{fontSize:8,color:C.tx3,marginBottom:2}}>S{i+1}</div>
+                              <input type="number" step={isRm?1:0.5} value={val??""} onChange={e=>{const nv=[...Array.from({length:wd.sets},(_,j)=>vals[j]??(isRm?wd.pct_rm??80:wd.kg??0))];nv[i]=parseFloat(e.target.value)||0;updField(ex.id,key,nv);}} style={{width:44,textAlign:"center",padding:"4px 2px",borderRadius:5,border:"1px solid "+C.brdL,background:C.s2,color:isRm?C.g:C.tx,fontSize:11,fontWeight:700,fontFamily:"inherit",boxSizing:"border-box"}}/>
+                              <div style={{fontSize:8,color:isRm?C.g:C.tx3,marginTop:2,fontWeight:700}}>{isRm?(calcKg?calcKg+"kg":"-"):(val?val+"kg":"-")}</div>
+                            </div>);
+                          })}
+                          <div style={{alignSelf:"center",paddingTop:10,fontSize:9,color:C.tx3}}>{isRm?"%":""}</div>
+                        </div>)}
+                      </div>);
+                    })()}
                   </div>
                 ):(<div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div><input type="number" value={wd.sets||""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/></div>)}
                 <div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5}}>Repetitions / Duree</div><input type="text" value={wd.repsRange||""} placeholder={isFlex?"30s ou 10":"10 ou 8-12"} onChange={e=>updField(ex.id,"repsRange",e.target.value)} style={{...fS,textAlign:"left",paddingLeft:10}}/></div>

@@ -12,6 +12,13 @@
  * Plus de saisie set-by-set standard : tout le pattern est défini par la méthode.
  */
 
+// ─── Weekly protocol ─────────────────────────────────────────────────────────
+
+export interface FullWeekConfig {
+  week: number;
+  config: MethodConfig;
+}
+
 // ─── Set scope ────────────────────────────────────────────────────────────────
 
 export interface SetMethodConfig {
@@ -37,9 +44,11 @@ export interface SetMethodConfig {
     type: 'same' | 'free' | 'decreasing_pct' | 'increasing_pct' | 'custom'
     pct_change?: number     // % de variation par sous-série (decreasing/increasing)
     values?: number[]       // valeur individuelle par sous-série si custom
+    values_unit?: 'pct'    // si absent = valeur absolue ; 'pct' = % du 1RM auto
     reference?: string      // charge de référence texte libre (ex: "80%", "75kg")
   }
   rir_required: boolean
+  weekly_configs?: FullWeekConfig[]
 }
 
 // ─── Exercise scope ───────────────────────────────────────────────────────────
@@ -62,12 +71,17 @@ export interface ExerciseMethodConfig {
   }
   load: {
     type: 'same' | 'ascending' | 'descending' | 'custom'
-    /** Seulement si type = 'custom' et mode = 'pct_1rm' */
+    /** Seulement si type = 'custom' et mode = 'pct_1rm'.
+     *  Le 1RM est récupéré automatiquement depuis les PR de l'athlète à l'exécution. */
     mode?: 'pct_1rm'
-    /** 1RM de référence (kg) saisi manuellement */
+    /** @deprecated — plus utilisé. Le 1RM vient des pr_logs à l'exécution. */
     rm_kg?: number
     /** % du 1RM cible par série (ex: 75) */
     pct_of_1rm?: number
+    /** Valeurs explicites par série (type = 'custom' et mode != 'pct_1rm') */
+    values?: number[]
+    /** 'pct' = les valeurs sont des % du 1RM auto ; absent = valeur absolue */
+    values_unit?: 'pct'
   }
   tempo?: {
     eccentric_s?: number
@@ -75,6 +89,7 @@ export interface ExerciseMethodConfig {
     concentric_s?: number
   }
   rir_required: boolean
+  weekly_configs?: FullWeekConfig[]
 }
 
 // ─── Classic scope ────────────────────────────────────────────────────────────
@@ -103,9 +118,11 @@ export interface ClassicMethodConfig {
     type: 'same' | 'ascending' | 'descending' | 'custom'
     pct_change?: number
     values?: number[]
+    values_unit?: 'pct'  // si absent = valeur absolue ; 'pct' = % du 1RM auto
     reference?: string   // ex: "80%", "75kg", "RPE 8" — texte libre
   }
   rir_required: boolean
+  weekly_configs?: FullWeekConfig[]
 }
 
 // ─── Union ────────────────────────────────────────────────────────────────────
@@ -180,6 +197,7 @@ export interface MethodFormValues {
   set_load_type: 'same' | 'free' | 'decreasing_pct' | 'increasing_pct' | 'custom'
   set_load_pct_change: number
   set_load_custom_values: string   // "90,85,92.5" — une valeur par sous-série
+  set_load_values_unit: 'kg' | 'pct'
   set_load_reference: string       // texte libre : "80%", "75kg", "RPE 8"…
   set_rir_required: boolean
 
@@ -193,9 +211,10 @@ export interface MethodFormValues {
   ex_rest_min_s: number
   ex_rest_max_s: number
   ex_load_type: 'same' | 'ascending' | 'descending' | 'custom'
-  ex_load_1rm_mode: boolean   // true = saisir % du 1RM
-  ex_load_rm_kg: number       // 1RM manuel (kg)
-  ex_load_pct_1rm: number     // % du 1RM cible
+  ex_load_1rm_mode: boolean   // true = % du 1RM auto ; false = valeurs par série
+  ex_load_values: string      // valeurs par série (comma-separated), ex: "80,85,90"
+  ex_load_values_unit: 'kg' | 'pct'
+  ex_load_pct_1rm: number     // % du 1RM cible (1RM auto-récupéré depuis les PR)
   ex_tempo_enabled: boolean
   ex_tempo_eccentric: number
   ex_tempo_pause: number
@@ -215,6 +234,7 @@ export interface MethodFormValues {
   cl_load_type: 'same' | 'ascending' | 'descending' | 'custom'
   cl_load_pct_change: number
   cl_load_custom_values: string
+  cl_load_values_unit: 'kg' | 'pct'
   cl_load_reference: string
   cl_rir_required: boolean
 }
