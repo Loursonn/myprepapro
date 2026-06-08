@@ -1265,8 +1265,23 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     onAttach={(attachment, method)=>{
       const exId=methodPickerEx.id;
       const exSid=methodPickerEx.sid;
-      const derived=methodConfigToWeekFields(method.config);
-      setExos(prev=>({...prev,[exSid]:(prev[exSid]||[]).map(e=>e.id===exId?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),...derived,method_attachment:attachment}}}:e)}));
+      const weeklyConfigs=method.config?.weekly_configs;
+      setExos(prev=>({...prev,[exSid]:(prev[exSid]||[]).map(e=>{
+        if(e.id!==exId)return e;
+        if(weeklyConfigs&&weeklyConfigs.length>0){
+          // Multi-week method: populate every week from its weekly_configs
+          const newWeeks={...e.weeks};
+          weeksArr.forEach(w=>{
+            const wc=weeklyConfigs.find(x=>x.week===w);
+            const derived=wc?methodConfigToWeekFields(wc.config):methodConfigToWeekFields(method.config);
+            newWeeks[w]={...(newWeeks[w]||{}),...derived,method_attachment:attachment};
+          });
+          return {...e,weeks:newWeeks};
+        }
+        // Single-config method: only populate current week
+        const derived=methodConfigToWeekFields(method.config);
+        return {...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),...derived,method_attachment:attachment}}};
+      })}));
       setMethodPickerEx(null);
     }}
     onClose={()=>setMethodPickerEx(null)}
