@@ -113,15 +113,19 @@ export const fmtMR = (method: string, mp: any, sets: number, repsRange: string) 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const generateRows = (planned: any, method: string, mp: any) => {
-  const sets = planned?.sets || 3, kg = planned?.kg || 0;
+  const sets = planned?.sets || 3;
+  const globalKg = planned?.kg || 0;
+  const setKgs: number[] | undefined = planned?.setKgs;  // charges par série (priorité sur kg global)
+  const kgForSet = (i: number) => setKgs?.[i] ?? globalKg;
   const repsArr = parseRepsArr(planned?.repsRange, sets);
-  const reps = repsArr[0] || 0; // fallback pour méthodes mono-valeur
+  const reps = repsArr[0] || 0;
   const rir = planned?.rir ?? 2;
   const p = mp || MDEF[method as keyof typeof MDEF] || {};
-  if (!method) return Array.from({ length: sets }, (_, i) => ({ type: "set", kg, reps: repsArr[i] ?? reps, rir, done: false }));
+  if (!method) return Array.from({ length: sets }, (_, i) => ({ type: "set", kg: kgForSet(i), reps: repsArr[i] ?? reps, rir, done: false }));
   if (method === "dropset") {
     const rows: object[] = [];
     for (let s = 0; s < sets; s++) {
+      const kg = kgForSet(s);
       rows.push({ type: "set", setIdx: s+1, kg, reps: repsArr[s] ?? reps, rir, done: false });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (let d = 0; d < ((p as any).drops || 2); d++) {
@@ -133,6 +137,7 @@ export const generateRows = (planned: any, method: string, mp: any) => {
     return rows;
   }
   if (method === "myoreps") {
+    const kg = kgForSet(0);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: object[] = [{ type: "activation", kg, reps: (p as any).activation || 12, rir, done: false }];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,21 +147,21 @@ export const generateRows = (planned: any, method: string, mp: any) => {
     return rows;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (method === "restpause") return Array.from({ length: (p as any).rounds || 3 }, (_, i) => ({ type: "round", idx: i+1, kg, reps: repsArr[i] ?? reps, rir, done: false, pauseSec: (p as any).pause || 15 }));
+  if (method === "restpause") return Array.from({ length: (p as any).rounds || 3 }, (_, i) => ({ type: "round", idx: i+1, kg: kgForSet(i), reps: repsArr[i] ?? reps, rir, done: false, pauseSec: (p as any).pause || 15 }));
   if (method === "cluster") {
     const rows: object[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nCl = (p as any).clusters || 3, ps = (p as any).pause || 10, ra = clusterReps(p);
     for (let s = 0; s < sets; s++)
       for (let c = 0; c < nCl; c++)
-        rows.push({ type: "cluster", setIdx: s+1, clusterIdx: c+1, totalClusters: nCl, kg, reps: ra[c] || 2, rir, done: false, pauseSec: ps, isLast: c === nCl-1 });
+        rows.push({ type: "cluster", setIdx: s+1, clusterIdx: c+1, totalClusters: nCl, kg: kgForSet(s), reps: ra[c] || 2, rir, done: false, pauseSec: ps, isLast: c === nCl-1 });
     return rows;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (method === "amrap") return [{ type: "amrap", kg, reps: 0, done: false, timed: (p as any).type === "timed", duration: (p as any).duration || 30 }];
+  if (method === "amrap") return [{ type: "amrap", kg: kgForSet(0), reps: 0, done: false, timed: (p as any).type === "timed", duration: (p as any).duration || 30 }];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (method === "isometrique") return Array.from({ length: (p as any).positions || 2 }, (_, i) => ({ type: "iso", idx: i+1, holdSec: (p as any).hold_sec || 30, done: false }));
-  return Array.from({ length: sets }, (_, i) => ({ type: "set", kg, reps: repsArr[i] ?? reps, rir, done: false }));
+  return Array.from({ length: sets }, (_, i) => ({ type: "set", kg: kgForSet(i), reps: repsArr[i] ?? reps, rir, done: false }));
 };
 
 // ── Exercise tier lookup (used for PR grouping in stats) ─────────────────────

@@ -274,7 +274,26 @@ export function methodConfigToWeekFields(config: MethodConfig): WeekFields {
     };
   }
 
-  // ─── Set scope — ne touche pas sets/repsRange globaux ─────────────────────
+  // ─── Set scope — dérive les champs des sous-séries ────────────────────────
+  if (config.scope === "set") {
+    const ss = config.sub_sets;
+
+    // repsRange : "3×5" (nb sous-séries × reps par sous-série)
+    const subReps =
+      ss.reps.type === "fixed"   ? String(ss.reps.value ?? "?") :
+      ss.reps.type === "custom" && ss.reps.pattern?.length ? ss.reps.pattern.join(",") :
+      ss.reps.type === "amrap"   ? "AMRAP" : undefined;
+    const subCount =
+      ss.count.type === "fixed" ? ss.count.value :
+      ss.count.type === "range" ? ss.count.min : undefined;
+    const repsRange = subCount && subReps ? `${subCount}×${subReps}` : subReps;
+
+    // Charges depuis la config load (réutilise loadFields)
+    const loadF = loadFields(config.load, subCount ?? 1);
+
+    return { ...(repsRange ? { repsRange } : {}), ...loadF };
+  }
+
   return {};
 }
 

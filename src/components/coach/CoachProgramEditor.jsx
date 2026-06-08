@@ -913,10 +913,12 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     {eType!=="muscu"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:typeColors[eType]+"20",color:typeColors[eType],fontWeight:600}}>{typeLabels[eType]}</span>}
                   </div>
                   {!isFlex&&(wd.pdc||wd.kg!=null||wd.pct_rm!=null||wd.sets||wd.method_attachment)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>
-                    {wd.pdc?"PDC":wd.pct_rm!=null?wd.pct_rm+"%RM":wd.kg!=null?wd.kg+"kg":wd.method_attachment?.method_name||""}
-                    {(wd.pdc||wd.kg!=null||wd.pct_rm!=null)?" - ":""}
+                    {wd.pdc?"PDC":wd.pct_rm!=null?wd.pct_rm+"%RM":wd.kg!=null?wd.kg+"kg":""}
+                    {(wd.pdc||wd.kg!=null||wd.pct_rm!=null)&&(wd.sets||wd.repsRange)?" - ":""}
                     {wd.sets||wd.repsRange?fmtMR(wd.method,wd.methodParams,wd.sets||"?",wd.repsRange):""}
-                    {(!wd.method||wd.method==="dropset"||wd.method==="restpause")?" - ":""}
+                    {wd.method_attachment&&!wd.method&&(wd.sets||wd.repsRange)?" · ":""}
+                    {wd.method_attachment&&!wd.method?<span style={{color:C.ac,fontWeight:600}}>{wd.method_attachment.method_name||"Méthode"}</span>:""}
+                    {(!wd.method||wd.method==="dropset"||wd.method==="restpause")&&!wd.method_attachment?" - ":""}
                     {(!wd.method||wd.method==="dropset"||wd.method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}
                   </div>
                   :isFlex&&wd.sets?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>
@@ -980,7 +982,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                         </tr>}
                         {!isFlex&&<tr>
                           <td style={lSt}>Méthode</td>
-                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const mk=wD.method||null;const mDat=mk?(DEF_METHODS[mk]||allMethods?.[mk]):null;const mc=mDat?.c||C.tx3;return(<td key={w} style={{padding:"2px 3px"}}><select value={mk||""} onChange={e=>{e.stopPropagation();updWeekNMethod(ex.id,w,e.target.value||null);}} style={{width:44,padding:"3px 1px",borderRadius:5,border:"1px solid "+(mk?mc:C.brdL),background:mk?mc+"20":C.s2,color:mk?mc:C.tx3,fontSize:8,fontWeight:mk?700:400,fontFamily:"inherit",cursor:"pointer"}}><option value="">—</option>{Object.entries(allMethods||{}).map(([k,m])=><option key={k} value={k}>{m.label.slice(0,7)}</option>)}</select></td>);})}
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const mk=wD.method||null;const mDat=mk?(DEF_METHODS[mk]||allMethods?.[mk]):null;const mc=mDat?.c||C.tx3;const ma=wD.method_attachment;return(<td key={w} style={{padding:"2px 3px"}}>{ma&&!mk?(<div title={ma.method_name||"Méthode"} style={{width:44,padding:"3px 2px",borderRadius:5,border:"1px solid "+C.ac+"60",background:C.acS,color:C.ac,fontSize:7,fontWeight:700,textAlign:"center",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",boxSizing:"border-box",cursor:"default"}}>{(ma.method_name||"Méth.").slice(0,6)}</div>):(<select value={mk||""} onChange={e=>{e.stopPropagation();updWeekNMethod(ex.id,w,e.target.value||null);}} style={{width:44,padding:"3px 1px",borderRadius:5,border:"1px solid "+(mk?mc:C.brdL),background:mk?mc+"20":C.s2,color:mk?mc:C.tx3,fontSize:8,fontWeight:mk?700:400,fontFamily:"inherit",cursor:"pointer"}}><option value="">—</option>{Object.entries(allMethods||{}).map(([k,m])=><option key={k} value={k}>{m.label.slice(0,7)}</option>)}</select>)}</td>);})}
                         </tr>}
                       </tbody>
                     </table>
