@@ -112,8 +112,8 @@ export function MethodCard({
           </div>
         )}
 
-        {/* Preview compact */}
-        <MethodPreview config={method.config} compact />
+        {/* Preview compact — masqué si weekly_configs existent (c'est eux qui font foi) */}
+        {weekCount === 0 && <MethodPreview config={method.config} compact />}
 
         {/* Weekly protocol display */}
         {weekCount > 0 && weeklyConfigs && (

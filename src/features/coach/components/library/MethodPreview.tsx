@@ -175,11 +175,71 @@ export function methodConfigToText(config: MethodConfig): string {
   }
 }
 
+export type WeekFields = {
+  sets?: number;
+  repsRange?: string;
+  kg?: number;
+  pct_rm?: number;
+  setKgs?: number[];
+  setPctRms?: number[];
+  rir?: number;
+};
+
 /**
- * Dérive les champs sets/repsRange depuis une config de méthode.
+ * Dérive les champs sets/repsRange/charge/RIR depuis une config de méthode.
  * Utilisé pour pré-remplir la semaine d'exercice lors de l'attachement.
  */
-export function methodConfigToWeekFields(config: MethodConfig): { sets?: number; repsRange?: string } {
+export function methodConfigToWeekFields(config: MethodConfig): WeekFields {
+  // ─── helpers charge ────────────────────────────────────────────────────────
+  function parseKgRef(ref?: string): number | undefined {
+    if (!ref) return undefined;
+    const m = ref.trim().match(/^(\d+(?:\.\d+)?)\s*kg$/i);
+    return m ? parseFloat(m[1]) : undefined;
+  }
+  function parsePctRef(ref?: string): number | undefined {
+    if (!ref) return undefined;
+    const m = ref.trim().match(/^(\d+(?:\.\d+)?)\s*%$/);
+    return m ? parseFloat(m[1]) : undefined;
+  }
+
+  function loadFields(
+    load: ClassicMethodConfig["load"] | SetMethodConfig["load"],
+    sets: number,
+  ): Pick<WeekFields, "kg" | "pct_rm" | "setKgs" | "setPctRms"> {
+    const isPct = load.values_unit === "pct";
+
+    // Charges par série explicites
+    if (load.type === "custom" && load.values && load.values.length > 0) {
+      if (isPct) return { setPctRms: load.values.slice(0, sets) };
+      return { setKgs: load.values.slice(0, sets) };
+    }
+
+    // Charge globale depuis reference texte libre
+    const kgRef = parseKgRef((load as ClassicMethodConfig["load"]).reference);
+    if (kgRef) return { kg: kgRef };
+    const pctRef = parsePctRef((load as ClassicMethodConfig["load"]).reference);
+    if (pctRef) return { pct_rm: pctRef };
+
+    return {};
+  }
+
+  function loadFieldsEx(
+    load: ExerciseMethodConfig["load"],
+    sets: number,
+  ): Pick<WeekFields, "kg" | "pct_rm" | "setKgs" | "setPctRms"> {
+    // Mode 1RM auto
+    if (load.mode === "pct_1rm" && load.pct_of_1rm != null) {
+      return { pct_rm: load.pct_of_1rm };
+    }
+    const isPct = load.values_unit === "pct";
+    if (load.type === "custom" && load.values && load.values.length > 0) {
+      if (isPct) return { setPctRms: load.values.slice(0, sets) };
+      return { setKgs: load.values.slice(0, sets) };
+    }
+    return {};
+  }
+
+  // ─── Classic ───────────────────────────────────────────────────────────────
   if (config.scope === "classic") {
     const sets = config.sets.count;
     const r = config.reps;
@@ -187,8 +247,16 @@ export function methodConfigToWeekFields(config: MethodConfig): { sets?: number;
       r.type === "range"  ? `${r.min ?? "?"}–${r.max ?? "?"}` :
       r.type === "fixed"  ? String(r.value ?? "?") :
       r.type === "amrap"  ? "AMRAP" : undefined;
-    return { sets, ...(repsRange ? { repsRange } : {}) };
+    const rir = config.rir_required ? 2 : undefined;
+    return {
+      sets,
+      ...(repsRange ? { repsRange } : {}),
+      ...(rir != null ? { rir } : {}),
+      ...loadFields(config.load, sets),
+    };
   }
+
+  // ─── Exercise ──────────────────────────────────────────────────────────────
   if (config.scope === "exercise") {
     const sets = config.sets.count;
     const r = config.reps;
@@ -197,9 +265,16 @@ export function methodConfigToWeekFields(config: MethodConfig): { sets?: number;
       r.type === "ascending"  ? "Pyramide ↑" :
       r.type === "descending" ? "Pyramide ↓" :
       r.type === "custom" && r.pattern?.length ? r.pattern.join("-") : undefined;
-    return { sets, ...(repsRange ? { repsRange } : {}) };
+    const rir = config.rir_required ? 2 : undefined;
+    return {
+      sets,
+      ...(repsRange ? { repsRange } : {}),
+      ...(rir != null ? { rir } : {}),
+      ...loadFieldsEx(config.load, sets),
+    };
   }
-  // set scope — ne touche pas sets/repsRange globaux
+
+  // ─── Set scope — ne touche pas sets/repsRange globaux ─────────────────────
   return {};
 }
 

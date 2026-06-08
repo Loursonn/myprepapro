@@ -459,6 +459,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const isMultiWeek=id=>multiWeekExs.has(id);
   const toggleMultiWeek=id=>setMultiWeekExs(prev=>{const n=new Set(prev);if(n.has(id))n.delete(id);else n.add(id);return n;});
   const[expandedMethodWeek,setExpandedMethodWeek]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
+  const[copiedSet,setCopiedSet]=useState(null); // { val: number, isRm: boolean }
   const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#7B6FFF",e:"NEW"});
   const dropRef=useRef(null);
   const[showAI,setShowAI]=useState(false);
@@ -1090,17 +1091,31 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                         <button onClick={togglePerSet} style={{padding:"2px 8px",borderRadius:5,border:"1px solid "+(hasPerSet?C.ac:C.brdL),background:hasPerSet?C.acS:"transparent",color:hasPerSet?C.ac:C.tx3,fontSize:9,fontWeight:hasPerSet?700:400,cursor:"pointer",fontFamily:"inherit"}}>
                           ⚡ {hasPerSet?"Charge globale":"Par série"}
                         </button>
-                        {hasPerSet&&(<div style={{display:"flex",gap:4,marginTop:6,overflowX:"auto",paddingBottom:2}}>
+                        {hasPerSet&&(<div style={{marginTop:6}}>
+                          <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:2}}>
                           {Array.from({length:wd.sets},(_,i)=>{
                             const val=vals[i]??(isRm?wd.pct_rm??80:wd.kg??0);
                             const calcKg=isRm&&best?Math.round((val||0)/100*best.kg*2)/2:null;
-                            return(<div key={i} style={{textAlign:"center",minWidth:44}}>
-                              <div style={{fontSize:8,color:C.tx3,marginBottom:2}}>S{i+1}</div>
+                            const canPaste=copiedSet&&copiedSet.isRm===isRm;
+                            return(<div key={i} style={{textAlign:"center",minWidth:44,flexShrink:0}}>
+                              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2,marginBottom:2}}>
+                                <span style={{fontSize:8,color:C.tx3}}>S{i+1}</span>
+                                {/* Dupliquer : insère une copie de ce set après */}
+                                <button title="Dupliquer" onClick={()=>{const nv=[...Array.from({length:wd.sets},(_,j)=>vals[j]??(isRm?wd.pct_rm??80:wd.kg??0))];nv.splice(i+1,0,val);updField(ex.id,"sets",nv.length);updField(ex.id,key,nv);}} style={{width:14,height:14,borderRadius:3,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:8,cursor:"pointer",fontFamily:"inherit",padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                                {/* Coller : applique la dernière valeur copiée */}
+                                {canPaste&&<button title="Coller" onClick={()=>{const nv=[...Array.from({length:wd.sets},(_,j)=>vals[j]??(isRm?wd.pct_rm??80:wd.kg??0))];nv[i]=copiedSet.val;updField(ex.id,key,nv);}} style={{width:14,height:14,borderRadius:3,border:"1px solid "+C.ac+"60",background:C.acS,color:C.ac,fontSize:8,cursor:"pointer",fontFamily:"inherit",padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>▼</button>}
+                              </div>
                               <input type="number" step={isRm?1:0.5} value={val??""} onChange={e=>{const nv=[...Array.from({length:wd.sets},(_,j)=>vals[j]??(isRm?wd.pct_rm??80:wd.kg??0))];nv[i]=parseFloat(e.target.value)||0;updField(ex.id,key,nv);}} style={{width:44,textAlign:"center",padding:"4px 2px",borderRadius:5,border:"1px solid "+C.brdL,background:C.s2,color:isRm?C.g:C.tx,fontSize:11,fontWeight:700,fontFamily:"inherit",boxSizing:"border-box"}}/>
-                              <div style={{fontSize:8,color:isRm?C.g:C.tx3,marginTop:2,fontWeight:700}}>{isRm?(calcKg?calcKg+"kg":"-"):(val?val+"kg":"-")}</div>
+                              <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:2}}>
+                                <div style={{fontSize:8,color:isRm?C.g:C.tx3,fontWeight:700}}>{isRm?(calcKg?calcKg+"kg":"-"):(val?val+"kg":"-")}</div>
+                                {/* Copier ce set */}
+                                <button title="Copier" onClick={()=>setCopiedSet({val,isRm})} style={{width:12,height:12,borderRadius:2,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:7,cursor:"pointer",fontFamily:"inherit",padding:0,lineHeight:1}}>C</button>
+                              </div>
                             </div>);
                           })}
                           <div style={{alignSelf:"center",paddingTop:10,fontSize:9,color:C.tx3}}>{isRm?"%":""}</div>
+                          </div>
+                          {copiedSet&&<div style={{fontSize:9,color:C.ac,marginTop:4}}>Copié : {copiedSet.val}{copiedSet.isRm?"%":"kg"} — clique ▼ pour coller</div>}
                         </div>)}
                       </div>);
                     })()}
@@ -1144,7 +1159,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                             })()}
                           </div>
                           <button onClick={()=>setMethodPickerEx({id:ex.id,sets:wd.sets||4,sid})} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Modifier</button>
-                          <button onClick={()=>setExos(prev=>({...prev,[sid]:(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),sets:undefined,repsRange:undefined,method_attachment:null}}}:e)}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Retirer</button>
+                          <button onClick={()=>setExos(prev=>({...prev,[sid]:(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method_attachment:null}}}:e)}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Retirer</button>
                         </div>
                         {/* Prescription text */}
                         {wd.method_attachment.prescription&&<div style={{fontSize:10,color:C.tx2,marginTop:5,padding:"4px 6px",borderRadius:5,background:"rgba(0,0,0,0.15)",fontFamily:"monospace"}}>{wd.method_attachment.prescription}</div>}
@@ -1269,12 +1284,17 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
       setExos(prev=>({...prev,[exSid]:(prev[exSid]||[]).map(e=>{
         if(e.id!==exId)return e;
         if(weeklyConfigs&&weeklyConfigs.length>0){
-          // Multi-week method: populate every week from its weekly_configs
+          // Multi-week method: populate weeks ONLY from weekly_configs (pas de fallback base config)
           const newWeeks={...e.weeks};
           weeksArr.forEach(w=>{
             const wc=weeklyConfigs.find(x=>x.week===w);
-            const derived=wc?methodConfigToWeekFields(wc.config):methodConfigToWeekFields(method.config);
-            newWeeks[w]={...(newWeeks[w]||{}),...derived,method_attachment:attachment};
+            if(wc){
+              const derived=methodConfigToWeekFields(wc.config);
+              newWeeks[w]={...(newWeeks[w]||{}),...derived,method_attachment:attachment};
+            } else {
+              // semaine sans config explicite : attacher la méthode sans écraser sets/repsRange
+              newWeeks[w]={...(newWeeks[w]||{}),method_attachment:attachment};
+            }
           });
           return {...e,weeks:newWeeks};
         }
