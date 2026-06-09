@@ -586,8 +586,7 @@ function Step2Set({ control }: { control: ReturnType<typeof useForm<FormValues>>
         <Controller name="set_reps_type" control={control} render={({ field }) => (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
             {([
-              ["fixed", "Fixe"], ["decreasing", "Décroissant"], ["increasing", "Croissant"],
-              ["amrap", "AMRAP"], ["custom", "Pattern custom"],
+              ["fixed", "Fixe"], ["amrap", "AMRAP"], ["custom", "Pattern (ex: 5,4,3)"],
             ] as const).map(([v, lbl]) => (
               <button key={v} type="button" onClick={() => field.onChange(v)} style={toggleBtn(field.value === v)}>
                 {lbl}
@@ -1259,12 +1258,12 @@ export function MethodBuilder({ initial, coachId: _coachId, onSubmit, onCancel, 
             existingCategories={existingCategories}
           />
         )}
-        {step === 2 && scope === "classic"  && <Step2Classic  control={control} />}
-        {step === 2 && scope === "set"      && <Step2Set      control={control} />}
-        {step === 2 && scope === "exercise" && <Step2Exercise control={control} />}
+        {step === 2 && !multiWeek && scope === "classic"  && <Step2Classic  control={control} />}
+        {step === 2 && !multiWeek && scope === "set"      && <Step2Set      control={control} />}
+        {step === 2 && !multiWeek && scope === "exercise" && <Step2Exercise control={control} />}
 
-        {/* Preview live */}
-        {step === 2 && (
+        {/* Preview live — masqué en mode multi-semaines (chaque semaine a sa propre preview) */}
+        {step === 2 && !multiWeek && (
           <div style={{ marginTop: 24 }}>
             <MethodPreview config={preview} />
           </div>

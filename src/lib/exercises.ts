@@ -119,8 +119,56 @@ export const generateRows = (planned: any, method: string, mp: any) => {
   const kgForSet = (i: number) => setKgs?.[i] ?? globalKg;
   const repsArr = parseRepsArr(planned?.repsRange, sets);
   const reps = repsArr[0] || 0;
-  const rir = planned?.rir ?? 2;
+  const rir = planned?.rir;
   const p = mp || MDEF[method as keyof typeof MDEF] || {};
+
+  // ── Méthode bibliothèque scope='set' — sous-séries ────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const att: any = planned?.method_attachment;
+  if (att?.scope === "set" && att?.config?.sub_sets) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfg: any = att.config;
+    const ss = cfg.sub_sets;
+    const subCount: number =
+      ss.count?.type === "fixed" ? (ss.count.value ?? 3) :
+      ss.count?.type === "range" ? (ss.count.min ?? 2) : 3;
+    const restSec: number = ss.rest_intra?.type === "fixed" ? (ss.rest_intra.seconds ?? 0) : 0;
+    const rows: object[] = [];
+    for (let s = 0; s < sets; s++) {
+      const baseKg = kgForSet(s);
+      for (let sub = 0; sub < subCount; sub++) {
+        // reps par sous-série
+        let subReps = 0;
+        const rc = ss.reps;
+        if (rc?.type === "fixed") subReps = rc.value ?? 5;
+        else if (rc?.type === "custom" && rc.pattern?.length)
+          subReps = rc.pattern[sub] ?? rc.pattern[rc.pattern.length - 1] ?? 5;
+        else if (rc?.type === "amrap") subReps = 0;
+        else if (rc?.type === "decreasing" && rc.value) subReps = Math.max(1, rc.value - sub);
+        else if (rc?.type === "increasing" && rc.value) subReps = rc.value + sub;
+        else subReps = (repsArr[s] ?? reps) || 5;
+        // charge par sous-série
+        let subKg = baseKg;
+        const lc = cfg.load;
+        if (lc?.type === "custom" && lc.values?.length) {
+          const v = lc.values[sub] ?? lc.values[lc.values.length - 1] ?? 0;
+          subKg = lc.values_unit === "pct" ? Math.round(baseKg * v / 100 * 2) / 2 : v;
+        } else if (lc?.type === "decreasing_pct" && lc.pct_change) {
+          subKg = Math.round(baseKg * Math.pow(1 - lc.pct_change / 100, sub) * 2) / 2;
+        } else if (lc?.type === "increasing_pct" && lc.pct_change) {
+          subKg = Math.round(baseKg * Math.pow(1 + lc.pct_change / 100, sub) * 2) / 2;
+        }
+        rows.push({
+          type: "sub_set", setIdx: s + 1, subIdx: sub + 1, totalSubs: subCount,
+          kg: subKg, reps: subReps, isAmrap: rc?.type === "amrap",
+          done: false, pauseSec: sub < subCount - 1 ? restSec : 0,
+          isLastInSet: sub === subCount - 1,
+        });
+      }
+    }
+    return rows;
+  }
+
   if (!method) return Array.from({ length: sets }, (_, i) => ({ type: "set", kg: kgForSet(i), reps: repsArr[i] ?? reps, rir, done: false }));
   if (method === "dropset") {
     const rows: object[] = [];

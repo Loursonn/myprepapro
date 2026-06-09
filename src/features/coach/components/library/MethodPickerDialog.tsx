@@ -73,6 +73,7 @@ export function MethodPickerDialog({ setsCount, onAttach, onClose }: MethodPicke
       scope:        selected.scope,
       method_name:  selected.name,
       prescription,
+      config:       selected.config,
       ...(selected.scope === "set" && appliedSets.length > 0 && { applied_to_sets: [...appliedSets].sort() }),
       ...(ref && { reference: ref }),
     };

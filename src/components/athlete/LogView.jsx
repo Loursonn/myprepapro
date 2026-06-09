@@ -18,9 +18,10 @@ function RestTimer({timerLeft,timerDur,timerActive,timerFinished,onSetDur,onStar
 
 function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,setAthleteNotes,method,methodParams,allMethods,exosMap,viewOnly=false,onTimerStart=null,postSession=false,isUnilateral=false}){
   const initRows=()=>generateRows(planned,method,methodParams);
-  const rows=(()=>{const stored=sessionSets[storeKey];if(!stored||!stored.length)return initRows();const specialType={cluster:"cluster",myoreps:"activation",restpause:"round",amrap:"amrap",isometrique:"iso",dropset:"drop"}[method||""];if(specialType&&!stored.some(r=>r.type===specialType))return initRows();if(!specialType&&stored.some(r=>r.type!=="set"))return initRows();return stored;})();
+  const rows=(()=>{const stored=sessionSets[storeKey];if(!stored||!stored.length)return initRows();const specialType={cluster:"cluster",myoreps:"activation",restpause:"round",amrap:"amrap",isometrique:"iso",dropset:"drop"}[method||""];if(specialType&&!stored.some(r=>r.type===specialType))return initRows();const hasSubSet=!!planned?.method_attachment?.config?.sub_sets;const storedIsSubSet=stored.some(r=>r.type==="sub_set");if(hasSubSet!==storedIsSubSet)return initRows();if(!specialType&&!hasSubSet&&stored.some(r=>r.type!=="set"))return initRows();const allEmpty=stored.every(r=>!r.kg&&!r.reps&&!r.kg_r&&!r.kg_l&&!r.reps_r&&!r.reps_l);if(allEmpty&&(planned?.repsRange||planned?.kg||planned?.setKgs?.length))return initRows();const noInteraction=stored.every(r=>!r.done&&!r.skipped);const missingKg=stored.every(r=>!r.kg&&!r.kg_r&&!r.kg_l);if(noInteraction&&missingKg&&(planned?.kg||planned?.setKgs?.length))return initRows();return stored;})();
   const upd=(i,f,v)=>updateSets(storeKey,rows.map((r,j)=>j===i?{...r,[f]:v}:r));
   const updR=(i,patch)=>updateSets(storeKey,rows.map((r,j)=>j===i?{...r,...patch}:r));
+  const showRIR=planned?.rir!=null||rows.some(r=>r.rir!=null);
   const done=rows.filter(r=>r.done||r.skipped).length;const note=athleteNotes?.[storeKey]||"";
   const iS={background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"4px 2px",width:"100%"};
   const rowLabel=r=>{if(r.type==="drop")return"Drop "+r.dropIdx;if(r.type==="activation")return"Activ.";if(r.type==="mini")return"Mini "+r.idx;if(r.type==="round")return"Rd "+r.idx;if(r.type==="amrap")return"AMRAP";if(r.type==="iso")return"Pos."+r.idx;if(r.type==="cluster")return"S"+r.setIdx+" C"+r.clusterIdx;return r.setIdx?"Set "+r.setIdx:"Set";};
@@ -30,6 +31,30 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
     {isUnilateral&&<div style={{display:"grid",gridTemplateColumns:"40px 1fr 1fr",gap:4,marginBottom:4,padding:"3px 8px"}}><span/><div style={{fontSize:9,fontWeight:700,color:C.tx3,textAlign:"center"}}>DROIT</div><div style={{fontSize:9,fontWeight:700,color:C.tx3,textAlign:"center"}}>GAUCHE</div></div>}
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><div style={{flex:1,height:3,background:C.s2,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:(rows.length?(done/rows.length)*100:0)+"%",background:C.g,borderRadius:2,transition:"width 0.3s"}}/></div><span style={{fontSize:10,color:done===rows.length&&rows.length>0?C.g:C.tx3,fontWeight:600}}>{done}/{rows.length}</span></div>
     {rows.map((r,i)=>{
+      // ── Sous-série (méthode bibliothèque scope='set') ──────────────────────
+      if(r.type==="sub_set"){
+        const isFirstInSet=r.subIdx===1;const isLastInSet=r.isLastInSet;
+        const setRows=rows.filter(x=>x.setIdx===r.setIdx);
+        const setDone=setRows.every(x=>x.done||x.skipped);
+        const subBg=r.done?C.g+"10":r.skipped?C.tx3+"08":C.s2;
+        const subBrd=r.done?C.g+"30":r.skipped?C.tx3+"20":C.brd;
+        return(<div key={i}>
+          {isFirstInSet&&(<div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 8px 4px"}}>
+            <div style={{flex:1,height:1,background:setDone?C.g+"50":C.brd}}/>
+            <span style={{fontSize:9,fontWeight:700,color:setDone?C.g:C.tx2,textTransform:"uppercase",letterSpacing:"0.5px"}}>Set {r.setIdx}{setDone?" ✓":""}</span>
+            <div style={{flex:1,height:1,background:setDone?C.g+"50":C.brd}}/>
+          </div>)}
+          <div style={{display:"grid",gridTemplateColumns:"36px 1fr 8px 1fr 26px 26px",gap:4,alignItems:"center",marginBottom:4,padding:"5px 8px",borderRadius:7,background:subBg,border:"1px solid "+subBrd,opacity:r.skipped?0.5:1}}>
+            <span style={{fontSize:9,fontWeight:700,color:C.ac,textAlign:"center"}}>SS{r.subIdx}</span>
+            <input type="number" step="0.5" value={r.kg||""} onChange={viewOnly?undefined:e=>upd(i,"kg",+e.target.value)} readOnly={viewOnly} placeholder="0" style={iS}/>
+            <span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>×</span>
+            <input type="number" value={r.isAmrap?"":r.reps||""} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={r.isAmrap?"max":"0"} style={iS}/>
+            <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:26,height:26,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button>
+            <button onClick={viewOnly?undefined:()=>{const nd=!r.done;updR(i,{done:nd,skipped:false});if(nd&&isLastInSet&&onTimerStart)onTimerStart();}} style={{width:26,height:26,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</button>
+          </div>
+          {!isLastInSet&&r.pauseSec>0&&<div style={{textAlign:"center",fontSize:9,color:C.tx3,padding:"2px 0",marginBottom:2}}>{r.pauseSec}s</div>}
+        </div>);
+      }
       const isIso=r.type==="iso";const isAmrap=r.type==="amrap";const isDrop=r.type==="drop";const isMini=r.type==="mini";const isCluster=r.type==="cluster";
       const showPause=((r.type==="round"||r.type==="mini")&&i<rows.length-1&&rows[i+1]?.type===r.type)||(isCluster&&!r.isLast&&i<rows.length-1&&rows[i+1]?.type==="cluster");
       const delCol=postSession&&!viewOnly?" 24px":"";
@@ -37,7 +62,7 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
       const rowBg=r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#C060D008":C.s2;
       const rowBrd=r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#C060D030":C.brd;
       if(isUni){
-        return(<div key={i}><div style={{display:"grid",gridTemplateColumns:"40px 1fr 1fr "+((!isAmrap)?"44px ":"")+"28px 28px"+delCol,gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:rowBg,border:"1px solid "+rowBrd,opacity:r.skipped?0.5:1,transition:"all 0.2s"}}>
+        return(<div key={i}><div style={{display:"grid",gridTemplateColumns:"40px 1fr 1fr "+((!isAmrap&&showRIR)?"44px ":"")+"28px 28px"+delCol,gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:rowBg,border:"1px solid "+rowBrd,opacity:r.skipped?0.5:1,transition:"all 0.2s"}}>
           <span style={{fontSize:9,color:rowC(r),fontWeight:600,textAlign:"center"}}>{rowLabel(r)}</span>
           <div style={{display:"flex",flexDirection:"column",gap:2}}>
             <input type="number" step="0.5" value={r.kg_r??r.kg??""} onChange={viewOnly?undefined:e=>upd(i,"kg_r",+e.target.value)} readOnly={viewOnly} placeholder="kg" style={iS}/>
@@ -47,19 +72,19 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
             <input type="number" step="0.5" value={r.kg_l??r.kg??""} onChange={viewOnly?undefined:e=>upd(i,"kg_l",+e.target.value)} readOnly={viewOnly} placeholder="kg" style={iS}/>
             <input type="number" value={r.reps_l??r.reps??""} onChange={viewOnly?undefined:e=>upd(i,"reps_l",+e.target.value)} readOnly={viewOnly} placeholder="reps" style={iS}/>
           </div>
-          <RIRPicker value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>
+          {!isAmrap&&showRIR&&<RIRPicker value={r.rir??0} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
           <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button>
           <button onClick={viewOnly?undefined:()=>{const nd=!r.done;updR(i,{done:nd,skipped:false});if(nd&&onTimerStart)onTimerStart();}} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
           {postSession&&!viewOnly&&<button onClick={()=>updateSets(storeKey,rows.filter((_,j)=>j!==i))} style={{width:22,height:22,borderRadius:6,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>}
         </div>{showPause&&<div style={{textAlign:"center",fontSize:9,color:C.tx3,padding:"2px 0",marginBottom:2}}>{r.pauseSec}s repos</div>}</div>);
       }
-      return(<div key={i}><div style={{display:"grid",gridTemplateColumns:isIso?"40px 1fr 28px 28px"+delCol:"40px 1fr 10px 1fr "+((!isAmrap&&!isMini&&!isDrop&&!isCluster)?"44px ":"")+"28px 28px"+delCol,gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:rowBg,border:"1px solid "+rowBrd,opacity:r.skipped?0.5:1,transition:"all 0.2s"}}>
+      return(<div key={i}><div style={{display:"grid",gridTemplateColumns:isIso?"40px 1fr 28px 28px"+delCol:"40px 1fr 10px 1fr "+((!isAmrap&&!isMini&&!isDrop&&!isCluster&&showRIR)?"44px ":"")+"28px 28px"+delCol,gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:rowBg,border:"1px solid "+rowBrd,opacity:r.skipped?0.5:1,transition:"all 0.2s"}}>
         <span style={{fontSize:9,color:rowC(r),fontWeight:600,textAlign:"center"}}>{rowLabel(r)}</span>
         {!isIso&&<input type="number" step="0.5" value={r.kg||""} onChange={viewOnly?undefined:e=>upd(i,"kg",+e.target.value)} readOnly={viewOnly} placeholder="0" style={iS}/>}
         {isIso&&<div style={{fontSize:11,color:C.tx2,textAlign:"center"}}>{r.holdSec}s</div>}
         {!isIso&&<span style={{fontSize:10,color:C.tx3,textAlign:"center"}}>x</span>}
         {!isIso&&<input type="number" value={r.reps||""} onChange={viewOnly?undefined:e=>upd(i,"reps",+e.target.value)} readOnly={viewOnly} placeholder={isAmrap?"max":"0"} style={iS}/>}
-        {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&<RIRPicker value={r.rir??2} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
+        {!isIso&&!isAmrap&&!isMini&&!isDrop&&!isCluster&&showRIR&&<RIRPicker value={r.rir??0} onChange={viewOnly?()=>{}:v=>upd(i,"rir",v)}/>}
         <button onClick={viewOnly?undefined:()=>updR(i,{skipped:!r.skipped,done:false})} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.skipped?C.o:C.brdL),background:r.skipped?C.o+"30":"transparent",color:r.skipped?C.o:C.tx3,cursor:viewOnly?"default":"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",visibility:r.done||viewOnly?"hidden":"visible"}}>—</button>
         <button onClick={viewOnly?undefined:()=>{const nd=!r.done;updR(i,{done:nd,skipped:false});if(nd&&onTimerStart)onTimerStart();}} style={{width:28,height:28,borderRadius:7,border:"1.5px solid "+(r.done?C.g:C.brdL),background:r.done?C.g:"transparent",color:r.done?"#fff":C.tx3,cursor:viewOnly?"default":"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",visibility:viewOnly?"hidden":"visible"}}>✓</button>
         {postSession&&!viewOnly&&<button onClick={()=>updateSets(storeKey,rows.filter((_,j)=>j!==i))} style={{width:22,height:22,borderRadius:6,border:"1px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>}

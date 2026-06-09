@@ -264,7 +264,7 @@ export function methodConfigToWeekFields(config: MethodConfig): WeekFields {
       r.type === "fixed"      ? String(r.value ?? "?") :
       r.type === "ascending"  ? "Pyramide ↑" :
       r.type === "descending" ? "Pyramide ↓" :
-      r.type === "custom" && r.pattern?.length ? r.pattern.join("-") : undefined;
+      r.type === "custom" && r.pattern?.length ? r.pattern.join(",") : undefined;
     const rir = config.rir_required ? 2 : undefined;
     return {
       sets,
@@ -282,7 +282,10 @@ export function methodConfigToWeekFields(config: MethodConfig): WeekFields {
     const subReps =
       ss.reps.type === "fixed"   ? String(ss.reps.value ?? "?") :
       ss.reps.type === "custom" && ss.reps.pattern?.length ? ss.reps.pattern.join(",") :
-      ss.reps.type === "amrap"   ? "AMRAP" : undefined;
+      ss.reps.type === "amrap"   ? "AMRAP" :
+      ss.reps.type === "decreasing" && ss.reps.value ? `${ss.reps.value},${ss.reps.value - 1},…` :
+      ss.reps.type === "increasing" && ss.reps.value ? `${ss.reps.value},${ss.reps.value + 1},…` :
+      undefined;
     const subCount =
       ss.count.type === "fixed" ? ss.count.value :
       ss.count.type === "range" ? ss.count.min : undefined;
