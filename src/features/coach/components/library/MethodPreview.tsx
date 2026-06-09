@@ -291,8 +291,11 @@ export function methodConfigToWeekFields(config: MethodConfig): WeekFields {
       ss.count.type === "range" ? ss.count.min : undefined;
     const repsRange = subCount && subReps ? `${subCount}×${subReps}` : subReps;
 
-    // Charges depuis la config load (réutilise loadFields)
-    const loadF = loadFields(config.load, subCount ?? 1);
+    // Pour scope="set", les valeurs load sont celles des sous-séries (gérées par method_attachment).
+    // On extrait uniquement une référence globale kg/% si définie explicitement en texte libre.
+    const kgRef = parseKgRef((config.load as ClassicMethodConfig["load"]).reference);
+    const pctRef = parsePctRef((config.load as ClassicMethodConfig["load"]).reference);
+    const loadF = kgRef ? { kg: kgRef } : pctRef ? { pct_rm: pctRef } : {};
 
     return { ...(repsRange ? { repsRange } : {}), ...loadF };
   }

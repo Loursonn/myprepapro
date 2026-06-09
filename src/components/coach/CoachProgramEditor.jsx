@@ -547,7 +547,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           const prevW=newWeeks[w-1]||w1;
           if(isDeloadW){
             const dlPct=tc.deloadPct||40;
-            newWeeks[w]={...prevW,...(w1.kg?{kg:Math.round(w1.kg*(1-dlPct/100)/2.5)*2.5}:{}),sets:Math.max(2,Math.round((prevW.sets||defSets)*0.6)),rir:(tc.rirStart||2)+2,repsRange:prevW.repsRange};
+            newWeeks[w]={...prevW,...(w1.kg?{kg:Math.round(w1.kg*(1-dlPct/100)/2.5)*2.5}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>Math.round(k*(1-dlPct/100)/2.5)*2.5)}:{}),sets:Math.max(2,Math.round((prevW.sets||defSets)*0.6)),rir:(tc.rirStart||2)+2,repsRange:prevW.repsRange};
           }else{
             const weekIdx=trainWeeks.indexOf(w);
             const allWeekIdx=allTrainWeeks.indexOf(w);
@@ -557,7 +557,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
               const rirRange=tc.rirStart-tc.rirEnd;
               const newRir=Math.round((tc.rirStart-rirRange*progress)*2)/2;
               const kgStep=tc.kgStep??2.5;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*allWeekIdx)}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*allWeekIdx)}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>roundHalf(k+kgStep*allWeekIdx))}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
             }else if(tc.mode==="reps"){
               const repRange=tc.repsEnd-tc.repsStart;
               const cycleLen=Math.max(2,repRange+1);
@@ -568,14 +568,14 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
               const rirRange=(tc.rirStart||2)-(tc.rirEnd||1);
               const repProgress=posInCycle/(cycleLen-1||1);
               const newRir=Math.round(((tc.rirStart||2)-rirRange*repProgress)*2)/2;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),sets:prevW.sets||defSets,repsRange:String(newReps),rir:Math.max(0,newRir)};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>roundHalf(k+kgStep*cycle))}:{}),sets:prevW.sets||defSets,repsRange:String(newReps),rir:Math.max(0,newRir)};
             }else{
               const repRange=tc.repsEnd-tc.repsStart;
               const cycleLen=repRange+1;
               const cycle=Math.floor(weekIdx/cycleLen);
               const posInCycle=weekIdx%cycleLen;
               const kgStep=tc.kgStep??1.25;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),sets:prevW.sets||defSets,repsRange:String(tc.repsStart+posInCycle),rir:tc.rir??0};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>roundHalf(k+kgStep*cycle))}:{}),sets:prevW.sets||defSets,repsRange:String(tc.repsStart+posInCycle),rir:tc.rir??0};
             }
           }
         }
@@ -958,7 +958,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                         </tr>
                         {!isFlex&&<tr>
                           <td style={lSt}>Charge</td>
-                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const isRm=wD.pct_rm!=null||wd.pct_rm!=null;const val=isRm?wD.pct_rm:wD.kg;const hasPS=!isRm&&wD.setKgs?.length>0;return(<td key={w} style={{padding:"2px 3px"}}>{hasPS?<div style={{...cellSt(w),display:"flex",alignItems:"center",justifyContent:"center",color:C.tx3,fontSize:9,fontStyle:"italic"}}>⚡</div>:<input type="number" step={isRm?1:0.5} value={val??""} placeholder="-" onChange={e=>updWeekN(ex.id,w,isRm?"pct_rm":"kg",e.target.value)} style={{...cellSt(w),color:isRm?C.g:C.tx,background:isRm?(w===week?C.g+"25":C.g+"10"):w===week?C.coachS:C.s2}}/>}</td>);})}
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const isRm=wD.pct_rm!=null||wd.pct_rm!=null;const val=isRm?wD.pct_rm:wD.kg;const hasPS=!isRm&&wD._perSetMode&&wD.setKgs?.length>0;return(<td key={w} style={{padding:"2px 3px"}}>{hasPS?<div style={{...cellSt(w),display:"flex",alignItems:"center",justifyContent:"center",color:C.tx3,fontSize:9,fontStyle:"italic"}}>⚡</div>:<input type="number" step={isRm?1:0.5} value={val??""} placeholder="-" onChange={e=>updWeekN(ex.id,w,isRm?"pct_rm":"kg",e.target.value)} style={{...cellSt(w),color:isRm?C.g:C.tx,background:isRm?(w===week?C.g+"25":C.g+"10"):w===week?C.coachS:C.s2}}/>}</td>);})}
                         </tr>}
                         {!isFlex&&<tr>
                           <td style={{...lSt,fontSize:8}}>{(wd.pct_rm!=null||weeksArr.some(w=>ex.weeks[w]?.pct_rm!=null))?"%RM":"kg"}</td>
@@ -1050,7 +1050,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 {!isFlex?(
                   <div style={{marginBottom:10}}>
                     {/* Charge header avec toggles PDC / %RM */}
-                    <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:5,justifyContent:"center"}}>
+                    {!wd._perSetMode&&<div style={{display:"flex",alignItems:"center",gap:4,marginBottom:5,justifyContent:"center"}}>
                       <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Charge</div>
                       {/* kg — mode par défaut */}
                       <button onClick={()=>{updField(ex.id,"pdc",false);updField(ex.id,"pct_rm",undefined);}} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(!wd.pdc&&wd.pct_rm==null?C.ac:C.brdL),background:(!wd.pdc&&wd.pct_rm==null)?C.acS:"transparent",color:(!wd.pdc&&wd.pct_rm==null)?C.ac:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>kg</button>
@@ -1058,10 +1058,10 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                       <button onClick={()=>{updField(ex.id,"pdc",!wd.pdc);if(!wd.pdc)updField(ex.id,"pct_rm",undefined);}} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(wd.pdc?C.ac:C.brdL),background:wd.pdc?C.acS:"transparent",color:wd.pdc?C.ac:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>PDC</button>
                       {/* %RM */}
                       {athleteId&&<button onClick={()=>{const on=!!wd.pct_rm||wd.pct_rm===0;if(on){updField(ex.id,"pct_rm",undefined);}else{updField(ex.id,"pct_rm",80);updField(ex.id,"pdc",false);}}} title={ex.rm_ref?"Ref: "+ex.rm_ref:"Définir une référence RM sur l'exercice d'abord"} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+((wd.pct_rm!=null)?C.g:C.brdL),background:(wd.pct_rm!=null)?C.g+"20":"transparent",color:(wd.pct_rm!=null)?C.g:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>%RM</button>}
-                    </div>
+                    </div>}
                     {/* Charge inputs */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div>
+                    <div style={{display:"grid",gridTemplateColumns:(wd.setKgs?.length>0||wd.setPctRms?.length>0)?"1fr":"1fr 1fr",gap:8}}>
+                      {!wd._perSetMode&&<div>
                         {wd.pdc?<div style={{...fS,display:"flex",alignItems:"center",justifyContent:"center",background:C.acS,border:"1px solid "+C.ac,color:C.ac,fontWeight:700}}>PDC</div>
                         :wd.pct_rm!=null?(
                           <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -1081,7 +1081,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                         ):wd.setKgs?.length>0?(
                           <div style={{...fS,display:"flex",alignItems:"center",justifyContent:"center",background:C.s2,border:"1px solid "+C.brdL,color:C.tx3,fontSize:10,fontStyle:"italic",cursor:"default"}}>par série ↓</div>
                         ):<input type="number" step="0.5" value={wd.kg??""} placeholder="--" onChange={e=>updField(ex.id,"kg",e.target.value)} style={fS}/>}
-                      </div>
+                      </div>}
                       <div>
                         <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div>
                         <input type="number" value={wd.sets??""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/>
@@ -1092,11 +1092,23 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     {/* Per-set charge config */}
                     {(wd.sets>=2)&&!wd.pdc&&(()=>{
                       const isRm=wd.pct_rm!=null;
-                      const hasPerSet=isRm?(wd.setPctRms&&wd.setPctRms.length>0):(wd.setKgs&&wd.setKgs.length>0);
+                      const hasPerSet=!!wd._perSetMode&&(isRm?(wd.setPctRms?.length>0):(wd.setKgs?.length>0));
                       const togglePerSet=()=>{
-                        if(hasPerSet){updField(ex.id,"setKgs",undefined);updField(ex.id,"setPctRms",undefined);}
-                        else if(isRm){updField(ex.id,"setPctRms",Array.from({length:wd.sets},()=>wd.pct_rm??80));}
-                        else{updField(ex.id,"setKgs",Array.from({length:wd.sets},()=>wd.kg??0));}
+                        setExos(prev=>({...prev,[sid]:prev[sid].map(e=>{
+                          if(e.id!==ex.id)return e;
+                          const cw=e.weeks[week]||{};let patch;
+                          if(hasPerSet){
+                            const stashVals=cw.setKgs||cw.setPctRms;
+                            const inferKg=!cw.kg&&!isRm&&stashVals?.length>0?stashVals[0]:undefined;
+                            patch={_perSetMode:false,_setKgsStash:stashVals,_setKgsIsRm:isRm,setKgs:undefined,setPctRms:undefined,...(inferKg!==undefined?{kg:inferKg}:{})};
+                          }else{
+                            const stash=cw._setKgsStash;const stashIsRm=cw._setKgsIsRm;
+                            if(stash?.length>0&&stashIsRm===isRm){patch=isRm?{_perSetMode:true,setPctRms:stash}:{_perSetMode:true,setKgs:stash};}
+                            else if(isRm){patch={_perSetMode:true,setPctRms:Array.from({length:cw.sets||3},()=>cw.pct_rm??80)};}
+                            else{patch={_perSetMode:true,setKgs:Array.from({length:cw.sets||3},()=>cw.kg??0)};}
+                          }
+                          return{...e,weeks:{...e.weeks,[week]:{...cw,...patch}}};
+                        })}));
                       };
                       const vals=isRm?(wd.setPctRms||[]):(wd.setKgs||[]);
                       const key=isRm?"setPctRms":"setKgs";
@@ -1138,7 +1150,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 <div style={{marginBottom:10}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
                     <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Repetitions / Duree</div>
-                    {!isFlex&&wd.sets>=2&&(()=>{const isPS=(wd.repsRange||"").includes(",");return(<button onClick={()=>{if(isPS){updField(ex.id,"repsRange",(wd.repsRange||"").split(",")[0]||"");}else{const b=wd.repsRange||"";updField(ex.id,"repsRange",Array.from({length:wd.sets},()=>b).join(","));}}} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(isPS?C.ac:C.brdL),background:isPS?C.acS:"transparent",color:isPS?C.ac:C.tx3,fontSize:9,fontWeight:isPS?700:400,cursor:"pointer",fontFamily:"inherit"}}>⚡ {isPS?"Global":"Par série"}</button>);})()}
+                    {!isFlex&&wd.sets>=2&&(()=>{const isPS=(wd.repsRange||"").includes(",");return(<button onClick={()=>{setExos(prev=>({...prev,[sid]:prev[sid].map(e=>{if(e.id!==ex.id)return e;const cw=e.weeks[week]||{};let patch;if(isPS){patch={_repsRangeStash:cw.repsRange,repsRange:(cw.repsRange||"").split(",")[0]||""};}else{const stash=cw._repsRangeStash;if(stash?.includes(",")&&stash.split(",").length===(cw.sets||3)){patch={repsRange:stash};}else{const b=cw.repsRange||"";patch={repsRange:Array.from({length:cw.sets||3},()=>b).join(",")};}}return{...e,weeks:{...e.weeks,[week]:{...cw,...patch}}};}))}));}} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(isPS?C.ac:C.brdL),background:isPS?C.acS:"transparent",color:isPS?C.ac:C.tx3,fontSize:9,fontWeight:isPS?700:400,cursor:"pointer",fontFamily:"inherit"}}>⚡ {isPS?"Global":"Par série"}</button>);})()}
                   </div>
                   {(()=>{const isPS=!isFlex&&wd.sets>=2&&(wd.repsRange||"").includes(",");if(!isPS)return(<input type="text" value={wd.repsRange||""} placeholder={isFlex?"30s ou 10":"10 ou 8-12"} onChange={e=>updField(ex.id,"repsRange",e.target.value)} style={{...fS,textAlign:"left",paddingLeft:10}}/>);const parts=(wd.repsRange||"").split(",");return(<div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:2}}>{Array.from({length:wd.sets},(_,i)=>{const val=parts[i]??parts[parts.length-1]??"";return(<div key={i} style={{textAlign:"center",minWidth:44,flexShrink:0}}><div style={{fontSize:8,color:C.tx3,marginBottom:2}}>S{i+1}</div><input type="text" value={val} onChange={e=>{const np=Array.from({length:wd.sets},(_,j)=>j===i?e.target.value:(parts[j]??parts[parts.length-1]??""));updField(ex.id,"repsRange",np.join(","));}} style={{width:44,textAlign:"center",padding:"4px 2px",borderRadius:5,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:11,fontWeight:700,fontFamily:"inherit",boxSizing:"border-box"}}/></div>);})}</div>);})()}
                 </div>
@@ -1318,23 +1330,26 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
       setExos(prev=>({...prev,[exSid]:(prev[exSid]||[]).map(e=>{
         if(e.id!==exId)return e;
         if(weeklyConfigs&&weeklyConfigs.length>0){
-          // Multi-week method: populate weeks ONLY from weekly_configs (pas de fallback base config)
+          // Multi-week method: fill each week from weekly_configs, carry-forward last derived for unconfigured weeks
           const newWeeks={...e.weeks};
+          let lastDerived={};
           weeksArr.forEach(w=>{
             const wc=weeklyConfigs.find(x=>x.week===w);
             if(wc){
-              const derived=methodConfigToWeekFields(wc.config);
-              newWeeks[w]={...(newWeeks[w]||{}),...derived,method_attachment:attachment};
+              lastDerived=methodConfigToWeekFields(wc.config);
+              newWeeks[w]={...(newWeeks[w]||{}),...lastDerived,method_attachment:attachment};
             } else {
-              // semaine sans config explicite : attacher la méthode sans écraser sets/repsRange
-              newWeeks[w]={...(newWeeks[w]||{}),method_attachment:attachment};
+              // Carry-forward last configured week's derived fields
+              newWeeks[w]={...(newWeeks[w]||{}),...lastDerived,method_attachment:attachment};
             }
           });
           return {...e,weeks:newWeeks};
         }
-        // Single-config method: only populate current week
+        // Single-config method: apply derived to ALL weeks so S+1, S+2 are pre-filled
         const derived=methodConfigToWeekFields(method.config);
-        return {...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),...derived,method_attachment:attachment}}};
+        const newWeeks={...e.weeks};
+        weeksArr.forEach(w=>{newWeeks[w]={...(newWeeks[w]||{}),...derived,method_attachment:attachment};});
+        return {...e,weeks:newWeeks};
       })}));
       setMethodPickerEx(null);
     }}
