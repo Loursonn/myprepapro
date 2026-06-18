@@ -21,6 +21,7 @@ import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
 import { SessionWeekDrawer } from "@/features/coach/components/SessionWeekDrawer";
 import { WorkoutSplitModal } from "@/features/coach/components/WorkoutSplitModal";
+import { ProgrammationView } from "@/features/coach/components/programmation/ProgrammationView";
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -757,48 +758,13 @@ export default function ProgrammationPage() {
 
       {/* ── Musculation ── */}
       {subTab === "muscu" && (
-        <>
-          {/* Header avec bouton créer (toujours visible si pas viewOnly) */}
-          {!viewOnly && sortedSessions.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <button
-                onClick={() => setShowTrash(true)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "7px 12px", borderRadius: 9,
-                  border: "1px solid " + C.brdL, background: "transparent",
-                  color: trashedSessions.length > 0 ? C.r : C.tx3,
-                  fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                  position: "relative" as const,
-                }}
-              >
-                <Trash2 size={13} />
-                Corbeille
-                {trashedSessions.length > 0 && (
-                  <span style={{
-                    position: "absolute", top: -6, right: -6,
-                    background: C.r, color: "#fff", borderRadius: "50%",
-                    width: 16, height: 16, fontSize: 9, fontWeight: 800,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>{trashedSessions.length}</span>
-                )}
-              </button>
-              <button
-                onClick={() => setShowAddMuscu(true)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "7px 14px", borderRadius: 9,
-                  border: "none", background: C.coach, color: "#fff",
-                  fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                }}
-              >
-                <Plus size={13} />
-                Créer une séance
-              </button>
-            </div>
-          )}
+        <ProgrammationView
+          athleteId={athleteId}
+          cycleId={activeCycle?.id}
+        />
+      )}
 
-          {sortedSessions.length === 0 ? (
+      {false && (sortedSessions.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 20px" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucune séance</div>
@@ -1011,9 +977,7 @@ export default function ProgrammationPage() {
                 )}
               </div>
             </>
-          )}
-        </>
-      )}
+          ))}
 
       {/* ── Énergétique ── */}
       {subTab === "energie" && (
