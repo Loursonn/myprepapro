@@ -41,12 +41,10 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
   const [name, setName] = useState(initial?.name ?? "")
   const [seriesMode, setSeriesMode] = useState<'libre' | 'fixe'>(initial?.series_mode ?? 'libre')
   const [seriesCount, setSeriesCount] = useState<number>(initial?.series_count ?? 4)
-  const [timingMode, setTimingMode] = useState<'depart' | 'repos'>(initial?.timing_mode ?? 'repos')
+  const [timingMode, setTimingMode] = useState<'libre' | 'depart' | 'repos'>(initial?.timing_mode ?? 'libre')
   const [timingDepartMin, setTimingDepartMin] = useState<number>(initial?.timing_depart_min ?? 3)
   const [timingReposMin, setTimingReposMin] = useState<number>(initial?.timing_repos_min ?? 2)
   const [timingReposSec, setTimingReposSec] = useState<number>(initial?.timing_repos_sec ?? 0)
-  const [multiSemaine, setMultiSemaine] = useState<boolean>(initial?.multi_semaine ?? false)
-  const [nbSemaines, setNbSemaines] = useState<number>(initial?.nb_semaines ?? 4)
 
   function handleSubmit() {
     const data: BlocFormData = {
@@ -57,18 +55,9 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
       timing_depart_min: timingMode === 'depart' ? timingDepartMin : undefined,
       timing_repos_min: timingMode === 'repos' ? timingReposMin : undefined,
       timing_repos_sec: timingMode === 'repos' ? timingReposSec : undefined,
-      multi_semaine: multiSemaine,
-      nb_semaines: multiSemaine ? nbSemaines : undefined,
     }
     onSubmit(data)
   }
-
-  const numInput = (value: number, onChange: (v: number) => void, min = 1, max = 99): React.CSSProperties & { value?: number } => ({
-    width: 52, padding: "6px 8px", borderRadius: 7,
-    border: "1px solid " + C.brdL, background: C.s2,
-    color: C.tx, fontSize: 13, fontFamily: "inherit",
-    outline: "none", textAlign: "center",
-  })
 
   return (
     <div style={{
@@ -107,9 +96,10 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
       </div>
 
       {/* Timing */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 16 }}>
         <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 6, fontWeight: 600 }}>Timing</label>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <button onClick={() => setTimingMode('libre')} style={pill(timingMode === 'libre')}>Libre</button>
           <button onClick={() => setTimingMode('depart')} style={pill(timingMode === 'depart')}>Départ toutes les X min</button>
           <button onClick={() => setTimingMode('repos')} style={pill(timingMode === 'repos')}>Repos X min X sec</button>
           {timingMode === 'depart' && (
@@ -142,31 +132,6 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
                 style={{ width: 52, padding: "6px 8px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", textAlign: "center" }}
               />
               <span style={{ fontSize: 11, color: C.tx3 }}>sec</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Multi-semaine */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 6, fontWeight: 600 }}>Multi-semaine</label>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <button
-            onClick={() => setMultiSemaine(v => !v)}
-            style={pill(multiSemaine)}
-          >
-            {multiSemaine ? "Activé" : "Activer"}
-          </button>
-          {multiSemaine && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <input
-                type="number"
-                value={nbSemaines}
-                onChange={e => setNbSemaines(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                min={1} max={24}
-                style={{ width: 52, padding: "6px 8px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", textAlign: "center" }}
-              />
-              <span style={{ fontSize: 11, color: C.tx3 }}>semaines</span>
             </div>
           )}
         </div>

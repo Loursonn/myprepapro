@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
-import type { Bloc } from "../types"
+import type { ProgSession } from "../types"
 
 export function useProgrammation(athleteId: string | undefined) {
-  return useQuery<Bloc[]>({
-    queryKey: ['asp-blocs', athleteId],
+  return useQuery<ProgSession[]>({
+    queryKey: ['asp-prog', athleteId],
     enabled: !!athleteId,
     staleTime: 30_000,
     queryFn: async () => {
@@ -12,10 +12,10 @@ export function useProgrammation(athleteId: string | undefined) {
         .from('app_data')
         .select('value')
         .eq('athlete_id', athleteId!)
-        .eq('key', 'asp:blocs')
+        .eq('key', 'asp:prog')
         .maybeSingle()
       if (error) throw error
-      return (data?.value ?? []) as Bloc[]
+      return (data?.value ?? []) as ProgSession[]
     }
   })
 }

@@ -13,7 +13,6 @@ import type { Bloc, Exercice } from "./types"
 import { defaultExerciceParams } from "./types"
 import { BlocForm } from "./BlocForm"
 import { ExerciceRow } from "./ExerciceRow"
-import { SemaineNav } from "./SemaineNav"
 
 const VIOLET = "#7B6FFF"
 const VIOLET_S = "rgba(123,111,255,0.12)"
@@ -21,8 +20,9 @@ const VIOLET_S = "rgba(123,111,255,0.12)"
 interface BlocCardProps {
   bloc: Bloc
   index: number
-  cycleId: string | undefined
   athleteId: string | undefined
+  activeWeek: number          // passed from SessionBlocEditor
+  sessionMultiSemaine: boolean // whether the parent session has multi_semaine
   onChange: (updated: Bloc) => void
   onDelete: () => void
   dragHandleProps?: Record<string, unknown>
@@ -35,13 +35,14 @@ interface SortableExerciceProps {
   bloc: Bloc
   athleteId: string | undefined
   activeWeek: number
+  sessionMultiSemaine: boolean
   onMoveUp: () => void
   onMoveDown: () => void
   onDelete: () => void
   onChange: (updated: Exercice) => void
 }
 
-function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek, onMoveUp, onMoveDown, onDelete, onChange }: SortableExerciceProps) {
+function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek, sessionMultiSemaine, onMoveUp, onMoveDown, onDelete, onChange }: SortableExerciceProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercice.id })
   return (
     <div
@@ -58,7 +59,7 @@ function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek,
         index={index}
         total={total}
         athleteId={athleteId}
-        multiSemaine={bloc.multi_semaine}
+        sessionMultiSemaine={sessionMultiSemaine}
         activeWeek={activeWeek}
         blocSeriesMode={bloc.series_mode}
         blocSeriesCount={bloc.series_count}
@@ -73,6 +74,7 @@ function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek,
 }
 
 function timingLabel(bloc: Bloc): string {
+  if (bloc.timing_mode === 'libre') return 'Repos libre'
   if (bloc.timing_mode === 'depart') return `Départ /${bloc.timing_depart_min ?? '?'}min`
   const min = bloc.timing_repos_min ?? 0
   const sec = bloc.timing_repos_sec ?? 0
@@ -82,12 +84,11 @@ function timingLabel(bloc: Bloc): string {
   return `Repos —`
 }
 
-export function BlocCard({ bloc, index, cycleId, athleteId, onChange, onDelete, dragHandleProps }: BlocCardProps) {
+export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemaine, onChange, onDelete, dragHandleProps }: BlocCardProps) {
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(bloc.name)
-  const [activeWeek, setActiveWeek] = useState(1)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -111,13 +112,14 @@ export function BlocCard({ bloc, index, cycleId, athleteId, onChange, onDelete, 
   }
 
   function addExercice() {
+    const effectiveMultiSemaine = sessionMultiSemaine
     const newEx: Exercice = {
       id: crypto.randomUUID(),
       exercise_id: "",
       exercise_name: "",
       mode: 'classique',
       sort_order: bloc.exercices.length,
-      params: bloc.multi_semaine
+      params: effectiveMultiSemaine
         ? { [String(activeWeek)]: defaultExerciceParams(bloc.series_count ?? 4) }
         : defaultExerciceParams(bloc.series_count ?? 4),
     }
@@ -133,24 +135,6 @@ export function BlocCard({ bloc, index, cycleId, athleteId, onChange, onDelete, 
   function deleteExercice(idx: number) {
     const exos = bloc.exercices.filter((_, i) => i !== idx)
     onChange({ ...bloc, exercices: exos.map((e, i) => ({ ...e, sort_order: i })) })
-  }
-
-  function handleDuplicateWeek() {
-    if (!bloc.multi_semaine) return
-    const weekKey = String(activeWeek)
-    const nextWeek = String(activeWeek + 1)
-    const exos = bloc.exercices.map(ex => {
-      if (typeof ex.params === 'object' && !('mode' in ex.params)) {
-        const rec = ex.params as Record<string, import("./types").ExerciceParams>
-        const thisWeekParams = rec[weekKey]
-        if (thisWeekParams) {
-          return { ...ex, params: { ...rec, [nextWeek]: { ...thisWeekParams } } }
-        }
-      }
-      return ex
-    })
-    onChange({ ...bloc, exercices: exos })
-    setActiveWeek(activeWeek + 1)
   }
 
   return (
@@ -242,18 +226,6 @@ export function BlocCard({ bloc, index, cycleId, athleteId, onChange, onDelete, 
         </div>
       )}
 
-      {/* Semaine nav */}
-      {bloc.multi_semaine && !editing && (
-        <div style={{ padding: "0 16px 10px" }}>
-          <SemaineNav
-            cycleId={cycleId}
-            activeWeek={activeWeek}
-            onWeekChange={setActiveWeek}
-            onDuplicateWeek={handleDuplicateWeek}
-          />
-        </div>
-      )}
-
       {/* Exercises */}
       <div style={{ padding: "10px 14px" }}>
         <DndContext
@@ -275,6 +247,7 @@ export function BlocCard({ bloc, index, cycleId, athleteId, onChange, onDelete, 
                   bloc={bloc}
                   athleteId={athleteId}
                   activeWeek={activeWeek}
+                  sessionMultiSemaine={sessionMultiSemaine}
                   onMoveUp={() => moveExercice(i, -1)}
                   onMoveDown={() => moveExercice(i, 1)}
                   onDelete={() => deleteExercice(i)}

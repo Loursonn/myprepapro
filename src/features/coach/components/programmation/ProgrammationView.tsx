@@ -8,32 +8,163 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { C } from "@/lib/theme"
-import { Plus } from "lucide-react"
+import { Plus, Pencil, X, ChevronDown, ChevronUp } from "lucide-react"
 import { useProgrammation } from "./hooks/useProgrammation"
 import { useUpdateProgrammation } from "./hooks/useUpdateProgrammation"
-import type { Bloc } from "./types"
-import { BlocCard } from "./BlocCard"
-import { BlocForm } from "./BlocForm"
+import type { ProgSession } from "./types"
+import { SessionForm } from "./SessionForm"
+import { SessionBlocEditor } from "./SessionBlocEditor"
 import { CardSkeleton } from "@/features/shared/components/skeletons"
 
 const VIOLET = "#7B6FFF"
+const VIOLET_S = "rgba(123,111,255,0.12)"
+
+const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
 
 interface ProgrammationViewProps {
   athleteId: string | undefined
   cycleId: string | undefined
 }
 
-interface SortableBlocProps {
-  bloc: Bloc
-  index: number
-  cycleId: string | undefined
-  athleteId: string | undefined
-  onChange: (updated: Bloc) => void
-  onDelete: () => void
+function totalExercices(session: ProgSession): number {
+  return session.blocs.reduce((sum, b) => sum + b.exercices.length, 0)
 }
 
-function SortableBloc({ bloc, index, cycleId, athleteId, onChange, onDelete }: SortableBlocProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: bloc.id })
+interface SessionCardProps {
+  session: ProgSession
+  isOpen: boolean
+  cycleId: string | undefined
+  athleteId: string | undefined
+  onToggle: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onChange: (updated: ProgSession) => void
+  dragHandleProps?: Record<string, unknown>
+}
+
+function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, onDelete, onChange, dragHandleProps }: SessionCardProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  return (
+    <div style={{
+      background: C.s1, borderRadius: 12, border: "1px solid " + (isOpen ? VIOLET + "60" : C.brdL),
+      overflow: "hidden", marginBottom: 8,
+      transition: "border-color 150ms",
+    }}>
+      {/* Card header */}
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", cursor: "pointer" }}
+        onClick={onToggle}
+      >
+        {/* Drag handle */}
+        <div
+          {...(dragHandleProps ?? {})}
+          onClick={e => e.stopPropagation()}
+          style={{ cursor: "grab", color: C.tx3, display: "flex", alignItems: "center", flexShrink: 0 }}
+        >
+          <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
+            <circle cx="4" cy="2.5" r="1.2" fill="currentColor" />
+            <circle cx="8" cy="2.5" r="1.2" fill="currentColor" />
+            <circle cx="4" cy="7" r="1.2" fill="currentColor" />
+            <circle cx="8" cy="7" r="1.2" fill="currentColor" />
+            <circle cx="4" cy="11.5" r="1.2" fill="currentColor" />
+            <circle cx="8" cy="11.5" r="1.2" fill="currentColor" />
+          </svg>
+        </div>
+
+        {/* Day badge */}
+        {session.day_of_week !== undefined ? (
+          <div style={{
+            padding: "3px 8px", borderRadius: 6,
+            background: VIOLET_S, color: VIOLET,
+            fontSize: 10, fontWeight: 800, flexShrink: 0,
+          }}>
+            {DOW[session.day_of_week]}
+          </div>
+        ) : session.recurrence === 'once' ? (
+          <div style={{
+            padding: "3px 8px", borderRadius: 6,
+            background: C.s2, color: C.tx3,
+            fontSize: 10, fontWeight: 700, flexShrink: 0,
+          }}>
+            Ponct.
+          </div>
+        ) : null}
+
+        {/* Short badge */}
+        <div style={{
+          padding: "3px 8px", borderRadius: 6,
+          background: C.s2, color: C.tx2,
+          fontSize: 10, fontWeight: 700, flexShrink: 0,
+          border: "1px solid " + C.brdL,
+        }}>
+          {session.short}
+        </div>
+
+        {/* Name + meta */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {session.name || "Séance sans nom"}
+          </div>
+          <div style={{ fontSize: 11, color: C.tx3, marginTop: 1 }}>
+            {session.blocs.length} bloc{session.blocs.length !== 1 ? "s" : ""} · {totalExercices(session)} exercice{totalExercices(session) !== 1 ? "s" : ""}
+            {session.multi_semaine && session.nb_semaines ? ` · ${session.nb_semaines} sem.` : ""}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+          <button
+            onClick={onEdit}
+            style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          ><Pencil size={12} /></button>
+
+          {confirmDelete ? (
+            <>
+              <button
+                onClick={onDelete}
+                style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: C.r, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit", flexShrink: 0 }}
+              >Supprimer</button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              ><X size={12} /></button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.r + "40", background: C.rS, color: C.r, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            ><X size={12} /></button>
+          )}
+        </div>
+
+        {/* Expand chevron */}
+        <div style={{ color: C.tx3, flexShrink: 0 }}>
+          {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </div>
+      </div>
+
+      {/* Expanded: SessionBlocEditor */}
+      {isOpen && (
+        <div style={{ borderTop: "1px solid " + C.brdL, padding: "0 14px 14px" }}>
+          <SessionBlocEditor
+            session={session}
+            cycleId={cycleId}
+            athleteId={athleteId}
+            onChange={onChange}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface SortableSessionCardProps extends SessionCardProps {
+  // inherits all from SessionCardProps
+}
+
+function SortableSessionCard(props: SortableSessionCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.session.id })
   return (
     <div
       ref={setNodeRef}
@@ -44,13 +175,8 @@ function SortableBloc({ bloc, index, cycleId, athleteId, onChange, onDelete }: S
       }}
       {...attributes}
     >
-      <BlocCard
-        bloc={bloc}
-        index={index}
-        cycleId={cycleId}
-        athleteId={athleteId}
-        onChange={onChange}
-        onDelete={onDelete}
+      <SessionCard
+        {...props}
         dragHandleProps={listeners as Record<string, unknown>}
       />
     </div>
@@ -58,50 +184,57 @@ function SortableBloc({ bloc, index, cycleId, athleteId, onChange, onDelete }: S
 }
 
 export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps) {
-  const { data: blocs = [], isLoading } = useProgrammation(athleteId)
+  const { data: sessions = [], isLoading } = useProgrammation(athleteId)
   const updateMutation = useUpdateProgrammation(athleteId)
-  const [isAddingBloc, setIsAddingBloc] = useState(false)
+  const [isAddingSession, setIsAddingSession] = useState(false)
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
-  function debouncedSave(updated: Bloc[]) {
+  function debouncedSave(updated: ProgSession[]) {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => updateMutation.mutate(updated), 500)
   }
 
-  function updateBloc(id: string, updated: Bloc) {
-    const next = blocs.map(b => b.id === id ? updated : b)
+  function addSession(data: Omit<ProgSession, 'id' | 'blocs'>) {
+    const newSession: ProgSession = {
+      ...data,
+      id: crypto.randomUUID(),
+      blocs: [],
+    }
+    updateMutation.mutate([...sessions, newSession])
+    setIsAddingSession(false)
+    setOpenSessionId(newSession.id)
+  }
+
+  function updateSessionMeta(id: string, data: Omit<ProgSession, 'id' | 'blocs'>) {
+    const next = sessions.map(s => s.id === id ? { ...s, ...data } : s)
+    updateMutation.mutate(next)
+    setEditingSessionId(null)
+  }
+
+  function updateSessionContent(id: string, updated: ProgSession) {
+    const next = sessions.map(s => s.id === id ? updated : s)
     debouncedSave(next)
   }
 
-  function deleteBloc(id: string) {
-    const next = blocs.filter(b => b.id !== id).map((b, i) => ({ ...b, sort_order: i }))
+  function deleteSession(id: string) {
+    const next = sessions.filter(s => s.id !== id)
     updateMutation.mutate(next)
-  }
-
-  function addBloc(data: Omit<Bloc, 'id' | 'exercices' | 'sort_order'>) {
-    const newBloc: Bloc = {
-      ...data,
-      id: crypto.randomUUID(),
-      exercices: [],
-      sort_order: blocs.length,
-    }
-    const next = [...blocs, newBloc]
-    updateMutation.mutate(next)
-    setIsAddingBloc(false)
+    if (openSessionId === id) setOpenSessionId(null)
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const list = [...blocs]
-    const from = list.findIndex(b => b.id === active.id)
-    const to = list.findIndex(b => b.id === over.id)
+    const list = [...sessions]
+    const from = list.findIndex(s => s.id === active.id)
+    const to = list.findIndex(s => s.id === over.id)
     if (from === -1 || to === -1) return
     list.splice(to, 0, list.splice(from, 1)[0])
-    const updated = list.map((b, i) => ({ ...b, sort_order: i }))
-    updateMutation.mutate(updated)
+    updateMutation.mutate(list)
   }
 
   if (isLoading) {
@@ -117,7 +250,7 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
       {/* Top bar */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
         <button
-          onClick={() => setIsAddingBloc(true)}
+          onClick={() => { setIsAddingSession(true); setEditingSessionId(null) }}
           style={{
             display: "flex", alignItems: "center", gap: 5,
             padding: "8px 16px", borderRadius: 9,
@@ -126,28 +259,28 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
           }}
         >
           <Plus size={13} />
-          Ajouter un bloc
+          Créer une séance
         </button>
       </div>
 
-      {/* Add bloc inline form */}
-      {isAddingBloc && (
-        <BlocForm
-          onSubmit={addBloc}
-          onCancel={() => setIsAddingBloc(false)}
+      {/* Add session inline form */}
+      {isAddingSession && (
+        <SessionForm
+          onSubmit={addSession}
+          onCancel={() => setIsAddingSession(false)}
         />
       )}
 
       {/* Empty state */}
-      {!isAddingBloc && blocs.length === 0 && (
+      {!isAddingSession && sessions.length === 0 && (
         <div style={{ textAlign: "center", padding: "50px 20px" }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>🏋️</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucun bloc</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucune séance</div>
           <div style={{ fontSize: 12, color: C.tx3, marginBottom: 20 }}>
-            Crée ton premier bloc pour commencer à programmer les exercices.
+            Crée ta première séance pour commencer à programmer.
           </div>
           <button
-            onClick={() => setIsAddingBloc(true)}
+            onClick={() => setIsAddingSession(true)}
             style={{
               padding: "10px 22px", borderRadius: 10,
               border: "none", background: VIOLET, color: "#fff",
@@ -156,32 +289,52 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
             }}
           >
             <Plus size={14} />
-            Créer un bloc
+            Créer une séance
           </button>
         </div>
       )}
 
-      {/* Blocs list */}
+      {/* Sessions list */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={blocs.map(b => b.id)}
+          items={sessions.map(s => s.id)}
           strategy={verticalListSortingStrategy}
         >
-          {blocs.map((bloc, i) => (
-            <SortableBloc
-              key={bloc.id}
-              bloc={bloc}
-              index={i}
-              cycleId={cycleId}
-              athleteId={athleteId}
-              onChange={updated => updateBloc(bloc.id, updated)}
-              onDelete={() => deleteBloc(bloc.id)}
-            />
-          ))}
+          {sessions.map(session => {
+            // If this session is being edited (meta), show inline form instead of card
+            if (editingSessionId === session.id) {
+              return (
+                <div key={session.id} style={{ marginBottom: 8 }}>
+                  <SessionForm
+                    initial={session}
+                    onSubmit={data => updateSessionMeta(session.id, data)}
+                    onCancel={() => setEditingSessionId(null)}
+                  />
+                </div>
+              )
+            }
+
+            return (
+              <SortableSessionCard
+                key={session.id}
+                session={session}
+                isOpen={openSessionId === session.id}
+                cycleId={cycleId}
+                athleteId={athleteId}
+                onToggle={() => setOpenSessionId(openSessionId === session.id ? null : session.id)}
+                onEdit={() => {
+                  setEditingSessionId(session.id)
+                  setIsAddingSession(false)
+                }}
+                onDelete={() => deleteSession(session.id)}
+                onChange={updated => updateSessionContent(session.id, updated)}
+              />
+            )
+          })}
         </SortableContext>
       </DndContext>
     </div>

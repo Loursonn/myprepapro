@@ -17,7 +17,7 @@ interface ExerciceParamsProps {
   exercice: Exercice
   blocSeriesMode: 'libre' | 'fixe'
   blocSeriesCount?: number
-  multiSemaine: boolean
+  sessionMultiSemaine: boolean
   activeWeek: number
   athleteId: string | undefined
   onChange: (updated: Exercice) => void
@@ -134,7 +134,7 @@ export function ExerciceParamsPanel({
   exercice,
   blocSeriesMode,
   blocSeriesCount,
-  multiSemaine,
+  sessionMultiSemaine,
   activeWeek,
   athleteId,
   onChange,
@@ -142,6 +142,9 @@ export function ExerciceParamsPanel({
   const [showSearch, setShowSearch] = useState(!exercice.exercise_name)
   const { data: methods = [] } = useTrainingMethods()
   const { best: bestRM } = useExerciceRM(athleteId, exercice.exercise_name)
+
+  // Effective multi_semaine: session level OR per-exercise override
+  const multiSemaine = sessionMultiSemaine || (exercice.multi_semaine ?? false)
 
   const params = getParams(exercice, activeWeek, multiSemaine)
 
@@ -525,7 +528,39 @@ export function ExerciceParamsPanel({
         )}
       </div>
 
-      {/* 9. Synthèse */}
+      {/* 9. Paramètres par semaine (per-exercise override, only when session doesn't have multi_semaine) */}
+      {!sessionMultiSemaine && (
+        <div>
+          <button
+            onClick={() => {
+              const newMultiSemaine = !(exercice.multi_semaine ?? false)
+              // When toggling on, convert current params to week-keyed record
+              let newParams = exercice.params
+              if (newMultiSemaine && typeof exercice.params === 'object' && 'mode' in exercice.params) {
+                // params is currently a flat ExerciceParams, wrap into week 1
+                newParams = { '1': exercice.params as ExerciceParams }
+              } else if (!newMultiSemaine && typeof exercice.params === 'object' && !('mode' in exercice.params)) {
+                // params is currently week-keyed, flatten to first week
+                const rec = exercice.params as Record<string, ExerciceParams>
+                newParams = Object.values(rec)[0] ?? defaultExerciceParams()
+              }
+              onChange({ ...exercice, multi_semaine: newMultiSemaine, params: newParams })
+            }}
+            style={{
+              padding: "5px 12px", borderRadius: 6,
+              border: "1px solid " + ((exercice.multi_semaine ?? false) ? VIOLET : C.brdL),
+              background: (exercice.multi_semaine ?? false) ? VIOLET_S : "transparent",
+              color: (exercice.multi_semaine ?? false) ? VIOLET : C.tx3,
+              fontSize: 11, fontWeight: (exercice.multi_semaine ?? false) ? 700 : 500,
+              cursor: "pointer", fontFamily: "inherit", transition: "all 100ms",
+            }}
+          >
+            {(exercice.multi_semaine ?? false) ? "◉ Paramètres par semaine" : "◎ Paramètres par semaine"}
+          </button>
+        </div>
+      )}
+
+      {/* 10. Synthèse */}
       <div style={{ borderTop: "1px solid " + C.brd, paddingTop: 10 }}>
         <SyntheseBar params={params} />
       </div>

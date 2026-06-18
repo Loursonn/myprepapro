@@ -14,7 +14,7 @@ interface ExerciceRowProps {
   index: number
   total: number
   athleteId: string | undefined
-  multiSemaine: boolean
+  sessionMultiSemaine: boolean
   activeWeek: number
   blocSeriesMode: 'libre' | 'fixe'
   blocSeriesCount?: number
@@ -40,7 +40,7 @@ export function ExerciceRow({
   index,
   total,
   athleteId,
-  multiSemaine,
+  sessionMultiSemaine,
   activeWeek,
   blocSeriesMode,
   blocSeriesCount,
@@ -55,7 +55,10 @@ export function ExerciceRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const { best: bestRM } = useExerciceRM(athleteId, exercice.exercise_name)
-  const displayParams = getDisplayParams(exercice, activeWeek, multiSemaine)
+
+  // Effective multi_semaine: session level OR per-exercise override
+  const effectiveMultiSemaine = sessionMultiSemaine || (exercice.multi_semaine ?? false)
+  const displayParams = getDisplayParams(exercice, activeWeek, effectiveMultiSemaine)
 
   return (
     <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brdL, overflow: "hidden" }}>
@@ -149,7 +152,7 @@ export function ExerciceRow({
             exercice={exercice}
             blocSeriesMode={blocSeriesMode}
             blocSeriesCount={blocSeriesCount}
-            multiSemaine={multiSemaine}
+            sessionMultiSemaine={sessionMultiSemaine}
             activeWeek={activeWeek}
             athleteId={athleteId}
             onChange={onChange}

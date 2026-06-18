@@ -26,7 +26,8 @@ export interface Exercice {
   mode: 'classique' | 'methode'
   methode_id?: string
   sort_order: number
-  // If multi_semaine on bloc: Record<weekNumber, ExerciceParams>; else ExerciceParams
+  multi_semaine?: boolean  // per-exercise override (only used when session multi_semaine is false)
+  // If multi_semaine active (session OR exercise level): Record<weekNumber, ExerciceParams>; else ExerciceParams
   params: ExerciceParams | Record<string, ExerciceParams>
 }
 
@@ -35,14 +36,24 @@ export interface Bloc {
   name: string
   series_mode: 'libre' | 'fixe'
   series_count?: number
-  timing_mode: 'depart' | 'repos'
+  timing_mode: 'libre' | 'depart' | 'repos'
   timing_depart_min?: number
   timing_repos_min?: number
   timing_repos_sec?: number
-  multi_semaine: boolean
-  nb_semaines?: number
+  // NO multi_semaine here anymore
   exercices: Exercice[]
   sort_order: number
+}
+
+export interface ProgSession {
+  id: string
+  name: string
+  short: string
+  day_of_week?: number  // 0=Mon...6=Sun
+  recurrence: 'weekly' | 'once'
+  multi_semaine: boolean
+  nb_semaines?: number
+  blocs: Bloc[]
 }
 
 export function defaultExerciceParams(nb_series = 4): ExerciceParams {
