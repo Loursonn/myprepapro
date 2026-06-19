@@ -4,7 +4,7 @@ export type ParamValue<T> =
 
 export interface ClusterConfig {
   nb_clusters: number
-  reps_per_cluster: number
+  reps: number[]  // per-cluster reps, e.g. [3,2,1] → "3+2+1"
   recup_sec: number
 }
 
@@ -15,7 +15,7 @@ export interface ExerciceParams {
   reps_mode: ParamValue<'EC' | 'iso'>
   charge_unit: '%RM' | 'kg' | 'PDC'
   charge: ParamValue<number | null>
-  rir: ParamValue<number>
+  rir: ParamValue<number | null>
   tempo: ParamValue<string>
 }
 
@@ -25,6 +25,7 @@ export interface Exercice {
   exercise_name: string
   mode: 'classique' | 'methode'
   methode_id?: string
+  applied_to_sets?: number[]  // scope='set' methods: which set numbers (1-indexed) the method applies to
   sort_order: number
   multi_semaine?: boolean  // per-exercise override (only used when session multi_semaine is false)
   // If multi_semaine active (session OR exercise level): Record<weekNumber, ExerciceParams>; else ExerciceParams
@@ -38,6 +39,7 @@ export interface Bloc {
   series_count?: number
   timing_mode: 'libre' | 'depart' | 'repos'
   timing_depart_min?: number
+  timing_depart_sec?: number
   timing_repos_min?: number
   timing_repos_sec?: number
   // NO multi_semaine here anymore

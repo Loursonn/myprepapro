@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { C } from "@/lib/theme"
-import { GripVertical, ChevronUp, ChevronDown, Settings, X, Check } from "lucide-react"
+import { GripVertical, Settings, X, Check } from "lucide-react"
 import type { Exercice } from "./types"
 import { SyntheseBar } from "./SyntheseBar"
 import { ExerciceParamsPanel } from "./ExerciceParamsPanel"
@@ -8,6 +8,7 @@ import { RmDrawer } from "./RmDrawer"
 import { useExerciceRM } from "./hooks/useExerciceRM"
 
 const VIOLET = "#7B6FFF"
+const VIOLET_S = "rgba(123,111,255,0.12)"
 
 interface ExerciceRowProps {
   exercice: Exercice
@@ -29,8 +30,7 @@ function getDisplayParams(exercice: Exercice, activeWeek: number, multiSemaine: 
   if (!multiSemaine) return exercice.params as import("./types").ExerciceParams
   if (typeof exercice.params === 'object' && !('mode' in exercice.params)) {
     const rec = exercice.params as Record<string, import("./types").ExerciceParams>
-    const weekKey = String(activeWeek)
-    return rec[weekKey] ?? Object.values(rec)[0] ?? null
+    return rec[String(activeWeek)] ?? Object.values(rec)[0] ?? null
   }
   return exercice.params as import("./types").ExerciceParams
 }
@@ -38,14 +38,13 @@ function getDisplayParams(exercice: Exercice, activeWeek: number, multiSemaine: 
 export function ExerciceRow({
   exercice,
   index,
-  total,
   athleteId,
   sessionMultiSemaine,
   activeWeek,
   blocSeriesMode,
   blocSeriesCount,
-  onMoveUp,
-  onMoveDown,
+  onMoveUp: _onMoveUp,
+  onMoveDown: _onMoveDown,
   onDelete,
   onChange,
   dragHandleProps,
@@ -56,98 +55,125 @@ export function ExerciceRow({
 
   const { best: bestRM } = useExerciceRM(athleteId, exercice.exercise_name)
 
-  // Effective multi_semaine: session level OR per-exercise override
   const effectiveMultiSemaine = sessionMultiSemaine || (exercice.multi_semaine ?? false)
   const displayParams = getDisplayParams(exercice, activeWeek, effectiveMultiSemaine)
 
+  const hasName = !!exercice.exercise_name
+
   return (
-    <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brdL, overflow: "hidden" }}>
-      {/* Row header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px" }}>
-        {/* Drag handle */}
+    <div style={{
+      borderRadius: 10,
+      border: "1px solid " + (showParams ? VIOLET + "50" : C.brdL),
+      background: showParams ? VIOLET + "04" : C.s1,
+      overflow: "hidden",
+      transition: "border-color 150ms, background 150ms",
+    }}>
+      {/* Row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px" }}>
+
+        {/* Drag */}
         <div
           {...(dragHandleProps ?? {})}
-          style={{ cursor: "grab", color: C.tx3, display: "flex", alignItems: "center", flexShrink: 0 }}
+          style={{ cursor: "grab", color: C.tx3 + "70", display: "flex", alignItems: "center", flexShrink: 0 }}
         >
-          <GripVertical size={14} />
+          <GripVertical size={12} />
         </div>
 
-        {/* Up/down */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
-          <button
-            onClick={onMoveUp}
-            disabled={index === 0}
-            style={{ background: "transparent", border: "none", color: index === 0 ? C.tx3 + "40" : C.tx3, cursor: index === 0 ? "default" : "pointer", padding: 2, display: "flex" }}
-          ><ChevronUp size={11} /></button>
-          <button
-            onClick={onMoveDown}
-            disabled={index === total - 1}
-            style={{ background: "transparent", border: "none", color: index === total - 1 ? C.tx3 + "40" : C.tx3, cursor: index === total - 1 ? "default" : "pointer", padding: 2, display: "flex" }}
-          ><ChevronDown size={11} /></button>
+        {/* Index badge */}
+        <div style={{
+          width: 18, height: 18, borderRadius: 5,
+          background: hasName ? VIOLET_S : C.s2,
+          color: hasName ? VIOLET : C.tx3,
+          fontSize: 9, fontWeight: 800,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+        }}>
+          {index + 1}
         </div>
 
         {/* Exercise info */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {exercice.exercise_name || <span style={{ color: C.tx3 }}>Exercice non défini</span>}
-          </div>
-          {/* RM display */}
-          <div style={{ fontSize: 11, marginTop: 2 }}>
-            {bestRM ? (
-              <span style={{ color: VIOLET, fontWeight: 700 }}>{bestRM.kg} kg — 1RM</span>
-            ) : exercice.exercise_name ? (
+          {/* Name row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+            <div style={{
+              fontSize: 12, fontWeight: 700,
+              color: hasName ? C.tx : C.tx3,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              minWidth: 0, flex: 1,
+            }}>
+              {exercice.exercise_name || "Exercice non défini"}
+            </div>
+
+            {exercice.mode === 'methode' && exercice.methode_id && (
+              <div style={{ fontSize: 8, fontWeight: 700, color: VIOLET, background: VIOLET_S, padding: "1px 5px", borderRadius: 4, flexShrink: 0 }}>
+                méthode
+              </div>
+            )}
+
+            {/* 1RM — always visible when exercise selected */}
+            {hasName && (
               <button
                 onClick={() => setShowRm(true)}
-                style={{ background: "transparent", border: "none", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}
+                style={{
+                  background: bestRM ? VIOLET_S : C.s2,
+                  border: "1px solid " + (bestRM ? VIOLET + "40" : C.brdL),
+                  color: bestRM ? VIOLET : C.tx3,
+                  fontSize: 9, fontWeight: 700,
+                  borderRadius: 5, padding: "1px 6px",
+                  cursor: "pointer", fontFamily: "inherit",
+                  flexShrink: 0, whiteSpace: "nowrap",
+                }}
               >
-                — Ajouter 1RM
+                {bestRM ? `${bestRM.kg}kg 1RM` : "— 1RM"}
               </button>
-            ) : null}
+            )}
           </div>
-          {/* Synthese */}
+
           {displayParams && (
-            <div style={{ marginTop: 4 }}>
+            <div style={{ marginTop: 2 }}>
               <SyntheseBar params={displayParams} />
             </div>
           )}
         </div>
 
         {/* Actions */}
-        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
           <button
             onClick={() => setShowParams(p => !p)}
             style={{
-              width: 28, height: 28, borderRadius: 7,
+              width: 24, height: 24, borderRadius: 6,
               border: "1px solid " + (showParams ? VIOLET : C.brdL),
-              background: showParams ? VIOLET + "20" : "transparent",
+              background: showParams ? VIOLET_S : "transparent",
               color: showParams ? VIOLET : C.tx3,
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
             }}
-          ><Settings size={13} /></button>
+            title="Paramètres"
+          ><Settings size={11} /></button>
 
           {confirmingDelete ? (
             <>
               <button
                 onClick={onDelete}
-                style={{ width: 28, height: 28, borderRadius: 7, border: "none", background: C.r, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-              ><Check size={13} /></button>
+                style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: C.r, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              ><Check size={11} /></button>
               <button
                 onClick={() => setConfirmingDelete(false)}
-                style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-              ><X size={13} /></button>
+                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              ><X size={11} /></button>
             </>
           ) : (
             <button
               onClick={() => setConfirmingDelete(true)}
-              style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.r + "40", background: C.rS, color: C.r, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-            ><X size={13} /></button>
+              style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.r + "40", background: C.rS, color: C.r, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            ><X size={11} /></button>
           )}
         </div>
       </div>
 
-      {/* Inline params */}
+      {/* Params panel */}
       {showParams && (
-        <div style={{ borderTop: "1px solid " + C.brdL, padding: "0 12px 12px" }}>
+        <div style={{ borderTop: "1px solid " + VIOLET + "30", padding: "0 10px 12px" }}>
           <ExerciceParamsPanel
             exercice={exercice}
             blocSeriesMode={blocSeriesMode}

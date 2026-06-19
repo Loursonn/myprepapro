@@ -11,7 +11,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
-import { CoachExoParams } from "@/components/coach/CoachProgramEditor";
 import { NewBlockModal } from "@/components/coach/CoachComponents";
 import type { Session } from "@/features/shared/types/athlete";
 import { useEnergySessions, useCreateEnergySession } from "@/features/shared/hooks/useEnergySessions";
@@ -19,8 +18,6 @@ import type { EnergySessionRow } from "@/types/energy";
 import { SessionPreviewModal, KIND_COLOR, KIND_LABEL } from "@/features/coach/components/energy/SessionPreviewModal";
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
-import { SessionWeekDrawer } from "@/features/coach/components/SessionWeekDrawer";
-import { WorkoutSplitModal } from "@/features/coach/components/WorkoutSplitModal";
 import { ProgrammationView } from "@/features/coach/components/programmation/ProgrammationView";
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -764,220 +761,6 @@ export default function ProgrammationPage() {
         />
       )}
 
-      {false && (sortedSessions.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 20px" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucune séance</div>
-              <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>Crée ta première séance ou un nouveau cycle.</div>
-              {!viewOnly && (
-                <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                  <button
-                    onClick={() => setShowAddMuscu(true)}
-                    style={{
-                      padding: "10px 20px", borderRadius: 10, border: "none",
-                      background: C.coach, color: "#fff", fontSize: 13, fontWeight: 700,
-                      cursor: "pointer", fontFamily: "inherit",
-                      display: "flex", alignItems: "center", gap: 6,
-                    }}
-                  >
-                    <Plus size={14} /> Créer une séance
-                  </button>
-                  <button
-                    onClick={() => setShowNewBlock(true)}
-                    style={{
-                      padding: "10px 20px", borderRadius: 10,
-                      border: "1px solid " + C.brdL, background: "transparent", color: C.tx2,
-                      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                    }}
-                  >
-                    Nouveau cycle
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginBottom: 16 }}>
-                {sortedSessions.map(sess => {
-                  const exoCount = ((exos as Record<string, unknown[]>)[sess.id] || []).length;
-                  const isPonctuelle = sess.recurrence === "once";
-                  return (
-                    <div
-                      key={sess.id}
-                      style={{
-                        padding: "12px 14px", borderRadius: 12,
-                        border: "1px solid " + C.brdL, background: C.s1,
-                        fontFamily: "inherit", textAlign: "left" as const,
-                        display: "flex", flexDirection: "column" as const, gap: 6,
-                        position: "relative" as const,
-                      }}
-                    >
-                      {isPonctuelle ? (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, color: C.b,
-                          background: C.bS, padding: "2px 7px", borderRadius: 5,
-                          alignSelf: "flex-start",
-                        }}>📅 Ponctuelle</span>
-                      ) : sess.day_of_week != null ? (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, color: C.coach,
-                          background: C.coachS, padding: "2px 7px", borderRadius: 5,
-                          alignSelf: "flex-start",
-                        }}>{DOW[sess.day_of_week]}</span>
-                      ) : (
-                        <span
-                          title="Double-clic pour assigner un jour"
-                          style={{
-                            fontSize: 10, fontWeight: 700, color: C.o,
-                            background: C.oS, padding: "2px 7px", borderRadius: 5,
-                            alignSelf: "flex-start",
-                          }}
-                        >⚠ Jour non défini</span>
-                      )}
-                      {editingSessionId === sess.id ? (
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-                          <input
-                            autoFocus
-                            value={editingSessionName}
-                            onChange={e => setEditingSessionName(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === "Enter") {
-                                if (editingSessionName.trim()) setSessions(prev => prev.map(s => s.id === sess.id ? { ...s, name: editingSessionName.trim() } : s));
-                                setEditingSessionId(null);
-                              } else if (e.key === "Escape") {
-                                setEditingSessionId(null);
-                              }
-                            }}
-                            style={{
-                              flex: 1, padding: "4px 8px", borderRadius: 7,
-                              border: "1px solid " + C.coach, background: C.s2,
-                              color: C.tx, fontSize: 13, fontWeight: 700,
-                              fontFamily: "inherit", outline: "none",
-                            }}
-                          />
-                          <button
-                            onClick={() => {
-                              if (editingSessionName.trim()) setSessions(prev => prev.map(s => s.id === sess.id ? { ...s, name: editingSessionName.trim() } : s));
-                              setEditingSessionId(null);
-                            }}
-                            style={{
-                              width: 24, height: 24, borderRadius: 6, border: "none",
-                              background: C.coach, color: "#fff", cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                            }}
-                          ><Check size={12} /></button>
-                          <button
-                            onClick={() => setEditingSessionId(null)}
-                            style={{
-                              width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.brdL,
-                              background: "transparent", color: C.tx3, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                            }}
-                          ><X size={12} /></button>
-                        </div>
-                      ) : (
-                        <div
-                          style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
-                          onClick={() => setOpenDrawer({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" })}
-                          onDoubleClick={(e) => {
-                            e.preventDefault();
-                            if (!isPonctuelle) setDayPicker({ sessId: sess.id, sessName: sess.name || sess.short || "Séance", currentDay: sess.day_of_week ?? 0 });
-                          }}
-                        >
-                          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, flex: 1, paddingRight: 4 }}>
-                            {sess.name || sess.short || "Séance"}
-                          </div>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              setEditingSessionId(sess.id);
-                              setEditingSessionName(sess.name || sess.short || "");
-                            }}
-                            style={{
-                              width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.brdL,
-                              background: "transparent", color: C.tx3, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                            }}
-                          ><Pencil size={11} /></button>
-                        </div>
-                      )}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div
-                          style={{ fontSize: 10, color: C.tx3, cursor: "pointer" }}
-                          onClick={() => editingSessionId !== sess.id && setOpenDrawer({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" })}
-                        >
-                          {exoCount} exercice{exoCount !== 1 ? "s" : ""}
-                        </div>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button
-                            title="Dupliquer la séance"
-                            onClick={e => {
-                              e.stopPropagation();
-                              const newId = crypto.randomUUID();
-                              setSessions(prev => [...prev, { ...sess, id: newId, name: (sess.name || sess.short || "Séance") + " (copie)", day_of_week: undefined }]);
-                              setExos(prev => ({ ...(prev as Record<string, unknown[]>), [newId]: [...((prev as Record<string, unknown[]>)[sess.id] || [])] }));
-                              toast.success("Séance dupliquée");
-                            }}
-                            style={{
-                              width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.brdL,
-                              background: "transparent", color: C.tx3, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          ><Copy size={11} /></button>
-                          <button
-                            title="Supprimer la séance"
-                            onClick={e => {
-                              e.stopPropagation();
-                              setConfirmDelete({ sessId: sess.id, sessName: sess.name || sess.short || "Séance" });
-                            }}
-                            style={{
-                              width: 22, height: 22, borderRadius: 5, border: "1px solid " + C.r + "40",
-                              background: C.rS, color: C.r, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          ><Trash2 size={11} /></button>
-                        </div>
-                      </div>
-                      {editingSessionId !== sess.id && (
-                        <ChevronRight
-                          size={14}
-                          style={{
-                            position: "absolute", right: 12,
-                            top: "50%", transform: "translateY(-50%)", color: C.tx3,
-                            pointerEvents: "none",
-                          }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div style={{ paddingTop: 14, borderTop: "1px solid " + C.brd }}>
-                <button
-                  onClick={() => setShowExoParams((p) => !p)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "8px 14px", borderRadius: 10,
-                    border: "1px solid " + C.brdL,
-                    background: showExoParams ? C.acS : "transparent",
-                    color: showExoParams ? C.ac : C.tx2,
-                    fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                    marginBottom: showExoParams ? 12 : 0,
-                  }}
-                >
-                  ⚙ Paramètres exercices{showExoParams ? " ∧" : " ∨"}
-                </button>
-                {showExoParams && (
-                  <CoachExoParams
-                    exMeta={exMeta} setExMeta={setExMeta}
-                    exos={exos} setExos={setExos}
-                    blockConfig={blockConfig}
-                  />
-                )}
-              </div>
-            </>
-          ))}
 
       {/* ── Énergétique ── */}
       {subTab === "energie" && (
@@ -1148,25 +931,6 @@ export default function ProgrammationPage() {
           blockHistory={blockHistory}
           onClose={() => setShowBlockHistory(false)}
           onDelete={(idx) => setBlockHistory(blockHistory.filter((_, i) => i !== idx))}
-        />
-      )}
-      {/* ── Split modal séance ── */}
-      {openDrawer && (
-        <WorkoutSplitModal
-          open={!!openDrawer}
-          onClose={() => setOpenDrawer(null)}
-          sessionId={openDrawer.sessId}
-          sessionName={openDrawer.sessName}
-          sessionDay=""
-          dayOfWeek={sessions.find(s => s.id === openDrawer.sessId)?.day_of_week}
-          onDayChange={async (day) => {
-            updateSessionDay(openDrawer.sessId, day);
-            await rescheduleWorkoutLogs(openDrawer.sessId, day);
-          }}
-          athleteId={athleteId}
-          cycleWeekCount={tw}
-          currentWeekIndex={currentWeek}
-          blockConfig={blockConfig}
         />
       )}
 

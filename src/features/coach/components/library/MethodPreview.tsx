@@ -4,7 +4,8 @@
  * Aucun nom de méthode inscrit en dur : purement paramétrique.
  */
 import { C } from "@/lib/theme";
-import type { MethodConfig, SetMethodConfig, ExerciseMethodConfig, ClassicMethodConfig, FullWeekConfig } from "@/types/trainingMethods";
+import type { MethodConfig, SetMethodConfig, ExerciseMethodConfig, ClassicMethodConfig, FullWeekConfig, MethodScope } from "@/types/trainingMethods";
+import type { ExerciceParams } from "../programmation/types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -358,10 +359,234 @@ export function MethodPreview({ config, compact = false }: MethodPreviewProps) {
   );
 }
 
+// ─── RestConfig (shared with MethodBuilder) ───────────────────────────────────
+
+export interface RestConfig {
+  type: 'free' | 'fixed' | 'variable'
+  seconds: number
+  min_s: number
+  max_s: number
+}
+
+// ─── ExerciceParams ↔ MethodConfig converters ─────────────────────────────────
+
+export function exerciceParamsToMethodConfig(
+  params: ExerciceParams,
+  rest: RestConfig,
+  scope: MethodScope,
+): Partial<MethodConfig> {
+
+  const rest_between = {
+    type: rest.type,
+    seconds:  rest.type === 'fixed'    ? rest.seconds : undefined,
+    min_s:    rest.type === 'variable' ? rest.min_s   : undefined,
+    max_s:    rest.type === 'variable' ? rest.max_s   : undefined,
+  }
+
+  const rirRequired = !(params.rir.mode === 'global' && params.rir.value === null)
+
+  // Charge → ClassicMethodConfig load
+  function buildLoadClassic(): ClassicMethodConfig['load'] {
+    if (params.charge_unit === 'PDC') return { type: 'same', reference: 'PDC' }
+    if (params.charge.mode === 'par_serie') {
+      const values = params.charge.values.filter((v): v is number => v !== null)
+      return { type: 'custom', values, values_unit: params.charge_unit === '%RM' ? 'pct' : undefined }
+    }
+    const val = params.charge.value
+    if (val === null) return { type: 'same' }
+    return { type: 'same', reference: params.charge_unit === '%RM' ? `${val}%` : `${val}kg` }
+  }
+
+  // Charge → ExerciseMethodConfig load
+  function buildLoadEx(): ExerciseMethodConfig['load'] {
+    if (params.charge_unit === 'PDC') return { type: 'same' }
+    if (params.charge.mode === 'par_serie') {
+      const values = params.charge.values.filter((v): v is number => v !== null)
+      return { type: 'custom', values, values_unit: params.charge_unit === '%RM' ? 'pct' : undefined }
+    }
+    const val = params.charge.value
+    if (val === null) return { type: 'same' }
+    if (params.charge_unit === '%RM') return { type: 'custom', mode: 'pct_1rm', pct_of_1rm: val }
+    return { type: 'same', reference: `${val}kg` }
+  }
+
+  // ── Set scope ──
+  if (scope === 'set') {
+    const cluster = params.cluster ?? { nb_clusters: 3, reps: [5, 4, 3], recup_sec: 15 }
+    const safeReps: number[] = Array.isArray(cluster.reps) ? cluster.reps : Array(cluster.nb_clusters).fill(5)
+    return {
+      scope: 'set',
+      sub_sets: {
+        count: { type: 'fixed', value: cluster.nb_clusters },
+        reps: { type: 'custom', pattern: safeReps },
+        rest_intra: cluster.recup_sec > 0
+          ? { type: 'fixed', seconds: cluster.recup_sec }
+          : { type: 'free' },
+      },
+      load: buildLoadClassic(),
+      rir_required: rirRequired,
+    } as SetMethodConfig
+  }
+
+  // ── Reps for classic ──
+  function buildRepsClassic(): ClassicMethodConfig['reps'] {
+    if (params.reps.mode === 'par_serie') {
+      const vals = params.reps.values
+      if (vals.length > 0) {
+        const mn = Math.min(...vals), mx = Math.max(...vals)
+        return mn === mx ? { type: 'fixed', value: mn } : { type: 'range', min: mn, max: mx }
+      }
+    }
+    return { type: 'fixed', value: params.reps.mode === 'global' ? params.reps.value : 8 }
+  }
+
+  // ── Reps for exercise ──
+  function buildRepsEx(): ExerciseMethodConfig['reps'] {
+    if (params.reps.mode === 'par_serie') {
+      return { type: 'custom', pattern: params.reps.values }
+    }
+    return { type: 'fixed', value: params.reps.mode === 'global' ? params.reps.value : 8 }
+  }
+
+  if (scope === 'classic') {
+    return {
+      scope: 'classic',
+      sets: { count: params.nb_series },
+      reps: buildRepsClassic(),
+      rest_between,
+      load: buildLoadClassic(),
+      rir_required: rirRequired,
+    } as ClassicMethodConfig
+  }
+
+  // ── Exercise scope ──
+  const tempoStr = params.tempo.mode === 'global' ? params.tempo.value : ''
+  let tempo: ExerciseMethodConfig['tempo'] | undefined
+  if (tempoStr) {
+    const parts = tempoStr.split('-').map(Number)
+    if (parts.length >= 3) {
+      tempo = {
+        eccentric_s:  isNaN(parts[0]) || parts[0] === 0 ? undefined : parts[0],
+        pause_s:      isNaN(parts[1]) || parts[1] === 0 ? undefined : parts[1],
+        concentric_s: isNaN(parts[2]) || parts[2] === 0 ? undefined : parts[2],
+      }
+    }
+  }
+
+  return {
+    scope: 'exercise',
+    sets: { count: params.nb_series },
+    reps: buildRepsEx(),
+    rest_between,
+    load: buildLoadEx(),
+    ...(tempo ? { tempo } : {}),
+    rir_required: rirRequired,
+  } as ExerciseMethodConfig
+}
+
+export function methodConfigToExerciceParams(config: MethodConfig, _scope: MethodScope): ExerciceParams {
+  function parseRef(ref?: string): { unit: '%RM' | 'kg' | 'PDC'; value: number | null } {
+    if (!ref) return { unit: 'kg', value: null }
+    if (ref === 'PDC') return { unit: 'PDC', value: null }
+    const pct = ref.match(/^(\d+(?:\.\d+)?)\s*%/)
+    if (pct) return { unit: '%RM', value: parseFloat(pct[1]) }
+    const kg = ref.match(/^(\d+(?:\.\d+)?)\s*kg/i)
+    if (kg) return { unit: 'kg', value: parseFloat(kg[1]) }
+    return { unit: 'kg', value: null }
+  }
+
+  // ── Set scope ──
+  if (config.scope === 'set') {
+    const ss = config.sub_sets ?? { count: { type: 'fixed' as const, value: 3 }, reps: { type: 'fixed' as const, value: 5 }, rest_intra: { type: 'free' as const } }
+    const nbClusters = ss.count?.type === 'fixed' ? (ss.count.value ?? 3) : (ss.count?.min ?? 3)
+    const reps: number[] = ss.reps?.type === 'custom' && ss.reps.pattern?.length
+      ? ss.reps.pattern
+      : Array(nbClusters).fill(ss.reps?.value ?? 5)
+    const recupSec = ss.rest_intra?.type === 'fixed' ? (ss.rest_intra.seconds ?? 15) : 15
+
+    let charge_unit: ExerciceParams['charge_unit'] = 'kg'
+    let charge: ExerciceParams['charge'] = { mode: 'global', value: null }
+    const load = config.load ?? {}
+    if ((load as SetMethodConfig['load']).type === 'custom' && (load as SetMethodConfig['load']).values?.length) {
+      const l = load as SetMethodConfig['load']
+      charge_unit = l.values_unit === 'pct' ? '%RM' : 'kg'
+      charge = { mode: 'par_serie', values: l.values! }
+    } else {
+      const ref = parseRef((load as SetMethodConfig['load']).reference)
+      charge_unit = ref.unit === 'PDC' ? 'PDC' : ref.unit
+      charge = { mode: 'global', value: ref.value }
+    }
+
+    return {
+      nb_series: nbClusters,
+      cluster: { nb_clusters: nbClusters, reps, recup_sec: recupSec },
+      reps: { mode: 'global', value: reps[0] ?? 5 },
+      reps_mode: { mode: 'global', value: 'EC' },
+      charge_unit,
+      charge,
+      rir: { mode: 'global', value: config.rir_required ? 2 : null },
+      tempo: { mode: 'global', value: '' },
+    }
+  }
+
+  // ── Classic / Exercise ──
+  const sets = (config as ClassicMethodConfig | ExerciseMethodConfig).sets?.count ?? 4
+  const repsConfig = (config as ClassicMethodConfig | ExerciseMethodConfig).reps ?? { type: 'fixed', value: 8 }
+
+  let reps: ExerciceParams['reps']
+  if ('pattern' in repsConfig && repsConfig.pattern?.length) {
+    reps = { mode: 'par_serie', values: repsConfig.pattern as number[] }
+  } else if ('max' in repsConfig && repsConfig.max != null) {
+    reps = { mode: 'global', value: repsConfig.max }
+  } else if ('value' in repsConfig && repsConfig.value != null) {
+    reps = { mode: 'global', value: repsConfig.value }
+  } else {
+    reps = { mode: 'global', value: 8 }
+  }
+
+  let charge_unit: ExerciceParams['charge_unit'] = 'kg'
+  let charge: ExerciceParams['charge'] = { mode: 'global', value: null }
+  const load = ((config as ClassicMethodConfig | ExerciseMethodConfig).load ?? {}) as Record<string, unknown>
+
+  if (load.mode === 'pct_1rm') {
+    charge_unit = '%RM'
+    charge = { mode: 'global', value: (load.pct_of_1rm as number | null) ?? null }
+  } else if (load.type === 'custom' && Array.isArray(load.values) && load.values.length) {
+    charge_unit = load.values_unit === 'pct' ? '%RM' : 'kg'
+    charge = { mode: 'par_serie', values: load.values as number[] }
+  } else {
+    const ref = parseRef(load.reference as string | undefined)
+    charge_unit = ref.unit
+    charge = { mode: 'global', value: ref.value }
+  }
+
+  // Tempo (exercise scope)
+  let tempo: ExerciceParams['tempo'] = { mode: 'global', value: '' }
+  if (config.scope === 'exercise' && config.tempo) {
+    const t = config.tempo
+    const parts = [t.eccentric_s ?? 0, t.pause_s ?? 0, t.concentric_s ?? 0]
+    tempo = { mode: 'global', value: parts.join('-') }
+  }
+
+  return {
+    nb_series: sets,
+    reps,
+    reps_mode: { mode: 'global', value: 'EC' },
+    charge_unit,
+    charge,
+    rir: { mode: 'global', value: config.rir_required ? 2 : null },
+    tempo,
+  }
+}
+
 // ─── Builder for partial form values → MethodConfig ──────────────────────────
 
 /** Convertit les valeurs brutes du formulaire en MethodConfig partielle pour preview. */
 export function formValuesToConfig(vals: Record<string, unknown>): Partial<MethodConfig> | null {
+  // Bypass: if a pre-built config is passed (from ExerciceParams-based Step2), use it directly
+  if (vals._method_config) {
+    try { return JSON.parse(vals._method_config as string) as Partial<MethodConfig> } catch { /* fall through */ }
+  }
   const scope = vals.scope as "set" | "exercise" | undefined;
   if (!scope) return null;
   const weekly_configs = vals.weekly_configs as FullWeekConfig[] | undefined;

@@ -21,6 +21,9 @@ function formatCharge(value: number | null, unit: ExerciceParams['charge_unit'])
 export function SyntheseBar({ params }: SyntheseBarProps) {
   const { nb_series, cluster, reps, reps_mode: _reps_mode, charge_unit, charge, rir, tempo } = params
 
+  // Guard: old/incomplete data missing required fields
+  if (!reps || !charge || !rir || !tempo) return null
+
   if (charge_unit === 'PDC') {
     // PDC — body weight
     const repsVal = getVal(reps)
@@ -60,7 +63,12 @@ export function SyntheseBar({ params }: SyntheseBarProps) {
   if (cluster) {
     const chargeVal = getVal(charge)
     const rirVal = getVal(rir)
-    let text = `${nb_series} séries × (${cluster.nb_clusters}×${cluster.reps_per_cluster} rep + ${cluster.recup_sec}sec)`
+    // compat: old format had reps_per_cluster (number), new has reps (number[])
+    const repsArr: number[] = Array.isArray(cluster.reps)
+      ? cluster.reps
+      : Array(cluster.nb_clusters).fill((cluster as unknown as { reps_per_cluster?: number }).reps_per_cluster ?? 5)
+    const repsStr = repsArr.join("+")
+    let text = `${nb_series}×(${repsStr} + ${cluster.recup_sec}s)`
     if (chargeVal != null) text += ` @ ${formatCharge(chargeVal, charge_unit)}`
     if (rirVal != null) text += ` — RIR ${rirVal}`
     return (

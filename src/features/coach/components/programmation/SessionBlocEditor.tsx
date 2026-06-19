@@ -136,14 +136,6 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange }: Ses
         </div>
       )}
 
-      {/* Add bloc inline form */}
-      {isAddingBloc && (
-        <BlocForm
-          onSubmit={addBloc}
-          onCancel={() => setIsAddingBloc(false)}
-        />
-      )}
-
       {/* Blocs list */}
       <DndContext
         sensors={sensors}
@@ -174,6 +166,14 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange }: Ses
         <div style={{ textAlign: "center", padding: "30px 20px", color: C.tx3, fontSize: 12 }}>
           Aucun bloc — ajoutes-en un pour commencer.
         </div>
+      )}
+
+      {/* Add bloc inline form — below existing blocs */}
+      {isAddingBloc && (
+        <BlocForm
+          onSubmit={addBloc}
+          onCancel={() => setIsAddingBloc(false)}
+        />
       )}
 
       {/* Add bloc button */}

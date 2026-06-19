@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   type DragEndEvent,
@@ -11,6 +11,8 @@ import { C } from "@/lib/theme"
 import { Plus, Pencil, X, ChevronDown, ChevronUp } from "lucide-react"
 import { useProgrammation } from "./hooks/useProgrammation"
 import { useUpdateProgrammation } from "./hooks/useUpdateProgrammation"
+import { usePlaceSession } from "@/features/shared/hooks/usePlaceSession"
+import { useAuth } from "@/hooks/useAuth"
 import type { ProgSession } from "./types"
 import { SessionForm } from "./SessionForm"
 import { SessionBlocEditor } from "./SessionBlocEditor"
@@ -44,6 +46,10 @@ interface SessionCardProps {
 
 function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, onDelete, onChange, dragHandleProps }: SessionCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showPlace, setShowPlace] = useState(false)
+  const [placeDate, setPlaceDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const { user } = useAuth()
+  const placeSession = usePlaceSession()
 
   return (
     <div style={{
@@ -119,6 +125,12 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
             style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
           ><Pencil size={12} /></button>
 
+          <button
+            onClick={() => setShowPlace(p => !p)}
+            title="Placer dans le planning"
+            style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: showPlace ? VIOLET_S : "transparent", color: showPlace ? VIOLET : C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}
+          >📅</button>
+
           {confirmDelete ? (
             <>
               <button
@@ -143,6 +155,71 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
           {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </div>
       </div>
+
+      {/* Place panel */}
+      {showPlace && (
+        <div style={{ padding: "10px 14px", borderTop: "1px solid " + C.brdL, background: C.s2 }}>
+          <div style={{ fontSize: 10, color: C.tx3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+            Placer dans le planning
+          </div>
+          {session.recurrence === 'weekly' && session.day_of_week !== undefined && cycleId ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 11, color: C.tx3 }}>
+                Récurrence hebdomadaire — génère une séance par semaine du cycle
+              </div>
+              <button
+                onClick={async () => {
+                  if (!athleteId || !user?.id) return
+                  await placeSession.mutateAsync({
+                    session,
+                    athleteId,
+                    coachId: user.id,
+                    date: placeDate,
+                    cycleId,
+                  })
+                  setShowPlace(false)
+                }}
+                disabled={placeSession.isPending}
+                style={{ padding: "10px 0", borderRadius: 9, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                {placeSession.isPending ? "En cours…" : "Générer tout le cycle ▶"}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="date"
+                value={placeDate}
+                onChange={e => setPlaceDate(e.target.value)}
+                style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+              />
+              <button
+                onClick={async () => {
+                  if (!athleteId || !user?.id || !placeDate) return
+                  await placeSession.mutateAsync({
+                    session,
+                    athleteId,
+                    coachId: user.id,
+                    date: placeDate,
+                    cycleId,
+                  })
+                  setShowPlace(false)
+                }}
+                disabled={placeSession.isPending}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                {placeSession.isPending ? "…" : "Placer"}
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setShowPlace(false)}
+            style={{ width: "100%", marginTop: 6, padding: "6px 0", borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
 
       {/* Expanded: SessionBlocEditor */}
       {isOpen && (
@@ -184,18 +261,31 @@ function SortableSessionCard(props: SortableSessionCardProps) {
 }
 
 export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps) {
-  const { data: sessions = [], isLoading } = useProgrammation(athleteId)
+  const { data: serverSessions = [], isLoading } = useProgrammation(athleteId)
   const updateMutation = useUpdateProgrammation(athleteId)
+  const [sessions, setSessions] = useState<ProgSession[]>([])
   const [isAddingSession, setIsAddingSession] = useState(false)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [openSessionId, setOpenSessionId] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
+  const hasPendingSave = useRef(false)
+
+  // Sync from server only when no local pending changes
+  useEffect(() => {
+    if (!hasPendingSave.current) {
+      setSessions(serverSessions)
+    }
+  }, [serverSessions])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   function debouncedSave(updated: ProgSession[]) {
+    hasPendingSave.current = true
     clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => updateMutation.mutate(updated), 500)
+    saveTimer.current = setTimeout(() => {
+      updateMutation.mutate(updated)
+      hasPendingSave.current = false
+    }, 800)
   }
 
   function addSession(data: Omit<ProgSession, 'id' | 'blocs'>) {
@@ -204,24 +294,29 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
       id: crypto.randomUUID(),
       blocs: [],
     }
-    updateMutation.mutate([...sessions, newSession])
+    const next = [...sessions, newSession]
+    setSessions(next)
+    updateMutation.mutate(next)
     setIsAddingSession(false)
     setOpenSessionId(newSession.id)
   }
 
   function updateSessionMeta(id: string, data: Omit<ProgSession, 'id' | 'blocs'>) {
     const next = sessions.map(s => s.id === id ? { ...s, ...data } : s)
+    setSessions(next)
     updateMutation.mutate(next)
     setEditingSessionId(null)
   }
 
   function updateSessionContent(id: string, updated: ProgSession) {
     const next = sessions.map(s => s.id === id ? updated : s)
-    debouncedSave(next)
+    setSessions(next)    // immediate local update → immediate re-render
+    debouncedSave(next)  // async debounced save (800ms)
   }
 
   function deleteSession(id: string) {
     const next = sessions.filter(s => s.id !== id)
+    setSessions(next)
     updateMutation.mutate(next)
     if (openSessionId === id) setOpenSessionId(null)
   }
@@ -234,7 +329,9 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
     const to = list.findIndex(s => s.id === over.id)
     if (from === -1 || to === -1) return
     list.splice(to, 0, list.splice(from, 1)[0])
-    updateMutation.mutate(list)
+    const reordered = list
+    setSessions(reordered)
+    updateMutation.mutate(reordered)
   }
 
   if (isLoading) {

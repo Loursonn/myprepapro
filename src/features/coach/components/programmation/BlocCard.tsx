@@ -21,8 +21,8 @@ interface BlocCardProps {
   bloc: Bloc
   index: number
   athleteId: string | undefined
-  activeWeek: number          // passed from SessionBlocEditor
-  sessionMultiSemaine: boolean // whether the parent session has multi_semaine
+  activeWeek: number
+  sessionMultiSemaine: boolean
   onChange: (updated: Bloc) => void
   onDelete: () => void
   dragHandleProps?: Record<string, unknown>
@@ -47,11 +47,7 @@ function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek,
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.4 : 1,
-      }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
       {...attributes}
     >
       <ExerciceRow
@@ -75,13 +71,19 @@ function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek,
 
 function timingLabel(bloc: Bloc): string {
   if (bloc.timing_mode === 'libre') return 'Repos libre'
-  if (bloc.timing_mode === 'depart') return `Départ /${bloc.timing_depart_min ?? '?'}min`
+  if (bloc.timing_mode === 'depart') {
+    const min = bloc.timing_depart_min ?? 0
+    const sec = bloc.timing_depart_sec ?? 0
+    if (min > 0 && sec > 0) return `Départ /${min}min ${sec}sec`
+    if (sec > 0) return `Départ /${sec}sec`
+    return `Départ /${min}min`
+  }
   const min = bloc.timing_repos_min ?? 0
   const sec = bloc.timing_repos_sec ?? 0
-  if (min > 0 && sec > 0) return `Repos ${min}min ${sec}sec`
-  if (min > 0) return `Repos ${min}min`
-  if (sec > 0) return `Repos ${sec}sec`
-  return `Repos —`
+  if (min > 0 && sec > 0) return `${min}min ${sec}sec`
+  if (min > 0) return `${min}min`
+  if (sec > 0) return `${sec}sec`
+  return `—`
 }
 
 export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemaine, onChange, onDelete, dragHandleProps }: BlocCardProps) {
@@ -112,14 +114,13 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
   }
 
   function addExercice() {
-    const effectiveMultiSemaine = sessionMultiSemaine
     const newEx: Exercice = {
       id: crypto.randomUUID(),
       exercise_id: "",
       exercise_name: "",
       mode: 'classique',
       sort_order: bloc.exercices.length,
-      params: effectiveMultiSemaine
+      params: sessionMultiSemaine
         ? { [String(activeWeek)]: defaultExerciceParams(bloc.series_count ?? 4) }
         : defaultExerciceParams(bloc.series_count ?? 4),
     }
@@ -137,107 +138,116 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
     onChange({ ...bloc, exercices: exos.map((e, i) => ({ ...e, sort_order: i })) })
   }
 
+  const exCount = bloc.exercices.length
+  const timing = timingLabel(bloc)
+
   return (
     <div style={{
-      background: C.s1, borderRadius: 14, border: "1px solid " + C.brdL,
-      overflow: "hidden", marginBottom: 10,
+      borderRadius: 14,
+      border: "1px solid " + C.brdL,
+      overflow: "hidden",
+      marginBottom: 12,
+      background: C.s1,
+      // Left accent bar via box-shadow
+      boxShadow: "inset 4px 0 0 " + VIOLET,
     }}>
       {/* Header */}
       {editing ? (
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid " + C.brdL }}>
+        <div style={{ padding: "14px 16px 14px 20px", borderBottom: "1px solid " + C.brdL }}>
           <BlocForm
             initial={bloc}
-            onSubmit={data => {
-              onChange({ ...bloc, ...data })
-              setEditing(false)
-            }}
+            onSubmit={data => { onChange({ ...bloc, ...data }); setEditing(false) }}
             onCancel={() => setEditing(false)}
           />
         </div>
       ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderBottom: "1px solid " + C.brdL }}>
-          {/* Drag handle */}
-          <div
-            {...(dragHandleProps ?? {})}
-            style={{ cursor: "grab", color: C.tx3, display: "flex", alignItems: "center", flexShrink: 0 }}
-          >
-            <GripVertical size={14} />
-          </div>
-
-          {/* Badge */}
-          <div style={{ padding: "2px 8px", borderRadius: 5, background: VIOLET_S, color: VIOLET, fontSize: 10, fontWeight: 800, flexShrink: 0 }}>
-            Bloc {index + 1}
-          </div>
-
-          {/* Name */}
-          {editingName ? (
-            <input
-              autoFocus
-              value={nameValue}
-              onChange={e => setNameValue(e.target.value)}
-              onBlur={() => {
-                onChange({ ...bloc, name: nameValue.trim() || bloc.name })
-                setEditingName(false)
-              }}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { onChange({ ...bloc, name: nameValue.trim() || bloc.name }); setEditingName(false) }
-                if (e.key === 'Escape') setEditingName(false)
-              }}
-              style={{ flex: 1, padding: "4px 8px", borderRadius: 7, border: "1px solid " + VIOLET, background: C.s2, color: C.tx, fontSize: 14, fontWeight: 700, fontFamily: "inherit", outline: "none" }}
-            />
-          ) : (
+        <div style={{ padding: "8px 10px 8px 16px", borderBottom: "1px solid " + C.brdL + "80" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* Drag */}
             <div
-              onClick={() => { setEditingName(true); setNameValue(bloc.name) }}
-              style={{ flex: 1, fontSize: 14, fontWeight: 700, color: C.tx, cursor: "text", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              {...(dragHandleProps ?? {})}
+              style={{ cursor: "grab", color: C.tx3 + "80", display: "flex", alignItems: "center", flexShrink: 0 }}
             >
-              {bloc.name || "Bloc sans nom"}
+              <GripVertical size={12} />
             </div>
-          )}
 
-          {/* Timing tag */}
-          <span style={{ fontSize: 10, color: C.tx3, background: C.s2, padding: "2px 7px", borderRadius: 5, border: "1px solid " + C.brdL, flexShrink: 0 }}>
-            {timingLabel(bloc)}
-          </span>
+            {/* Bloc number badge */}
+            <div style={{
+              width: 18, height: 18, borderRadius: 5,
+              background: VIOLET_S, color: VIOLET,
+              fontSize: 9, fontWeight: 900,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {index + 1}
+            </div>
 
-          {/* Gear */}
-          <button
-            onClick={() => setEditing(true)}
-            style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-          ><Settings size={13} /></button>
+            {/* Name — editable */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameValue}
+                  onChange={e => setNameValue(e.target.value)}
+                  onBlur={() => { onChange({ ...bloc, name: nameValue.trim() || bloc.name }); setEditingName(false) }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { onChange({ ...bloc, name: nameValue.trim() || bloc.name }); setEditingName(false) }
+                    if (e.key === 'Escape') setEditingName(false)
+                  }}
+                  style={{ width: "100%", padding: "2px 6px", borderRadius: 5, border: "1px solid " + VIOLET, background: C.s2, color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+                />
+              ) : (
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, minWidth: 0 }}>
+                  <div
+                    onClick={() => { setEditingName(true); setNameValue(bloc.name) }}
+                    style={{ fontSize: 13, fontWeight: 700, color: C.tx, cursor: "text", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {bloc.name || <span style={{ color: C.tx3 }}>Bloc sans nom</span>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    {exCount > 0 && <span style={{ fontSize: 9, color: C.tx3 }}>{exCount} ex.</span>}
+                    <span style={{ fontSize: 9, color: C.tx3 + "80" }}>·</span>
+                    <span style={{ fontSize: 9, color: C.tx3 }}>{timing}</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
-          {/* Delete */}
-          {confirmDelete ? (
-            <>
+            {/* Actions */}
+            <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
               <button
-                onClick={onDelete}
-                style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: C.r, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit", flexShrink: 0 }}
-              >Supprimer</button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-              ><X size={13} /></button>
-            </>
-          ) : (
-            <button
-              onClick={() => setConfirmDelete(true)}
-              style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.r + "40", background: C.rS, color: C.r, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-            ><X size={13} /></button>
-          )}
+                onClick={() => setEditing(true)}
+                title="Modifier le bloc"
+                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              ><Settings size={11} /></button>
+
+              {confirmDelete ? (
+                <>
+                  <button
+                    onClick={onDelete}
+                    style={{ padding: "0 8px", height: 24, borderRadius: 6, border: "none", background: C.r, color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 700, fontFamily: "inherit" }}
+                  >Supprimer</button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  ><X size={11} /></button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.r + "40", background: C.rS, color: C.r, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                ><X size={11} /></button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Exercises */}
-      <div style={{ padding: "10px 14px" }}>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleExerciceDragEnd}
-        >
-          <SortableContext
-            items={bloc.exercices.map(e => e.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ padding: "8px 10px 10px 16px" }}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleExerciceDragEnd}>
+          <SortableContext items={bloc.exercices.map(e => e.id)} strategy={verticalListSortingStrategy}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {bloc.exercices.map((ex, i) => (
                 <SortableExercice
                   key={ex.id}
@@ -258,12 +268,12 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
           </SortableContext>
         </DndContext>
 
-        {/* Add exercise button */}
+        {/* Add exercise */}
         <button
           onClick={addExercice}
           style={{
-            width: "100%", marginTop: 8,
-            padding: "10px 0", borderRadius: 9,
+            width: "100%", marginTop: bloc.exercices.length > 0 ? 6 : 0,
+            padding: "7px 0", borderRadius: 8,
             border: "1px dashed " + C.brdL, background: "transparent",
             color: C.tx3, fontSize: 12, fontWeight: 600,
             cursor: "pointer", fontFamily: "inherit",

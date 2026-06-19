@@ -43,6 +43,7 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
   const [seriesCount, setSeriesCount] = useState<number>(initial?.series_count ?? 4)
   const [timingMode, setTimingMode] = useState<'libre' | 'depart' | 'repos'>(initial?.timing_mode ?? 'libre')
   const [timingDepartMin, setTimingDepartMin] = useState<number>(initial?.timing_depart_min ?? 3)
+  const [timingDepartSec, setTimingDepartSec] = useState<number>(initial?.timing_depart_sec ?? 0)
   const [timingReposMin, setTimingReposMin] = useState<number>(initial?.timing_repos_min ?? 2)
   const [timingReposSec, setTimingReposSec] = useState<number>(initial?.timing_repos_sec ?? 0)
 
@@ -53,6 +54,7 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
       series_count: seriesMode === 'fixe' ? seriesCount : undefined,
       timing_mode: timingMode,
       timing_depart_min: timingMode === 'depart' ? timingDepartMin : undefined,
+      timing_depart_sec: timingMode === 'depart' ? timingDepartSec : undefined,
       timing_repos_min: timingMode === 'repos' ? timingReposMin : undefined,
       timing_repos_sec: timingMode === 'repos' ? timingReposSec : undefined,
     }
@@ -100,18 +102,26 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
         <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 6, fontWeight: 600 }}>Timing</label>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <button onClick={() => setTimingMode('libre')} style={pill(timingMode === 'libre')}>Libre</button>
-          <button onClick={() => setTimingMode('depart')} style={pill(timingMode === 'depart')}>Départ toutes les X min</button>
-          <button onClick={() => setTimingMode('repos')} style={pill(timingMode === 'repos')}>Repos X min X sec</button>
+          <button onClick={() => setTimingMode('depart')} style={pill(timingMode === 'depart')}>Départ toutes les</button>
+          <button onClick={() => setTimingMode('repos')} style={pill(timingMode === 'repos')}>Repos</button>
           {timingMode === 'depart' && (
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 4 }}>
               <input
                 type="number"
                 value={timingDepartMin}
-                onChange={e => setTimingDepartMin(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                min={1} max={30}
+                onChange={e => setTimingDepartMin(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                min={0} max={30}
                 style={{ width: 52, padding: "6px 8px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", textAlign: "center" }}
               />
               <span style={{ fontSize: 11, color: C.tx3 }}>min</span>
+              <input
+                type="number"
+                value={timingDepartSec}
+                onChange={e => setTimingDepartSec(Math.max(0, Math.min(59, parseInt(e.target.value, 10) || 0)))}
+                min={0} max={59}
+                style={{ width: 52, padding: "6px 8px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", textAlign: "center" }}
+              />
+              <span style={{ fontSize: 11, color: C.tx3 }}>sec</span>
             </div>
           )}
           {timingMode === 'repos' && (

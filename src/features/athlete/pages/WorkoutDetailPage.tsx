@@ -1,340 +1,401 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { C } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
-import { useWorkoutDetail } from "@/features/shared/hooks/useWorkoutDetail";
-import { useUpdateSet } from "@/features/shared/hooks/useUpdateSet";
-import { useCompleteWorkout } from "@/features/shared/hooks/useCompleteWorkout";
-import { useWorkoutLog } from "@/features/shared/hooks/useWorkoutLog";
-import { useAddBonusSet } from "@/features/shared/hooks/useAddBonusSet";
-import { useAddCustomExercise } from "@/features/shared/hooks/useAddCustomExercise";
-import { usePRsByRef } from "@/features/shared/hooks/usePRLogs";
-import { useAutoComputePRs, effectiveRmRef } from "@/features/shared/hooks/useAutoComputePRs";
-import type { SetRow } from "@/features/shared/types/athlete";
-import { RpeSheet } from "../components/RpeSheet";
+import { useWorkoutSession } from "@/features/shared/hooks/useWorkoutSession";
+import { useSaveWorkoutSets } from "@/features/shared/hooks/useSaveWorkoutSets";
+import type { AthleteModifications, SessionSetLog } from "@/features/shared/types/athlete";
+import type { ExerciceParams } from "@/features/coach/components/programmation/types";
+
+const VIOLET = "#7B6FFF";
 
 function haptic() {
   if (navigator.vibrate) navigator.vibrate(10);
 }
 
-function localMonday(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function formatPrescription(params: ExerciceParams): string {
+  const nb = params.nb_series;
+
+  if (params.cluster) {
+    const c = params.cluster;
+    const repsArr = Array.isArray(c.reps) ? c.reps : Array(c.nb_clusters).fill(5);
+    const repsStr = repsArr.join("+");
+    let s = `${nb}×(${repsStr} + ${c.recup_sec}s)`;
+    const charge =
+      params.charge.mode === "global" ? params.charge.value : null;
+    if (charge != null && params.charge_unit !== "PDC")
+      s += ` @ ${charge}${params.charge_unit}`;
+    return s;
+  }
+
+  if (
+    params.reps.mode === "par_serie" ||
+    params.charge.mode === "par_serie"
+  ) {
+    const parts = Array.from({ length: nb }, (_, i) => {
+      const r =
+        params.reps.mode === "par_serie"
+          ? params.reps.values[i]
+          : params.reps.value;
+      const c =
+        params.charge.mode === "par_serie"
+          ? params.charge.values[i]
+          : params.charge.value;
+      if (c != null && params.charge_unit !== "PDC")
+        return `${r ?? "?"}@${c}${params.charge_unit}`;
+      return String(r ?? "?");
+    });
+    return `${nb}× ${parts.join(" / ")}`;
+  }
+
+  const reps =
+    params.reps.mode === "global" ? params.reps.value : "?";
+  const chargeVal =
+    params.charge_unit === "PDC"
+      ? "PDC"
+      : params.charge.mode === "global" && params.charge.value != null
+      ? `${params.charge.value}${params.charge_unit}`
+      : null;
+  const rirVal =
+    params.rir.mode === "global" && params.rir.value != null
+      ? params.rir.value
+      : null;
+
+  let s = `${nb}×${reps}`;
+  if (chargeVal) s += ` @ ${chargeVal}`;
+  if (rirVal != null) s += ` · RIR ${rirVal}`;
+  return s;
 }
 
-// ── Set row editor ────────────────────────────────────────────────────────────
+function getSetTarget(
+  params: ExerciceParams,
+  setIdx: number
+): { reps?: number; kg?: number | null; rir?: number | null } {
+  const reps =
+    params.reps.mode === "par_serie"
+      ? params.reps.values[setIdx]
+      : params.reps.value;
+  const kg =
+    params.charge_unit !== "PDC"
+      ? params.charge.mode === "par_serie"
+        ? params.charge.values[setIdx]
+        : params.charge.value
+      : null;
+  const rir =
+    params.rir.mode === "par_serie"
+      ? (params.rir.values as (number | null)[])[setIdx]
+      : params.rir.value;
+  return { reps, kg, rir };
+}
+
+function initSetsFromParams(params: ExerciceParams): SessionSetLog[] {
+  return Array.from({ length: params.nb_series }, (_, i) => {
+    const t = getSetTarget(params, i);
+    return {
+      done: false,
+      kg: t.kg ?? undefined,
+      reps: t.reps ?? undefined,
+      rir: t.rir != null ? t.rir : undefined,
+    };
+  });
+}
+
+// ── Set row editor ─────────────────────────────────────────────────────────────
 
 interface SetEditorProps {
   setNum: number;
-  set: SetRow;
-  onChange: (s: SetRow) => void;
-  isBonus?: boolean;
+  set: SessionSetLog;
+  target: { reps?: number; kg?: number | null; rir?: number | null };
+  chargeUnit: string;
+  onChange: (s: SessionSetLog) => void;
 }
 
-function SetEditor({ setNum, set, onChange, isBonus }: SetEditorProps) {
+function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps) {
   const doneColor = set.done ? C.g : C.tx3;
 
   return (
     <div
       style={{
-        display: "flex", alignItems: "center", gap: 10,
-        padding: "8px 0", borderBottom: "1px solid " + C.brd,
-        background: isBonus ? "rgba(245,158,11,0.04)" : "transparent",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "9px 0",
+        borderBottom: "1px solid " + C.brd,
       }}
     >
       {/* Done toggle */}
       <button
-        onClick={() => { onChange({ ...set, done: !set.done }); haptic(); }}
+        onClick={() => {
+          onChange({ ...set, done: !set.done });
+          haptic();
+        }}
         style={{
-          width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-          border: "1px solid " + (set.done ? C.g + "50" : isBonus ? "#F59E0B50" : C.brdL),
+          width: 30,
+          height: 30,
+          borderRadius: "50%",
+          flexShrink: 0,
+          border: "1px solid " + (set.done ? C.g + "50" : C.brdL),
           background: set.done ? C.gS : "transparent",
-          color: doneColor, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          minWidth: 44, minHeight: 44,
+          color: doneColor,
+          fontSize: 12,
+          cursor: "pointer",
+          fontFamily: "inherit",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minWidth: 44,
+          minHeight: 44,
         }}
       >
-        {set.done ? "✓" : isBonus ? "+" : setNum}
+        {set.done ? "✓" : setNum}
       </button>
 
       {/* Kg */}
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 2 }}>Kg</div>
-        <input
-          type="number" inputMode="decimal"
-          value={set.kg ?? ""}
-          onChange={(e) => onChange({ ...set, kg: Number(e.target.value) || undefined })}
-          style={{
-            width: "100%", background: C.s2, border: "1px solid " + C.brdL,
-            borderRadius: 8, padding: "6px 8px",
-            color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
-          }}
-          placeholder="—"
-        />
-      </div>
+      {chargeUnit !== "PDC" && (
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9, color: C.tx3, marginBottom: 1 }}>
+            {chargeUnit}
+            {target.kg != null && (
+              <span style={{ color: VIOLET, marginLeft: 4 }}>/{target.kg}</span>
+            )}
+          </div>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={set.kg ?? ""}
+            onChange={(e) =>
+              onChange({
+                ...set,
+                kg: e.target.value === "" ? undefined : Number(e.target.value),
+              })
+            }
+            placeholder={target.kg != null ? String(target.kg) : "—"}
+            style={{
+              width: "100%",
+              background: C.s2,
+              border: "1px solid " + C.brdL,
+              borderRadius: 8,
+              padding: "6px 8px",
+              color: C.tx,
+              fontSize: 13,
+              fontFamily: "inherit",
+              outline: "none",
+            }}
+          />
+        </div>
+      )}
 
       {/* Reps */}
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 2 }}>Reps</div>
+        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 1 }}>
+          Reps
+          {target.reps != null && (
+            <span style={{ color: VIOLET, marginLeft: 4 }}>/{target.reps}</span>
+          )}
+        </div>
         <input
-          type="number" inputMode="numeric"
+          type="number"
+          inputMode="numeric"
           value={set.reps ?? ""}
-          onChange={(e) => onChange({ ...set, reps: Number(e.target.value) || undefined })}
+          onChange={(e) =>
+            onChange({
+              ...set,
+              reps:
+                e.target.value === "" ? undefined : Number(e.target.value),
+            })
+          }
+          placeholder={target.reps != null ? String(target.reps) : "—"}
           style={{
-            width: "100%", background: C.s2, border: "1px solid " + C.brdL,
-            borderRadius: 8, padding: "6px 8px",
-            color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+            width: "100%",
+            background: C.s2,
+            border: "1px solid " + C.brdL,
+            borderRadius: 8,
+            padding: "6px 8px",
+            color: C.tx,
+            fontSize: 13,
+            fontFamily: "inherit",
+            outline: "none",
           }}
-          placeholder="—"
         />
       </div>
 
       {/* RIR */}
-      <div style={{ width: 48 }}>
-        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 2 }}>RIR</div>
+      <div style={{ width: 52 }}>
+        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 1 }}>
+          RIR
+          {target.rir != null && (
+            <span style={{ color: VIOLET, marginLeft: 4 }}>/{target.rir}</span>
+          )}
+        </div>
         <input
-          type="number" inputMode="numeric" min={0} max={5}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={5}
           value={set.rir ?? ""}
-          onChange={(e) => onChange({ ...set, rir: Number(e.target.value) })}
+          onChange={(e) =>
+            onChange({
+              ...set,
+              rir:
+                e.target.value === ""
+                  ? undefined
+                  : Number(e.target.value),
+            })
+          }
+          placeholder={target.rir != null ? String(target.rir) : "—"}
           style={{
-            width: "100%", background: C.s2, border: "1px solid " + C.brdL,
-            borderRadius: 8, padding: "6px 8px",
-            color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
+            width: "100%",
+            background: C.s2,
+            border: "1px solid " + C.brdL,
+            borderRadius: 8,
+            padding: "6px 8px",
+            color: C.tx,
+            fontSize: 13,
+            fontFamily: "inherit",
+            outline: "none",
           }}
-          placeholder="—"
         />
       </div>
     </div>
   );
 }
 
-// ── Exercise picker modal ──────────────────────────────────────────────────────
+// ── Timing badge ───────────────────────────────────────────────────────────────
 
-interface ExercisePickerProps {
-  onSelect: (ex: { id: string; name: string; ex_type?: string }) => void;
-  onClose: () => void;
-}
-
-function ExercisePicker({ onSelect, onClose }: ExercisePickerProps) {
-  const [search, setSearch] = useState("");
-
-  const { data: exercises = [], isLoading } = useQuery({
-    queryKey: ["exercises-picker", search],
-    staleTime: 60_000,
-    queryFn: async () => {
-      let q = supabase
-        .from("exercises")
-        .select("id, name, ex_type, bloc")
-        .order("name")
-        .limit(40);
-      if (search.trim()) {
-        q = q.ilike("name", `%${search.trim()}%`);
-      }
-      const { data } = await q;
-      return data ?? [];
-    },
-  });
-
-  return (
-    <Drawer open onOpenChange={(v) => !v && onClose()}>
-      <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: "0 0 32px", maxHeight: "80vh" }}>
-        <DrawerHeader style={{ padding: "16px 20px 8px" }}>
-          <DrawerTitle style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
-            Ajouter un exercice
-          </DrawerTitle>
-        </DrawerHeader>
-
-        <div style={{ padding: "0 20px 8px" }}>
-          <input
-            autoFocus
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un exercice…"
-            style={{
-              width: "100%", padding: "10px 12px", borderRadius: 10,
-              border: "1px solid " + C.brdL, background: C.s2,
-              color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-
-        <div style={{ overflowY: "auto", padding: "0 20px", display: "flex", flexDirection: "column", gap: 4 }}>
-          {isLoading ? (
-            <div style={{ padding: "24px 0", textAlign: "center", color: C.tx3, fontSize: 12 }}>
-              Chargement…
-            </div>
-          ) : exercises.length === 0 ? (
-            <div style={{ padding: "24px 0", textAlign: "center", color: C.tx3, fontSize: 12 }}>
-              Aucun exercice trouvé
-            </div>
-          ) : (
-            exercises.map((ex) => (
-              <button
-                key={ex.id}
-                onClick={() => { haptic(); onSelect({ id: ex.id, name: ex.name ?? "", ex_type: ex.ex_type ?? undefined }); }}
-                style={{
-                  width: "100%", padding: "10px 12px", borderRadius: 10,
-                  border: "1px solid " + C.brd, background: C.s2,
-                  display: "flex", alignItems: "center", gap: 10,
-                  cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{ex.name}</div>
-                  {ex.bloc && <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>{ex.bloc}</div>}
-                </div>
-                <span style={{ fontSize: 11, color: C.ac }}>+ Ajouter</span>
-              </button>
-            ))
-          )}
-        </div>
-      </DrawerContent>
-    </Drawer>
-  );
-}
-
-// ── Bonus set section (below each exercise) ───────────────────────────────────
-
-interface BonusSetSectionProps {
-  exerciseId: string;
-  exerciseName: string;
-  workoutLogId: string;
-  athleteId: string;
-  weekMondayISO: string;
-  existingSets: SetRow[];
-}
-
-function BonusSetSection({
-  exerciseId, exerciseName, workoutLogId, athleteId, weekMondayISO, existingSets,
-}: BonusSetSectionProps) {
-  const [localSets, setLocalSets] = useState<SetRow[]>(existingSets);
-  const { mutate: addBonus, isPending } = useAddBonusSet();
-
-  // Keep local state in sync when props change (e.g. after successful save)
-  useEffect(() => { setLocalSets(existingSets); }, [existingSets]);
-
-  function handleAddSet() {
-    const newSet: SetRow = {};
-    const updated = [...localSets, newSet];
-    setLocalSets(updated);
-    addBonus({
-      workoutLogId, athleteId, exerciseId, exerciseName,
-      set: newSet, weekMondayISO,
-    });
+function timingBadge(bloc: {
+  timing_mode: string;
+  timing_repos_min?: number;
+  timing_repos_sec?: number;
+  timing_depart_min?: number;
+  timing_depart_sec?: number;
+}): string | null {
+  if (bloc.timing_mode === "libre") return null;
+  if (bloc.timing_mode === "depart") {
+    const min = bloc.timing_depart_min ?? 0;
+    const sec = bloc.timing_depart_sec ?? 0;
+    if (min > 0 && sec > 0) return `Départ /${min}min ${sec}sec`;
+    if (sec > 0) return `Départ /${sec}sec`;
+    return `Départ /${min}min`;
   }
-
-  if (localSets.length === 0) {
-    return (
-      <button
-        onClick={() => { haptic(); handleAddSet(); }}
-        disabled={isPending}
-        style={{
-          width: "100%", padding: "8px 14px", borderRadius: "0 0 10px 10px",
-          border: "none", borderTop: "1px dashed " + C.brdL,
-          background: "rgba(245,158,11,0.06)", color: "#F59E0B",
-          fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-          textAlign: "left",
-        }}
-      >
-        + Série bonus
-      </button>
-    );
-  }
-
-  return (
-    <div>
-      <div style={{ padding: "4px 14px", borderTop: "1px dashed " + "#F59E0B30" }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
-          Séries bonus athlète
-        </div>
-        {localSets.map((s, i) => (
-          <SetEditor
-            key={i}
-            setNum={i + 1}
-            set={s}
-            isBonus
-            onChange={(newSet) => {
-              const updated = [...localSets];
-              updated[i] = newSet;
-              setLocalSets(updated);
-            }}
-          />
-        ))}
-      </div>
-      <button
-        onClick={() => { haptic(); handleAddSet(); }}
-        disabled={isPending}
-        style={{
-          width: "100%", padding: "7px 14px",
-          border: "none", borderTop: "1px dashed " + C.brdL,
-          background: "rgba(245,158,11,0.04)", color: "#F59E0B",
-          fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-          textAlign: "left",
-        }}
-      >
-        + Série bonus
-      </button>
-    </div>
-  );
+  const min = bloc.timing_repos_min ?? 0;
+  const sec = bloc.timing_repos_sec ?? 0;
+  if (min > 0 && sec > 0) return `Repos ${min}min ${sec}sec`;
+  if (min > 0) return `Repos ${min}min`;
+  if (sec > 0) return `Repos ${sec}sec`;
+  return null;
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { athleteId, sets: setsMap } = useAthleteContext();
+  const { athleteId } = useAthleteContext();
+  const qc = useQueryClient();
 
-  const { session, exercises, isCompleted, currentWeek } = useWorkoutDetail(id ?? "");
-  const { mutate: updateSet } = useUpdateSet();
-  const { mutate: completeWorkoutBase } = useCompleteWorkout();
-  const computePRs = useAutoComputePRs();
+  const workout = useWorkoutSession(id);
+  const saveWorkoutSets = useSaveWorkoutSets(id);
 
-  const completeWorkout = useCallback((sessionId: string) => {
-    completeWorkoutBase(sessionId);
-    if (athleteId) {
-      computePRs({
-        athleteId,
-        exercises: exercises.map(e => e.exercise),
-        sets: setsMap,
-        currentWeek,
-      });
-    }
-  }, [completeWorkoutBase, computePRs, athleteId, exercises, setsMap, currentWeek]);
   const [showRpe, setShowRpe] = useState(false);
-  const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [localMods, setLocalMods] = useState<AthleteModifications>({});
+  const [modsInitialized, setModsInitialized] = useState(false);
 
-  const weekMondayISO = localMonday();
-
-  const { data: workoutLog } = useWorkoutLog(athleteId ?? "", id ?? "");
-  const { byRef: prByRef } = usePRsByRef(athleteId ?? undefined);
-
-  const { mutate: addCustomEx } = useAddCustomExercise();
-  const [customExercises, setCustomExercises] = useState<Array<{
-    name: string; id: string; sets: SetRow[];
-  }>>([]);
-
-  // Sync custom exercises from persisted athlete_modifications
+  // Initialize local mods from DB + prescription pre-fill
   useEffect(() => {
-    if (workoutLog?.athleteModifications?.customExercises) {
-      setCustomExercises(
-        workoutLog.athleteModifications.customExercises.map((ce) => ({
-          name: ce.name,
-          id:   ce.tempId,
-          sets: ce.sets as SetRow[],
-        }))
-      );
+    if (workout.isLoading || modsInitialized) return;
+
+    const base = workout.athleteModifications ?? {};
+    const sessionSets: Record<string, SessionSetLog[]> = { ...(base.sessionSets ?? {}) };
+
+    // Pre-fill sets from ExerciceParams for exercices that have no saved sets
+    for (const bloc of workout.blocs) {
+      for (const ex of bloc.exercices) {
+        if (!sessionSets[ex.id] || sessionSets[ex.id].length === 0) {
+          sessionSets[ex.id] = initSetsFromParams(ex.params);
+        }
+      }
     }
-  }, [workoutLog]);
 
-  const canEditLive = !!workoutLog && !isCompleted;
+    setLocalMods({ ...base, sessionSets });
+    setModsInitialized(true);
+  }, [workout.isLoading, workout.blocs, workout.athleteModifications, modsInitialized]);
 
-  if (!session) {
+  const updateExerciceSets = useCallback((exerciceId: string, sets: SessionSetLog[]) => {
+    setLocalMods((prev) => {
+      const next = {
+        ...prev,
+        sessionSets: { ...(prev.sessionSets ?? {}), [exerciceId]: sets },
+      };
+      saveWorkoutSets(next);
+      return next;
+    });
+  }, [saveWorkoutSets]);
+
+  const updateExerciceComment = useCallback((exerciceId: string, comment: string) => {
+    setLocalMods((prev) => {
+      const next = {
+        ...prev,
+        exerciceComments: { ...(prev.exerciceComments ?? {}), [exerciceId]: comment },
+      };
+      saveWorkoutSets(next);
+      return next;
+    });
+  }, [saveWorkoutSets]);
+
+  const updateSessionComment = useCallback((comment: string) => {
+    setLocalMods((prev) => {
+      const next = { ...prev, sessionComment: comment };
+      saveWorkoutSets(next);
+      return next;
+    });
+  }, [saveWorkoutSets]);
+
+  const updateForme = useCallback((forme: number) => {
+    setLocalMods((prev) => {
+      const next = { ...prev, sessionForme: forme };
+      saveWorkoutSets(next);
+      return next;
+    });
+  }, [saveWorkoutSets]);
+
+  // Complete workout
+  const { mutate: completeWorkout, isPending: completing } = useMutation({
+    mutationFn: async () => {
+      if (!id) return;
+      const { error } = await supabase
+        .from("workout_logs")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          athlete_modifications: localMods,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workout-log-detail", id] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week"] });
+      qc.invalidateQueries({ queryKey: ["active-plan", athleteId] });
+      setShowRpe(true);
+    },
+  });
+
+  const isCompleted = workout.status === "completed";
+  const canEdit = !isCompleted && !!id;
+
+  if (workout.isLoading) {
+    return (
+      <div style={{ padding: 32, textAlign: "center", color: C.tx3, fontSize: 13 }}>
+        Chargement…
+      </div>
+    );
+  }
+
+  if (!workout.workoutLogId) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: C.tx3, fontSize: 13 }}>
         Séance introuvable
@@ -342,326 +403,687 @@ export default function WorkoutDetailPage() {
     );
   }
 
-  // Bonus sets from persisted modifications
-  const bonusSetsMap = new Map<string, SetRow[]>(
-    (workoutLog?.athleteModifications?.bonusSets ?? []).map((b) => [b.exerciseId, b.sets])
-  );
+  const FORME_LABELS = ["😴", "😐", "🙂", "💪", "🔥"];
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: 120, scrollbarWidth: "none" }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: 140, scrollbarWidth: "none" }}>
       {/* Header */}
       <div
         style={{
-          padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
           borderBottom: "1px solid " + C.brd,
-          position: "sticky", top: 45, background: C.bg, zIndex: 5,
+          position: "sticky",
+          top: 45,
+          background: C.bg,
+          zIndex: 5,
         }}
       >
         <button
           onClick={() => navigate(-1)}
           style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            border: "1px solid " + C.brdL, background: "transparent",
-            color: C.tx3, fontSize: 16, cursor: "pointer", fontFamily: "inherit",
-            display: "flex", alignItems: "center", justifyContent: "center", minWidth: 44,
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            flexShrink: 0,
+            border: "1px solid " + C.brdL,
+            background: "transparent",
+            color: C.tx3,
+            fontSize: 16,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: 44,
           }}
         >
           ←
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10, color: C.tx3 }}>{session.short}</div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: C.tx }}>{session.name}</div>
-          {/* Badge décalée */}
-          {workoutLog?.rescheduledByAthlete && workoutLog.originalScheduledDate !== workoutLog.scheduledDate && (
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "2px 8px", borderRadius: 20, marginTop: 3,
-              background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)",
-              fontSize: 9, fontWeight: 700, color: "#F59E0B",
-            }}>
-              ⏱ Décalée du {new Date(workoutLog.originalScheduledDate + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-            </div>
-          )}
+          <div style={{ fontSize: 10, color: C.tx3 }}>{workout.sessionShort}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: C.tx }}>{workout.sessionName}</div>
+          {workout.rescheduledByAthlete &&
+            workout.originalScheduledDate &&
+            workout.originalScheduledDate !== workout.scheduledDate && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "2px 8px",
+                  borderRadius: 20,
+                  marginTop: 3,
+                  background: "rgba(245,158,11,0.12)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: "#F59E0B",
+                }}
+              >
+                Décalée du{" "}
+                {new Date(
+                  workout.originalScheduledDate + "T12:00:00"
+                ).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+              </div>
+            )}
         </div>
         {isCompleted && (
-          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: C.gS, color: C.g }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "3px 10px",
+              borderRadius: 20,
+              background: C.gS,
+              color: C.g,
+            }}
+          >
             ✓ Complétée
           </span>
         )}
       </div>
 
-      {/* Exercises */}
+      {/* Blocs */}
       <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
-        {exercises.length === 0 ? (
+        {workout.blocs.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: C.tx3, fontSize: 12 }}>
             Aucun exercice dans cette séance
           </div>
         ) : (
-          exercises.map(({ exercise, sets, prevSets, prevWeekNum }) => {
-            const wk = exercise.weeks?.[currentWeek] ?? exercise.weeks?.[1];
-            const exSets = sets.length > 0
-              ? sets
-              : Array.from({ length: wk?.sets ?? 3 }, (): SetRow => ({}));
-            const bonusSets = bonusSetsMap.get(exercise.id) ?? [];
-
-            // Method reference weight calculation (from kg on the exercise)
-            const methodRef = wk?.method_attachment?.reference;
-            const methodRefKg = (() => {
-              if (!methodRef || !wk?.kg) return null;
-              const m = methodRef.trim().match(/^(\d+(?:\.\d+)?)%$/);
-              if (!m) return null;
-              return Math.round(parseFloat(m[1]) / 100 * wk.kg * 2) / 2;
-            })();
-
-            // %RM programming: derive kg from athlete PR
-            const pctRm = wk?.pct_rm;
-            const rmRef = effectiveRmRef(exercise); // rm_ref ou nom de l'exercice
-            const rmKg = (() => {
-              if (pctRm == null || !rmRef) return null;
-              const prs = prByRef[rmRef];
-              if (!prs?.length) return null;
-              const best = prs.reduce((m, p) => p.kg > m.kg ? p : m, prs[0]);
-              return Math.round(pctRm / 100 * best.kg * 2) / 2;
-            })();
-
+          workout.blocs.map((bloc, blocIdx) => {
+            const timing = timingBadge(bloc);
             return (
-              <div
-                key={exercise.id}
-                style={{
-                  background: C.s1, borderRadius: 14,
-                  border: "1px solid " + C.brd, overflow: "hidden",
-                }}
-              >
-                {/* Exercise header */}
-                <div style={{ padding: "12px 14px", borderBottom: "1px solid " + C.brd }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{exercise.name}</div>
-                  {exercise.bloc && (
-                    <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>{exercise.bloc}</div>
-                  )}
-                  {/* %RM badge */}
-                  {pctRm != null && (
-                    <div style={{
-                      marginTop: 8, padding: "6px 10px", borderRadius: 8,
-                      background: `${C.g}12`, border: `1px solid ${C.g}30`,
-                      display: "flex", alignItems: "center", gap: 8,
-                    }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: C.g }}>%RM</span>
-                      <span style={{ fontSize: 10, color: C.tx3 }}>{rmRef ?? "—"}</span>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: C.tx, marginLeft: "auto" }}>
-                        {pctRm}%
-                        {rmKg != null ? ` → ${rmKg} kg` : <span style={{ fontSize: 10, color: C.o }}> (aucun PR)</span>}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Method badge */}
-                  {wk?.method_attachment && (
-                    <div style={{
-                      marginTop: 8, padding: "6px 10px", borderRadius: 8,
-                      background: `${C.ac}12`, border: `1px solid ${C.ac}30`,
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: C.ac }}>
-                          {wk.method_attachment.method_name ?? "Méthode"}
-                        </span>
-                        {wk.method_attachment.applied_to_sets && wk.method_attachment.applied_to_sets.length > 0 && (
-                          <span style={{ fontSize: 10, color: C.tx3 }}>
-                            · sets {wk.method_attachment.applied_to_sets.join(", ")}
-                          </span>
-                        )}
-                        {methodRefKg !== null && (
-                          <span style={{ fontSize: 11, fontWeight: 800, color: C.tx, marginLeft: "auto" }}>
-                            {methodRef} → {methodRefKg} kg
-                          </span>
-                        )}
-                      </div>
-                      {wk.method_attachment.prescription && (
-                        <div style={{ fontSize: 10, color: C.tx2, marginTop: 4, fontFamily: "monospace" }}>
-                          {wk.method_attachment.prescription}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Prescribed sets */}
-                {/* Previous session */}
-                {prevWeekNum !== null && (
-                  <div style={{
-                    padding: "8px 14px",
-                    borderBottom: "1px solid " + C.brd,
-                    background: C.s2,
-                  }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: C.tx3, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      ↩ Sem. {prevWeekNum}
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                      {prevSets.map((s, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.tx2 }}>
-                          <span style={{ fontSize: 10, color: C.tx3, minWidth: 18 }}>S{i + 1}</span>
-                          <span style={{ fontWeight: 600, color: C.tx }}>
-                            {s.kg != null ? `${s.kg} kg` : "—"}
-                          </span>
-                          <span style={{ color: C.tx3 }}>×</span>
-                          <span style={{ fontWeight: 600, color: C.tx }}>
-                            {s.reps != null ? `${s.reps}` : "—"}
-                          </span>
-                          {s.rir != null && (
-                            <span style={{ fontSize: 10, color: C.tx3, marginLeft: 2 }}>
-                              · RIR {s.rir}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+              <div key={bloc.id}>
+                {/* Bloc header */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 6,
+                      background: VIOLET + "20",
+                      color: VIOLET,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 10,
+                      fontWeight: 900,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {String.fromCharCode(65 + blocIdx)}
                   </div>
-                )}
-
-                {/* Sets */}
-                <div style={{ padding: "0 14px" }}>
-                  {exSets.map((s, i) => (
-                    <SetEditor
-                      key={i}
-                      setNum={i + 1}
-                      set={s}
-                      onChange={(newSet) => {
-                        const key = `${exercise.id}_${1}`;
-                        const newSets = [...exSets];
-                        newSets[i] = newSet;
-                        updateSet(key, newSets);
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>
+                    {bloc.name || `Bloc ${blocIdx + 1}`}
+                  </div>
+                  {timing && (
+                    <div
+                      style={{
+                        fontSize: 9,
+                        color: VIOLET,
+                        background: VIOLET + "15",
+                        padding: "2px 7px",
+                        borderRadius: 5,
+                        fontWeight: 600,
                       }}
-                    />
-                  ))}
+                    >
+                      {timing}
+                    </div>
+                  )}
                 </div>
 
-                {/* Bonus sets section */}
-                {canEditLive && workoutLog && (
-                  <BonusSetSection
-                    exerciseId={exercise.id}
-                    exerciseName={exercise.name}
-                    workoutLogId={workoutLog.id}
-                    athleteId={athleteId ?? ""}
-                    weekMondayISO={weekMondayISO}
-                    existingSets={bonusSets}
-                  />
-                )}
+                {/* Exercices */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {bloc.exercices.map((ex) => {
+                    const sets =
+                      localMods.sessionSets?.[ex.id] ??
+                      initSetsFromParams(ex.params);
+                    const comment =
+                      localMods.exerciceComments?.[ex.id] ?? "";
+                    const prescription = formatPrescription(ex.params);
+
+                    return (
+                      <ExerciceCard
+                        key={ex.id}
+                        exerciceId={ex.id}
+                        name={ex.exercise_name}
+                        prescription={prescription}
+                        params={ex.params}
+                        sets={sets}
+                        comment={comment}
+                        canEdit={canEdit}
+                        onSetsChange={(newSets) =>
+                          updateExerciceSets(ex.id, newSets)
+                        }
+                        onCommentChange={(c) =>
+                          updateExerciceComment(ex.id, c)
+                        }
+                      />
+                    );
+                  })}
+                </div>
               </div>
             );
           })
         )}
 
-        {/* Custom exercises added by athlete */}
-        {customExercises.map((ce) => (
+        {/* Fin de séance */}
+        {canEdit && (
           <div
-            key={ce.id}
             style={{
-              background: C.s1, borderRadius: 14,
-              border: "1px solid rgba(245,158,11,0.3)", overflow: "hidden",
+              background: C.s1,
+              borderRadius: 14,
+              border: "1px solid " + C.brd,
+              padding: "14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
             }}
           >
-            <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(245,158,11,0.2)", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20, background: "rgba(245,158,11,0.12)", color: "#F59E0B" }}>
-                Ajouté athlète
-              </span>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>{ce.name}</div>
+            {/* Forme */}
+            <div>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: C.tx3,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 8,
+                }}
+              >
+                État de forme
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {FORME_LABELS.map((emoji, i) => (
+                  <button
+                    key={i}
+                    onClick={() => updateForme(i + 1)}
+                    style={{
+                      flex: 1,
+                      padding: "8px 4px",
+                      borderRadius: 10,
+                      border:
+                        "1px solid " +
+                        (localMods.sessionForme === i + 1 ? VIOLET : C.brdL),
+                      background:
+                        localMods.sessionForme === i + 1
+                          ? VIOLET + "20"
+                          : C.s2,
+                      fontSize: 18,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      minHeight: 44,
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div style={{ padding: "0 14px" }}>
-              {ce.sets.map((s, i) => (
-                <SetEditor
-                  key={i}
-                  setNum={i + 1}
-                  set={s}
-                  isBonus
-                  onChange={(newSet) => {
-                    setCustomExercises((prev) =>
-                      prev.map((x) => x.id === ce.id
-                        ? { ...x, sets: x.sets.map((ss, ii) => ii === i ? newSet : ss) }
-                        : x
-                      )
-                    );
-                  }}
-                />
-              ))}
+
+            {/* Commentaire séance */}
+            <div>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: C.tx3,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
+                  marginBottom: 6,
+                }}
+              >
+                Commentaire de séance
+              </div>
+              <textarea
+                value={localMods.sessionComment ?? ""}
+                onChange={(e) => updateSessionComment(e.target.value)}
+                placeholder="Comment s'est passée la séance ?"
+                rows={3}
+                style={{
+                  width: "100%",
+                  background: C.s2,
+                  border: "1px solid " + C.brdL,
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  color: C.tx,
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                  outline: "none",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                }}
+              />
             </div>
           </div>
-        ))}
+        )}
 
-        {/* + Exercice button */}
-        {canEditLive && workoutLog && (
-          <button
-            onClick={() => { haptic(); setShowExercisePicker(true); }}
+        {/* Show saved comment when completed */}
+        {isCompleted && localMods.sessionComment && (
+          <div
             style={{
-              width: "100%", padding: "12px 0", borderRadius: 12,
-              border: "1.5px dashed " + "#F59E0B50", background: "rgba(245,158,11,0.05)",
-              color: "#F59E0B", fontSize: 13, fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit", minHeight: 44,
+              background: C.s1,
+              borderRadius: 12,
+              border: "1px solid " + C.brd,
+              padding: "12px 16px",
             }}
           >
-            + Exercice
-          </button>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: C.tx3,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                marginBottom: 6,
+              }}
+            >
+              Commentaire
+            </div>
+            <div style={{ fontSize: 13, color: C.tx2 }}>
+              {localMods.sessionComment}
+            </div>
+          </div>
         )}
       </div>
 
       {/* Sticky "Terminer" button */}
       <div
         style={{
-          position: "fixed", bottom: 64, left: 0, right: 0, zIndex: 20,
+          position: "fixed",
+          bottom: 64,
+          left: 0,
+          right: 0,
+          zIndex: 20,
           padding: "12px 16px",
           background: "linear-gradient(transparent, " + C.bg + " 30%)",
-          display: "flex", justifyContent: "center",
+          display: "flex",
+          justifyContent: "center",
         }}
       >
         <button
           onClick={() => {
-            if (!isCompleted) {
-              completeWorkout(session.id);
-              setShowRpe(true);
+            if (!isCompleted && !completing) {
+              haptic();
+              completeWorkout();
             }
           }}
-          disabled={isCompleted}
+          disabled={isCompleted || completing}
           style={{
-            width: "100%", maxWidth: 480, padding: "16px 0", borderRadius: 16,
+            width: "100%",
+            maxWidth: 480,
+            padding: "16px 0",
+            borderRadius: 16,
             border: "none",
             background: isCompleted ? C.s2 : C.coach,
             color: isCompleted ? C.tx3 : "#fff",
-            fontSize: 14, fontWeight: 700, cursor: isCompleted ? "default" : "pointer",
-            fontFamily: "inherit", minHeight: 44,
-            boxShadow: isCompleted ? "none" : "0 4px 20px rgba(168,85,247,0.35)",
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: isCompleted || completing ? "default" : "pointer",
+            fontFamily: "inherit",
+            minHeight: 44,
+            boxShadow:
+              isCompleted ? "none" : "0 4px 20px rgba(168,85,247,0.35)",
           }}
         >
-          {isCompleted ? "Séance déjà complétée ✓" : "Terminer la séance 🏁"}
+          {completing
+            ? "Enregistrement…"
+            : isCompleted
+            ? "Séance complétée ✓"
+            : "Terminer la séance 🏁"}
         </button>
       </div>
 
-      {showRpe && session && (
-        <RpeSheet
-          sessionId={session.id}
-          onClose={() => { setShowRpe(false); navigate(-1); }}
-        />
-      )}
-
-      {/* Exercise picker */}
-      {showExercisePicker && workoutLog && (
-        <ExercisePicker
-          onClose={() => setShowExercisePicker(false)}
-          onSelect={(ex) => {
-            setShowExercisePicker(false);
-            const newEntry = { name: ex.name, id: "local_" + Date.now(), sets: [{}] as SetRow[] };
-            setCustomExercises((prev) => [...prev, newEntry]);
-            addCustomEx({
-              workoutLogId:  workoutLog.id,
-              athleteId:     athleteId ?? "",
-              weekMondayISO,
-              exercise: {
-                name:       ex.name,
-                exerciseId: ex.id,
-                exType:     ex.ex_type,
-                sets:       [{}],
-              },
-            });
+      {/* RPE sheet */}
+      {showRpe && workout.workoutLogId && (
+        <RpeSheetForLog
+          workoutLogId={workout.workoutLogId}
+          onClose={() => {
+            setShowRpe(false);
+            navigate(-1);
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Exercice card ──────────────────────────────────────────────────────────────
+
+interface ExerciceCardProps {
+  exerciceId: string;
+  name: string;
+  prescription: string;
+  params: ExerciceParams;
+  sets: SessionSetLog[];
+  comment: string;
+  canEdit: boolean;
+  onSetsChange: (sets: SessionSetLog[]) => void;
+  onCommentChange: (comment: string) => void;
+}
+
+function ExerciceCard({
+  exerciceId: _exerciceId,
+  name,
+  prescription,
+  params,
+  sets,
+  comment,
+  canEdit,
+  onSetsChange,
+  onCommentChange,
+}: ExerciceCardProps) {
+  const [showComment, setShowComment] = useState(false);
+
+  function updateSet(idx: number, s: SessionSetLog) {
+    const next = [...sets];
+    next[idx] = s;
+    onSetsChange(next);
+  }
+
+  function addBonusSet() {
+    onSetsChange([...sets, { done: false }]);
+    haptic();
+  }
+
+  const doneSets = sets.filter((s) => s.done).length;
+
+  return (
+    <div
+      style={{
+        background: C.s1,
+        borderRadius: 14,
+        border: "1px solid " + C.brd,
+        overflow: "hidden",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: "11px 14px",
+          borderBottom: "1px solid " + C.brd,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: C.tx,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {name}
+          </div>
+          <div style={{ fontSize: 10, color: VIOLET, marginTop: 2, fontWeight: 600 }}>
+            {prescription}
+          </div>
+        </div>
+        {doneSets > 0 && (
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: C.g,
+              background: C.gS,
+              padding: "2px 8px",
+              borderRadius: 20,
+              flexShrink: 0,
+            }}
+          >
+            {doneSets}/{sets.length} ✓
+          </div>
+        )}
+      </div>
+
+      {/* Sets */}
+      <div style={{ padding: "0 14px" }}>
+        {sets.map((s, i) => (
+          <SetEditor
+            key={i}
+            setNum={i + 1}
+            set={s}
+            target={getSetTarget(params, i)}
+            chargeUnit={params.charge_unit}
+            onChange={(newSet) => updateSet(i, newSet)}
+          />
+        ))}
+      </div>
+
+      {/* Comment + bonus */}
+      <div style={{ padding: "4px 14px 10px" }}>
+        {showComment || comment ? (
+          <textarea
+            value={comment}
+            onChange={(e) => onCommentChange(e.target.value)}
+            placeholder="Commentaire sur cet exercice…"
+            rows={2}
+            disabled={!canEdit}
+            style={{
+              width: "100%",
+              background: C.s2,
+              border: "1px solid " + C.brdL,
+              borderRadius: 8,
+              padding: "8px 10px",
+              color: C.tx,
+              fontSize: 12,
+              fontFamily: "inherit",
+              outline: "none",
+              resize: "none",
+              boxSizing: "border-box",
+              marginTop: 8,
+              marginBottom: canEdit ? 8 : 0,
+            }}
+          />
+        ) : null}
+
+        {canEdit && (
+          <div style={{ display: "flex", gap: 6, marginTop: showComment || comment ? 0 : 8 }}>
+            {!showComment && !comment && (
+              <button
+                onClick={() => setShowComment(true)}
+                style={{
+                  flex: 1,
+                  padding: "6px 0",
+                  borderRadius: 7,
+                  border: "1px dashed " + C.brdL,
+                  background: "transparent",
+                  color: C.tx3,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                💬 Commentaire
+              </button>
+            )}
+            <button
+              onClick={addBonusSet}
+              style={{
+                flex: 1,
+                padding: "6px 0",
+                borderRadius: 7,
+                border: "1px dashed " + "#F59E0B50",
+                background: "rgba(245,158,11,0.05)",
+                color: "#F59E0B",
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              + Série bonus
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── RPE sheet bridged to workout_log_id ────────────────────────────────────────
+
+function RpeSheetForLog({
+  workoutLogId,
+  onClose,
+}: {
+  workoutLogId: string;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const { athleteId } = useAthleteContext();
+  const [rpe, setRpe] = useState<number | null>(null);
+
+  const { mutate: saveRpe, isPending } = useMutation({
+    mutationFn: async (rpeScore: number) => {
+      await supabase
+        .from("workout_logs")
+        .update({ rpe_score: rpeScore })
+        .eq("id", workoutLogId);
+      await supabase.from("workout_rpe").upsert({
+        workout_log_id: workoutLogId,
+        athlete_id: athleteId ?? "",
+        rpe_score: rpeScore,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workout-log-detail", workoutLogId] });
+      onClose();
+    },
+  });
+
+  const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        zIndex: 50,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          background: C.bg,
+          borderRadius: "20px 20px 0 0",
+          padding: "24px 20px 40px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 800,
+            color: C.tx,
+            textAlign: "center",
+            marginBottom: 6,
+          }}
+        >
+          🏁 Séance terminée !
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: C.tx3,
+            textAlign: "center",
+            marginBottom: 20,
+          }}
+        >
+          Quelle était ton effort global ? (RPE)
+        </div>
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            justifyContent: "center",
+            flexWrap: "wrap",
+            marginBottom: 20,
+          }}
+        >
+          {RPE_VALUES.map((v) => (
+            <button
+              key={v}
+              onClick={() => setRpe(v)}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                border:
+                  "1px solid " + (rpe === v ? VIOLET : C.brdL),
+                background: rpe === v ? VIOLET + "20" : C.s1,
+                color: rpe === v ? VIOLET : C.tx,
+                fontSize: 14,
+                fontWeight: 800,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1,
+              padding: "12px 0",
+              borderRadius: 12,
+              border: "1px solid " + C.brdL,
+              background: "transparent",
+              color: C.tx2,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            Passer
+          </button>
+          <button
+            onClick={() => rpe != null && saveRpe(rpe)}
+            disabled={rpe == null || isPending}
+            style={{
+              flex: 2,
+              padding: "12px 0",
+              borderRadius: 12,
+              border: "none",
+              background: rpe != null ? VIOLET : C.s2,
+              color: rpe != null ? "#fff" : C.tx3,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: rpe != null ? "pointer" : "default",
+              fontFamily: "inherit",
+            }}
+          >
+            {isPending ? "Enregistrement…" : "Valider"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
