@@ -42,7 +42,7 @@ interface QuickAddDialogProps {
   date: Date | null;
   athleteId: string;
   coachId: string;
-  sessions: Array<{ id: string; name?: string; label?: string }>;
+  sessions: Array<{ id: string; name: string }>;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -76,10 +76,9 @@ export function QuickAddDialog({
   const dateStr   = format(date, "yyyy-MM-dd");
   const dateLabel = format(date, "d MMMM yyyy", { locale: fr });
 
-  const filteredSessions = sessions.filter((s) => {
-    const name = s.name ?? s.label ?? "";
-    return name.toLowerCase().includes(sessionSearch.toLowerCase());
-  });
+  const filteredSessions = sessions.filter((s) =>
+    s.name.toLowerCase().includes(sessionSearch.toLowerCase())
+  );
 
   const filteredEnergy = energySessions.filter((s) =>
     s.name.toLowerCase().includes(energySearch.toLowerCase())
@@ -99,7 +98,7 @@ export function QuickAddDialog({
     const sess = sessions.find((s) => s.id === selectedSession);
     if (!sess) return;
     assignWorkout(
-      { sessionId: sess.id, sessionName: sess.name ?? sess.label ?? "Séance", athleteId, coachId, date: dateStr },
+      { sessionId: sess.id, sessionName: sess.name, athleteId, coachId, date: dateStr },
       { onSuccess: handleClose },
     );
   }
@@ -241,7 +240,7 @@ export function QuickAddDialog({
               <input
                 value={sessionSearch}
                 onChange={(e) => setSessionSearch(e.target.value)}
-                placeholder="Rechercher une séance du bloc..."
+                placeholder="Rechercher dans la banque de séances..."
                 style={{
                   width: "100%", padding: "9px 12px", borderRadius: 10,
                   border: "1px solid " + C.brdL, background: C.s2,
@@ -252,11 +251,10 @@ export function QuickAddDialog({
               <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, scrollbarWidth: "none" }}>
                 {filteredSessions.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "24px 0", color: C.tx3, fontSize: 12 }}>
-                    Aucune séance dans le bloc actif
+                    {sessionSearch ? "Aucun résultat" : "Banque de séances vide — créez une séance dans l'onglet Programmation"}
                   </div>
                 ) : (
                   filteredSessions.map((s) => {
-                    const name = s.name ?? s.label ?? "Séance";
                     const active = selectedSession === s.id;
                     return (
                       <button
@@ -272,7 +270,7 @@ export function QuickAddDialog({
                           transition: "all 120ms",
                         }}
                       >
-                        {active && "✓ "}{name}
+                        {active && "✓ "}{s.name}
                       </button>
                     );
                   })
