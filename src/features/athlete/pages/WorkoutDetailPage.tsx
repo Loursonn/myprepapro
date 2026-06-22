@@ -11,6 +11,18 @@ import type { ExerciceParams } from "@/features/coach/components/programmation/t
 
 const VIOLET = "#7B6FFF";
 
+const BLOC_PALETTE = [
+  "#7B6FFF", "#F97316", "#22C55E", "#EF4444",
+  "#3B9EFF", "#FACC15", "#EC4899", "#14B8A6",
+];
+
+function hexToRgba(hex: string, alpha: number) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function haptic() {
   if (navigator.vibrate) navigator.vibrate(10);
 }
@@ -117,13 +129,29 @@ interface SetEditorProps {
 function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps) {
   const doneColor = set.done ? C.g : C.tx3;
 
+  function fieldStyle(isDone: boolean): React.CSSProperties {
+    return {
+      width: "100%",
+      background: isDone ? C.gS : C.s2,
+      border: "1px solid " + (isDone ? C.g + "40" : C.brdL),
+      borderRadius: 8,
+      padding: "8px 8px",
+      color: C.tx,
+      fontSize: 14,
+      fontWeight: 700,
+      fontFamily: "inherit",
+      outline: "none",
+      textAlign: "center" as const,
+    };
+  }
+
   return (
     <div
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         gap: 8,
-        padding: "9px 0",
+        padding: "10px 0",
         borderBottom: "1px solid " + C.brd,
       }}
     >
@@ -134,14 +162,15 @@ function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps
           haptic();
         }}
         style={{
-          width: 30,
-          height: 30,
+          width: 38,
+          height: 38,
           borderRadius: "50%",
           flexShrink: 0,
-          border: "1px solid " + (set.done ? C.g + "50" : C.brdL),
+          border: "2px solid " + (set.done ? C.g : C.brdL),
           background: set.done ? C.gS : "transparent",
           color: doneColor,
-          fontSize: 12,
+          fontSize: set.done ? 16 : 13,
+          fontWeight: 700,
           cursor: "pointer",
           fontFamily: "inherit",
           display: "flex",
@@ -149,6 +178,7 @@ function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps
           justifyContent: "center",
           minWidth: 44,
           minHeight: 44,
+          transition: "all 150ms",
         }}
       >
         {set.done ? "✓" : setNum}
@@ -157,10 +187,12 @@ function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps
       {/* Kg */}
       {chargeUnit !== "PDC" && (
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 9, color: C.tx3, marginBottom: 1 }}>
-            {chargeUnit}
+          <div style={{ fontSize: 9, color: C.tx3, marginBottom: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>{chargeUnit}</span>
             {target.kg != null && (
-              <span style={{ color: VIOLET, marginLeft: 4 }}>/{target.kg}</span>
+              <span style={{ color: VIOLET, fontWeight: 700, background: VIOLET + "18", padding: "1px 5px", borderRadius: 4 }}>
+                {target.kg}
+              </span>
             )}
           </div>
           <input
@@ -174,27 +206,19 @@ function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps
               })
             }
             placeholder={target.kg != null ? String(target.kg) : "—"}
-            style={{
-              width: "100%",
-              background: C.s2,
-              border: "1px solid " + C.brdL,
-              borderRadius: 8,
-              padding: "6px 8px",
-              color: C.tx,
-              fontSize: 13,
-              fontFamily: "inherit",
-              outline: "none",
-            }}
+            style={fieldStyle(set.done)}
           />
         </div>
       )}
 
       {/* Reps */}
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 1 }}>
-          Reps
+        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>Reps</span>
           {target.reps != null && (
-            <span style={{ color: VIOLET, marginLeft: 4 }}>/{target.reps}</span>
+            <span style={{ color: VIOLET, fontWeight: 700, background: VIOLET + "18", padding: "1px 5px", borderRadius: 4 }}>
+              {target.reps}
+            </span>
           )}
         </div>
         <input
@@ -204,31 +228,22 @@ function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps
           onChange={(e) =>
             onChange({
               ...set,
-              reps:
-                e.target.value === "" ? undefined : Number(e.target.value),
+              reps: e.target.value === "" ? undefined : Number(e.target.value),
             })
           }
           placeholder={target.reps != null ? String(target.reps) : "—"}
-          style={{
-            width: "100%",
-            background: C.s2,
-            border: "1px solid " + C.brdL,
-            borderRadius: 8,
-            padding: "6px 8px",
-            color: C.tx,
-            fontSize: 13,
-            fontFamily: "inherit",
-            outline: "none",
-          }}
+          style={fieldStyle(set.done)}
         />
       </div>
 
       {/* RIR */}
-      <div style={{ width: 52 }}>
-        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 1 }}>
-          RIR
+      <div style={{ width: 54 }}>
+        <div style={{ fontSize: 9, color: C.tx3, marginBottom: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>RIR</span>
           {target.rir != null && (
-            <span style={{ color: VIOLET, marginLeft: 4 }}>/{target.rir}</span>
+            <span style={{ color: VIOLET, fontWeight: 700, background: VIOLET + "18", padding: "1px 5px", borderRadius: 4 }}>
+              {target.rir}
+            </span>
           )}
         </div>
         <input
@@ -240,24 +255,11 @@ function SetEditor({ setNum, set, target, chargeUnit, onChange }: SetEditorProps
           onChange={(e) =>
             onChange({
               ...set,
-              rir:
-                e.target.value === ""
-                  ? undefined
-                  : Number(e.target.value),
+              rir: e.target.value === "" ? undefined : Number(e.target.value),
             })
           }
           placeholder={target.rir != null ? String(target.rir) : "—"}
-          style={{
-            width: "100%",
-            background: C.s2,
-            border: "1px solid " + C.brdL,
-            borderRadius: 8,
-            padding: "6px 8px",
-            color: C.tx,
-            fontSize: 13,
-            fontFamily: "inherit",
-            outline: "none",
-          }}
+          style={fieldStyle(set.done)}
         />
       </div>
     </div>
@@ -378,8 +380,8 @@ export default function WorkoutDetailPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workout-log-detail", id] });
-      qc.invalidateQueries({ queryKey: ["workout-logs-week"] });
-      qc.invalidateQueries({ queryKey: ["active-plan", athleteId] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week", athleteId] });
+      qc.invalidateQueries({ queryKey: ["activePlan", athleteId] });
       setShowRpe(true);
     },
   });
@@ -495,6 +497,7 @@ export default function WorkoutDetailPage() {
         ) : (
           workout.blocs.map((bloc, blocIdx) => {
             const timing = timingBadge(bloc);
+            const bColor = bloc.color ?? BLOC_PALETTE[blocIdx % BLOC_PALETTE.length];
             return (
               <div key={bloc.id}>
                 {/* Bloc header */}
@@ -504,34 +507,38 @@ export default function WorkoutDetailPage() {
                     alignItems: "center",
                     gap: 8,
                     marginBottom: 8,
+                    padding: "5px 10px 5px 12px",
+                    borderRadius: 8,
+                    background: hexToRgba(bColor, 0.08),
+                    borderLeft: `3px solid ${bColor}`,
                   }}
                 >
                   <div
                     style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 6,
-                      background: VIOLET + "20",
-                      color: VIOLET,
+                      width: 20,
+                      height: 20,
+                      borderRadius: 5,
+                      background: hexToRgba(bColor, 0.18),
+                      color: bColor,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: 900,
                       flexShrink: 0,
                     }}
                   >
                     {String.fromCharCode(65 + blocIdx)}
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: bColor }}>
                     {bloc.name || `Bloc ${blocIdx + 1}`}
                   </div>
                   {timing && (
                     <div
                       style={{
                         fontSize: 9,
-                        color: VIOLET,
-                        background: VIOLET + "15",
+                        color: bColor,
+                        background: hexToRgba(bColor, 0.12),
                         padding: "2px 7px",
                         borderRadius: 5,
                         fontWeight: 600,

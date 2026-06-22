@@ -78,8 +78,8 @@ export function usePlaceSession() {
       if (error) throw error;
     },
     onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ["workout-logs-week"] });
-      qc.invalidateQueries({ queryKey: ["active-plan", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["activePlan", vars.athleteId] });
       toast.success("Séance placée dans le planning ✓");
     },
     onError: () => toast.error("Erreur lors du placement"),
