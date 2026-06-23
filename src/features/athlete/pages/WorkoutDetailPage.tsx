@@ -117,7 +117,7 @@ function setStateToLog(s: SetState): SessionSetLog {
     skipped: s.skipped,
     kg: kgStr ? parseFloat(kgStr) : undefined,
     reps: s.reps ? parseInt(s.reps) : undefined,
-    rir: s.rir !== "" ? parseInt(s.rir) : undefined,
+    rir: s.rir === "5+" ? 5 : s.rir !== "" ? parseFloat(s.rir) : undefined,
   };
 }
 
@@ -187,14 +187,20 @@ function timingLabel(bloc: {
 
 function blocRestSeconds(bloc: {
   timing_mode: string;
+  timing_depart_min?: number;
+  timing_depart_sec?: number;
   timing_repos_min?: number;
   timing_repos_sec?: number;
 }): number {
   if (bloc.timing_mode === "repos") {
     const s = (bloc.timing_repos_min ?? 0) * 60 + (bloc.timing_repos_sec ?? 0);
-    return s > 0 ? s : REST_DEFAULT;
+    return s > 0 ? s : 0;
   }
-  return REST_DEFAULT;
+  if (bloc.timing_mode === "depart") {
+    const s = (bloc.timing_depart_min ?? 0) * 60 + (bloc.timing_depart_sec ?? 0);
+    return s > 0 ? s : 0;
+  }
+  return 0; // libre → rien
 }
 
 // ── BadgeTag ───────────────────────────────────────────────────────────────────
@@ -230,9 +236,11 @@ interface SetRowProps {
   onToggle: () => void;
   onOpenPad: (field: "kg" | "reps" | "rir") => void;
   isCompleted: boolean;
+  canRemove?: boolean;
+  onRemoveSet?: () => void;
 }
 
-function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCompleted }: SetRowProps) {
+function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCompleted, canRemove, onRemoveSet }: SetRowProps) {
   const isPDC = chargeUnit === "PDC";
   const checkState = state.done ? "done" : state.skipped ? "skip" : "empty";
   const gridCols = isPDC
@@ -277,9 +285,22 @@ function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCom
         borderBottom: `1px solid ${C.brd}`,
       }}
     >
-      {/* Set number */}
+      {/* Set number / remove bonus */}
       <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: C.tx3 }}>
-        {setIdx + 1}
+        {canRemove && onRemoveSet ? (
+          <button
+            onClick={onRemoveSet}
+            style={{
+              width: 22, height: 22, borderRadius: 6,
+              border: `1px solid ${hexToRgba(ROSE, 0.5)}`,
+              background: hexToRgba(ROSE, 0.12),
+              color: ROSE, fontSize: 13, fontWeight: 700,
+              cursor: "pointer", fontFamily: "inherit",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              padding: 0,
+            }}
+          >×</button>
+        ) : setIdx + 1}
       </div>
 
       {/* kg */}
@@ -440,6 +461,7 @@ interface ExerciceCardProps {
   comment: string;
   canEdit: boolean;
   blocColor: string;
+  timingMode: string;
   blocRestSec: number;
   blocRestLabel: string;
   restActiveKey: string | null;
@@ -448,6 +470,7 @@ interface ExerciceCardProps {
   onToggle: (setIdx: number) => void;
   onOpenPad: (setIdx: number, field: "kg" | "reps" | "rir") => void;
   onAddSet: () => void;
+  onRemoveSet: (setIdx: number) => void;
   onCommentChange: (c: string) => void;
   onStartRest: (key: string, sec: number) => void;
   onStopRest: () => void;
@@ -463,6 +486,7 @@ function ExerciceCard({
   prevSets,
   comment,
   canEdit,
+  timingMode,
   blocColor,
   blocRestSec,
   blocRestLabel,
@@ -472,6 +496,7 @@ function ExerciceCard({
   onToggle,
   onOpenPad,
   onAddSet,
+  onRemoveSet,
   onCommentChange,
   onStartRest,
   onStopRest,
@@ -479,9 +504,11 @@ function ExerciceCard({
   const [showComment, setShowComment] = useState(false);
   const isPDC = params.charge_unit === "PDC";
   const doneSets = sets.filter((s) => s.done).length;
-  // Cluster → use intra-cluster recup_sec; otherwise bloc timing
-  const restSec = params.cluster ? params.cluster.recup_sec : blocRestSec;
-  const restLabel = params.cluster ? "récup." : blocRestLabel;
+  // For cluster: cluster.recup_sec is intra-cluster rest (shown as badge); inter-set rest = bloc rest
+  const restSec = blocRestSec;
+  const restLabel = blocRestLabel;
+  // stripSec: InlineRestStrip only for repos timing (bloc-level) — not for depart or cluster-only
+  const stripSec = timingMode === "repos" ? blocRestSec : 0;
   const totalSets = sets.length;
   const allDone = doneSets === totalSets && totalSets > 0;
 
@@ -539,6 +566,28 @@ function ExerciceCard({
         </div>
       </div>
 
+      {/* Cluster info strip */}
+      {params.cluster && (() => {
+        const c = params.cluster;
+        const safeReps = Array.isArray(c.reps) ? c.reps : Array(c.nb_clusters).fill(5);
+        return (
+          <div style={{
+            padding: "5px 14px",
+            borderBottom: `1px solid ${C.brd}`,
+            background: "rgba(245,166,35,0.06)",
+            display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+          }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: "#F5A623", textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>
+              Cluster
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#F5A623", letterSpacing: 1 }}>
+              {safeReps.join("+")}
+            </span>
+            <span style={{ fontSize: 9, color: C.tx3 }}>·  {c.recup_sec}s entre clusters</span>
+          </div>
+        );
+      })()}
+
       {/* Column headers */}
       <div
         style={{
@@ -577,10 +626,12 @@ function ExerciceCard({
                 onToggle={() => onToggle(i)}
                 onOpenPad={(field) => onOpenPad(i, field)}
                 isCompleted={!canEdit}
+                canRemove={canEdit && i >= params.nb_series}
+                onRemoveSet={canEdit && i >= params.nb_series ? () => onRemoveSet(i) : undefined}
               />
               <InlineRestStrip
                 myKey={stripKey}
-                seconds={restSec}
+                seconds={stripSec}
                 label={restLabel}
                 activeKey={restActiveKey}
                 left={restLeft}
@@ -830,16 +881,144 @@ function NumPad({ target, value, onChange, onConfirm, onClose }: NumPadProps) {
   );
 }
 
+// ── RirPicker ──────────────────────────────────────────────────────────────────
+
+const RIR_ITEMS: Array<{ val: string; label: string; desc: string }> = [
+  { val: "0",   label: "0",    desc: "Échec" },
+  { val: "0.5", label: "0,5",  desc: "Quasi échec" },
+  { val: "1",   label: "1",    desc: "Très difficile" },
+  { val: "1.5", label: "1,5",  desc: "Difficile" },
+  { val: "2",   label: "2",    desc: "Modéré" },
+  { val: "2.5", label: "2,5",  desc: "" },
+  { val: "3",   label: "3",    desc: "Confortable" },
+  { val: "3.5", label: "3,5",  desc: "" },
+  { val: "4",   label: "4",    desc: "Facile" },
+  { val: "4.5", label: "4,5",  desc: "" },
+  { val: "5",   label: "5",    desc: "Très facile" },
+  { val: "5+",  label: "5+",   desc: "Aucun effort" },
+];
+
+function getRirColor(val: string): string {
+  const n = val === "5+" ? 6 : parseFloat(val);
+  if (n <= 0.5) return "#EF4444";
+  if (n <= 1.5) return "#F97316";
+  if (n <= 2.5) return "#FACC15";
+  if (n <= 3.5) return "#84CC16";
+  if (n <= 4.5) return "#22C55E";
+  if (n <= 5)   return "#22C993";
+  return "#3B9EFF";
+}
+
+interface RirPickerProps {
+  value: string;
+  onChange: (v: string) => void;
+  onConfirm: () => void;
+  onClose: () => void;
+}
+
+function RirPicker({ value, onChange, onConfirm, onClose }: RirPickerProps) {
+  const selectedItem = RIR_ITEMS.find((r) => r.val === value);
+  const selColor = value ? getRirColor(value) : VIOLET;
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
+      <div
+        style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 41,
+          background: C.s1, borderRadius: "20px 20px 0 0",
+          maxWidth: 480, margin: "0 auto",
+        }}
+      >
+        {/* Label + selected value display */}
+        <div style={{ padding: "16px 20px 10px", textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: C.tx3, fontWeight: 600, marginBottom: 4 }}>
+            RIR — Reps en réserve
+          </div>
+          <div
+            style={{
+              fontSize: 36, fontWeight: 900, color: selColor,
+              minHeight: 44, display: "flex", alignItems: "center",
+              justifyContent: "center", gap: 10,
+            }}
+          >
+            {value ? (
+              <>
+                <span>{selectedItem?.label ?? value}</span>
+                {selectedItem?.desc && (
+                  <span style={{ fontSize: 13, fontWeight: 500, color: C.tx3 }}>
+                    {selectedItem.desc}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span style={{ color: C.tx3, fontWeight: 400, fontSize: 22 }}>—</span>
+            )}
+          </div>
+        </div>
+
+        {/* 4-column grid of RIR values */}
+        <div
+          style={{
+            display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 6, padding: "0 12px 8px",
+          }}
+        >
+          {RIR_ITEMS.map((item) => {
+            const color = getRirColor(item.val);
+            const selected = value === item.val;
+            return (
+              <button
+                key={item.val}
+                onClick={() => onChange(item.val)}
+                style={{
+                  height: 52, borderRadius: 10,
+                  border: `2px solid ${selected ? color : hexToRgba(color, 0.3)}`,
+                  background: selected ? hexToRgba(color, 0.2) : hexToRgba(color, 0.07),
+                  color: selected ? color : C.tx2,
+                  fontSize: 15, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit",
+                  transition: "all 120ms",
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Confirm */}
+        <div style={{ padding: "4px 12px 28px" }}>
+          <button
+            onClick={onConfirm}
+            style={{
+              width: "100%", padding: "14px 0", borderRadius: 12,
+              border: "none",
+              background: value ? selColor : C.s2,
+              color: value ? "#fff" : C.tx3,
+              fontSize: 14, fontWeight: 700,
+              cursor: value ? "pointer" : "default", fontFamily: "inherit",
+            }}
+          >
+            Valider
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── RestTimer ──────────────────────────────────────────────────────────────────
 
 interface RestTimerProps {
   left: number;
   total: number;
   nextInfo: string | null;
+  loop?: boolean;
   onDismiss: () => void;
 }
 
-function RestTimer({ left, total, nextInfo, onDismiss }: RestTimerProps) {
+function RestTimer({ left, total, nextInfo, loop, onDismiss }: RestTimerProps) {
   const offset = RING_C * (1 - left / total);
   const isUrgent = left <= 10;
 
@@ -894,7 +1073,7 @@ function RestTimer({ left, total, nextInfo, onDismiss }: RestTimerProps) {
         </svg>
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>Repos</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{loop ? "Départ ∞" : "Repos"}</div>
         {nextInfo && (
           <div
             style={{
@@ -1317,6 +1496,8 @@ export default function WorkoutDetailPage() {
 
   const restRef = useRef<ReturnType<typeof setInterval>>();
   const elapsedRef = useRef<ReturnType<typeof setInterval>>();
+  const loopRef = useRef(false);
+  const restSecondsRef = useRef(REST_DEFAULT);
 
   // ── Collect all exIds for usePrevWorkoutSets ─────────────────────────────
   const allExIds = useMemo(
@@ -1363,12 +1544,15 @@ export default function WorkoutDetailPage() {
   // ── Rest timer helpers ───────────────────────────────────────────────────
   const stopRest = useCallback(() => {
     clearInterval(restRef.current);
+    loopRef.current = false;
     setRestLeft(null);
     setRestActiveKey(null);
   }, []);
 
-  const startRest = useCallback((seconds: number, nextInfo: string | null, activeKey?: string) => {
+  const startRest = useCallback((seconds: number, nextInfo: string | null, activeKey?: string, loop = false) => {
     clearInterval(restRef.current);
+    loopRef.current = loop;
+    restSecondsRef.current = seconds;
     setRestTotal(seconds);
     setRestLeft(seconds);
     setRestNextInfo(nextInfo);
@@ -1376,6 +1560,10 @@ export default function WorkoutDetailPage() {
     restRef.current = setInterval(() => {
       setRestLeft((prev) => {
         if (prev === null || prev <= 1) {
+          if (loopRef.current) {
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            return restSecondsRef.current; // relance automatique
+          }
           clearInterval(restRef.current);
           if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
           return null;
@@ -1397,7 +1585,9 @@ export default function WorkoutDetailPage() {
 
   // ── Toggle 3-state checkmark ─────────────────────────────────────────────
   const toggleAndPersist = useCallback(
-    (exId: string, setIdx: number, restSec: number, nextInfo: string | null) => {
+    (exId: string, setIdx: number, restSec: number, nextInfo: string | null, timingMode = "repos", blocId = "", blocExIds: string[] = []) => {
+      let shouldStop = false;
+
       setSets((prev) => {
         const exSets = [...(prev[exId] ?? [])];
         const s = { ...exSets[setIdx] };
@@ -1408,11 +1598,16 @@ export default function WorkoutDetailPage() {
           if (!s.reps && prevStr) s.reps = parsePrevVal(prevStr, "reps");
           s.done = true;
           s.skipped = false;
-          startRest(restSec, nextInfo, `${exId}:${setIdx}`);
+
+          if (timingMode === "depart" && restSec > 0) {
+            startRest(restSec, null, `depart:${blocId}`, true /* loop */);
+          } else if (restSec > 0) {
+            startRest(restSec, nextInfo, `${exId}:${setIdx}`);
+          }
         } else if (s.done) {
           s.done = false;
           s.skipped = true;
-          stopRest();
+          if (timingMode !== "depart") stopRest();
         } else {
           s.done = false;
           s.skipped = false;
@@ -1420,11 +1615,23 @@ export default function WorkoutDetailPage() {
 
         exSets[setIdx] = s;
         const next = { ...prev, [exId]: exSets };
+
+        // Départ mode: stop looping timer when all bloc sets are done/skipped
+        if (timingMode === "depart" && blocExIds.length > 0) {
+          const allDone = blocExIds.every((eid) => {
+            const eSets = next[eid] ?? [];
+            return eSets.length > 0 && eSets.every((ss) => ss.done || ss.skipped);
+          });
+          if (allDone) shouldStop = true;
+        }
+
         const mods = allSetsToMods(next, localMods);
         setLocalMods(mods);
         saveWorkoutSets(mods);
         return next;
       });
+
+      if (shouldStop) stopRest();
     },
     [prevSets, startRest, stopRest, localMods, saveWorkoutSets],
   );
@@ -1487,6 +1694,22 @@ export default function WorkoutDetailPage() {
         return next;
       });
       haptic();
+    },
+    [localMods, saveWorkoutSets],
+  );
+
+  // ── Remove bonus set ─────────────────────────────────────────────────────
+  const removeBonusSet = useCallback(
+    (exId: string, setIdx: number) => {
+      setSets((prev) => {
+        const exSets = [...(prev[exId] ?? [])];
+        exSets.splice(setIdx, 1);
+        const next = { ...prev, [exId]: exSets };
+        const mods = allSetsToMods(next, localMods);
+        setLocalMods(mods);
+        saveWorkoutSets(mods);
+        return next;
+      });
     },
     [localMods, saveWorkoutSets],
   );
@@ -1780,9 +2003,13 @@ export default function WorkoutDetailPage() {
                   {timing && <BadgeTag label={timing} color={bColor} />}
                 </div>
 
-                {/* Exercices */}
+                {/* Exercices — colored background groups them visually as superset */}
                 <div
                   style={{
+                    background: hexToRgba(bColor, 0.05),
+                    border: `1px solid ${hexToRgba(bColor, 0.2)}`,
+                    borderRadius: 14,
+                    padding: "8px",
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
@@ -1804,6 +2031,7 @@ export default function WorkoutDetailPage() {
                         prevSets={prevSets[ex.id] ?? []}
                         comment={localMods.exerciceComments?.[ex.id] ?? ""}
                         canEdit={canEdit}
+                        timingMode={bloc.timing_mode}
                         blocColor={bColor}
                         blocRestSec={restSec}
                         blocRestLabel={bloc.timing_mode === "depart" ? "départ" : "repos"}
@@ -1811,12 +2039,13 @@ export default function WorkoutDetailPage() {
                         restLeft={restLeft}
                         restTotal={restTotal}
                         onToggle={(setIdx) =>
-                          toggleAndPersist(ex.id, setIdx, restSec, nextInfo)
+                          toggleAndPersist(ex.id, setIdx, restSec, nextInfo, bloc.timing_mode, bloc.id, bloc.exercices.map(e => e.id))
                         }
                         onOpenPad={(setIdx, field) =>
                           openPad(ex.id, setIdx, field, ex.params.charge_unit)
                         }
                         onAddSet={() => addBonusSet(ex.id)}
+                        onRemoveSet={(setIdx) => removeBonusSet(ex.id, setIdx)}
                         onCommentChange={(c) => updateExComment(ex.id, c)}
                         onStartRest={(key, sec) => startRest(sec, null, key)}
                         onStopRest={stopRest}
@@ -1890,24 +2119,28 @@ export default function WorkoutDetailPage() {
               boxShadow: `0 4px 20px ${hexToRgba(VIOLET, 0.35)}`,
             }}
           >
-            Terminer la séance 🏁
+            Terminer la séance
           </button>
         </div>
       )}
 
-      {/* ── NumPad ── */}
-      {padTarget && (
+      {/* ── NumPad / RirPicker ── */}
+      {padTarget && padTarget.field === "rir" ? (
+        <RirPicker
+          value={padVal}
+          onChange={setPadVal}
+          onConfirm={() => confirmPad(padVal)}
+          onClose={() => { setPadTarget(null); setPadVal(""); }}
+        />
+      ) : padTarget ? (
         <NumPad
           target={padTarget}
           value={padVal}
           onChange={setPadVal}
           onConfirm={() => confirmPad(padVal)}
-          onClose={() => {
-            setPadTarget(null);
-            setPadVal("");
-          }}
+          onClose={() => { setPadTarget(null); setPadVal(""); }}
         />
-      )}
+      ) : null}
 
       {/* ── Rest timer ── */}
       {restLeft !== null && (
@@ -1915,6 +2148,7 @@ export default function WorkoutDetailPage() {
           left={restLeft}
           total={restTotal}
           nextInfo={restNextInfo}
+          loop={restActiveKey?.startsWith("depart:") ?? false}
           onDismiss={stopRest}
         />
       )}

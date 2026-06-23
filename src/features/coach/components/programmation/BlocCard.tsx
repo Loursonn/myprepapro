@@ -256,29 +256,37 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
       )}
 
       {/* Exercises */}
-      <div style={{ padding: "8px 10px 10px 16px" }}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleExerciceDragEnd}>
-          <SortableContext items={bloc.exercices.map(e => e.id)} strategy={verticalListSortingStrategy}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              {bloc.exercices.map((ex, i) => (
-                <SortableExercice
-                  key={ex.id}
-                  exercice={ex}
-                  index={i}
-                  total={bloc.exercices.length}
-                  bloc={bloc}
-                  athleteId={athleteId}
-                  activeWeek={activeWeek}
-                  sessionMultiSemaine={sessionMultiSemaine}
-                  onMoveUp={() => moveExercice(i, -1)}
-                  onMoveDown={() => moveExercice(i, 1)}
-                  onDelete={() => deleteExercice(i)}
-                  onChange={updated => updateExercice(i, updated)}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+      <div style={{ padding: "8px 10px 10px 12px" }}>
+        <div style={{
+          background: hexToRgba(bColor, 0.05),
+          border: "1px solid " + hexToRgba(bColor, 0.18),
+          borderRadius: 10,
+          padding: bloc.exercices.length > 0 ? "6px" : "0",
+          marginBottom: bloc.exercices.length > 0 ? 6 : 0,
+        }}>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleExerciceDragEnd}>
+            <SortableContext items={bloc.exercices.map(e => e.id)} strategy={verticalListSortingStrategy}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {bloc.exercices.map((ex, i) => (
+                  <SortableExercice
+                    key={ex.id}
+                    exercice={ex}
+                    index={i}
+                    total={bloc.exercices.length}
+                    bloc={bloc}
+                    athleteId={athleteId}
+                    activeWeek={activeWeek}
+                    sessionMultiSemaine={sessionMultiSemaine}
+                    onMoveUp={() => moveExercice(i, -1)}
+                    onMoveDown={() => moveExercice(i, 1)}
+                    onDelete={() => deleteExercice(i)}
+                    onChange={updated => updateExercice(i, updated)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
 
         {/* Add exercise */}
         <button
