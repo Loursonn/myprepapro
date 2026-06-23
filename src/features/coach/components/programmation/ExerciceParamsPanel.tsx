@@ -161,15 +161,29 @@ function Stepper({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getParams(exercice: Exercice, activeWeek: number, multiSemaine: boolean): ExerciceParams {
+function getParams(exercice: Exercice, activeWeek: number, _multiSemaine: boolean): ExerciceParams {
   const p = exercice.params
-  const isRecord = typeof p === 'object' && p !== null && Object.keys(p as object).some((k) => /^\d+$/.test(k))
+  if (!p || typeof p !== 'object') return defaultExerciceParams()
+  const isRecord = Object.keys(p as object).some((k) => /^\d+$/.test(k))
+  let result: ExerciceParams
   if (isRecord) {
     const weekKey = String(activeWeek)
     const rec = p as Record<string, ExerciceParams>
-    return rec[weekKey] ?? rec['1'] ?? defaultExerciceParams()
+    result = rec[weekKey] ?? rec['1'] ?? defaultExerciceParams()
+  } else {
+    result = p as ExerciceParams
   }
-  return p as ExerciceParams
+  // Guard against incomplete/corrupt stored params
+  const def = defaultExerciceParams(result.nb_series)
+  return {
+    ...def,
+    ...result,
+    reps: result.reps ?? def.reps,
+    reps_mode: result.reps_mode ?? def.reps_mode,
+    charge: result.charge ?? def.charge,
+    rir: result.rir ?? def.rir,
+    tempo: result.tempo ?? def.tempo,
+  }
 }
 
 function setParams(exercice: Exercice, params: ExerciceParams, activeWeek: number, multiSemaine: boolean): Exercice {

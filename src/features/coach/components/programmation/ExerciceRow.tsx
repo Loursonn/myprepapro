@@ -28,12 +28,18 @@ interface ExerciceRowProps {
 
 function getDisplayParams(exercice: Exercice, activeWeek: number, _multiSemaine: boolean) {
   const p = exercice.params
-  const isRecord = typeof p === 'object' && p !== null && Object.keys(p as object).some((k) => /^\d+$/.test(k))
-  if (isRecord) {
-    const rec = p as Record<string, import("./types").ExerciceParams>
-    return rec[String(activeWeek)] ?? rec['1'] ?? Object.values(rec)[0] ?? null
-  }
-  return p as import("./types").ExerciceParams
+  if (!p || typeof p !== 'object') return null
+  const isRecord = Object.keys(p as object).some((k) => /^\d+$/.test(k))
+  const raw = isRecord
+    ? ((p as Record<string, import("./types").ExerciceParams>)[String(activeWeek)]
+      ?? (p as Record<string, import("./types").ExerciceParams>)['1']
+      ?? Object.values(p as Record<string, import("./types").ExerciceParams>)[0]
+      ?? null)
+    : (p as import("./types").ExerciceParams)
+  if (!raw) return null
+  // Guard incomplete stored params
+  if (!raw.reps || !raw.charge || !raw.rir || !raw.tempo) return null
+  return raw
 }
 
 export function ExerciceRow({
