@@ -1534,6 +1534,40 @@ export default function WorkoutDetailPage() {
     setSetsInit(true);
   }, [workout.isLoading, workout.blocs, workout.athleteModifications, setsInit]);
 
+  // ── Backfill empty cells from prevSets once they load ───────────────────
+  useEffect(() => {
+    if (!setsInit || Object.keys(prevSets).length === 0) return;
+    setSets((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [exId, exSets] of Object.entries(next)) {
+        const prevEx = prevSets[exId];
+        if (!prevEx) continue;
+        const updated = exSets.map((s, i) => {
+          if (s.done || s.skipped) return s;
+          const prevStr = prevEx[i] ?? "";
+          if (!prevStr) return s;
+          let newS = { ...s };
+          let dirty = false;
+          if (!newS.kg) {
+            const v = parsePrevVal(prevStr, "kg");
+            if (v) { newS.kg = v; dirty = true; }
+          }
+          if (!newS.reps) {
+            const v = parsePrevVal(prevStr, "reps");
+            if (v) { newS.reps = v; dirty = true; }
+          }
+          return dirty ? newS : s;
+        });
+        if (updated.some((s, i) => s !== exSets[i])) {
+          next[exId] = updated;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [setsInit, prevSets]);
+
   // ── Session timer ────────────────────────────────────────────────────────
   useEffect(() => {
     if (workout.status === "completed") return;
