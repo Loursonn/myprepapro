@@ -2076,6 +2076,25 @@ export default function WorkoutDetailPage() {
     [saveWorkoutSets],
   );
 
+  // ── Reopen (cancel completion) ───────────────────────────────────────────
+  const { mutate: reopenWorkout, isPending: reopening } = useMutation({
+    mutationFn: async () => {
+      if (!id) return;
+      const { error } = await supabase
+        .from("workout_logs")
+        .update({ status: "planned", completed_at: null, rpe_score: null })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workout-log-detail", id] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week", athleteId] });
+      qc.invalidateQueries({ queryKey: ["activePlan", athleteId] });
+      toast.success("Séance réouverte");
+    },
+    onError: () => toast.error("Erreur lors de la réouverture"),
+  });
+
   // ── Complete workout ─────────────────────────────────────────────────────
   const { mutate: completeWorkout, isPending: completing } = useMutation({
     mutationFn: async () => {
@@ -2472,6 +2491,44 @@ export default function WorkoutDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ── Sticky "Rouvrir" button (completed) ── */}
+      {isCompleted && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 64,
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            padding: "12px 16px",
+            background: `linear-gradient(transparent, ${C.bg} 30%)`,
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          <button
+            onClick={() => reopenWorkout()}
+            disabled={reopening}
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              padding: "14px 0",
+              borderRadius: 16,
+              border: `1px solid ${hexToRgba(ROSE, 0.4)}`,
+              background: hexToRgba(ROSE, 0.08),
+              color: ROSE,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: reopening ? "default" : "pointer",
+              fontFamily: "inherit",
+              opacity: reopening ? 0.6 : 1,
+            }}
+          >
+            {reopening ? "Annulation…" : "↩ Annuler la complétion"}
+          </button>
+        </div>
+      )}
 
       {/* ── Sticky "Terminer" button ── */}
       {canEdit && (
