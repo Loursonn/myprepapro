@@ -18,6 +18,7 @@ import type { AthleteModifications, Exercise, WeekConfig } from "../types/athlet
 export interface WorkoutExerciceData {
   id: string;
   exercise_name: string;
+  muscle?: string;
   params: ExerciceParams;
   mode: "classique" | "methode";
   methode_id?: string;
@@ -116,6 +117,7 @@ function buildLegacyBlocs(
       return {
         id: ex.id,
         exercise_name: ex.name,
+        muscle: ex.target,
         params: weekConfigToParams(wc, wc?.sets ?? 3),
         mode: "classique" as const,
       };
@@ -279,6 +281,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
           return {
             id: ex.id,
             exercise_name: ex.exercise_name,
+            muscle: (ex as { muscle?: string }).muscle,
             params: { ...params, nb_series: effectiveNbSeries },
             mode: ex.mode,
             methode_id: ex.methode_id,

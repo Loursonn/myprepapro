@@ -178,6 +178,7 @@ export interface CustomExercise {
 
 export interface SessionSetLog {
   done: boolean;
+  skipped?: boolean;
   kg?: number | null;
   reps?: number;
   rir?: number | null;
