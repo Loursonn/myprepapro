@@ -46,6 +46,7 @@ const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx
 const AthleteViewPage           = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
 const EnergySessionEditorPage   = lazy(() => import("./features/coach/pages/EnergySessionEditorPage.tsx"));
 const ProfilSportifPage         = lazy(() => import("./features/coach/pages/ProfilSportifPage.tsx"));
+const EnergyLibraryPage         = lazy(() => import("./features/coach/pages/EnergyLibraryPage.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -112,6 +113,8 @@ function AnimatedRoutes() {
             <Route path="coaches"  element={<CoachesListPage />} />
             <Route path="roadmap"  element={<RoadmapPage />} />
             <Route path="settings"     element={<SettingsPage />} />
+{/* Banque séances énergie (sans contexte athlète) */}
+            <Route path="energy-library"                  element={<EnergyLibraryPage />} />
             <Route path="energy-library/new"              element={<EnergySessionEditorPage />} />
             <Route path="energy-library/:sessionId/edit"  element={<EnergySessionEditorPage />} />
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { Zap, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { C } from "@/lib/theme";
 import { ROLE_COLOR, ROLE_LABEL_FR } from "@/features/coach/components/energy/SessionPreviewModal";
 import { formatS, formatTarget } from "@/lib/energy/formatTarget";
@@ -16,6 +16,12 @@ const KIND_COLOR: Record<string, string> = {
 const KIND_LABEL: Record<string, string> = {
   vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
   footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+};
+
+const KIND_LABELS: Record<string, string> = {
+  ...KIND_LABEL,
+  intermittent: "Intermittent", continu: "Continu",
+  coupures: "Coupures", sprint: "Sprint", circuit: "Circuit",
 };
 
 // ── Status pill ───────────────────────────────────────────────────────────────
@@ -128,6 +134,9 @@ function StepLogRow({ step, log, index }: { step: any; log: Record<string, Energ
   );
 }
 
+function rpeColor(v: number) { return v <= 4 ? C.g : v <= 7 ? C.o : C.r; }
+function rpeBg(v: number)    { return v <= 4 ? C.gS : v <= 7 ? C.oS : C.rS; }
+
 // ── Main card ─────────────────────────────────────────────────────────────────
 
 interface EnergyRetourCardProps {
@@ -137,11 +146,26 @@ interface EnergyRetourCardProps {
 export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
   const [expanded, setExpanded] = useState(false);
   const kc = KIND_COLOR[session.session_kind ?? ""] ?? "#6B7280";
-  const hasIntervals = session.intervals.length > 0;
-  const hasStepLog   = session.step_log !== null;
 
-  const doneCount    = hasStepLog ? Object.values(session.step_log!).filter(s => s.status === "done").length : null;
-  const partialCount = hasStepLog ? Object.values(session.step_log!).filter(s => s.status === "partial").length : null;
+  // Support both step_log (old) and block_logs (new)
+  const hasBlockLogs = session.block_logs && Object.keys(session.block_logs).length > 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hasIntervals = ((session as any).intervals?.length ?? 0) > 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hasStepLog   = (session as any).step_log !== null && (session as any).step_log !== undefined;
+
+  const blVals     = session.block_logs ? Object.values(session.block_logs) : [];
+  const doneCount  = blVals.filter((b) => b.done).length;
+  const totalCount = blVals.length;
+
+  const statusColor = session.partial ? "#3B8DF0" : session.completed ? "#22C993" : "#FB923C";
+  const statusLabel = session.partial
+    ? `✓ Partielle ${doneCount}/${totalCount}`
+    : session.completed ? "✓ Complétée" : "Non faite";
+
+  const blockEntries = session.block_logs
+    ? Object.entries(session.block_logs).filter(([, b]) => (b as { note?: string }).note)
+    : [];
 
   return (
     <div style={{ background: C.s1, border: "1px solid " + C.brd, borderRadius: 12, overflow: "hidden" }}>
@@ -150,17 +174,30 @@ export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
         onClick={() => setExpanded(v => !v)}
         style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", cursor: "pointer" }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1, flexWrap: "wrap" }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: kc + "20", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Zap size={12} color={kc} />
           </div>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {session.session_label}
           </span>
-          <StatusBadge status={session.status} />
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 8,
+            background: statusColor + "25", color: statusColor,
+          }}>
+            {statusLabel}
+          </span>
+          {session.rpe_score != null && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 8,
+              background: rpeBg(session.rpe_score), color: rpeColor(session.rpe_score),
+            }}>
+              RPE {session.rpe_score}/10
+            </span>
+          )}
           {session.session_kind && (
             <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: kc + "20", color: kc, flexShrink: 0 }}>
-              {KIND_LABEL[session.session_kind] ?? session.session_kind}
+              {KIND_LABELS[session.session_kind] ?? session.session_kind}
             </span>
           )}
         </div>
@@ -179,7 +216,7 @@ export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {session.duration_min != null && (
               <div style={{ fontSize: 11, color: C.tx2 }}>
-                Durée planifiée : <span style={{ fontWeight: 600, color: C.tx }}>{session.duration_min} min</span>
+                Durée : <span style={{ fontWeight: 600, color: C.tx }}>{session.duration_min} min</span>
               </div>
             )}
             {session.distance_m != null && (
@@ -187,15 +224,35 @@ export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
                 Distance : <span style={{ fontWeight: 600, color: C.tx }}>{(session.distance_m / 1000).toFixed(2)} km</span>
               </div>
             )}
-            {/* Step log summary */}
-            {hasStepLog && (
-              <div style={{ fontSize: 11, color: C.tx2 }}>
-                Blocs :
-                {doneCount! > 0 && <span style={{ fontWeight: 700, color: C.g, marginLeft: 4 }}>✓ {doneCount} fait{doneCount! > 1 ? "s" : ""}</span>}
-                {partialCount! > 0 && <span style={{ fontWeight: 700, color: "#F59E0B", marginLeft: 4 }}>~ {partialCount} partiel{partialCount! > 1 ? "s" : ""}</span>}
-              </div>
-            )}
           </div>
+
+          {/* Block completion summary (new system) */}
+          {hasBlockLogs && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {Object.entries(session.block_logs!).map(([id, b], i) => (
+                <span key={id} style={{
+                  fontSize: 10, padding: "2px 8px", borderRadius: 6,
+                  background: b.done ? C.g + "20" : C.s2,
+                  color: b.done ? C.g : C.tx3,
+                  display: "flex", alignItems: "center", gap: 4,
+                }}>
+                  {b.done && <Check size={9} />}
+                  Bloc {i + 1}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Block notes */}
+          {blockEntries.length > 0 && (
+            <div>
+              {blockEntries.map(([id, b], i) => (
+                <div key={id} style={{ fontSize: 11, color: C.tx2, marginBottom: 3 }}>
+                  <span style={{ color: C.tx3 }}>Bloc {i + 1} : </span>{(b as { note?: string }).note}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Note */}
           {session.note && (
@@ -205,7 +262,7 @@ export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
             </div>
           )}
 
-          {/* Intervals: planned + step log */}
+          {/* Intervals: planned + step log (old system) */}
           {hasIntervals && (
             <div>
               <div style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 6, display: "flex", gap: 10 }}>
@@ -213,14 +270,21 @@ export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
                 {hasStepLog && <span style={{ color: C.ac }}>avec réalisé</span>}
               </div>
               <div style={{ background: C.s2, borderRadius: 8, padding: "4px 2px", display: "flex", flexDirection: "column", gap: 2 }}>
-                {session.intervals.map((step, i) => (
-                  <StepLogRow key={(step as { id?: string }).id ?? i} step={step} log={session.step_log} index={i} />
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {((session as any).intervals as any[]).map((step, i) => (
+                  <StepLogRow
+                    key={(step as { id?: string }).id ?? i}
+                    step={step}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    log={(session as any).step_log ?? null}
+                    index={i}
+                  />
                 ))}
               </div>
             </div>
           )}
 
-          {!hasIntervals && !session.note && (
+          {!hasIntervals && !hasBlockLogs && !session.note && (
             <div style={{ fontSize: 12, color: C.tx3, textAlign: "center", padding: "8px 0" }}>Aucun détail disponible</div>
           )}
         </div>

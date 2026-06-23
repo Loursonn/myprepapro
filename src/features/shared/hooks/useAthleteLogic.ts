@@ -81,7 +81,6 @@ export function useAthleteLogic(d: LogicDeps) {
 
     const blockStart = new Date(blockConfig.startDate + "T12:00:00");
     const dow0 = blockStart.getDay();
-    // Snap blockStart to the Monday of its week
     const blockMonday = new Date(blockStart);
     blockMonday.setDate(blockStart.getDate() + (dow0 === 0 ? -6 : 1 - dow0));
 
@@ -157,9 +156,7 @@ export function useAthleteLogic(d: LogicDeps) {
             .gte("scheduled_date", weekStart)
             .lte("scheduled_date", weekEnd)
             .limit(1);
-
           const existing = rows?.[0] ?? null;
-
           if (existing) {
             if (existing.status !== "completed") {
               await supabase.from("workout_logs").update({ status: "completed" }).eq("id", existing.id);

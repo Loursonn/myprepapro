@@ -11,9 +11,6 @@ import {
 import { C } from "@/lib/theme";
 import type { EnergyInterval, IntervalRole, EnergyDuration, EnergyTarget } from "@/types/energy";
 import { genId } from "@/lib/energy/treeUtils";
-import PaceInput from "./PaceInput";
-import { deriveDistance, deriveDuration } from "@/lib/energy/computeDerivedMetrics";
-import { formatS } from "@/lib/energy/formatTarget";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -131,8 +128,6 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
   const [rangeMin, setRangeMin] = useState(0);
   const [rangeMax, setRangeMax] = useState(0);
   const [paceUnit, setPaceUnit] = useState<"min_per_km"|"kmh">("min_per_km");
-  const [paceMinS, setPaceMinS] = useState(0);  // seconds per km
-  const [paceMaxS, setPaceMaxS] = useState(0);  // seconds per km
   const [cadenceUnit, setCadenceUnit] = useState<"spm"|"rpm">("spm");
   const [testMetric, setTestMetric] = useState("VMA");
   const [textValue, setTextValue] = useState("");
@@ -157,9 +152,7 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
       setRangeMin(t.min); setRangeMax(t.max);
     }
     if (t.kind === "pace") {
-      setPaceUnit(t.unit);
-      setPaceMinS(t.min_s_per_unit);
-      setPaceMaxS(t.max_s_per_unit);
+      setRangeMin(t.min); setRangeMax(t.max); setPaceUnit(t.unit);
     }
     if (t.kind === "pace_test_pct" || t.kind === "power_test_pct") {
       setRangeMin(t.min); setRangeMax(t.max); setTestMetric(t.test_metric);
@@ -181,7 +174,7 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
       case "hr_zone": return { kind: "hr_zone", zone: hrZone };
       case "hr_pct":  return { kind: "hr_pct", min: rangeMin, max: rangeMax };
       case "hr_bpm":  return { kind: "hr_bpm", min: rangeMin, max: rangeMax };
-      case "pace":    return { kind: "pace", min_s_per_unit: paceMinS, max_s_per_unit: paceMaxS, unit: paceUnit };
+      case "pace":    return { kind: "pace", min: rangeMin, max: rangeMax, unit: paceUnit };
       case "pace_test_pct":  return { kind: "pace_test_pct", test_metric: testMetric, min: rangeMin, max: rangeMax };
       case "power":          return { kind: "power", min: rangeMin, max: rangeMax };
       case "power_test_pct": return { kind: "power_test_pct", test_metric: testMetric, min: rangeMin, max: rangeMax };
@@ -257,34 +250,6 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
           </div>
         )}
 
-        {/* Derived metrics */}
-        {(() => {
-          if (targetKind !== "pace" || paceUnit !== "min_per_km") return null;
-          const avgPaceS = (paceMinS + paceMaxS) / 2;
-          if (avgPaceS <= 0) return null;
-          if (durKind === "time") {
-            const durationS = parseMMSS(durValue);
-            if (durationS <= 0) return null;
-            const distM = deriveDistance(durationS, avgPaceS);
-            return (
-              <div style={{ background: C.s2, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: C.tx3, marginTop: 4 }}>
-                Calculé : <strong style={{ color: C.tx }}>{distM >= 1000 ? `${(distM / 1000).toFixed(2)} km` : `${distM} m`}</strong>
-              </div>
-            );
-          }
-          if (durKind === "distance") {
-            const distM = Number(durValue) || 0;
-            if (distM <= 0) return null;
-            const durS = deriveDuration(distM, avgPaceS);
-            return (
-              <div style={{ background: C.s2, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: C.tx3, marginTop: 4 }}>
-                Calculé : <strong style={{ color: C.tx }}>{formatS(durS)}</strong>
-              </div>
-            );
-          }
-          return null;
-        })()}
-
         {/* Target */}
         {label("Cible d'intensité")}
         <Select value={targetKind} onValueChange={(v) => setTargetKind(v as EnergyTarget["kind"])}>
@@ -320,38 +285,9 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
           )}
           {targetKind === "pace" && (
             <>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                {paceUnit === "min_per_km" ? (
-                  <>
-                    <PaceInput value={paceMinS} onChange={setPaceMinS} placeholder="4:00" />
-                    <span style={{ color: C.tx3, fontSize: 12 }}>–</span>
-                    <PaceInput value={paceMaxS} onChange={setPaceMaxS} placeholder="4:30" />
-                    <span style={{ color: C.tx3, fontSize: 12 }}>/km</span>
-                  </>
-                ) : (
-                  <>
-                    {/* kmh: display km/h, store as s/km */}
-                    <input
-                      type="number" step="0.1"
-                      style={{ ...inp.base, width: 80 }}
-                      value={paceMinS > 0 ? (3600 / paceMinS).toFixed(1) : ""}
-                      onChange={(e) => { const v = parseFloat(e.target.value); if (v > 0) setPaceMinS(Math.round(3600 / v)); }}
-                      placeholder="14.0"
-                    />
-                    <span style={{ color: C.tx3, fontSize: 12 }}>–</span>
-                    <input
-                      type="number" step="0.1"
-                      style={{ ...inp.base, width: 80 }}
-                      value={paceMaxS > 0 ? (3600 / paceMaxS).toFixed(1) : ""}
-                      onChange={(e) => { const v = parseFloat(e.target.value); if (v > 0) setPaceMaxS(Math.round(3600 / v)); }}
-                      placeholder="16.0"
-                    />
-                    <span style={{ color: C.tx3, fontSize: 12 }}>km/h</span>
-                  </>
-                )}
-              </div>
+              <RangeInputs min={rangeMin} max={rangeMax} onMin={setRangeMin} onMax={setRangeMax} />
               <Select value={paceUnit} onValueChange={(v) => setPaceUnit(v as "min_per_km"|"kmh")} >
-                <SelectTrigger style={{ background: C.s2, border: `1px solid ${C.brd}`, color: C.tx }}>
+                <SelectTrigger style={{ background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, marginTop: 6 }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

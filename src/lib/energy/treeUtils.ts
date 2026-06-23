@@ -79,7 +79,6 @@ export function duplicateStep(root: EnergyGroup, id: string): EnergyGroup {
       ...parent.children.slice(index + 1),
     ],
   };
-  if (parent.id === root.id) return newParent;
   return updateStep(root, newParent);
 }
 

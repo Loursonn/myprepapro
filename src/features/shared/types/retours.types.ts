@@ -95,11 +95,11 @@ export interface EnergySessionDetail {
   duration_min: number | null;   // energy_sessions.total_duration_s / 60
   distance_m: number | null;     // energy_sessions.total_distance_m
   session_kind: string | null;   // energy_sessions.session_kind
+  note: string | null;           // plain-text note (coach or athlete)
+  rpe_score: number | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   intervals: any[];              // EnergyStep[] — planned structure
   step_log: Record<string, EnergyStepLog> | null; // per-step completion
-  note: string | null;           // energy_session_assignments.notes (plain-text or extracted from JSON)
-  rpe_score: number | null;
   block_logs: Record<string, { done: boolean; note?: string }> | null;
 }
 

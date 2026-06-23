@@ -267,8 +267,7 @@ Toutes les mutations ont : optimistic update → rollback → toast sonner.
 | `/coach/energy-library/:id/edit` | `EnergySessionEditorPage` | Édition séance |
 | `/coach/athletes/:id/energy/new` | `EnergySessionEditorPage` | Création séance (pour athlète) |
 | `/coach/athletes/:id/energy/:sid/edit` | `EnergySessionEditorPage` | Édition séance (pour athlète) |
-| `/coach/athletes/:id/planning?view=month` | `CalendarMonthView` unifié | Calendrier muscu + énergie sur une seule vue |
-| `/coach/athletes/:id/programmation` → onglet Énergétique | `EnergyAssignmentList` | Liste séances assignées à l'athlète |
+| `/coach/athletes/:id/planning?type=energy` | `PlanningPage` onglet Énergétique | Calendrier assignations athlète |
 
 ---
 

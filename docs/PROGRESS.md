@@ -211,7 +211,7 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 - [x] /coach/energy-library/:id/edit — EnergySessionEditorPage
 - [x] /coach/athletes/:id/energy/new — EnergySessionEditorPage (avec athlète)
 - [x] /coach/athletes/:id/energy/:sid/edit — EnergySessionEditorPage
-- [x] /coach/athletes/:id/planning → vue mois unifiée (muscu + énergie)
+- [x] /coach/athletes/:id/planning?type=energy — PlanningPage onglet Énergétique
 
 ### Sidebar
 - [x] ⚡ Énergie dans CoachShell entre Banque et Tests
@@ -227,32 +227,6 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 - [x] npm run test — 1 test passant (tests energy sur branche séparée)
 - [x] npm run lint — aucune nouvelle erreur (pré-existantes non introduites)
 - [ ] Test manuel scénario complet (migration DB non déployée en prod — attente merge PRs)
-
----
-
-## ✅ NETTOYAGE SYSTÈME ÉNERGÉTIQUE LEGACY + CALENDRIER UNIFIÉ (2026-05-01)
-
-### PRIORITÉ 1 — Suppression système legacy
-
-- [x] EnergySessionEditor.tsx supprimé (référençait energy_session_config, tables droppées)
-- [x] EnergyExerciseBank.tsx supprimé (référençait energy_exercises, table droppée)
-- [x] EnergySessionLog.tsx supprimé (vue athlète legacy)
-- [x] CoachEnergyProgram supprimé de CoachComponents.jsx (référençait energy_session_config + app_data legacy)
-- [x] ProgrammationPage → sous-onglet Énergétique remplacé par EnergyAssignmentList (useEnergyAssignments)
-- [x] LibraryPage → sous-onglet Énergétique supprimé (banque = /coach/energy-library dans sidebar)
-- [x] LogSeancePage → EnergySessionLog remplacé par EnergyAthleteView (liste assignations à venir)
-
-### PRIORITÉ 2 — Calendrier Planning unifié
-
-- [x] useUnifiedCalendar : type "energy" ajouté, requête energy_session_assignments, useDeleteCalendarEvent gère "energy"
-- [x] CalendarMonthView : EventChip couleur par session_kind, ⚡ icône, légende + stats bar includes energy events
-- [x] DayDetailsDrawer : section séances énergétiques, vue détail basique energy events, TYPE_COLOR includes energy
-- [x] PlanningPage : Tabs muscu/energy SUPPRIMÉES → vue unique (saison/timeline/mois/summary), CalendarMonthView unifié
-
-### Validation
-- [x] npx tsc --noEmit — aucune erreur
-- [x] npm run build — succès (✓ built in 6.23s)
-- [x] npm run lint — aucune nouvelle erreur introduite
 
 ---
 

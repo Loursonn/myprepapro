@@ -22,13 +22,14 @@ import { Search } from "lucide-react";
 // ── Navigation items ──────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { icon: "🏠", label: "Home",       path: "/coach",          exact: true,  certified: false, roadmap: false },
-  { icon: "👥", label: "Athlètes",   path: "/coach/athletes", exact: false, certified: false, roadmap: false },
-  { icon: "📚", label: "Banque",     path: "/coach/library",  exact: false, certified: false, roadmap: false },
-  { icon: "🧪", label: "Tests",      path: "/coach/tests",    exact: false, certified: false, roadmap: false },
-  { icon: "🎖️", label: "Coachs",    path: "/coach/coaches",  exact: false, certified: true,  roadmap: false },
-  { icon: "🗺️", label: "Roadmap",   path: "/coach/roadmap",  exact: false, certified: false, roadmap: true  },
-  { icon: "⚙️", label: "Paramètres", path: "/coach/settings", exact: false, certified: false, roadmap: false },
+  { icon: "🏠", label: "Home",       path: "/coach",                 exact: true,  certified: false, roadmap: false },
+  { icon: "👥", label: "Athlètes",   path: "/coach/athletes",        exact: false, certified: false, roadmap: false },
+  { icon: "📚", label: "Banque",     path: "/coach/library",          exact: false, certified: false, roadmap: false },
+  { icon: "⚡", label: "Énergie",    path: "/coach/energy-library",   exact: false, certified: false, roadmap: false },
+  { icon: "🧪", label: "Tests",      path: "/coach/tests",            exact: false, certified: false, roadmap: false },
+  { icon: "🎖️", label: "Coachs",    path: "/coach/coaches",          exact: false, certified: true,  roadmap: false },
+  { icon: "🗺️", label: "Roadmap",   path: "/coach/roadmap",          exact: false, certified: false, roadmap: true  },
+  { icon: "⚙️", label: "Paramètres", path: "/coach/settings",        exact: false, certified: false, roadmap: false },
 ] as const;
 
 // ── Sidebar styles (CSS vars overridden via inline style on provider) ─────────
@@ -54,10 +55,9 @@ function CoachShellInner() {
 
   function isActive(path: string, exact: boolean) {
     if (exact) return location.pathname === path;
-    // Banque = library + energy-library (editor routes)
+    // Banque muscu = library only (energy-library has its own nav item)
     if (path === "/coach/library") {
-      return location.pathname.startsWith("/coach/library") ||
-             location.pathname.startsWith("/coach/energy-library");
+      return location.pathname.startsWith("/coach/library");
     }
     return location.pathname.startsWith(path);
   }

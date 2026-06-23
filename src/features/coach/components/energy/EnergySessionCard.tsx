@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { C } from "@/lib/theme";
 import SessionPreview from "./SessionPreview";
 import type { EnergySessionRow, EnergyGroup, SessionKind } from "@/types/energy";
-import { useVerifyEnergySession, useDeleteEnergySession, useCreateEnergySession, usePublishEnergySession } from "@/features/shared/hooks/useEnergySessions";
+import { useVerifyEnergySession, useDeleteEnergySession, useCreateEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import { formatSLong } from "@/lib/energy/formatTarget";
 import { expandIntervals, computeTotals } from "@/lib/energy";
 import { makeRootGroup } from "@/lib/energy/treeUtils";
@@ -35,13 +35,7 @@ const KIND_LABEL: Record<SessionKind | string, string> = {
 
 // ── Dot menu ──────────────────────────────────────────────────────────────────
 
-interface DotMenuItem {
-  label: string;
-  action: () => void;
-  color?: string;
-}
-
-function DotMenu({ items }: { items: DotMenuItem[] }) {
+function DotMenu({ onDuplicate, onDelete }: { onDuplicate: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -61,17 +55,20 @@ function DotMenu({ items }: { items: DotMenuItem[] }) {
         <div style={{
           position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 50,
           background: C.s1, border: `1px solid ${C.brd}`, borderRadius: 8,
-          minWidth: 160, boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+          minWidth: 140, boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           overflow: "hidden",
         }}>
-          {items.map(({ label, action, color }) => (
+          {[
+            { label: "Dupliquer", action: onDuplicate, color: C.tx },
+            { label: "Supprimer", action: onDelete, color: C.r },
+          ].map(({ label, action, color }) => (
             <button
               key={label}
               onClick={(e) => { e.stopPropagation(); action(); setOpen(false); }}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 padding: "9px 14px", background: "none", border: "none",
-                color: color ?? C.tx, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                color, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
@@ -92,26 +89,13 @@ interface Props {
   canEdit: boolean;
   canVerify: boolean;
   canDelete: boolean;
-  canPublish?: boolean;
-  userId?: string;
 }
 
-type ConfirmState = { message: string; onConfirm: () => void } | null;
-
-export default function EnergySessionCard({ session, canEdit, canVerify, canDelete, canPublish, userId }: Props) {
+export default function EnergySessionCard({ session, canEdit, canVerify, canDelete }: Props) {
   const navigate = useNavigate();
   const verifyMutation  = useVerifyEnergySession();
   const deleteMutation  = useDeleteEnergySession();
   const createMutation  = useCreateEnergySession();
-  const publishMutation = usePublishEnergySession();
-
-  const [confirm, setConfirm] = useState<ConfirmState>(null);
-
-  const isOwn = !!userId && session.created_by === userId;
-
-  function askConfirm(message: string, onConfirm: () => void) {
-    setConfirm({ message, onConfirm });
-  }
 
   // Build root group for preview
   const root: EnergyGroup = {
@@ -137,7 +121,7 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
   }
 
   async function handleDuplicate() {
-    void makeRootGroup(); // unused but kept to avoid tree-shaking side effects
+    const newRoot = makeRootGroup();
     await createMutation.mutateAsync({
       name: `${session.name} (copie)`,
       session_kind: session.session_kind,
@@ -145,20 +129,6 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
       structure_type: session.structure_type,
       intervals: session.intervals,
       notes: session.notes,
-      created_by: userId ?? null,
-    });
-  }
-
-  async function handleCopyToPersonal() {
-    if (!userId) return;
-    await createMutation.mutateAsync({
-      name: session.name,
-      session_kind: session.session_kind,
-      custom_kind: session.custom_kind,
-      structure_type: session.structure_type,
-      intervals: session.intervals,
-      notes: session.notes,
-      created_by: userId,
     });
   }
 
@@ -209,32 +179,12 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
               }}>
                 {kindLabel}
               </span>
-              {/* Public badge */}
-              {session.is_public && (
+              {/* Verified badge */}
+              {session.is_verified && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                  background: "#3B8DF020", color: "#3B8DF0",
+                  background: C.g + "20", color: C.g,
                 }}>
-                  🌐 Publique
-                </span>
-              )}
-              {/* Verified badge — cliquable pour dé-vérifier (coach certifié seulement) */}
-              {session.is_verified && (
-                <span
-                  onClick={canVerify ? (e) => {
-                    e.stopPropagation();
-                    askConfirm("Retirer la vérification de cette séance ?", () =>
-                      verifyMutation.mutate({ id: session.id, verify: false })
-                    );
-                  } : undefined}
-                  title={canVerify ? "Cliquer pour retirer la vérification" : undefined}
-                  style={{
-                    fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                    background: C.g + "20", color: C.g,
-                    cursor: canVerify ? "pointer" : "default",
-                    userSelect: "none",
-                  }}
-                >
                   ✓ Vérifiée
                 </span>
               )}
@@ -243,24 +193,6 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-            {/* Copier dans ma banque — séance d'un autre coach */}
-            {userId && !isOwn && (
-              <button
-                onClick={handleCopyToPersonal}
-                disabled={createMutation.isPending}
-                title="Copier dans mes séances"
-                style={{
-                  padding: "4px 8px", borderRadius: 6,
-                  border: `1px solid ${C.ac}50`, background: C.ac + "12",
-                  color: C.ac, fontSize: 10, fontWeight: 600,
-                  cursor: "pointer", fontFamily: "inherit",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {createMutation.isPending ? "…" : "+ Mes séances"}
-              </button>
-            )}
-            {/* Vérifier — coach certifié, séance non vérifiée */}
             {canVerify && !session.is_verified && (
               <button
                 onClick={() => verifyMutation.mutate({ id: session.id, verify: true })}
@@ -275,24 +207,10 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
                 Vérifier
               </button>
             )}
-            {/* Dot menu — dupliquer, publier/dépublier, supprimer */}
-            {(canDelete || canPublish) && (
+            {canDelete && (
               <DotMenu
-                items={[
-                  { label: "Dupliquer", action: handleDuplicate },
-                  ...(canPublish ? [{
-                    label: session.is_public
-                      ? "🔒 Retirer de la banque"
-                      : "🌐 Publier dans la banque",
-                    action: () => publishMutation.mutate({ id: session.id, publish: !session.is_public }),
-                    color: "#3B8DF0",
-                  }] : []),
-                  ...(canDelete ? [{
-                    label: "Supprimer",
-                    action: () => deleteMutation.mutate(session.id),
-                    color: C.r,
-                  }] : []),
-                ]}
+                onDuplicate={handleDuplicate}
+                onDelete={() => deleteMutation.mutate(session.id)}
               />
             )}
           </div>
@@ -321,43 +239,6 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
             <span>📏 {(totals.distanceM / 1000).toFixed(1)} km</span>
           )}
         </div>
-
-        {/* Confirmation inline */}
-        {confirm && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              marginTop: 4,
-              padding: "10px 12px",
-              background: "rgba(255,255,255,0.04)",
-              border: `1px solid ${C.brd}`,
-              borderRadius: 8,
-              display: "flex", alignItems: "center", gap: 8,
-            }}
-          >
-            <span style={{ flex: 1, fontSize: 11, color: C.tx2 }}>{confirm.message}</span>
-            <button
-              onClick={() => { confirm.onConfirm(); setConfirm(null); }}
-              style={{
-                padding: "4px 10px", borderRadius: 6, border: "none",
-                background: C.r, color: "#fff", fontSize: 11,
-                fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              Confirmer
-            </button>
-            <button
-              onClick={() => setConfirm(null)}
-              style={{
-                padding: "4px 10px", borderRadius: 6,
-                border: `1px solid ${C.brd}`, background: "none",
-                color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              Annuler
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

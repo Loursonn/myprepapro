@@ -15,11 +15,11 @@ import type { SessionKind } from "@/types/energy";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-type FilterTab = "mine" | "bank" | "verified";
+type FilterTab = "all" | "mine" | "verified";
 
 const FILTER_TABS: { value: FilterTab; label: string }[] = [
+  { value: "all",      label: "Toutes" },
   { value: "mine",     label: "Mes séances" },
-  { value: "bank",     label: "Banque publique" },
   { value: "verified", label: "Vérifiées" },
 ];
 
@@ -83,7 +83,7 @@ export default function EnergyLibraryPage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
-  const [tab, setTab]         = useState<FilterTab>("mine");
+  const [tab, setTab]         = useState<FilterTab>("all");
   const [kindFilter, setKind] = useState("all");
   const [search, setSearch]   = useState("");
 
@@ -97,8 +97,6 @@ export default function EnergyLibraryPage() {
 
     if (tab === "mine" && profile?.id) {
       list = list.filter((s) => s.created_by === profile.id);
-    } else if (tab === "bank") {
-      list = list.filter((s) => s.is_public);
     } else if (tab === "verified") {
       list = list.filter((s) => s.is_verified);
     }
@@ -129,7 +127,7 @@ export default function EnergyLibraryPage() {
           display: "flex", alignItems: "center", gap: 12,
         }}>
           <h1 style={{ fontSize: 18, fontWeight: 800, color: C.tx, margin: 0, flex: 1 }}>
-            {tab === "bank" ? "Banque publique" : tab === "verified" ? "Séances vérifiées" : "Mes séances"}
+            Banque énergétique
           </h1>
           <button
             onClick={() => navigate("/coach/energy-library/new")}
@@ -228,8 +226,6 @@ export default function EnergyLibraryPage() {
                 canEdit={isAuthor || isAdmin}
                 canVerify={canVerify}
                 canDelete={isAuthor || isAdmin}
-                canPublish={isAuthor || isAdmin || canVerify}
-                userId={profile?.id}
               />
             );
           })
