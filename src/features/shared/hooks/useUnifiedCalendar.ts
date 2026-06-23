@@ -260,12 +260,14 @@ export function useAssignWorkout() {
       athleteId,
       coachId,
       date,
+      weekNumber,
     }: {
       sessionId: string;
       sessionName: string;
       athleteId: string;
       coachId: string;
       date: string;
+      weekNumber?: number;
     }) => {
       const { error } = await supabase.from("workout_logs").insert({
         athlete_id:            athleteId,
@@ -275,6 +277,7 @@ export function useAssignWorkout() {
         scheduled_date:        date,
         original_scheduled_date: date,
         status:                "planned",
+        ...(weekNumber != null ? { week_number: weekNumber } : {}),
       });
       if (error) throw error;
     },

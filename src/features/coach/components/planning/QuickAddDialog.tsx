@@ -46,7 +46,7 @@ interface QuickAddDialogProps {
   date: Date | null;
   athleteId: string;
   coachId: string;
-  sessions: Array<{ id: string; name: string }>;
+  sessions: Array<{ id: string; name: string; multi_semaine?: boolean; nb_semaines?: number }>;
 }
 
 // ── Shared micro-styles ───────────────────────────────────────────────────────
@@ -82,6 +82,7 @@ export function QuickAddDialog({
   const [tab, setTab]                           = useState<Tab>(getSavedTab);
   const [selectedSession, setSelectedSession]   = useState("");
   const [sessionSearch, setSessionSearch]       = useState("");
+  const [selectedWeek, setSelectedWeek]         = useState(1);
   const [selectedEnergy, setSelectedEnergy]     = useState("");
   const [energySearch, setEnergySearch]         = useState("");
   const [testSearch, setTestSearch]             = useState("");
@@ -122,7 +123,7 @@ export function QuickAddDialog({
   }
 
   function handleClose() {
-    setSelectedSession(""); setSessionSearch("");
+    setSelectedSession(""); setSessionSearch(""); setSelectedWeek(1);
     setSelectedEnergy(""); setEnergySearch("");
     setTestSearch(""); setSelectedTestDef(null); setTestTitle(""); setTestType("musculation");
     onClose();
@@ -145,7 +146,10 @@ export function QuickAddDialog({
       const sess = sessions.find(s => s.id === selectedSession);
       if (!sess) return;
       assignWorkout(
-        { sessionId: sess.id, sessionName: sess.name, athleteId, coachId, date: dateStr },
+        {
+          sessionId: sess.id, sessionName: sess.name, athleteId, coachId, date: dateStr,
+          weekNumber: sess.multi_semaine ? selectedWeek : undefined,
+        },
         { onSuccess: handleClose },
       );
     } else if (tab === "energy") {
@@ -287,7 +291,7 @@ export function QuickAddDialog({
                     return (
                       <button
                         key={s.id}
-                        onClick={() => setSelectedSession(active ? "" : s.id)}
+                        onClick={() => { setSelectedSession(active ? "" : s.id); setSelectedWeek(1); }}
                         style={itemBtn(active, "#7B6FFF")}
                       >
                         {active && "✓ "}{s.name}
@@ -295,6 +299,31 @@ export function QuickAddDialog({
                     );
                   })}
                 </div>
+                {/* Week selector for multi-semaine sessions */}
+                {(() => {
+                  const sess = sessions.find(s => s.id === selectedSession);
+                  if (!sess?.multi_semaine || !sess.nb_semaines || sess.nb_semaines <= 1) return null;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, background: "rgba(123,111,255,0.07)", border: "1px solid rgba(123,111,255,0.2)" }}>
+                      <span style={{ fontSize: 11, color: "#7B6FFF", fontWeight: 700, flexShrink: 0 }}>Semaine</span>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {Array.from({ length: sess.nb_semaines }, (_, i) => i + 1).map(w => (
+                          <button
+                            key={w}
+                            onClick={() => setSelectedWeek(w)}
+                            style={{
+                              width: 26, height: 26, borderRadius: 6, fontSize: 11, fontWeight: 700,
+                              border: "1px solid " + (selectedWeek === w ? "#7B6FFF" : "rgba(123,111,255,0.3)"),
+                              background: selectedWeek === w ? "#7B6FFF" : "transparent",
+                              color: selectedWeek === w ? "#fff" : "#7B6FFF",
+                              cursor: "pointer", fontFamily: "inherit",
+                            }}
+                          >{w}</button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
 

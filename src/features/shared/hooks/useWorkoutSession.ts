@@ -138,7 +138,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
       const { data } = await supabase
         .from("workout_logs")
         .select(
-          "id, session_id, session_name, status, rpe_score, scheduled_date, athlete_modifications, microcycle_id, original_scheduled_date, rescheduled_by_athlete"
+          "id, session_id, session_name, status, rpe_score, scheduled_date, athlete_modifications, microcycle_id, original_scheduled_date, rescheduled_by_athlete, week_number"
         )
         .eq("id", workoutLogId!)
         .maybeSingle();
@@ -183,7 +183,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
   });
 
   return useMemo(() => {
-    const weekNumber = microcycle?.week_number ?? 1;
+    const weekNumber = wlog?.week_number ?? microcycle?.week_number ?? 1;
     const isLoading = loadingLog || loadingSessions || (needsLegacy && loadingLegacy);
 
     const empty: WorkoutSessionResult = {

@@ -17,12 +17,14 @@ export function usePlaceSession() {
       coachId,
       date,
       cycleId,
+      weekNumber,
     }: {
       session: ProgSession;
       athleteId: string;
       coachId: string;
       date: string;
       cycleId?: string;
+      weekNumber?: number;
     }) => {
       const shouldRecur =
         session.recurrence === "weekly" &&
@@ -74,6 +76,7 @@ export function usePlaceSession() {
         scheduled_date: date,
         original_scheduled_date: date,
         status: "planned",
+        ...(weekNumber != null ? { week_number: weekNumber } : {}),
       });
       if (error) throw error;
     },
