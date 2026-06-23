@@ -7,9 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CompetitionFormModal } from "@/features/coach/components/planning/CompetitionFormModal";
 
-// Vue Saison
-import { PlanningOverview } from "@/components/coach/PlanningOverview";
-
 // Vue Frise
 import { TimelineView } from "@/features/coach/components/planning/TimelineView";
 import { CalendarMonthView } from "@/features/coach/components/planning/CalendarMonthView";
@@ -21,14 +18,14 @@ import { EnergyCalendarView } from "@/features/coach/components/energy/EnergyCal
 
 // ── View types ────────────────────────────────────────────────────────────────
 
-type PlanView = "season" | "timeline" | "month" | "summary" | "competitions";
+type PlanView = "timeline" | "month" | "summary" | "competitions";
 type PlanType = "muscu" | "energy";
 
 // ── PlanningPage ──────────────────────────────────────────────────────────────
 
 export default function PlanningPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const view = (searchParams.get("view") as PlanView) ?? "season";
+  const view = (searchParams.get("view") as PlanView) ?? "timeline";
   const planType = (searchParams.get("type") as PlanType) ?? "muscu";
 
   const { user } = useAuth();
@@ -105,27 +102,6 @@ export default function PlanningPage() {
 
           {/* ── MUSCULATION TAB ─────────────────────────────────────────────── */}
           <TabsContent value="muscu" style={{ outline: "none" }}>
-            {/* ── SAISON ────────────────────────────────────────────────────── */}
-            {view === "season" && (
-              <>
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-                  <button
-                    onClick={() => setShowCompForm(true)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 14px", borderRadius: 10,
-                      border: "1px solid " + C.coach + "50",
-                      background: C.coachS, color: C.coach,
-                      fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                    }}
-                  >
-                    🏆 + Compétition
-                  </button>
-                </div>
-                <PlanningOverview athleteId={athleteId} C={C} />
-              </>
-            )}
-
             {/* ── FRISE ─────────────────────────────────────────────────────── */}
             {view === "timeline" && (
               <TimelineView athleteId={athleteId} />
