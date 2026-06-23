@@ -60,7 +60,12 @@ export function usePlaceSession() {
             });
 
           if (logs.length > 0) {
-            const { error } = await supabase.from("workout_logs").insert(logs);
+            const { error } = await supabase
+              .from("workout_logs")
+              .upsert(logs, {
+                onConflict: "athlete_id,session_id,original_scheduled_date",
+                ignoreDuplicates: true,
+              });
             if (error) throw error;
           }
           return;
@@ -68,7 +73,7 @@ export function usePlaceSession() {
       }
 
       // Single placement
-      const { error } = await supabase.from("workout_logs").insert({
+      const { error } = await supabase.from("workout_logs").upsert({
         athlete_id: athleteId,
         coach_id: coachId,
         session_id: session.id,
@@ -77,6 +82,9 @@ export function usePlaceSession() {
         original_scheduled_date: date,
         status: "planned",
         ...(weekNumber != null ? { week_number: weekNumber } : {}),
+      }, {
+        onConflict: "athlete_id,session_id,original_scheduled_date",
+        ignoreDuplicates: true,
       });
       if (error) throw error;
     },
