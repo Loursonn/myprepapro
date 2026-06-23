@@ -18,6 +18,7 @@ import type { AthleteModifications, Exercise, WeekConfig } from "../types/athlet
 export interface WorkoutExerciceData {
   id: string;
   exercise_name: string;
+  muscle?: string;
   params: ExerciceParams;
   mode: "classique" | "methode";
   methode_id?: string;
@@ -116,6 +117,7 @@ function buildLegacyBlocs(
       return {
         id: ex.id,
         exercise_name: ex.name,
+        muscle: ex.target,
         params: weekConfigToParams(wc, wc?.sets ?? 3),
         mode: "classique" as const,
       };
@@ -136,7 +138,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
       const { data } = await supabase
         .from("workout_logs")
         .select(
-          "id, session_id, session_name, status, rpe_score, scheduled_date, athlete_modifications, microcycle_id, original_scheduled_date, rescheduled_by_athlete"
+          "id, session_id, session_name, status, rpe_score, scheduled_date, athlete_modifications, microcycle_id, original_scheduled_date, rescheduled_by_athlete, week_number"
         )
         .eq("id", workoutLogId!)
         .maybeSingle();
@@ -180,8 +182,27 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
     },
   });
 
+  // Compute week number as the chronological rank of this log among all logs
+  // for the same (athlete, session). 1st occurrence = week 1, 2nd = week 2, etc.
+  // Only used when week_number not explicitly set and no microcycle link.
+  const needsRank = !!wlog && wlog.week_number == null && !wlog.microcycle_id;
+  const { data: sessionRank } = useQuery({
+    queryKey: ["session-rank", athleteId, wlog?.session_id, wlog?.scheduled_date],
+    enabled: needsRank,
+    staleTime: 300_000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("workout_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("athlete_id", athleteId!)
+        .eq("session_id", wlog!.session_id)
+        .lte("scheduled_date", wlog!.scheduled_date);
+      return count ?? 1;
+    },
+  });
+
   return useMemo(() => {
-    const weekNumber = microcycle?.week_number ?? 1;
+    const weekNumber = wlog?.week_number ?? microcycle?.week_number ?? sessionRank ?? 1;
     const isLoading = loadingLog || loadingSessions || (needsLegacy && loadingLegacy);
 
     const empty: WorkoutSessionResult = {
@@ -255,10 +276,14 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
 
           // session.multi_semaine OR ex.multi_semaine → params stored as Record<weekKey, ExerciceParams>
           const effectiveMulti = progSession.multi_semaine || (ex.multi_semaine ?? false);
+          // Detect Record by presence of at least one numeric string key (week number).
+          // Using numeric key detection is more robust than checking absence of 'nb_series'
+          // because mixed objects (flat params accidentally spread into a Record) would
+          // have both 'nb_series' and numeric keys — we still want to treat them as Records.
           const isRecord =
             typeof ex.params === "object" &&
             ex.params !== null &&
-            !("nb_series" in ex.params);
+            Object.keys(ex.params).some((k) => /^\d+$/.test(k));
 
           if (effectiveMulti && isRecord) {
             const paramsMap = ex.params as Record<string, ExerciceParams>;
@@ -279,6 +304,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
           return {
             id: ex.id,
             exercise_name: ex.exercise_name,
+            muscle: (ex as { muscle?: string }).muscle,
             params: { ...params, nb_series: effectiveNbSeries },
             mode: ex.mode,
             methode_id: ex.methode_id,
@@ -302,5 +328,5 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
       rescheduledByAthlete: wlog.rescheduled_by_athlete ?? false,
       originalScheduledDate: wlog.original_scheduled_date ?? null,
     };
-  }, [wlog, progSessions, microcycle, loadingLog, loadingSessions, needsLegacy, loadingLegacy, legacyExosRows]);
+  }, [wlog, progSessions, microcycle, loadingLog, loadingSessions, needsLegacy, loadingLegacy, legacyExosRows, sessionRank]);
 }

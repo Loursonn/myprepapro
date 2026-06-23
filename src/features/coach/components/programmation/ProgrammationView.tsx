@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { C } from "@/lib/theme"
-import { Plus, Pencil, X, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, Pencil, X, ChevronDown, ChevronUp, BarChart2 } from "lucide-react"
 import { useProgrammation } from "./hooks/useProgrammation"
 import { useUpdateProgrammation } from "./hooks/useUpdateProgrammation"
 import { usePlaceSession } from "@/features/shared/hooks/usePlaceSession"
@@ -17,6 +17,7 @@ import type { ProgSession } from "./types"
 import { SessionForm } from "./SessionForm"
 import { SessionBlocEditor } from "./SessionBlocEditor"
 import { CardSkeleton } from "@/features/shared/components/skeletons"
+import { ProgSessionWeekDrawer } from "./ProgSessionWeekDrawer"
 
 const VIOLET = "#7B6FFF"
 const VIOLET_S = "rgba(123,111,255,0.12)"
@@ -41,10 +42,11 @@ interface SessionCardProps {
   onEdit: () => void
   onDelete: () => void
   onChange: (updated: ProgSession) => void
+  onOpenWeekDrawer: () => void
   dragHandleProps?: Record<string, unknown>
 }
 
-function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, onDelete, onChange, dragHandleProps }: SessionCardProps) {
+function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, onDelete, onChange, onOpenWeekDrawer, dragHandleProps }: SessionCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showPlace, setShowPlace] = useState(false)
   const [placeDate, setPlaceDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -124,6 +126,12 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
             onClick={onEdit}
             style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
           ><Pencil size={12} /></button>
+
+          <button
+            onClick={onOpenWeekDrawer}
+            title="Prévu / Réalisé / S+1"
+            style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + VIOLET + "50", background: VIOLET_S, color: VIOLET, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          ><BarChart2 size={12} /></button>
 
           <button
             onClick={() => setShowPlace(p => !p)}
@@ -267,6 +275,7 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
   const [isAddingSession, setIsAddingSession] = useState(false)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [openSessionId, setOpenSessionId] = useState<string | null>(null)
+  const [weekDrawerSession, setWeekDrawerSession] = useState<ProgSession | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>()
   const hasPendingSave = useRef(false)
 
@@ -429,11 +438,22 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
                 }}
                 onDelete={() => deleteSession(session.id)}
                 onChange={updated => updateSessionContent(session.id, updated)}
+                onOpenWeekDrawer={() => setWeekDrawerSession(session)}
               />
             )
           })}
         </SortableContext>
       </DndContext>
+
+      {weekDrawerSession && (
+        <ProgSessionWeekDrawer
+          session={weekDrawerSession}
+          cycleId={cycleId}
+          athleteId={athleteId}
+          onChange={updated => updateSessionContent(weekDrawerSession.id, updated)}
+          onClose={() => setWeekDrawerSession(null)}
+        />
+      )}
     </div>
   )
 }

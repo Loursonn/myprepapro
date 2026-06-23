@@ -17,12 +17,14 @@ export function usePlaceSession() {
       coachId,
       date,
       cycleId,
+      weekNumber,
     }: {
       session: ProgSession;
       athleteId: string;
       coachId: string;
       date: string;
       cycleId?: string;
+      weekNumber?: number;
     }) => {
       const shouldRecur =
         session.recurrence === "weekly" &&
@@ -58,7 +60,12 @@ export function usePlaceSession() {
             });
 
           if (logs.length > 0) {
-            const { error } = await supabase.from("workout_logs").insert(logs);
+            const { error } = await supabase
+              .from("workout_logs")
+              .upsert(logs, {
+                onConflict: "athlete_id,session_id,original_scheduled_date",
+                ignoreDuplicates: true,
+              });
             if (error) throw error;
           }
           return;
@@ -66,7 +73,7 @@ export function usePlaceSession() {
       }
 
       // Single placement
-      const { error } = await supabase.from("workout_logs").insert({
+      const { error } = await supabase.from("workout_logs").upsert({
         athlete_id: athleteId,
         coach_id: coachId,
         session_id: session.id,
@@ -74,6 +81,10 @@ export function usePlaceSession() {
         scheduled_date: date,
         original_scheduled_date: date,
         status: "planned",
+        ...(weekNumber != null ? { week_number: weekNumber } : {}),
+      }, {
+        onConflict: "athlete_id,session_id,original_scheduled_date",
+        ignoreDuplicates: true,
       });
       if (error) throw error;
     },

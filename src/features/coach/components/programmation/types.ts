@@ -35,6 +35,7 @@ export interface Exercice {
 export interface Bloc {
   id: string
   name: string
+  color?: string
   series_mode: 'libre' | 'fixe'
   series_count?: number
   timing_mode: 'libre' | 'depart' | 'repos'
