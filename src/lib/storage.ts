@@ -60,6 +60,7 @@ export async function sLoad<T>(k: string, fb: T, aid: string | null | undefined)
 
 export async function sSave(k: string, v: unknown, aid: string | null | undefined): Promise<void> {
   if (!aid) return;
+  if (v === null || v === undefined) return;
   const { error } = await db.from("app_data").upsert(
     { athlete_id: aid, key: k, value: v, updated_at: new Date().toISOString() },
     { onConflict: "athlete_id,key" }
