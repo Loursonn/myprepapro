@@ -2281,40 +2281,99 @@ export default function WorkoutDetailPage() {
             return (
               <div key={bloc.id}>
                 {/* Bloc header */}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    marginBottom: 8,
-                    padding: "5px 10px 5px 12px",
-                    borderRadius: 8,
-                    background: hexToRgba(bColor, 0.08),
-                    borderLeft: `3px solid ${bColor}`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 5,
-                      background: hexToRgba(bColor, 0.18),
-                      color: bColor,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 9,
-                      fontWeight: 900,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {String.fromCharCode(65 + blocIdx)}
-                  </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: bColor }}>
-                    {bloc.name || `Bloc ${blocIdx + 1}`}
-                  </div>
-                  {timing && <BadgeTag label={timing} color={bColor} />}
-                </div>
+                {(() => {
+                  const departKey = `depart:${bloc.id}`;
+                  const isDepart = bloc.timing_mode === "depart" && restSec > 0;
+                  const isRunning = isDepart && restActiveKey === departKey && restLeft !== null;
+                  const urgent = isRunning && restLeft !== null && restLeft <= 10;
+
+                  function fmt(s: number) {
+                    const m = Math.floor(s / 60);
+                    const sec = s % 60;
+                    return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${s}s`;
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 8,
+                        padding: "5px 10px 5px 12px",
+                        borderRadius: 8,
+                        background: hexToRgba(bColor, 0.08),
+                        borderLeft: `3px solid ${bColor}`,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 5,
+                          background: hexToRgba(bColor, 0.18),
+                          color: bColor,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 9,
+                          fontWeight: 900,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {String.fromCharCode(65 + blocIdx)}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: bColor, flex: 1, minWidth: 0 }}>
+                        {bloc.name || `Bloc ${blocIdx + 1}`}
+                      </div>
+                      {timing && <BadgeTag label={timing} color={bColor} />}
+                      {/* Depart inline chrono */}
+                      {isDepart && canEdit && (
+                        isRunning ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                            <span style={{
+                              fontSize: 13,
+                              fontWeight: 900,
+                              color: urgent ? ROSE : bColor,
+                              fontVariantNumeric: "tabular-nums",
+                              minWidth: 36,
+                              textAlign: "right" as const,
+                              transition: "color 300ms",
+                            }}>
+                              {fmt(restLeft!)}
+                            </span>
+                            <button
+                              onClick={stopRest}
+                              style={{
+                                width: 22, height: 22, borderRadius: 6,
+                                border: `1px solid ${hexToRgba(ROSE, 0.5)}`,
+                                background: hexToRgba(ROSE, 0.12),
+                                color: ROSE, fontSize: 11, fontWeight: 700,
+                                cursor: "pointer", fontFamily: "inherit",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                padding: 0, flexShrink: 0,
+                              }}
+                            >✕</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startRest(restSec, null, departKey, true)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              padding: "3px 8px", borderRadius: 6,
+                              border: `1px solid ${hexToRgba(bColor, 0.4)}`,
+                              background: hexToRgba(bColor, 0.12),
+                              color: bColor, fontSize: 11, fontWeight: 700,
+                              cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                            }}
+                          >
+                            ▶ {fmt(restSec)}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Exercices — colored background groups them visually as superset */}
                 <div
