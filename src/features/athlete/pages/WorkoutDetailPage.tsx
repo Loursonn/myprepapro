@@ -332,7 +332,7 @@ function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCom
               : checkState === "skip"
               ? ROSE
               : C.tx3,
-          fontSize: checkState === "empty" ? 11 : 14,
+          fontSize: 14,
           fontWeight: 700,
           cursor: isCompleted ? "default" : "pointer",
           fontFamily: "inherit",
@@ -343,10 +343,86 @@ function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCom
           flexShrink: 0,
           justifySelf: "center" as const,
           minWidth: 32,
+          opacity: checkState === "empty" ? 0.35 : 1,
         }}
       >
-        {checkState === "done" ? "✓" : checkState === "skip" ? "✕" : setIdx + 1}
+        {checkState === "skip" ? "✕" : "✓"}
       </button>
+    </div>
+  );
+}
+
+// ── InlineRestStrip ────────────────────────────────────────────────────────────
+
+interface InlineRestStripProps {
+  myKey: string;
+  seconds: number;
+  label: string;
+  activeKey: string | null;
+  left: number | null;
+  total: number;
+  onStart: () => void;
+  onStop: () => void;
+  canEdit: boolean;
+}
+
+function InlineRestStrip({ myKey, seconds, label, activeKey, left, total, onStart, onStop, canEdit }: InlineRestStripProps) {
+  if (!canEdit || seconds <= 0) return null;
+  const isActive = activeKey === myKey && left !== null;
+
+  function fmt(s: number): string {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}:${String(sec).padStart(2, "0")}` : `${s}s`;
+  }
+
+  if (isActive) {
+    const pct = Math.max(0, 1 - left! / total);
+    const urgent = left! <= 10;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0 2px" }}>
+        <span style={{ fontSize: 9, color: urgent ? ROSE : VIOLET, flexShrink: 0 }}>⏱</span>
+        <div style={{ flex: 1, height: 3, background: C.brd, borderRadius: 2, overflow: "hidden" }}>
+          <div style={{
+            height: "100%",
+            width: `${pct * 100}%`,
+            background: urgent ? ROSE : VIOLET,
+            borderRadius: 2,
+            transition: "width 1s linear",
+          }} />
+        </div>
+        <span style={{ fontSize: 10, fontWeight: 700, color: urgent ? ROSE : VIOLET, minWidth: 28, textAlign: "right" as const }}>
+          {fmt(left!)}
+        </span>
+        <button
+          onClick={onStop}
+          style={{
+            padding: "2px 6px", borderRadius: 4, border: "none",
+            background: hexToRgba(ROSE, 0.15), color: ROSE,
+            fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0 1px", opacity: 0.45 }}>
+      <div style={{ flex: 1, height: 1, background: C.brdL }} />
+      <span style={{ fontSize: 9, color: C.tx3, whiteSpace: "nowrap" as const }}>
+        ⏱ {fmt(seconds)} {label}
+      </span>
+      <button
+        onClick={onStart}
+        style={{
+          width: 18, height: 18, borderRadius: 4, border: `1px solid ${C.brdL}`,
+          background: "transparent", color: C.tx3,
+          fontSize: 9, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 0,
+        }}
+      >▶</button>
+      <div style={{ flex: 1, height: 1, background: C.brdL }} />
     </div>
   );
 }
@@ -364,13 +440,21 @@ interface ExerciceCardProps {
   comment: string;
   canEdit: boolean;
   blocColor: string;
+  blocRestSec: number;
+  blocRestLabel: string;
+  restActiveKey: string | null;
+  restLeft: number | null;
+  restTotal: number;
   onToggle: (setIdx: number) => void;
   onOpenPad: (setIdx: number, field: "kg" | "reps" | "rir") => void;
   onAddSet: () => void;
   onCommentChange: (c: string) => void;
+  onStartRest: (key: string, sec: number) => void;
+  onStopRest: () => void;
 }
 
 function ExerciceCard({
+  exId,
   name,
   muscle,
   prescription,
@@ -380,14 +464,24 @@ function ExerciceCard({
   comment,
   canEdit,
   blocColor,
+  blocRestSec,
+  blocRestLabel,
+  restActiveKey,
+  restLeft,
+  restTotal,
   onToggle,
   onOpenPad,
   onAddSet,
   onCommentChange,
+  onStartRest,
+  onStopRest,
 }: ExerciceCardProps) {
   const [showComment, setShowComment] = useState(false);
   const isPDC = params.charge_unit === "PDC";
   const doneSets = sets.filter((s) => s.done).length;
+  // Cluster → use intra-cluster recup_sec; otherwise bloc timing
+  const restSec = params.cluster ? params.cluster.recup_sec : blocRestSec;
+  const restLabel = params.cluster ? "récup." : blocRestLabel;
   const totalSets = sets.length;
   const allDone = doneSets === totalSets && totalSets > 0;
 
@@ -471,18 +565,33 @@ function ExerciceCard({
 
       {/* Set rows */}
       <div style={{ padding: "0 14px" }}>
-        {sets.map((s, i) => (
-          <SetRow
-            key={i}
-            setIdx={i}
-            state={s}
-            prevStr={prevSets[i] ?? "—"}
-            chargeUnit={params.charge_unit}
-            onToggle={() => onToggle(i)}
-            onOpenPad={(field) => onOpenPad(i, field)}
-            isCompleted={!canEdit}
-          />
-        ))}
+        {sets.map((s, i) => {
+          const stripKey = `${exId}:${i}`;
+          return (
+            <div key={i}>
+              <SetRow
+                setIdx={i}
+                state={s}
+                prevStr={prevSets[i] ?? "—"}
+                chargeUnit={params.charge_unit}
+                onToggle={() => onToggle(i)}
+                onOpenPad={(field) => onOpenPad(i, field)}
+                isCompleted={!canEdit}
+              />
+              <InlineRestStrip
+                myKey={stripKey}
+                seconds={restSec}
+                label={restLabel}
+                activeKey={restActiveKey}
+                left={restLeft}
+                total={restTotal}
+                onStart={() => onStartRest(stripKey, restSec)}
+                onStop={onStopRest}
+                canEdit={canEdit}
+              />
+            </div>
+          );
+        })}
       </div>
 
       {/* Comment + bonus set */}
@@ -1201,6 +1310,7 @@ export default function WorkoutDetailPage() {
   const [restLeft, setRestLeft] = useState<number | null>(null);
   const [restTotal, setRestTotal] = useState(REST_DEFAULT);
   const [restNextInfo, setRestNextInfo] = useState<string | null>(null);
+  const [restActiveKey, setRestActiveKey] = useState<string | null>(null);
   const [showFinish, setShowFinish] = useState(false);
   const [showRpe, setShowRpe] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -1254,13 +1364,15 @@ export default function WorkoutDetailPage() {
   const stopRest = useCallback(() => {
     clearInterval(restRef.current);
     setRestLeft(null);
+    setRestActiveKey(null);
   }, []);
 
-  const startRest = useCallback((seconds: number, nextInfo: string | null) => {
+  const startRest = useCallback((seconds: number, nextInfo: string | null, activeKey?: string) => {
     clearInterval(restRef.current);
     setRestTotal(seconds);
     setRestLeft(seconds);
     setRestNextInfo(nextInfo);
+    setRestActiveKey(activeKey ?? null);
     restRef.current = setInterval(() => {
       setRestLeft((prev) => {
         if (prev === null || prev <= 1) {
@@ -1296,7 +1408,7 @@ export default function WorkoutDetailPage() {
           if (!s.reps && prevStr) s.reps = parsePrevVal(prevStr, "reps");
           s.done = true;
           s.skipped = false;
-          startRest(restSec, nextInfo);
+          startRest(restSec, nextInfo, `${exId}:${setIdx}`);
         } else if (s.done) {
           s.done = false;
           s.skipped = true;
@@ -1693,6 +1805,11 @@ export default function WorkoutDetailPage() {
                         comment={localMods.exerciceComments?.[ex.id] ?? ""}
                         canEdit={canEdit}
                         blocColor={bColor}
+                        blocRestSec={restSec}
+                        blocRestLabel={bloc.timing_mode === "depart" ? "départ" : "repos"}
+                        restActiveKey={restActiveKey}
+                        restLeft={restLeft}
+                        restTotal={restTotal}
                         onToggle={(setIdx) =>
                           toggleAndPersist(ex.id, setIdx, restSec, nextInfo)
                         }
@@ -1701,6 +1818,8 @@ export default function WorkoutDetailPage() {
                         }
                         onAddSet={() => addBonusSet(ex.id)}
                         onCommentChange={(c) => updateExComment(ex.id, c)}
+                        onStartRest={(key, sec) => startRest(sec, null, key)}
+                        onStopRest={stopRest}
                       />
                     );
                   })}
