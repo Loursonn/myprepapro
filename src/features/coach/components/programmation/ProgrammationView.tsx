@@ -50,7 +50,6 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showPlace, setShowPlace] = useState(false)
   const [placeDate, setPlaceDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [placeWeek, setPlaceWeek] = useState(1)
   const { user } = useAuth()
   const placeSession = usePlaceSession()
 
@@ -195,53 +194,30 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {session.multi_semaine && session.nb_semaines && session.nb_semaines > 1 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 11, color: C.tx3, flexShrink: 0 }}>Semaine :</span>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {Array.from({ length: session.nb_semaines }, (_, i) => i + 1).map(w => (
-                      <button
-                        key={w}
-                        onClick={() => setPlaceWeek(w)}
-                        style={{
-                          width: 28, height: 28, borderRadius: 6, fontSize: 11, fontWeight: 700,
-                          border: "1px solid " + (placeWeek === w ? VIOLET : C.brdL),
-                          background: placeWeek === w ? VIOLET_S : "transparent",
-                          color: placeWeek === w ? VIOLET : C.tx3,
-                          cursor: "pointer", fontFamily: "inherit",
-                        }}
-                      >{w}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="date"
-                  value={placeDate}
-                  onChange={e => setPlaceDate(e.target.value)}
-                  style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none" }}
-                />
-                <button
-                  onClick={async () => {
-                    if (!athleteId || !user?.id || !placeDate) return
-                    await placeSession.mutateAsync({
-                      session,
-                      athleteId,
-                      coachId: user.id,
-                      date: placeDate,
-                      cycleId,
-                      weekNumber: session.multi_semaine ? placeWeek : undefined,
-                    })
-                    setShowPlace(false)
-                  }}
-                  disabled={placeSession.isPending}
-                  style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                >
-                  {placeSession.isPending ? "…" : "Placer"}
-                </button>
-              </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="date"
+                value={placeDate}
+                onChange={e => setPlaceDate(e.target.value)}
+                style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+              />
+              <button
+                onClick={async () => {
+                  if (!athleteId || !user?.id || !placeDate) return
+                  await placeSession.mutateAsync({
+                    session,
+                    athleteId,
+                    coachId: user.id,
+                    date: placeDate,
+                    cycleId,
+                  })
+                  setShowPlace(false)
+                }}
+                disabled={placeSession.isPending}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                {placeSession.isPending ? "…" : "Placer"}
+              </button>
             </div>
           )}
           <button

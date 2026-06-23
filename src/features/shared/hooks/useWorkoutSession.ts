@@ -182,8 +182,27 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
     },
   });
 
+  // Compute week number as the chronological rank of this log among all logs
+  // for the same (athlete, session). 1st occurrence = week 1, 2nd = week 2, etc.
+  // Only used when week_number not explicitly set and no microcycle link.
+  const needsRank = !!wlog && wlog.week_number == null && !wlog.microcycle_id;
+  const { data: sessionRank } = useQuery({
+    queryKey: ["session-rank", athleteId, wlog?.session_id, wlog?.scheduled_date],
+    enabled: needsRank,
+    staleTime: 300_000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("workout_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("athlete_id", athleteId!)
+        .eq("session_id", wlog!.session_id)
+        .lte("scheduled_date", wlog!.scheduled_date);
+      return count ?? 1;
+    },
+  });
+
   return useMemo(() => {
-    const weekNumber = wlog?.week_number ?? microcycle?.week_number ?? 1;
+    const weekNumber = wlog?.week_number ?? microcycle?.week_number ?? sessionRank ?? 1;
     const isLoading = loadingLog || loadingSessions || (needsLegacy && loadingLegacy);
 
     const empty: WorkoutSessionResult = {
@@ -305,5 +324,5 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
       rescheduledByAthlete: wlog.rescheduled_by_athlete ?? false,
       originalScheduledDate: wlog.original_scheduled_date ?? null,
     };
-  }, [wlog, progSessions, microcycle, loadingLog, loadingSessions, needsLegacy, loadingLegacy, legacyExosRows]);
+  }, [wlog, progSessions, microcycle, loadingLog, loadingSessions, needsLegacy, loadingLegacy, legacyExosRows, sessionRank]);
 }
