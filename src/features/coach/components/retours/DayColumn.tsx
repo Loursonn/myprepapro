@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { isToday, format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Zap, ChevronDown, ChevronUp } from "lucide-react";
+import { Zap, Check, X, ChevronDown, ChevronUp, Hourglass } from "lucide-react";
 import { C } from "@/lib/theme";
 import { DayDetailPanel } from "./DayDetailPanel";
 import { ROLE_COLOR, ROLE_LABEL_FR } from "@/features/coach/components/energy/SessionPreviewModal";
@@ -37,6 +37,13 @@ function statusColors(status: string, rescheduled = false) {
   if (status === "missed")    return { bg: C.r + "12", border: C.r + "40",  accent: C.r,       label: "Manquée" };
   if (status === "skipped")   return { bg: C.s2,       border: C.brd,       accent: C.tx3,     label: "Skippée" };
   return                             { bg: C.s2,       border: C.brd,       accent: C.tx3,     label: "Planifiée" };
+}
+
+function StatusIcon({ status }: { status: string }) {
+  if (status === "completed") return <Check size={10} color={C.g} />;
+  if (status === "partial")   return <Check size={10} color={C.tx3} />;
+  if (status === "planned" || status === "in-progress") return <Hourglass size={10} color={C.tx3} />;
+  return <X size={10} color={C.tx3} />;
 }
 
 // ── Wellness mini-block ───────────────────────────────────────────────────────
@@ -102,36 +109,55 @@ function WorkoutRow({ workout, prevWorkout, isRescheduled }: { workout: DayWorko
         {done && (open ? <ChevronUp size={9} color={C.tx3} /> : <ChevronDown size={9} color={C.tx3} />)}
       </div>
 
-      {/* Expanded: exercise detail */}
-      {done && open && (
-        <div style={{ borderTop: "1px solid " + C.g + "30", padding: "6px 7px", display: "flex", flexDirection: "column", gap: 4 }}>
-          {workout.duration_s != null && (
-            <div style={{ fontSize: 9, color: C.tx3 }}>{Math.round(workout.duration_s / 60)} min</div>
-          )}
-          {workout.notes && (
-            <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>« {workout.notes} »</div>
-          )}
-          {workout.performed_exercises.length > 0 ? (
-            workout.performed_exercises.map((ex) => {
-              const prevEx    = prevWorkout?.performed_exercises.find(p => p.exercise_id === ex.exercise_id);
-              const comment   = workout.exercise_comments.find(
-                c => c.exercise_id === ex.exercise_id || c.exercise_name === ex.exercise_name,
-              );
+      {/* Expanded: planned + actual exercises */}
+      {done && open && (() => {
+        const exIds = [...new Set([
+          ...workout.planned_exercises.map((p) => p.exercise_id),
+          ...workout.performed_exercises.map((p) => p.exercise_id),
+        ])];
+        return (
+          <div style={{ borderTop: "1px solid " + C.g + "30", padding: "6px 7px", display: "flex", flexDirection: "column", gap: 5 }}>
+            {workout.duration_s != null && (
+              <div style={{ fontSize: 9, color: C.tx3 }}>{Math.round(workout.duration_s / 60)} min</div>
+            )}
+            {workout.notes && (
+              <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>« {workout.notes} »</div>
+            )}
+            {exIds.length > 0 ? exIds.map((exId) => {
+              const planned   = workout.planned_exercises.find((p) => p.exercise_id === exId);
+              const performed = workout.performed_exercises.find((p) => p.exercise_id === exId);
+              const prevEx    = prevWorkout?.performed_exercises.find((p) => p.exercise_id === exId);
+              const name      = planned?.exercise_name ?? performed?.exercise_name ?? "Exercice";
+              const comment   = workout.exercise_comments.find((c) => c.exercise_id === exId || c.exercise_name === name);
               return (
-                <div key={ex.exercise_id} style={{ fontSize: 9 }}>
-                  <div style={{ fontWeight: 700, color: C.tx, marginBottom: 2 }}>{ex.exercise_name}</div>
-                  {ex.sets.map(s => (
+                <div key={exId} style={{ fontSize: 9 }}>
+                  <div style={{ fontWeight: 700, color: C.tx, marginBottom: 2 }}>{name}</div>
+                  {/* Planned target */}
+                  {planned && planned.sets > 0 && (
+                    <div style={{ fontSize: 8, color: C.tx3, paddingLeft: 6, marginBottom: 2 }}>
+                      ↗ {planned.sets}×{planned.reps_range ?? "—"}
+                      {planned.kg != null ? ` @${planned.kg}kg` : ""}
+                      {planned.rir != null ? ` RIR${planned.rir}` : ""}
+                    </div>
+                  )}
+                  {/* Actual sets */}
+                  {performed?.sets.map((s) => (
                     <div key={s.set_num} style={{ display: "flex", gap: 4, color: C.tx2, paddingLeft: 6 }}>
                       <span style={{ color: C.tx3, minWidth: 14 }}>S{s.set_num}</span>
                       <span style={{ fontWeight: 600 }}>{s.kg != null ? `${s.kg}kg` : "—"} × {s.reps ?? "—"}</span>
                       {s.rir != null && <span style={{ color: C.tx3 }}>RIR{s.rir}</span>}
                     </div>
                   ))}
+                  {!performed && (
+                    <div style={{ fontSize: 8, color: C.tx3, paddingLeft: 6, fontStyle: "italic" }}>Non enregistré</div>
+                  )}
+                  {/* S-1 comparison */}
                   {prevEx && prevEx.sets.length > 0 && (
                     <div style={{ marginTop: 2, paddingLeft: 6, color: C.tx3, fontStyle: "italic" }}>
                       S-1 : {prevEx.sets[0].kg ?? "—"}kg × {prevEx.sets[0].reps ?? "—"}
                     </div>
                   )}
+                  {/* Comment */}
                   {comment && (
                     <div style={{ marginTop: 3, padding: "2px 5px", borderRadius: 4, background: C.acS, color: C.ac, fontSize: 8 }}>
                       {comment.comment}
@@ -139,12 +165,12 @@ function WorkoutRow({ workout, prevWorkout, isRescheduled }: { workout: DayWorko
                   )}
                 </div>
               );
-            })
-          ) : (
-            <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Aucun résultat enregistré</span>
-          )}
-        </div>
-      )}
+            }) : (
+              <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Aucun résultat enregistré</span>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -211,7 +237,7 @@ function EnergyRow({ session, isRescheduled }: { session: DayEnergy; isReschedul
   const [open, setOpen] = useState(false);
   const done     = session.status === "completed";
   const cols     = statusColors(session.status, isRescheduled);
-  const hasSteps = session.intervals.length > 0;
+  const hasSteps = (session as { intervals?: unknown[] }).intervals?.length ?? 0 > 0;
 
   const kindColors: Record<string, string> = {
     vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
@@ -248,12 +274,29 @@ function EnergyRow({ session, isRescheduled }: { session: DayEnergy; isReschedul
           {session.note && (
             <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginBottom: 2 }}>« {session.note} »</div>
           )}
-          {hasSteps ? (
-            session.intervals.map((step, i) => (
+          {/* Block logs (new system) */}
+          {session.block_logs && Object.entries(session.block_logs).length > 0 ? (
+            Object.entries(session.block_logs).map(([key, b], i) => (
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9 }}>
+                <span style={{
+                  width: 13, height: 13, borderRadius: "50%", flexShrink: 0,
+                  background: b.done ? C.g : "transparent",
+                  border: "1px solid " + (b.done ? C.g : C.tx3),
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 7, color: "#fff",
+                }}>
+                  {b.done ? "✓" : ""}
+                </span>
+                <span style={{ color: b.done ? C.tx : C.tx3 }}>Bloc {i + 1}</span>
+                {(b as { note?: string }).note && <span style={{ color: C.tx3, fontStyle: "italic" }}>{(b as { note?: string }).note}</span>}
+              </div>
+            ))
+          ) : hasSteps ? (
+            ((session as { intervals?: unknown[] }).intervals ?? []).map((step, i) => (
               <EnergyStepRow
                 key={(step as { id?: string }).id ?? i}
                 step={step}
-                log={session.step_log}
+                log={(session as { step_log?: Record<string, EnergyStepLog> | null }).step_log ?? null}
                 index={i}
               />
             ))
@@ -308,16 +351,56 @@ function TestRow({ test }: { test: DayTest }) {
             {test.type}
           </span>
 
-          {/* results_note — human-readable summary (auto-generated or free text) */}
           {test.results_note && (
             <div style={{ fontSize: 9, color: C.tx2, lineHeight: 1.4 }}>
               {test.results_note}
             </div>
           )}
 
-          {/* No results yet */}
           {!test.results_note && !structuredVars && (
             <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Aucun résultat saisi</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Free activity compact row ─────────────────────────────────────────────────
+
+function FreeActivityRow({ activity }: { activity: FreeActivityDetail }) {
+  const [open, setOpen] = useState(false);
+  const hasDetail = activity.duration != null || activity.intensity != null || !!activity.note;
+
+  return (
+    <div style={{ background: C.s2, borderRadius: 7, overflow: "hidden" }}>
+      <div
+        onClick={() => hasDetail && setOpen((v) => !v)}
+        style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 7px", cursor: hasDetail ? "pointer" : "default" }}
+      >
+        <Check size={10} color={C.g} />
+        <span style={{
+          flex: 1, fontSize: 10, fontWeight: 600, color: C.tx,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {activity.sportEmoji ? activity.sportEmoji + " " : ""}{activity.name}
+        </span>
+        {activity.intensity != null && (
+          <span style={{ fontSize: 8, color: C.tx3, flexShrink: 0 }}>RPE {activity.intensity}</span>
+        )}
+        {hasDetail && (open ? <ChevronUp size={9} color={C.tx3} /> : <ChevronDown size={9} color={C.tx3} />)}
+      </div>
+
+      {open && (
+        <div style={{ borderTop: "1px solid " + C.brd, padding: "5px 7px", display: "flex", flexDirection: "column", gap: 3 }}>
+          {activity.duration != null && (
+            <div style={{ fontSize: 9, color: C.tx2 }}>{activity.duration} min</div>
+          )}
+          {activity.intensity != null && (
+            <div style={{ fontSize: 9, color: C.tx2 }}>RPE {activity.intensity}/10</div>
+          )}
+          {activity.note && (
+            <div style={{ fontSize: 8, color: C.tx3, fontStyle: "italic" }}>{activity.note}</div>
           )}
         </div>
       )}
