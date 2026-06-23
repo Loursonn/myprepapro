@@ -173,9 +173,10 @@ function getParams(exercice: Exercice, activeWeek: number, multiSemaine: boolean
 function setParams(exercice: Exercice, params: ExerciceParams, activeWeek: number, multiSemaine: boolean): Exercice {
   if (multiSemaine) {
     const weekKey = String(activeWeek)
-    const rec = (typeof exercice.params === 'object' && !('mode' in exercice.params))
-      ? { ...(exercice.params as Record<string, ExerciceParams>) }
-      : {}
+    const existing = exercice.params
+    // Only keep existing as Record base if it actually has numeric week keys (not a flat ExerciceParams)
+    const isExistingRecord = typeof existing === 'object' && existing !== null && !('nb_series' in (existing as object))
+    const rec = isExistingRecord ? { ...(existing as Record<string, ExerciceParams>) } : {}
     rec[weekKey] = params
     return { ...exercice, params: rec }
   }

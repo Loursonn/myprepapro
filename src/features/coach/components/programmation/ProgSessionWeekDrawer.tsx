@@ -52,8 +52,9 @@ function resolveParams(
   const p = exercice.params
   if (!p || typeof p !== "object") return null
 
-  // Flat ExerciceParams has 'nb_series'; Record<weekKey, ExerciceParams> has numeric string keys
-  const isFlat = "nb_series" in (p as object)
+  // Detect Record by presence of numeric string keys (more robust than checking 'nb_series'
+  // because mixed objects can have both — e.g. flat params accidentally spread into a Record)
+  const isFlat = !Object.keys(p as object).some((k) => /^\d+$/.test(k))
 
   const multi = sessionMultiSemaine || (exercice.multi_semaine ?? false)
 

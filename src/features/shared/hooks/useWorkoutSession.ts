@@ -276,10 +276,14 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
 
           // session.multi_semaine OR ex.multi_semaine → params stored as Record<weekKey, ExerciceParams>
           const effectiveMulti = progSession.multi_semaine || (ex.multi_semaine ?? false);
+          // Detect Record by presence of at least one numeric string key (week number).
+          // Using numeric key detection is more robust than checking absence of 'nb_series'
+          // because mixed objects (flat params accidentally spread into a Record) would
+          // have both 'nb_series' and numeric keys — we still want to treat them as Records.
           const isRecord =
             typeof ex.params === "object" &&
             ex.params !== null &&
-            !("nb_series" in ex.params);
+            Object.keys(ex.params).some((k) => /^\d+$/.test(k));
 
           if (effectiveMulti && isRecord) {
             const paramsMap = ex.params as Record<string, ExerciceParams>;
