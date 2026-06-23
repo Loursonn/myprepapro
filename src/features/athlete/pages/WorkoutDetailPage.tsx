@@ -1583,7 +1583,18 @@ function RpeSheetForLog({
     },
   });
 
-  const RPE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const RPE_ITEMS: Array<{ v: number; label: string; color: string }> = [
+    { v: 1,  label: "Très léger",  color: "#22C55E" },
+    { v: 2,  label: "Léger",       color: "#4ADE80" },
+    { v: 3,  label: "Facile",      color: "#84CC16" },
+    { v: 4,  label: "Modéré",      color: "#FACC15" },
+    { v: 5,  label: "Rythme",      color: "#F59E0B" },
+    { v: 6,  label: "Intense",     color: "#FB923C" },
+    { v: 7,  label: "Dur",         color: "#F97316" },
+    { v: 8,  label: "Très dur",    color: "#EF4444" },
+    { v: 9,  label: "Quasi max",   color: "#DC2626" },
+    { v: 10, label: "Maximum",     color: "#991B1B" },
+  ];
 
   return (
     <div
@@ -1624,40 +1635,48 @@ function RpeSheetForLog({
             fontSize: 12,
             color: C.tx3,
             textAlign: "center",
-            marginBottom: 20,
+            marginBottom: 16,
           }}
         >
-          Quelle était ton effort global ? (RPE)
+          Effort global perçu ? (RPE)
         </div>
+        {/* 2 rows of 5 */}
         <div
           style={{
-            display: "flex",
+            display: "grid",
+            gridTemplateColumns: "repeat(5, 1fr)",
             gap: 6,
-            justifyContent: "center",
-            flexWrap: "wrap",
             marginBottom: 20,
           }}
         >
-          {RPE_VALUES.map((v) => (
-            <button
-              key={v}
-              onClick={() => setRpe(v)}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                border: `1px solid ${rpe === v ? VIOLET : C.brdL}`,
-                background: rpe === v ? hexToRgba(VIOLET, 0.2) : C.s1,
-                color: rpe === v ? VIOLET : C.tx,
-                fontSize: 14,
-                fontWeight: 800,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {v}
-            </button>
-          ))}
+          {RPE_ITEMS.map(({ v, label, color }) => {
+            const selected = rpe === v;
+            return (
+              <button
+                key={v}
+                onClick={() => setRpe(v)}
+                style={{
+                  height: 56,
+                  borderRadius: 10,
+                  border: `2px solid ${selected ? color : hexToRgba(color, 0.35)}`,
+                  background: selected ? hexToRgba(color, 0.22) : hexToRgba(color, 0.07),
+                  color: selected ? color : C.tx2,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 1,
+                  transition: "all 120ms",
+                  padding: "3px 2px",
+                }}
+              >
+                <span style={{ fontSize: 16, fontWeight: 900, lineHeight: 1, color: selected ? color : C.tx }}>{v}</span>
+                <span style={{ fontSize: 8, fontWeight: 600, lineHeight: 1.2, color: selected ? color : C.tx3, textAlign: "center" as const }}>{label}</span>
+              </button>
+            );
+          })}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -1685,7 +1704,7 @@ function RpeSheetForLog({
               padding: "12px 0",
               borderRadius: 12,
               border: "none",
-              background: rpe != null ? VIOLET : C.s2,
+              background: rpe != null ? (RPE_ITEMS.find(r => r.v === rpe)?.color ?? VIOLET) : C.s2,
               color: rpe != null ? "#fff" : C.tx3,
               fontSize: 13,
               fontWeight: 700,
@@ -1889,13 +1908,11 @@ export default function WorkoutDetailPage() {
           s.done = true;
           s.skipped = false;
 
-          // Auto-fill next cluster charge when this cluster is done
-          if (clusterNb && clusterNb > 0 && s.kg) {
-            const ci = setIdx % clusterNb;
-            if (ci < clusterNb - 1) {
-              const nextIdx = setIdx + 1;
-              if (nextIdx < exSets.length && !exSets[nextIdx].done && !exSets[nextIdx].kg) {
-                exSets[nextIdx] = { ...exSets[nextIdx], kg: s.kg };
+          // Auto-fill ALL empty cluster sub-rows with the same charge
+          if (clusterNb && s.kg) {
+            for (let j = 0; j < exSets.length; j++) {
+              if (j !== setIdx && !exSets[j].done && !exSets[j].kg) {
+                exSets[j] = { ...exSets[j], kg: s.kg };
               }
             }
           }
@@ -1967,14 +1984,11 @@ export default function WorkoutDetailPage() {
           }
           s.done = true;
 
-          // Auto-fill next cluster's charge
-          if (field === "kg" && padTarget.clusterNb && padTarget.clusterNb > 0 && value) {
-            const clusterNb = padTarget.clusterNb;
-            const ci = setIdx % clusterNb;
-            if (ci < clusterNb - 1) {
-              const nextIdx = setIdx + 1;
-              if (nextIdx < exSets.length && !exSets[nextIdx].done && !exSets[nextIdx].kg) {
-                exSets[nextIdx] = { ...exSets[nextIdx], kg: value };
+          // Auto-fill ALL empty cluster sub-rows with the same charge
+          if (field === "kg" && padTarget.clusterNb && value) {
+            for (let j = 0; j < exSets.length; j++) {
+              if (j !== setIdx && !exSets[j].done && !exSets[j].kg) {
+                exSets[j] = { ...exSets[j], kg: value };
               }
             }
           }
