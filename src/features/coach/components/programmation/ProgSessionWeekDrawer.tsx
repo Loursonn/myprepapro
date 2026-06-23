@@ -314,7 +314,18 @@ export function ProgSessionWeekDrawer({ session, cycleId, athleteId, onChange, o
     athleteId, session.id, cycleId,
   )
 
-  const weekCount  = Math.max(microcycles.length, session.nb_semaines ?? 1, 1)
+  // Also account for exercise-level multi_semaine (session.multi_semaine may be false
+  // but individual exercises can have params keyed by week number)
+  const maxExWeek = session.blocs.reduce((max, bloc) =>
+    bloc.exercices.reduce((m, ex) => {
+      if (!ex.multi_semaine) return m
+      const p = ex.params
+      if (!p || typeof p !== "object" || "nb_series" in (p as object)) return m
+      const keys = Object.keys(p as Record<string, unknown>).map(Number).filter(n => !isNaN(n) && n > 0)
+      return keys.length > 0 ? Math.max(m, ...keys) : m
+    }, max)
+  , 1)
+  const weekCount  = Math.max(microcycles.length, session.nb_semaines ?? 1, maxExWeek, 1)
   const currentLog = getLogForWeek(activeWeek)
   const atMods     = currentLog?.athleteModifications ?? null
   const isLastWeek = activeWeek >= weekCount
