@@ -9,7 +9,6 @@
  */
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -95,7 +94,6 @@ function AssignModal({
 export default function EnergySessionEditorPage() {
   const { athleteId, sessionId } = useParams<{ athleteId?: string; sessionId?: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const isEdit = !!sessionId;
 
   // Load existing session when editing
@@ -144,7 +142,6 @@ export default function EnergySessionEditorPage() {
       custom_kind: sessionKind === "custom" ? customKind : null,
       structure_type: structureType,
       intervals: root.children,
-      created_by: user?.id ?? null,
     };
 
     if (isEdit && sessionId) {
@@ -170,7 +167,7 @@ export default function EnergySessionEditorPage() {
     if (athleteId) {
       navigate(`/coach/athletes/${athleteId}/programmation`);
     } else {
-      navigate("/coach/library?tab=energetique");
+      navigate("/coach/energy-library");
     }
   }
 
@@ -265,6 +262,15 @@ export default function EnergySessionEditorPage() {
           >
             {isSaving ? "Enregistrement…" : "Enregistrer"}
           </button>
+          {athleteId && (
+            <button
+              onClick={() => handleSave(true)}
+              disabled={isSaving}
+              style={{ padding: "7px 16px", borderRadius: 8, border: `1px solid ${C.g}50`, background: C.g + "15", color: C.g, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              Enregistrer & planifier
+            </button>
+          )}
         </div>
       </div>
 
@@ -311,16 +317,6 @@ export default function EnergySessionEditorPage() {
               <SessionPreview intervals={root} />
             </div>
           )}
-
-          {/* Planning info */}
-          <div style={{
-            marginTop: 16, padding: "10px 12px", borderRadius: 8,
-            background: C.ac + "12", border: `1px solid ${C.ac}30`,
-            fontSize: 11, color: C.tx2, lineHeight: 1.5,
-          }}>
-            📅 Pour planifier cette séance, allez dans{" "}
-            <strong style={{ color: C.ac }}>Planning → Mois</strong>.
-          </div>
 
           {/* Mini totals recap */}
           {totals.durationS > 0 && (
