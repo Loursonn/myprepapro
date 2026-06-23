@@ -69,6 +69,7 @@ function resolveParams(
 }
 
 function fmtReps(p: ExerciceParams): string {
+  if (!p.reps) return "?"
   return p.reps.mode === "par_serie"
     ? p.reps.values.join(" / ")
     : String(p.reps.value)
@@ -76,6 +77,7 @@ function fmtReps(p: ExerciceParams): string {
 
 function fmtCharge(p: ExerciceParams): string {
   if (p.charge_unit === "PDC") return "PDC"
+  if (!p.charge) return "—"
   const unit = p.charge_unit === "%RM" ? "%" : "kg"
   if (p.charge.mode === "par_serie")
     return p.charge.values.map(v => (v !== null ? `${v}${unit}` : "—")).join(" / ")
@@ -83,6 +85,7 @@ function fmtCharge(p: ExerciceParams): string {
 }
 
 function fmtRIR(p: ExerciceParams): string {
+  if (!p.rir) return "—"
   if (p.rir.mode === "par_serie")
     return "RIR " + p.rir.values.map(v => (v === null ? "?" : v)).join("/")
   return p.rir.value === null ? "Libre" : `RIR ${p.rir.value}`
@@ -128,7 +131,7 @@ function ExercicePreview({ exercice, params }: { exercice: Exercice; params: Exe
         <Chip label="Reps"    value={fmtReps(params)} />
         <Chip label="Charge"  value={fmtCharge(params)} />
         <Chip label="RIR"     value={fmtRIR(params)} />
-        {params.tempo.mode === "global" && params.tempo.value && (
+        {params.tempo?.mode === "global" && params.tempo.value && (
           <Chip label="Tempo" value={params.tempo.value} />
         )}
       </div>
