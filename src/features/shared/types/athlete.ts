@@ -176,9 +176,22 @@ export interface CustomExercise {
   sets: Array<{ kg?: number; reps?: number; duration_s?: number; rir?: number; done?: boolean }>;
 }
 
+export interface SessionSetLog {
+  done: boolean;
+  kg?: number | null;
+  reps?: number;
+  rir?: number | null;
+  note?: string;
+}
+
 export interface AthleteModifications {
   bonusSets?: BonusSet[];
   customExercises?: CustomExercise[];
+  // NEW fields for new ProgSession-based sessions:
+  sessionSets?: Record<string, SessionSetLog[]>;    // key = Exercice.id
+  exerciceComments?: Record<string, string>;         // key = Exercice.id
+  sessionComment?: string;
+  sessionForme?: number;                             // 1-5 état de forme
 }
 
 // ─── Session Logs ────────────────────────────────────────────────────────────

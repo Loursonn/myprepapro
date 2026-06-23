@@ -7,6 +7,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BlockConfig, Session, WellnessData } from "@/features/shared/types/athlete";
+import { useProgrammation } from "@/features/coach/components/programmation/hooks/useProgrammation";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, X as XIcon } from "lucide-react";
 import {
@@ -432,17 +433,16 @@ function SessionBank({
   energySessions,
   activeDragId,
 }: {
-  sessions: Array<{ id: string; name?: string; label?: string }>;
+  sessions: Array<{ id: string; name: string }>;
   energySessions: EnergySessionRow[];
   activeDragId: string | null;
 }) {
   const [tab, setTab]     = useState<BankItemType>("workout");
   const [search, setSearch] = useState("");
 
-  const filteredMuscu = sessions.filter((s) => {
-    const name = s.name ?? s.label ?? "";
-    return name.toLowerCase().includes(search.toLowerCase());
-  });
+  const filteredMuscu = sessions.filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   const filteredEnergy = energySessions.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -512,7 +512,9 @@ function SessionBank({
       >
         {tab === "workout" ? (
           filteredMuscu.length === 0 ? (
-            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucune séance</div>
+            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>
+              {search ? "Aucun résultat" : "Aucune séance dans la banque"}
+            </div>
           ) : (
             filteredMuscu.map((s) => (
               <DraggableSession
@@ -640,7 +642,7 @@ function TestBank({
 interface CalendarMonthViewProps {
   athleteId: string;
   coachId: string;
-  sessions: Session[];
+  sessions?: Session[]; // legacy — kept for projected events fallback only
   blockConfig?: BlockConfig;
   setBlockConfig?: (fn: (prev: BlockConfig) => BlockConfig) => void;
   exos?: Record<string, unknown[]>;
@@ -688,6 +690,7 @@ export function CalendarMonthView({
   const realEvents = useMemo(() => rawEvents.map(toCalEvent), [rawEvents]);
   const { mutate: assignWorkout }       = useAssignWorkout();
   const { mutate: reschedule }          = useRescheduleWorkout();
+  const { data: progSessions = [] }     = useProgrammation(athleteId);
   const { data: energySessions = [] }   = useEnergySessions({ created_by: coachId });
   const { mutate: assignEnergy }        = useAssignEnergySession();
   const { mutate: rescheduleEnergy }    = useUpdateEnergyAssignment();
@@ -765,18 +768,13 @@ export function CalendarMonthView({
     });
   }, [realEvents]);
 
-  // ── Project block sessions onto calendar dates ────────────────────────────
+  // ── Project ProgSessions onto calendar dates (recurring sessions with day_of_week) ──
   const projectedEvents = useMemo<CalEvent[]>(() => {
-    if (!blockConfig?.startDate || !sessions.length) return [];
+    if (!blockConfig?.startDate || !progSessions.length) return [];
 
     // Snap to Monday of the week containing startDate
     const blockStart = startOfWeek(parseISO(blockConfig.startDate), { weekStartsOn: 1 });
 
-    // Borne dure = dates réelles du cycle DB. La projection legacy (blockConfig +
-    // completedSessions) ne doit JAMAIS dépasser la fin réelle du cycle, sinon des
-    // séances fantômes apparaissent après la fin (ex. cycle stoppé au 31 mai).
-    // Fallback sur le cycle le plus récent si blockConfig.cycleId ne résout pas
-    // (sinon aucune borne → projection sur des semaines fantômes).
     const activeCyc = allCycles.find((c) => c.id === blockConfig?.cycleId)
       ?? [...allCycles].sort((a, b) => b.end_date.localeCompare(a.end_date))[0];
 
@@ -788,23 +786,21 @@ export function CalendarMonthView({
     );
 
     const out: CalEvent[] = [];
+    // Only project recurring sessions that have a day_of_week
+    const recurring = progSessions.filter(
+      (s) => s.recurrence === "weekly" && s.day_of_week != null
+    );
     for (let w = 0; w < (blockConfig.totalWeeks ?? 8); w++) {
-      for (const sess of sessions) {
-        // Per-week day override → fallback to default day_of_week
-        const dow = (sess.weekDays?.[String(w + 1)] ?? sess.day_of_week) as number | undefined;
-        if (dow == null) continue;
-
-        const d    = addDays(blockStart, w * 7 + dow);
+      for (const sess of recurring) {
+        const dow = sess.day_of_week as number;
+        const d   = addDays(blockStart, w * 7 + dow);
         if (d < gridStartDate || d > gridEndDate) continue;
 
         const dateStr = format(d, "yyyy-MM-dd");
-        // Hors des bornes réelles du cycle → on ne projette pas.
         if (activeCyc && (dateStr < activeCyc.start_date || dateStr > activeCyc.end_date)) continue;
         if (logged.has(`${sess.id}:${dateStr}`)) continue;
 
         const weekNum = w + 1;
-        // Une séance projetée n'a PAS de log → jamais "réalisée".
-        // Passée = manquée, présente/future = planifiée ("prévu").
         const todayStr = format(new Date(), "yyyy-MM-dd");
         const projStatus = dateStr < todayStr ? "missed" : "planned";
 
@@ -819,7 +815,7 @@ export function CalendarMonthView({
       }
     }
     return out;
-  }, [blockConfig, sessions, gridStartDate, gridEndDate, enrichedRealEvents, allCycles]);
+  }, [blockConfig, progSessions, gridStartDate, gridEndDate, enrichedRealEvents, allCycles]);
 
   const events = useMemo(
     () => [...enrichedRealEvents.filter(e => e.status !== "skipped"), ...projectedEvents],
@@ -914,7 +910,7 @@ export function CalendarMonthView({
   );
 
   const activeDragSession = activeDragId
-    ? (sessions.find((s) => s.id === activeDragId)
+    ? (progSessions.find((s) => s.id === activeDragId)
         ?? energySessions.find((s) => s.id === activeDragId)
         ?? testDefinitions.find((s) => s.id === activeDragId)
         ?? null)
@@ -1148,7 +1144,7 @@ export function CalendarMonthView({
 
         {/* ── Banks sidebar ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
-          <SessionBank sessions={sessions} energySessions={energySessions} activeDragId={activeDragId} />
+          <SessionBank sessions={progSessions} energySessions={energySessions} activeDragId={activeDragId} />
           <TestBank testDefinitions={testDefinitions} activeDragId={activeDragId} />
         </div>
       </div>
@@ -1182,7 +1178,7 @@ export function CalendarMonthView({
             }}
           >
             {activeDragIsEnergy ? <Zap size={12} /> : activeDragIsTest ? <FlaskConical size={12} /> : <Dumbbell size={12} />}
-            {activeDragSession.name ?? (activeDragSession as Session).label ?? "Séance"}
+            {activeDragSession.name ?? "Séance"}
           </div>
         ) : null}
       </DragOverlay>
@@ -1210,7 +1206,7 @@ export function CalendarMonthView({
         date={quickAddDay}
         athleteId={athleteId}
         coachId={coachId}
-        sessions={sessions}
+        sessions={progSessions}
       />
 
       {/* Empty slot click → quick-add (secondary trigger via drawer "+" button works,

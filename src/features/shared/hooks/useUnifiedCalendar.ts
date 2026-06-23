@@ -268,20 +268,22 @@ export function useAssignWorkout() {
       date: string;
     }) => {
       const { error } = await supabase.from("workout_logs").insert({
-        athlete_id:     athleteId,
-        coach_id:       coachId,
-        session_id:     sessionId,
-        session_name:   sessionName,
-        scheduled_date: date,
-        status:         "planned",
+        athlete_id:            athleteId,
+        coach_id:              coachId,
+        session_id:            sessionId,
+        session_name:          sessionName,
+        scheduled_date:        date,
+        original_scheduled_date: date,
+        status:                "planned",
       });
       if (error) throw error;
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: calBaseKey(vars.athleteId) });
-      // Bridge: also invalidate old key until all consumers migrated
       qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["workout-logs-week", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["activePlan", vars.athleteId] });
       toast.success("Séance ajoutée");
     },
     onError: () => toast.error("Erreur lors de l'ajout"),
@@ -464,6 +466,7 @@ export function useRescheduleWorkout() {
       qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
       qc.invalidateQueries({ queryKey: ["workout-logs-week", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["activePlan", vars.athleteId] });
       toast.success("Séance déplacée");
     },
     onError: () => toast.error("Erreur lors du déplacement"),

@@ -163,6 +163,9 @@ export interface MethodAttachment {
   applied_to_sets?: number[]
   /** Overrides éventuels de config pour cet exercice précis */
   config_override?: Partial<MethodConfig>
+  /** Config complète stockée au moment de l'attachment — permet de générer les
+   *  rows sous-séries côté athlète sans re-fetcher la méthode depuis Supabase. */
+  config?: MethodConfig
   /** Charge de référence capturée depuis la config au moment de l'attachment.
    *  Permet d'afficher le calcul (ex: "80%" + kg exercice = poids cible) sans
    *  re-fetcher la méthode. Format texte libre : "80%", "75kg", "RPE 8"… */

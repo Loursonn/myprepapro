@@ -9,7 +9,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useActivePlan } from "@/features/shared/hooks/useActivePlan";
 import { useEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import { useRescheduleWorkout } from "@/features/shared/hooks/useRescheduleWorkout";
-import { useWorkoutDetail } from "@/features/shared/hooks/useWorkoutDetail";
+import { useWorkoutSession } from "@/features/shared/hooks/useWorkoutSession";
 import { SessionPreviewModal, ROLE_COLOR, ROLE_LABEL_FR } from "@/features/coach/components/energy/SessionPreviewModal";
 import { EmptyState } from "@/features/shared/components/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
@@ -652,17 +652,6 @@ function RescheduleDrawer({
 
 // ── Workout preview drawer ────────────────────────────────────────────────────
 
-const METHOD_LABEL: Record<string, string> = {
-  dropset: "Drop Set", superset: "Superset", cluster: "Cluster",
-  pause: "Pause", partiel: "Partiel", excentrique: "Excentrique",
-  isometrique: "Iso", pyramide: "Pyramide", degressif: "Dégressif",
-};
-
-/** Convert auto-generated bloc keys (e.g. "BLOC_1777474109225") to letters A, B, C… */
-function blocLabel(raw: string, idx: number): string {
-  if (raw === "—" || /^BLOC_\d+/i.test(raw)) return String.fromCharCode(65 + idx);
-  return raw;
-}
 
 function WorkoutPreviewDrawer({
   session,
@@ -677,21 +666,8 @@ function WorkoutPreviewDrawer({
   onReschedule: () => void;
   onClose: () => void;
 }) {
-  const { exercises } = useWorkoutDetail(session.sessionId ?? "");
-  const { currentWeek } = useAthleteContext();
+  const workout = useWorkoutSession(session.id);
   const isPast = session.scheduledDate < today;
-
-  // Group by bloc
-  const byBloc = useMemo(() => {
-    const map = new Map<string, typeof exercises>();
-    for (const e of exercises) {
-      const key = e.exercise.bloc?.trim() || "—";
-      const arr = map.get(key) ?? [];
-      arr.push(e);
-      map.set(key, arr);
-    }
-    return Array.from(map.entries()); // [["A", [...]], ["B", [...]]]
-  }, [exercises]);
 
   return (
     <Drawer open onOpenChange={(v) => !v && onClose()}>
@@ -702,84 +678,60 @@ function WorkoutPreviewDrawer({
           </DrawerTitle>
         </DrawerHeader>
 
-        {/* Exercises — scrollable */}
-        {exercises.length > 0 && (
+        {/* Blocs — scrollable */}
+        {workout.isLoading ? (
+          <div style={{ padding: "24px 16px", textAlign: "center", color: C.tx3, fontSize: 12 }}>
+            Chargement…
+          </div>
+        ) : workout.blocs.length > 0 ? (
           <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", padding: "0 16px" }}>
-            {byBloc.map(([bloc, exs], blocIdx) => {
-              const label = blocLabel(bloc, blocIdx);
-              return (
-              <div key={bloc} style={{ marginBottom: 14 }}>
+            {workout.blocs.map((bloc, blocIdx) => (
+              <div key={bloc.id} style={{ marginBottom: 14 }}>
                 {/* Bloc header */}
-                {byBloc.length > 1 || bloc !== "—" ? (
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.ac, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
-                    Bloc {label}
-                  </div>
-                ) : null}
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.ac, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+                  Bloc {String.fromCharCode(65 + blocIdx)}{bloc.name ? " — " + bloc.name : ""}
+                </div>
                 <div style={{ background: C.s2, borderRadius: 12, overflow: "hidden" }}>
-                  {exs.map(({ exercise }, idx) => {
-                    const cfg = exercise.weeks[currentWeek] ?? exercise.weeks[1] ?? {};
-                    const method = cfg.method ? (METHOD_LABEL[cfg.method.toLowerCase()] ?? cfg.method) : null;
+                  {bloc.exercices.map((ex, idx) => {
+                    const nb = ex.params.nb_series;
+                    const reps = ex.params.reps.mode === "global" ? ex.params.reps.value : "?";
+                    const rir = ex.params.rir.mode === "global" ? ex.params.rir.value : null;
                     return (
                       <div
-                        key={exercise.id}
+                        key={ex.id}
                         style={{
                           padding: "10px 14px",
                           borderTop: idx > 0 ? "1px solid " + C.brd : "none",
                           display: "flex", alignItems: "center", gap: 10,
                         }}
                       >
-                        {/* Bloc letter badge */}
                         <div style={{
                           width: 24, height: 24, borderRadius: 6, flexShrink: 0,
                           background: C.ac + "20", color: C.ac,
                           display: "flex", alignItems: "center", justifyContent: "center",
                           fontSize: 10, fontWeight: 800,
                         }}>
-                          {label}
+                          {String.fromCharCode(65 + blocIdx)}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {exercise.name}
-                            </span>
-                            {method && (
-                              <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5, background: C.b + "20", color: C.b, flexShrink: 0 }}>
-                                {method}
-                              </span>
-                            )}
-                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                            {ex.exercise_name}
+                          </span>
                           <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
-                            {cfg.sets != null && (
-                              <span style={{ fontSize: 10, color: C.tx3 }}>{cfg.sets} séries</span>
-                            )}
-                            {cfg.repsRange && (
-                              <span style={{ fontSize: 10, color: C.tx3 }}>· {cfg.repsRange} reps</span>
-                            )}
-                            {cfg.rir != null && (
-                              <span style={{ fontSize: 10, color: C.tx3 }}>· RIR {cfg.rir}</span>
-                            )}
-                            {cfg.tempo && (
-                              <span style={{ fontSize: 10, color: C.tx3 }}>· {cfg.tempo}</span>
-                            )}
-                            {cfg.kg != null && (
-                              <span style={{ fontSize: 10, fontWeight: 700, color: C.ac }}>· {cfg.kg} kg</span>
+                            <span style={{ fontSize: 10, color: C.tx3 }}>{nb} séries × {reps} reps</span>
+                            {rir != null && (
+                              <span style={{ fontSize: 10, color: C.tx3 }}>· RIR {rir}</span>
                             )}
                           </div>
-                          {cfg.coachNote && (
-                            <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginTop: 2 }}>
-                              📝 {cfg.coachNote}
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
-              );
-            })}
+            ))}
           </div>
-        )}
+        ) : null}
 
         {/* Actions — sticky */}
         <div style={{ padding: "12px 16px 24px", flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1209,16 +1161,7 @@ export default function ProgramPage() {
           today={today}
           onStart={() => {
             setWorkoutPreview(null);
-            navigate("/athlete/log", {
-              state: {
-                initialSess: {
-                  id:          workoutPreview.sessionId,
-                  name:        workoutPreview.sessionName,
-                  short:       workoutPreview.sessionName.slice(0, 3).toUpperCase(),
-                  day_of_week: (new Date(workoutPreview.scheduledDate + "T12:00:00").getDay() + 6) % 7,
-                },
-              },
-            });
+            navigate("/athlete/program/workout/" + workoutPreview.id);
           }}
           onReschedule={() => { setRescheduleTarget(workoutPreview); setWorkoutPreview(null); }}
           onClose={() => setWorkoutPreview(null)}

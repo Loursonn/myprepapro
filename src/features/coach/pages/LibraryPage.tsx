@@ -434,7 +434,7 @@ function MethodsTab({ coachId }: { coachId: string }) {
             position: "fixed", top: "50%", left: "50%", zIndex: 91,
             transform: "translate(-50%, -50%)",
             background: C.bg, borderRadius: 16,
-            width: "min(94vw, 560px)", maxHeight: "90vh",
+            width: "min(96vw, 820px)", maxHeight: "90vh",
             display: "flex", flexDirection: "column",
             boxShadow: "0 12px 48px rgba(0,0,0,0.6)",
             border: `1px solid ${C.brdL}`,

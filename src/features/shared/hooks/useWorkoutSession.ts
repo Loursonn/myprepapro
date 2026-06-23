@@ -1,0 +1,306 @@
+/**
+ * useWorkoutSession — fetches a workout_log by id and resolves the corresponding
+ * ProgSession from app_data, returning workout-ready data for the athlete fill page.
+ *
+ * Supports two session formats:
+ *   NEW: ProgSession UUID — blocs/exercices stored in app_data (key=asp:prog)
+ *   LEGACY: session id like "s_TIMESTAMP_x" — exercises in app_data (key=asp:exos::cycleId)
+ */
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useProgrammation } from "@/features/coach/components/programmation/hooks/useProgrammation";
+import { useAthleteContext } from "@/features/shared/context/AthleteContext";
+import { defaultExerciceParams } from "@/features/coach/components/programmation/types";
+import type { ExerciceParams } from "@/features/coach/components/programmation/types";
+import type { AthleteModifications, Exercise, WeekConfig } from "../types/athlete";
+
+export interface WorkoutExerciceData {
+  id: string;
+  exercise_name: string;
+  params: ExerciceParams;
+  mode: "classique" | "methode";
+  methode_id?: string;
+}
+
+export interface WorkoutBlocData {
+  id: string;
+  name: string;
+  color?: string;
+  series_mode: "libre" | "fixe";
+  series_count?: number;
+  timing_mode: "libre" | "depart" | "repos";
+  timing_repos_min?: number;
+  timing_repos_sec?: number;
+  timing_depart_min?: number;
+  timing_depart_sec?: number;
+  exercices: WorkoutExerciceData[];
+}
+
+export interface WorkoutSessionResult {
+  isLoading: boolean;
+  workoutLogId: string | null;
+  sessionId: string | null;
+  sessionName: string;
+  sessionShort: string;
+  blocs: WorkoutBlocData[];
+  status: string;
+  rpeScore: number | null;
+  scheduledDate: string | null;
+  weekNumber: number;
+  athleteModifications: AthleteModifications | null;
+  rescheduledByAthlete: boolean;
+  originalScheduledDate: string | null;
+}
+
+// ── Legacy format helpers ─────────────────────────────────────────────────────
+
+function parseReps(repsRange?: string): number {
+  if (!repsRange) return 8;
+  const match = repsRange.match(/^(\d+)/);
+  return match ? parseInt(match[1], 10) : 8;
+}
+
+function weekConfigToParams(wc: WeekConfig | undefined, fallbackSets = 3): ExerciceParams {
+  if (!wc) return defaultExerciceParams(fallbackSets);
+  return {
+    nb_series: wc.sets ?? fallbackSets,
+    reps: { mode: "global", value: parseReps(wc.repsRange) },
+    reps_mode: { mode: "global", value: "EC" },
+    charge_unit: wc.pdc ? "PDC" : wc.pct_rm !== undefined ? "%RM" : "kg",
+    charge: {
+      mode: "global",
+      value: wc.pdc ? null : wc.pct_rm !== undefined ? wc.pct_rm : (wc.kg ?? null),
+    },
+    rir: { mode: "global", value: wc.rir ?? null },
+    tempo: { mode: "global", value: wc.tempo ?? "" },
+  };
+}
+
+function buildLegacyBlocs(
+  sessionId: string,
+  rows: Array<{ key: string; value: unknown }>,
+  weekNumber: number,
+): WorkoutBlocData[] {
+  // Find ExosMap that contains this sessionId
+  let exercises: Exercise[] | null = null;
+  for (const row of rows) {
+    const exosMap = row.value as Record<string, Exercise[]>;
+    if (exosMap && exosMap[sessionId]) {
+      exercises = exosMap[sessionId];
+      break;
+    }
+  }
+  if (!exercises || exercises.length === 0) return [];
+
+  // Group by bloc field
+  const grouped = new Map<string, Exercise[]>();
+  for (const ex of exercises) {
+    const blocName = ex.bloc ?? "Séance";
+    const arr = grouped.get(blocName) ?? [];
+    arr.push(ex);
+    grouped.set(blocName, arr);
+  }
+
+  return Array.from(grouped.entries()).map(([blocName, exList], idx) => ({
+    id: `legacy-bloc-${idx}`,
+    name: blocName,
+    series_mode: "libre" as const,
+    timing_mode: "libre" as const,
+    exercices: exList.map((ex) => {
+      // weeks keys are stored as strings in JSON
+      const wc: WeekConfig | undefined =
+        (ex.weeks as Record<string, WeekConfig>)?.[String(weekNumber)] ??
+        (ex.weeks as Record<string, WeekConfig>)?.["1"] ??
+        undefined;
+      return {
+        id: ex.id,
+        exercise_name: ex.name,
+        params: weekConfigToParams(wc, wc?.sets ?? 3),
+        mode: "classique" as const,
+      };
+    }),
+  }));
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
+export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSessionResult {
+  const { athleteId } = useAthleteContext();
+
+  const { data: wlog, isLoading: loadingLog } = useQuery({
+    queryKey: ["workout-log-detail", workoutLogId],
+    enabled: !!workoutLogId,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("workout_logs")
+        .select(
+          "id, session_id, session_name, status, rpe_score, scheduled_date, athlete_modifications, microcycle_id, original_scheduled_date, rescheduled_by_athlete"
+        )
+        .eq("id", workoutLogId!)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const { data: microcycle } = useQuery({
+    queryKey: ["microcycle", wlog?.microcycle_id],
+    enabled: !!wlog?.microcycle_id,
+    staleTime: 300_000,
+    queryFn: async () => {
+      const id = wlog?.microcycle_id;
+      if (!id) return null;
+      const { data } = await supabase
+        .from("microcycles")
+        .select("week_number, cycle_id")
+        .eq("id", id)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const { data: progSessions = [], isLoading: loadingSessions } = useProgrammation(athleteId);
+
+  // Legacy fallback: enabled once progSessions loaded and session_id not found in new format
+  const needsLegacy =
+    !!wlog && !loadingSessions && progSessions.every((s) => s.id !== wlog.session_id);
+
+  const { data: legacyExosRows = [], isLoading: loadingLegacy } = useQuery({
+    queryKey: ["legacy-exos", athleteId],
+    enabled: needsLegacy,
+    staleTime: 300_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("app_data")
+        .select("key, value")
+        .eq("athlete_id", athleteId)
+        .like("key", "asp:exos::%");
+      return data ?? [];
+    },
+  });
+
+  return useMemo(() => {
+    const weekNumber = microcycle?.week_number ?? 1;
+    const isLoading = loadingLog || loadingSessions || (needsLegacy && loadingLegacy);
+
+    const empty: WorkoutSessionResult = {
+      isLoading,
+      workoutLogId: null,
+      sessionId: null,
+      sessionName: "",
+      sessionShort: "",
+      blocs: [],
+      status: "planned",
+      rpeScore: null,
+      scheduledDate: null,
+      weekNumber: 1,
+      athleteModifications: null,
+      rescheduledByAthlete: false,
+      originalScheduledDate: null,
+    };
+
+    if (!wlog) return empty;
+
+    const progSession = progSessions.find((s) => s.id === wlog.session_id);
+
+    if (!progSession) {
+      // Still loading legacy data
+      if (needsLegacy && loadingLegacy) {
+        return { ...empty, isLoading: true };
+      }
+
+      // Build from legacy exos format
+      const legacyBlocs = buildLegacyBlocs(wlog.session_id, legacyExosRows, weekNumber);
+
+      return {
+        isLoading: false,
+        workoutLogId: wlog.id,
+        sessionId: wlog.session_id,
+        sessionName: wlog.session_name,
+        sessionShort: wlog.session_name.slice(0, 3).toUpperCase(),
+        blocs: legacyBlocs,
+        status: wlog.status,
+        rpeScore: wlog.rpe_score ?? null,
+        scheduledDate: wlog.scheduled_date,
+        weekNumber,
+        athleteModifications: (wlog.athlete_modifications as AthleteModifications | null) ?? null,
+        rescheduledByAthlete: wlog.rescheduled_by_athlete ?? false,
+        originalScheduledDate: wlog.original_scheduled_date ?? null,
+      };
+    }
+
+    const mods =
+      (wlog.athlete_modifications as AthleteModifications | null) ?? null;
+
+    const blocs: WorkoutBlocData[] = progSession.blocs.map((bloc) => {
+      const nbSeriesFixed =
+        bloc.series_mode === "fixe" && bloc.series_count
+          ? bloc.series_count
+          : null;
+
+      return {
+        id: bloc.id,
+        name: bloc.name,
+        color: bloc.color,
+        series_mode: bloc.series_mode,
+        series_count: bloc.series_count,
+        timing_mode: bloc.timing_mode,
+        timing_repos_min: bloc.timing_repos_min,
+        timing_repos_sec: bloc.timing_repos_sec,
+        timing_depart_min: bloc.timing_depart_min,
+        timing_depart_sec: bloc.timing_depart_sec,
+        exercices: bloc.exercices.map((ex) => {
+          let params: ExerciceParams;
+
+          // session.multi_semaine OR ex.multi_semaine → params stored as Record<weekKey, ExerciceParams>
+          const effectiveMulti = progSession.multi_semaine || (ex.multi_semaine ?? false);
+          const isRecord =
+            typeof ex.params === "object" &&
+            ex.params !== null &&
+            !("nb_series" in ex.params);
+
+          if (effectiveMulti && isRecord) {
+            const paramsMap = ex.params as Record<string, ExerciceParams>;
+            params =
+              paramsMap[String(weekNumber)] ??
+              paramsMap["1"] ??
+              defaultExerciceParams();
+          } else if (isRecord) {
+            // has record structure but multi_semaine not flagged — take first week
+            const paramsMap = ex.params as Record<string, ExerciceParams>;
+            params = Object.values(paramsMap)[0] ?? defaultExerciceParams();
+          } else {
+            params = ex.params as ExerciceParams;
+          }
+
+          const effectiveNbSeries = nbSeriesFixed ?? params.nb_series;
+
+          return {
+            id: ex.id,
+            exercise_name: ex.exercise_name,
+            params: { ...params, nb_series: effectiveNbSeries },
+            mode: ex.mode,
+            methode_id: ex.methode_id,
+          };
+        }),
+      };
+    });
+
+    return {
+      isLoading: false,
+      workoutLogId: wlog.id,
+      sessionId: wlog.session_id,
+      sessionName: progSession.name,
+      sessionShort: progSession.short,
+      blocs,
+      status: wlog.status,
+      rpeScore: wlog.rpe_score ?? null,
+      scheduledDate: wlog.scheduled_date,
+      weekNumber,
+      athleteModifications: mods,
+      rescheduledByAthlete: wlog.rescheduled_by_athlete ?? false,
+      originalScheduledDate: wlog.original_scheduled_date ?? null,
+    };
+  }, [wlog, progSessions, microcycle, loadingLog, loadingSessions, needsLegacy, loadingLegacy, legacyExosRows]);
+}

@@ -16,6 +16,23 @@ export const parseReps = (r: unknown): number => {
   return m ? +m[1] : 0;
 };
 
+/**
+ * Parse repsRange en tableau de reps par série.
+ * "8-10" → [9,9,...] (mid-point, pour estimation 1RM)
+ * "8"    → [8,8,...]
+ * "3,2,1" → [3,2,1] (séparateur , = série distincte)
+ * AMRAP  → [99,...]
+ */
+export const parseRepsArr = (repsRange: unknown, sets: number): number[] => {
+  const s = String(repsRange || "").trim();
+  if (!s || s.toUpperCase() === "AMRAP") return Array.from({ length: sets }, () => s.toUpperCase() === "AMRAP" ? 99 : 0);
+  if (s.includes(",")) {
+    const parts = s.split(",").map((p) => parseReps(p.trim()));
+    return Array.from({ length: sets }, (_, i) => parts[i] ?? parts[parts.length - 1] ?? 0);
+  }
+  return Array.from({ length: sets }, () => parseReps(s));
+};
+
 export const e1rm = (kg: number, reps: number) =>
   reps === 1 ? kg : Math.round(kg * (1 + reps / 30));
 
@@ -96,24 +113,79 @@ export const fmtMR = (method: string, mp: any, sets: number, repsRange: string) 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const generateRows = (planned: any, method: string, mp: any) => {
-  const sets = planned?.sets || 3, kg = planned?.kg || 0;
-  const reps = parseReps(planned?.repsRange), rir = planned?.rir ?? 2;
+  const sets = planned?.sets || 3;
+  const globalKg = planned?.kg || 0;
+  const setKgs: number[] | undefined = planned?.setKgs;  // charges par série (priorité sur kg global)
+  const kgForSet = (i: number) => setKgs?.[i] ?? globalKg;
+  const repsArr = parseRepsArr(planned?.repsRange, sets);
+  const reps = repsArr[0] || 0;
+  const rir = planned?.rir;
   const p = mp || MDEF[method as keyof typeof MDEF] || {};
-  if (!method) return Array.from({ length: sets }, () => ({ type: "set", kg, reps, rir, done: false }));
+
+  // ── Méthode bibliothèque scope='set' — sous-séries ────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const att: any = planned?.method_attachment;
+  if (att?.scope === "set" && att?.config?.sub_sets) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cfg: any = att.config;
+    const ss = cfg.sub_sets;
+    const subCount: number =
+      ss.count?.type === "fixed" ? (ss.count.value ?? 3) :
+      ss.count?.type === "range" ? (ss.count.min ?? 2) : 3;
+    const restSec: number = ss.rest_intra?.type === "fixed" ? (ss.rest_intra.seconds ?? 0) : 0;
+    const rows: object[] = [];
+    for (let s = 0; s < sets; s++) {
+      const baseKg = kgForSet(s);
+      for (let sub = 0; sub < subCount; sub++) {
+        // reps par sous-série
+        let subReps = 0;
+        const rc = ss.reps;
+        if (rc?.type === "fixed") subReps = rc.value ?? 5;
+        else if (rc?.type === "custom" && rc.pattern?.length)
+          subReps = rc.pattern[sub] ?? rc.pattern[rc.pattern.length - 1] ?? 5;
+        else if (rc?.type === "amrap") subReps = 0;
+        else if (rc?.type === "decreasing" && rc.value) subReps = Math.max(1, rc.value - sub);
+        else if (rc?.type === "increasing" && rc.value) subReps = rc.value + sub;
+        else subReps = (repsArr[s] ?? reps) || 5;
+        // charge par sous-série
+        let subKg = baseKg;
+        const lc = cfg.load;
+        if (lc?.type === "custom" && lc.values?.length) {
+          const v = lc.values[sub] ?? lc.values[lc.values.length - 1] ?? 0;
+          subKg = lc.values_unit === "pct" ? Math.round(baseKg * v / 100 * 2) / 2 : v;
+        } else if (lc?.type === "decreasing_pct" && lc.pct_change) {
+          subKg = Math.round(baseKg * Math.pow(1 - lc.pct_change / 100, sub) * 2) / 2;
+        } else if (lc?.type === "increasing_pct" && lc.pct_change) {
+          subKg = Math.round(baseKg * Math.pow(1 + lc.pct_change / 100, sub) * 2) / 2;
+        }
+        rows.push({
+          type: "sub_set", setIdx: s + 1, subIdx: sub + 1, totalSubs: subCount,
+          kg: subKg, reps: subReps, isAmrap: rc?.type === "amrap",
+          done: false, pauseSec: sub < subCount - 1 ? restSec : 0,
+          isLastInSet: sub === subCount - 1,
+        });
+      }
+    }
+    return rows;
+  }
+
+  if (!method) return Array.from({ length: sets }, (_, i) => ({ type: "set", kg: kgForSet(i), reps: repsArr[i] ?? reps, rir, done: false }));
   if (method === "dropset") {
     const rows: object[] = [];
     for (let s = 0; s < sets; s++) {
-      rows.push({ type: "set", setIdx: s+1, kg, reps, rir, done: false });
+      const kg = kgForSet(s);
+      rows.push({ type: "set", setIdx: s+1, kg, reps: repsArr[s] ?? reps, rir, done: false });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (let d = 0; d < ((p as any).drops || 2); d++) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const dkg = (p as any).dropWeights?.[d] ?? Math.round(kg * Math.pow(1 - ((p as any).pct || 20) / 100, d+1) / 2.5) * 2.5;
-        rows.push({ type: "drop", setIdx: s+1, dropIdx: d+1, kg: dkg, reps, done: false });
+        rows.push({ type: "drop", setIdx: s+1, dropIdx: d+1, kg: dkg, reps: repsArr[s] ?? reps, done: false });
       }
     }
     return rows;
   }
   if (method === "myoreps") {
+    const kg = kgForSet(0);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows: object[] = [{ type: "activation", kg, reps: (p as any).activation || 12, rir, done: false }];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,21 +195,21 @@ export const generateRows = (planned: any, method: string, mp: any) => {
     return rows;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (method === "restpause") return Array.from({ length: (p as any).rounds || 3 }, (_, i) => ({ type: "round", idx: i+1, kg, reps, rir, done: false, pauseSec: (p as any).pause || 15 }));
+  if (method === "restpause") return Array.from({ length: (p as any).rounds || 3 }, (_, i) => ({ type: "round", idx: i+1, kg: kgForSet(i), reps: repsArr[i] ?? reps, rir, done: false, pauseSec: (p as any).pause || 15 }));
   if (method === "cluster") {
     const rows: object[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nCl = (p as any).clusters || 3, ps = (p as any).pause || 10, ra = clusterReps(p);
     for (let s = 0; s < sets; s++)
       for (let c = 0; c < nCl; c++)
-        rows.push({ type: "cluster", setIdx: s+1, clusterIdx: c+1, totalClusters: nCl, kg, reps: ra[c] || 2, rir, done: false, pauseSec: ps, isLast: c === nCl-1 });
+        rows.push({ type: "cluster", setIdx: s+1, clusterIdx: c+1, totalClusters: nCl, kg: kgForSet(s), reps: ra[c] || 2, rir, done: false, pauseSec: ps, isLast: c === nCl-1 });
     return rows;
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (method === "amrap") return [{ type: "amrap", kg, reps: 0, done: false, timed: (p as any).type === "timed", duration: (p as any).duration || 30 }];
+  if (method === "amrap") return [{ type: "amrap", kg: kgForSet(0), reps: 0, done: false, timed: (p as any).type === "timed", duration: (p as any).duration || 30 }];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (method === "isometrique") return Array.from({ length: (p as any).positions || 2 }, (_, i) => ({ type: "iso", idx: i+1, holdSec: (p as any).hold_sec || 30, done: false }));
-  return Array.from({ length: sets }, () => ({ type: "set", kg, reps, rir, done: false }));
+  return Array.from({ length: sets }, (_, i) => ({ type: "set", kg: kgForSet(i), reps: repsArr[i] ?? reps, rir, done: false }));
 };
 
 // ── Exercise tier lookup (used for PR grouping in stats) ─────────────────────

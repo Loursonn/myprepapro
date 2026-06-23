@@ -1153,12 +1153,12 @@ export default function TodayPage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 800, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.session.name}</div>
                           <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
-                            Musculation · {w.exercises.length} exercice{w.exercises.length > 1 ? "s" : ""}
+                            Musculation · {w.session.short}
                           </div>
                         </div>
                       </div>
                       <button
-                        onClick={() => { haptic(); navigate("/athlete/log", { state: { initialSess: w.session } }); }}
+                        onClick={() => { haptic(); navigate("/athlete/program/workout/" + w.workoutLogId); }}
                         style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: C.coach, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minHeight: 44 }}
                       >
                         Démarrer ▶

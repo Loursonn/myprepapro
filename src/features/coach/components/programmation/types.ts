@@ -1,0 +1,71 @@
+export type ParamValue<T> =
+  | { mode: 'global'; value: T }
+  | { mode: 'par_serie'; values: T[] }
+
+export interface ClusterConfig {
+  nb_clusters: number
+  reps: number[]  // per-cluster reps, e.g. [3,2,1] → "3+2+1"
+  recup_sec: number
+}
+
+export interface ExerciceParams {
+  nb_series: number
+  cluster?: ClusterConfig
+  reps: ParamValue<number>
+  reps_mode: ParamValue<'EC' | 'iso'>
+  charge_unit: '%RM' | 'kg' | 'PDC'
+  charge: ParamValue<number | null>
+  rir: ParamValue<number | null>
+  tempo: ParamValue<string>
+}
+
+export interface Exercice {
+  id: string
+  exercise_id: string
+  exercise_name: string
+  mode: 'classique' | 'methode'
+  methode_id?: string
+  applied_to_sets?: number[]  // scope='set' methods: which set numbers (1-indexed) the method applies to
+  sort_order: number
+  multi_semaine?: boolean  // per-exercise override (only used when session multi_semaine is false)
+  // If multi_semaine active (session OR exercise level): Record<weekNumber, ExerciceParams>; else ExerciceParams
+  params: ExerciceParams | Record<string, ExerciceParams>
+}
+
+export interface Bloc {
+  id: string
+  name: string
+  series_mode: 'libre' | 'fixe'
+  series_count?: number
+  timing_mode: 'libre' | 'depart' | 'repos'
+  timing_depart_min?: number
+  timing_depart_sec?: number
+  timing_repos_min?: number
+  timing_repos_sec?: number
+  // NO multi_semaine here anymore
+  exercices: Exercice[]
+  sort_order: number
+}
+
+export interface ProgSession {
+  id: string
+  name: string
+  short: string
+  day_of_week?: number  // 0=Mon...6=Sun
+  recurrence: 'weekly' | 'once'
+  multi_semaine: boolean
+  nb_semaines?: number
+  blocs: Bloc[]
+}
+
+export function defaultExerciceParams(nb_series = 4): ExerciceParams {
+  return {
+    nb_series,
+    reps: { mode: 'global', value: 8 },
+    reps_mode: { mode: 'global', value: 'EC' },
+    charge_unit: 'kg',
+    charge: { mode: 'global', value: null },
+    rir: { mode: 'global', value: 2 },
+    tempo: { mode: 'global', value: '' },
+  }
+}

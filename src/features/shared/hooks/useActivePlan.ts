@@ -274,7 +274,7 @@ export function useActivePlan(athleteId: string) {
       const [{ data: wLogs }, { data: eAssigns }, { data: tSessions }] = await Promise.all([
         supabase
           .from("workout_logs")
-          .select("id, session_id, session_name, scheduled_date, status")
+          .select("id, session_id, session_name, scheduled_date, status, original_scheduled_date, rescheduled_by_athlete, coach_alert")
           .eq("athlete_id", athleteId)
           .neq("status", "skipped")
           .gte("scheduled_date", mondayISO)

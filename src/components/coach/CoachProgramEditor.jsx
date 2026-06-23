@@ -459,6 +459,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const isMultiWeek=id=>multiWeekExs.has(id);
   const toggleMultiWeek=id=>setMultiWeekExs(prev=>{const n=new Set(prev);if(n.has(id))n.delete(id);else n.add(id);return n;});
   const[expandedMethodWeek,setExpandedMethodWeek]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
+  const[copiedSet,setCopiedSet]=useState(null); // { val: number, isRm: boolean }
   const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#7B6FFF",e:"NEW"});
   const dropRef=useRef(null);
   const[showAI,setShowAI]=useState(false);
@@ -546,7 +547,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
           const prevW=newWeeks[w-1]||w1;
           if(isDeloadW){
             const dlPct=tc.deloadPct||40;
-            newWeeks[w]={...prevW,...(w1.kg?{kg:Math.round(w1.kg*(1-dlPct/100)/2.5)*2.5}:{}),sets:Math.max(2,Math.round((prevW.sets||defSets)*0.6)),rir:(tc.rirStart||2)+2,repsRange:prevW.repsRange};
+            newWeeks[w]={...prevW,...(w1.kg?{kg:Math.round(w1.kg*(1-dlPct/100)/2.5)*2.5}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>Math.round(k*(1-dlPct/100)/2.5)*2.5)}:{}),sets:Math.max(2,Math.round((prevW.sets||defSets)*0.6)),rir:(tc.rirStart||2)+2,repsRange:prevW.repsRange};
           }else{
             const weekIdx=trainWeeks.indexOf(w);
             const allWeekIdx=allTrainWeeks.indexOf(w);
@@ -556,7 +557,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
               const rirRange=tc.rirStart-tc.rirEnd;
               const newRir=Math.round((tc.rirStart-rirRange*progress)*2)/2;
               const kgStep=tc.kgStep??2.5;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*allWeekIdx)}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*allWeekIdx)}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>roundHalf(k+kgStep*allWeekIdx))}:{}),sets:defSets,repsRange:defReps,rir:Math.max(0,newRir)};
             }else if(tc.mode==="reps"){
               const repRange=tc.repsEnd-tc.repsStart;
               const cycleLen=Math.max(2,repRange+1);
@@ -567,14 +568,14 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
               const rirRange=(tc.rirStart||2)-(tc.rirEnd||1);
               const repProgress=posInCycle/(cycleLen-1||1);
               const newRir=Math.round(((tc.rirStart||2)-rirRange*repProgress)*2)/2;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),sets:prevW.sets||defSets,repsRange:String(newReps),rir:Math.max(0,newRir)};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>roundHalf(k+kgStep*cycle))}:{}),sets:prevW.sets||defSets,repsRange:String(newReps),rir:Math.max(0,newRir)};
             }else{
               const repRange=tc.repsEnd-tc.repsStart;
               const cycleLen=repRange+1;
               const cycle=Math.floor(weekIdx/cycleLen);
               const posInCycle=weekIdx%cycleLen;
               const kgStep=tc.kgStep??1.25;
-              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),sets:prevW.sets||defSets,repsRange:String(tc.repsStart+posInCycle),rir:tc.rir??0};
+              newWeeks[w]={...prevW,...(w1.kg?{kg:roundHalf(w1.kg+kgStep*cycle)}:{}),...(w1._perSetMode&&w1.setKgs?.length>0?{setKgs:w1.setKgs.map(k=>roundHalf(k+kgStep*cycle))}:{}),sets:prevW.sets||defSets,repsRange:String(tc.repsStart+posInCycle),rir:tc.rir??0};
             }
           }
         }
@@ -911,7 +912,15 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     <span style={{fontSize:13,fontWeight:600}}>{ex.name}</span>{occIndex>0&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:C.bS,color:C.b,fontWeight:700,flexShrink:0}}>({occIndex})</span>}
                     {eType!=="muscu"&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:typeColors[eType]+"20",color:typeColors[eType],fontWeight:600}}>{typeLabels[eType]}</span>}
                   </div>
-                  {!isFlex&&(wd.pdc||wd.kg)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.pdc?"PDC":wd.kg+"kg"} - {fmtMR(wd.method,wd.methodParams,wd.sets,wd.repsRange)}{(!wd.method||wd.method==="dropset"||wd.method==="restpause")?" - ":""}{(!wd.method||wd.method==="dropset"||wd.method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}</div>
+                  {!isFlex&&(wd.pdc||wd.kg!=null||wd.pct_rm!=null||wd.sets||wd.method_attachment)?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>
+                    {wd.pdc?"PDC":wd.pct_rm!=null?wd.pct_rm+"%RM":wd.kg!=null?wd.kg+"kg":""}
+                    {(wd.pdc||wd.kg!=null||wd.pct_rm!=null)&&(wd.sets||wd.repsRange)?" - ":""}
+                    {wd.sets||wd.repsRange?fmtMR(wd.method,wd.methodParams,wd.sets||"?",wd.repsRange):""}
+                    {wd.method_attachment&&!wd.method&&(wd.sets||wd.repsRange)?" · ":""}
+                    {wd.method_attachment&&!wd.method?<span style={{color:C.ac,fontWeight:600}}>{wd.method_attachment.method_name||"Méthode"}</span>:""}
+                    {(!wd.method||wd.method==="dropset"||wd.method==="restpause")&&!wd.method_attachment?" - ":""}
+                    {(!wd.method||wd.method==="dropset"||wd.method==="restpause")?<span style={{color:rC(wd.rir??2)}}>RIR {rL(wd.rir??2)}</span>:""}
+                  </div>
                   :isFlex&&wd.sets?<div style={{fontSize:11,color:C.tx2,marginTop:2}}>{wd.sets}x{wd.repsRange||"?"}{wd.tempo?" tempo "+wd.tempo:""}</div>
                   :<div style={{fontSize:11,color:C.tx3,marginTop:2}}>Aucune prescription</div>}
                 </div>
@@ -949,7 +958,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                         </tr>
                         {!isFlex&&<tr>
                           <td style={lSt}>Charge</td>
-                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const isRm=wD.pct_rm!=null||wd.pct_rm!=null;const val=isRm?wD.pct_rm:wD.kg;return(<td key={w} style={{padding:"2px 3px"}}><input type="number" step={isRm?1:0.5} value={val??""} placeholder="-" onChange={e=>updWeekN(ex.id,w,isRm?"pct_rm":"kg",e.target.value)} style={{...cellSt(w),color:isRm?C.g:C.tx,background:isRm?(w===week?C.g+"25":C.g+"10"):w===week?C.coachS:C.s2}}/></td>);})}
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const isRm=wD.pct_rm!=null||wd.pct_rm!=null;const val=isRm?wD.pct_rm:wD.kg;const hasPS=!isRm&&wD._perSetMode&&wD.setKgs?.length>0;return(<td key={w} style={{padding:"2px 3px"}}>{hasPS?<div style={{...cellSt(w),display:"flex",alignItems:"center",justifyContent:"center",color:C.tx3,fontSize:9,fontStyle:"italic"}}>⚡</div>:<input type="number" step={isRm?1:0.5} value={val??""} placeholder="-" onChange={e=>updWeekN(ex.id,w,isRm?"pct_rm":"kg",e.target.value)} style={{...cellSt(w),color:isRm?C.g:C.tx,background:isRm?(w===week?C.g+"25":C.g+"10"):w===week?C.coachS:C.s2}}/>}</td>);})}
                         </tr>}
                         {!isFlex&&<tr>
                           <td style={{...lSt,fontSize:8}}>{(wd.pct_rm!=null||weeksArr.some(w=>ex.weeks[w]?.pct_rm!=null))?"%RM":"kg"}</td>
@@ -973,7 +982,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                         </tr>}
                         {!isFlex&&<tr>
                           <td style={lSt}>Méthode</td>
-                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const mk=wD.method||null;const mDat=mk?(DEF_METHODS[mk]||allMethods?.[mk]):null;const mc=mDat?.c||C.tx3;return(<td key={w} style={{padding:"2px 3px"}}><select value={mk||""} onChange={e=>{e.stopPropagation();updWeekNMethod(ex.id,w,e.target.value||null);}} style={{width:44,padding:"3px 1px",borderRadius:5,border:"1px solid "+(mk?mc:C.brdL),background:mk?mc+"20":C.s2,color:mk?mc:C.tx3,fontSize:8,fontWeight:mk?700:400,fontFamily:"inherit",cursor:"pointer"}}><option value="">—</option>{Object.entries(allMethods||{}).map(([k,m])=><option key={k} value={k}>{m.label.slice(0,7)}</option>)}</select></td>);})}
+                          {weeksArr.map(w=>{const wD=ex.weeks[w]||{};const mk=wD.method||null;const mDat=mk?(DEF_METHODS[mk]||allMethods?.[mk]):null;const mc=mDat?.c||C.tx3;const ma=wD.method_attachment;return(<td key={w} style={{padding:"2px 3px"}}>{ma&&!mk?(<div title={ma.method_name||"Méthode"} style={{width:44,padding:"3px 2px",borderRadius:5,border:"1px solid "+C.ac+"60",background:C.acS,color:C.ac,fontSize:7,fontWeight:700,textAlign:"center",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",boxSizing:"border-box",cursor:"default"}}>{(ma.method_name||"Méth.").slice(0,6)}</div>):(<select value={mk||""} onChange={e=>{e.stopPropagation();updWeekNMethod(ex.id,w,e.target.value||null);}} style={{width:44,padding:"3px 1px",borderRadius:5,border:"1px solid "+(mk?mc:C.brdL),background:mk?mc+"20":C.s2,color:mk?mc:C.tx3,fontSize:8,fontWeight:mk?700:400,fontFamily:"inherit",cursor:"pointer"}}><option value="">—</option>{Object.entries(allMethods||{}).map(([k,m])=><option key={k} value={k}>{m.label.slice(0,7)}</option>)}</select>)}</td>);})}
                         </tr>}
                       </tbody>
                     </table>
@@ -1041,14 +1050,18 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                 {!isFlex?(
                   <div style={{marginBottom:10}}>
                     {/* Charge header avec toggles PDC / %RM */}
-                    <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:5,justifyContent:"center"}}>
+                    {!wd._perSetMode&&<div style={{display:"flex",alignItems:"center",gap:4,marginBottom:5,justifyContent:"center"}}>
                       <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Charge</div>
+                      {/* kg — mode par défaut */}
+                      <button onClick={()=>{updField(ex.id,"pdc",false);updField(ex.id,"pct_rm",undefined);}} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(!wd.pdc&&wd.pct_rm==null?C.ac:C.brdL),background:(!wd.pdc&&wd.pct_rm==null)?C.acS:"transparent",color:(!wd.pdc&&wd.pct_rm==null)?C.ac:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>kg</button>
+                      {/* PDC */}
                       <button onClick={()=>{updField(ex.id,"pdc",!wd.pdc);if(!wd.pdc)updField(ex.id,"pct_rm",undefined);}} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(wd.pdc?C.ac:C.brdL),background:wd.pdc?C.acS:"transparent",color:wd.pdc?C.ac:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>PDC</button>
+                      {/* %RM */}
                       {athleteId&&<button onClick={()=>{const on=!!wd.pct_rm||wd.pct_rm===0;if(on){updField(ex.id,"pct_rm",undefined);}else{updField(ex.id,"pct_rm",80);updField(ex.id,"pdc",false);}}} title={ex.rm_ref?"Ref: "+ex.rm_ref:"Définir une référence RM sur l'exercice d'abord"} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+((wd.pct_rm!=null)?C.g:C.brdL),background:(wd.pct_rm!=null)?C.g+"20":"transparent",color:(wd.pct_rm!=null)?C.g:C.tx3,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>%RM</button>}
-                    </div>
+                    </div>}
                     {/* Charge inputs */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div>
+                    <div style={{display:"grid",gridTemplateColumns:(wd.setKgs?.length>0||wd.setPctRms?.length>0)?"1fr":"1fr 1fr",gap:8}}>
+                      {!wd._perSetMode&&<div>
                         {wd.pdc?<div style={{...fS,display:"flex",alignItems:"center",justifyContent:"center",background:C.acS,border:"1px solid "+C.ac,color:C.ac,fontWeight:700}}>PDC</div>
                         :wd.pct_rm!=null?(
                           <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -1065,8 +1078,10 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                               return <div style={{fontSize:9,color:C.g,fontWeight:700,textAlign:"center"}}>{calc} kg</div>;
                             })()}
                           </div>
+                        ):wd.setKgs?.length>0?(
+                          <div style={{...fS,display:"flex",alignItems:"center",justifyContent:"center",background:C.s2,border:"1px solid "+C.brdL,color:C.tx3,fontSize:10,fontStyle:"italic",cursor:"default"}}>par série ↓</div>
                         ):<input type="number" step="0.5" value={wd.kg??""} placeholder="--" onChange={e=>updField(ex.id,"kg",e.target.value)} style={fS}/>}
-                      </div>
+                      </div>}
                       <div>
                         <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div>
                         <input type="number" value={wd.sets??""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/>
@@ -1077,82 +1092,132 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
                     {/* Per-set charge config */}
                     {(wd.sets>=2)&&!wd.pdc&&(()=>{
                       const isRm=wd.pct_rm!=null;
-                      const hasPerSet=isRm?(wd.setPctRms&&wd.setPctRms.length>0):(wd.setKgs&&wd.setKgs.length>0);
+                      const hasPerSet=!!wd._perSetMode&&(isRm?(wd.setPctRms?.length>0):(wd.setKgs?.length>0));
                       const togglePerSet=()=>{
-                        if(hasPerSet){updField(ex.id,"setKgs",undefined);updField(ex.id,"setPctRms",undefined);}
-                        else if(isRm){updField(ex.id,"setPctRms",Array.from({length:wd.sets},()=>wd.pct_rm??80));}
-                        else{updField(ex.id,"setKgs",Array.from({length:wd.sets},()=>wd.kg??0));}
+                        setExos(prev=>({...prev,[sid]:prev[sid].map(e=>{
+                          if(e.id!==ex.id)return e;
+                          const cw=e.weeks[week]||{};let patch;
+                          if(hasPerSet){
+                            const stashVals=cw.setKgs||cw.setPctRms;
+                            const inferKg=!cw.kg&&!isRm&&stashVals?.length>0?stashVals[0]:undefined;
+                            patch={_perSetMode:false,_setKgsStash:stashVals,_setKgsIsRm:isRm,setKgs:undefined,setPctRms:undefined,...(inferKg!==undefined?{kg:inferKg}:{})};
+                          }else{
+                            const stash=cw._setKgsStash;const stashIsRm=cw._setKgsIsRm;
+                            if(stash?.length>0&&stashIsRm===isRm){patch=isRm?{_perSetMode:true,setPctRms:stash}:{_perSetMode:true,setKgs:stash};}
+                            else if(isRm){patch={_perSetMode:true,setPctRms:Array.from({length:cw.sets||3},()=>cw.pct_rm??80)};}
+                            else{patch={_perSetMode:true,setKgs:Array.from({length:cw.sets||3},()=>cw.kg??0)};}
+                          }
+                          return{...e,weeks:{...e.weeks,[week]:{...cw,...patch}}};
+                        })}));
                       };
                       const vals=isRm?(wd.setPctRms||[]):(wd.setKgs||[]);
                       const key=isRm?"setPctRms":"setKgs";
                       const ref=effectiveRmRef(ex);const prs=athleteId&&ref?prByRef[ref]:null;const best=prs?.length?prs.reduce((m,p)=>p.kg>m.kg?p:m,prs[0]):null;
                       return(<div style={{marginTop:8}}>
                         <button onClick={togglePerSet} style={{padding:"2px 8px",borderRadius:5,border:"1px solid "+(hasPerSet?C.ac:C.brdL),background:hasPerSet?C.acS:"transparent",color:hasPerSet?C.ac:C.tx3,fontSize:9,fontWeight:hasPerSet?700:400,cursor:"pointer",fontFamily:"inherit"}}>
-                          ⚡ {hasPerSet?"Charge globale":"Par série"}
+                          {hasPerSet?"⚡ Par série · ↩ Globale":"⚡ Par série"}
                         </button>
-                        {hasPerSet&&(<div style={{display:"flex",gap:4,marginTop:6,overflowX:"auto",paddingBottom:2}}>
+                        {hasPerSet&&(<div style={{marginTop:6}}>
+                          <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:2}}>
                           {Array.from({length:wd.sets},(_,i)=>{
                             const val=vals[i]??(isRm?wd.pct_rm??80:wd.kg??0);
                             const calcKg=isRm&&best?Math.round((val||0)/100*best.kg*2)/2:null;
-                            return(<div key={i} style={{textAlign:"center",minWidth:44}}>
-                              <div style={{fontSize:8,color:C.tx3,marginBottom:2}}>S{i+1}</div>
+                            const canPaste=copiedSet&&copiedSet.isRm===isRm;
+                            return(<div key={i} style={{textAlign:"center",minWidth:44,flexShrink:0}}>
+                              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2,marginBottom:2}}>
+                                <span style={{fontSize:8,color:C.tx3}}>S{i+1}</span>
+                                {/* Dupliquer : insère une copie de ce set après */}
+                                <button title="Dupliquer" onClick={()=>{const nv=[...Array.from({length:wd.sets},(_,j)=>vals[j]??(isRm?wd.pct_rm??80:wd.kg??0))];nv.splice(i+1,0,val);updField(ex.id,"sets",nv.length);updField(ex.id,key,nv);}} style={{width:14,height:14,borderRadius:3,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:8,cursor:"pointer",fontFamily:"inherit",padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                                {/* Coller : applique la dernière valeur copiée */}
+                                {canPaste&&<button title="Coller" onClick={()=>{const nv=[...Array.from({length:wd.sets},(_,j)=>vals[j]??(isRm?wd.pct_rm??80:wd.kg??0))];nv[i]=copiedSet.val;updField(ex.id,key,nv);}} style={{width:14,height:14,borderRadius:3,border:"1px solid "+C.ac+"60",background:C.acS,color:C.ac,fontSize:8,cursor:"pointer",fontFamily:"inherit",padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>▼</button>}
+                              </div>
                               <input type="number" step={isRm?1:0.5} value={val??""} onChange={e=>{const nv=[...Array.from({length:wd.sets},(_,j)=>vals[j]??(isRm?wd.pct_rm??80:wd.kg??0))];nv[i]=parseFloat(e.target.value)||0;updField(ex.id,key,nv);}} style={{width:44,textAlign:"center",padding:"4px 2px",borderRadius:5,border:"1px solid "+C.brdL,background:C.s2,color:isRm?C.g:C.tx,fontSize:11,fontWeight:700,fontFamily:"inherit",boxSizing:"border-box"}}/>
-                              <div style={{fontSize:8,color:isRm?C.g:C.tx3,marginTop:2,fontWeight:700}}>{isRm?(calcKg?calcKg+"kg":"-"):(val?val+"kg":"-")}</div>
+                              <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:2}}>
+                                <div style={{fontSize:8,color:isRm?C.g:C.tx3,fontWeight:700}}>{isRm?(calcKg?calcKg+"kg":"-"):(val?val+"kg":"-")}</div>
+                                {/* Copier ce set */}
+                                <button title="Copier" onClick={()=>setCopiedSet({val,isRm})} style={{width:12,height:12,borderRadius:2,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:7,cursor:"pointer",fontFamily:"inherit",padding:0,lineHeight:1}}>C</button>
+                              </div>
                             </div>);
                           })}
                           <div style={{alignSelf:"center",paddingTop:10,fontSize:9,color:C.tx3}}>{isRm?"%":""}</div>
+                          </div>
+                          {copiedSet&&<div style={{fontSize:9,color:C.ac,marginTop:4}}>Copié : {copiedSet.val}{copiedSet.isRm?"%":"kg"} — clique ▼ pour coller</div>}
                         </div>)}
                       </div>);
                     })()}
                   </div>
                 ):(<div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5,textAlign:"center"}}>Series</div><input type="number" value={wd.sets||""} placeholder="--" onChange={e=>updField(ex.id,"sets",e.target.value)} style={fS}/></div>)}
-                <div style={{marginBottom:10}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:5}}>Repetitions / Duree</div><input type="text" value={wd.repsRange||""} placeholder={isFlex?"30s ou 10":"10 ou 8-12"} onChange={e=>updField(ex.id,"repsRange",e.target.value)} style={{...fS,textAlign:"left",paddingLeft:10}}/></div>
+                <div style={{marginBottom:10}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px"}}>Repetitions / Duree</div>
+                    {!isFlex&&wd.sets>=2&&(()=>{const isPS=(wd.repsRange||"").includes(",");return(<button onClick={()=>{setExos(prev=>({...prev,[sid]:prev[sid].map(e=>{if(e.id!==ex.id)return e;const cw=e.weeks[week]||{};let patch;if(isPS){patch={_repsRangeStash:cw.repsRange,repsRange:(cw.repsRange||"").split(",")[0]||""};}else{const stash=cw._repsRangeStash;if(stash?.includes(",")&&stash.split(",").length===(cw.sets||3)){patch={repsRange:stash};}else{const b=cw.repsRange||"";patch={repsRange:Array.from({length:cw.sets||3},()=>b).join(",")};}}return{...e,weeks:{...e.weeks,[week]:{...cw,...patch}}};}))}));}} style={{padding:"1px 5px",borderRadius:4,border:"1px solid "+(isPS?C.ac:C.brdL),background:isPS?C.acS:"transparent",color:isPS?C.ac:C.tx3,fontSize:9,fontWeight:isPS?700:400,cursor:"pointer",fontFamily:"inherit"}}>⚡ {isPS?"Global":"Par série"}</button>);})()}
+                  </div>
+                  {(()=>{const isPS=!isFlex&&wd.sets>=2&&(wd.repsRange||"").includes(",");if(!isPS)return(<input type="text" value={wd.repsRange||""} placeholder={isFlex?"30s ou 10":"10 ou 8-12"} onChange={e=>updField(ex.id,"repsRange",e.target.value)} style={{...fS,textAlign:"left",paddingLeft:10}}/>);const parts=(wd.repsRange||"").split(",");return(<div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:2}}>{Array.from({length:wd.sets},(_,i)=>{const val=parts[i]??parts[parts.length-1]??"";return(<div key={i} style={{textAlign:"center",minWidth:44,flexShrink:0}}><div style={{fontSize:8,color:C.tx3,marginBottom:2}}>S{i+1}</div><input type="text" value={val} onChange={e=>{const np=Array.from({length:wd.sets},(_,j)=>j===i?e.target.value:(parts[j]??parts[parts.length-1]??""));updField(ex.id,"repsRange",np.join(","));}} style={{width:44,textAlign:"center",padding:"4px 2px",borderRadius:5,border:"1px solid "+C.brdL,background:C.s2,color:C.tx,fontSize:11,fontWeight:700,fontFamily:"inherit",boxSizing:"border-box"}}/></div>);})}</div>);})()}
+                </div>
                 <div style={{display:"grid",gridTemplateColumns:isFlex?"1fr":"1fr 1fr",gap:8,marginBottom:14}}>
                   <div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5,textAlign:"center"}}>Tempo</div><input type="text" value={wd.tempo||""} placeholder="3-1-2-0" onChange={e=>updField(ex.id,"tempo",e.target.value)} style={{...fS,fontSize:12}}/></div>
                   {!isFlex&&<div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5,textAlign:"center"}}>RIR cible</div><div style={{display:"flex",justifyContent:"center"}}><RIRPicker value={wd.rir??2} onChange={v=>updField(ex.id,"rir",v)}/></div></div>}
                 </div>
                 {!isFlex&&(<div style={{marginBottom:14}}>
-                  <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Methode</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                    <button onClick={()=>{setExos(prev=>({...prev,[sid]:(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:null,methodParams:null}}}:e)}));}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(!wd.method?C.coach:C.brdL),background:!wd.method?C.coachS:"transparent",color:!wd.method?C.coach:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:!wd.method?700:400}}>Standard</button>
-                    {Object.entries(allMethods).map(([k,m])=><button key={k} onClick={()=>{const nm=wd.method===k?null:k;setExos(prev=>({...prev,[sid]:(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method:nm,methodParams:nm?(MDEF[nm]||null):null}}}:e)}));}} style={{padding:"5px 10px",borderRadius:7,border:"1px solid "+(wd.method===k?m.c:C.brdL),background:wd.method===k?m.c+"20":"transparent",color:wd.method===k?m.c:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:wd.method===k?700:400}}>{m.label}</button>)}
-                    <button onClick={()=>setNewMForm(o=>!o)} style={{padding:"5px 10px",borderRadius:7,border:"1px dashed "+C.brdL,background:"transparent",color:C.tx3,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>+ Custom</button>
-                  </div>
-                  {wd.method&&<MethodParamsForm method={wd.method} params={wd.methodParams} onChange={p=>updMP(ex.id,p)} exosInSession={exList} currentExId={ex.id} plannedKg={wd.pdc?null:wd.kg}/>}
-                  {newMForm&&(<div style={{marginTop:8,padding:"10px 12px",borderRadius:10,background:C.s2,border:"1px solid "+C.brdL}}><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}><input value={newM.label} onChange={e=>setNewM(p=>({...p,label:e.target.value}))} placeholder="Nom" style={{padding:"6px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit"}}/><input value={newM.e} onChange={e=>setNewM(p=>({...p,e:e.target.value}))} placeholder="Code" style={{padding:"6px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:C.s1,color:C.tx,fontSize:12,fontFamily:"inherit"}}/></div><button onClick={addCM} style={{padding:"6px 14px",borderRadius:7,border:"none",background:C.coachS,color:C.coach,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Ajouter</button></div>)}
-                  {/* Sous-série — méthode bibliothèque (scope=set) */}
-                  <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.brd}}>
-                    <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Sous-série (méthode)</div>
-                    {wd.method_attachment?(
-                      <div style={{padding:"8px 10px",borderRadius:8,background:C.acS,border:"1px solid "+C.ac+"50"}}>
-                        {/* Header row: nom + actions */}
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <div style={{flex:1,fontSize:11,color:C.ac,fontWeight:700}}>
-                            {wd.method_attachment.method_name||"Méthode"}
-                            {wd.method_attachment.applied_to_sets?.length>0&&<span style={{fontWeight:400,color:C.tx3}}> · sets {wd.method_attachment.applied_to_sets.join(", ")}</span>}
-                            {(()=>{
-                              const ref=wd.method_attachment.reference;
-                              if(!ref)return null;
-                              const m=ref.trim().match(/^(\d+(?:\.\d+)?)%$/);
-                              if(!m)return null;
-                              // Priority: use ex.rm_ref PR if available, else wd.kg
-                              let baseKg=wd.kg;
-                              const effRefM=effectiveRmRef(ex);if(effRefM&&prByRef[effRefM]?.length){const best=prByRef[effRefM].reduce((bst,p)=>p.kg>bst.kg?p:bst,prByRef[effRefM][0]);baseKg=best.kg;}
-                              if(!baseKg)return null;
-                              const calc=Math.round(parseFloat(m[1])/100*baseKg*2)/2;
-                              return <span style={{fontWeight:400,color:C.tx3}}> · {ref} = <span style={{fontWeight:700,color:C.tx}}>{calc} kg</span></span>;
-                            })()}
-                          </div>
-                          <button onClick={()=>setMethodPickerEx({id:ex.id,sets:wd.sets||4,sid})} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Modifier</button>
-                          <button onClick={()=>setExos(prev=>({...prev,[sid]:(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),sets:undefined,repsRange:undefined,method_attachment:null}}}:e)}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Retirer</button>
+                  <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Méthode</div>
+                  {wd.method_attachment?(
+                    <div style={{padding:"8px 10px",borderRadius:8,background:C.acS,border:"1px solid "+C.ac+"50"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{flex:1,fontSize:11,color:C.ac,fontWeight:700}}>
+                          {wd.method_attachment.method_name||"Méthode"}
+                          {wd.method_attachment.applied_to_sets?.length>0&&<span style={{fontWeight:400,color:C.tx3}}> · sets {wd.method_attachment.applied_to_sets.join(", ")}</span>}
+                          {(()=>{
+                            const ref=wd.method_attachment.reference;
+                            if(!ref)return null;
+                            const m=ref.trim().match(/^(\d+(?:\.\d+)?)%$/);
+                            if(!m)return null;
+                            let baseKg=wd.kg;
+                            const effRefM=effectiveRmRef(ex);if(effRefM&&prByRef[effRefM]?.length){const best=prByRef[effRefM].reduce((bst,p)=>p.kg>bst.kg?p:bst,prByRef[effRefM][0]);baseKg=best.kg;}
+                            if(!baseKg)return null;
+                            const calc=Math.round(parseFloat(m[1])/100*baseKg*2)/2;
+                            return <span style={{fontWeight:400,color:C.tx3}}> · {ref} = <span style={{fontWeight:700,color:C.tx}}>{calc} kg</span></span>;
+                          })()}
                         </div>
-                        {/* Prescription text */}
-                        {wd.method_attachment.prescription&&<div style={{fontSize:10,color:C.tx2,marginTop:5,padding:"4px 6px",borderRadius:5,background:"rgba(0,0,0,0.15)",fontFamily:"monospace"}}>{wd.method_attachment.prescription}</div>}
+                        <button onClick={()=>setMethodPickerEx({id:ex.id,sets:wd.sets||4,sid})} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Modifier</button>
+                        <button onClick={()=>setExos(prev=>({...prev,[sid]:(prev[sid]||[]).map(e=>e.id===ex.id?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),method_attachment:null}}}:e)}))} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Retirer</button>
                       </div>
-                    ):(
-                      <button onClick={()=>setMethodPickerEx({id:ex.id,sets:wd.sets||4,sid})} style={{padding:"6px 12px",borderRadius:7,border:"1px dashed "+C.ac+"60",background:C.acS,color:C.ac,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Ajouter une sous-série</button>
-                    )}
-                  </div>
+                      {/* Hint kg manquant — scope='set' load same/free */}
+                      {(()=>{
+                        const ma=wd.method_attachment;if(!ma?.config?.sub_sets)return null;
+                        const loadType=ma.config?.load?.type;
+                        const noRef=!ma.reference&&!ma.config?.load?.reference;
+                        const noKg=!wd.kg&&!wd.pct_rm&&!wd.pdc;
+                        if((loadType==="same"||loadType==="free")&&noRef&&noKg)
+                          return <div style={{marginTop:6,fontSize:10,color:C.o,padding:"4px 8px",borderRadius:6,background:C.o+"15",border:"1px solid "+C.o+"40"}}>⚠ Charge non définie — renseigner la valeur kg ci-dessus pour préremplir côté athlète</div>;
+                        return null;
+                      })()}
+                      {/* Aperçu sous-séries — scope='set' */}
+                      {(()=>{
+                        const ss=wd.method_attachment?.config?.sub_sets;if(!ss)return null;
+                        const nSets=wd.sets||3;const subCount=ss.count?.type==="fixed"?(ss.count.value??3):ss.count?.type==="range"?(ss.count.min??2):3;
+                        const restSec=ss.rest_intra?.type==="fixed"?(ss.rest_intra.seconds??0):0;
+                        const repsLabel=(sub)=>{const rc=ss.reps;if(rc?.type==="fixed")return rc.value??"?";if(rc?.type==="custom"&&rc.pattern?.length)return rc.pattern[sub]??rc.pattern[rc.pattern.length-1]??"?";if(rc?.type==="amrap")return"max";return"?";};
+                        return(<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:3}}>
+                          {Array.from({length:nSets},(_,s)=>(
+                            <div key={s} style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                              <span style={{fontSize:9,fontWeight:700,color:C.tx3,minWidth:28}}>S{s+1}</span>
+                              {Array.from({length:subCount},(_,sub)=>(
+                                <span key={sub} style={{display:"inline-flex",alignItems:"center",gap:3,padding:"2px 6px",borderRadius:4,background:C.s2,border:"1px solid "+C.brd,fontSize:10,color:C.tx2}}>
+                                  <span style={{fontSize:9,color:C.ac,fontWeight:700}}>SS{sub+1}</span>
+                                  {(wd.kg?<span style={{color:C.tx,fontWeight:600}}>{wd.kg}kg</span>:null)}
+                                  <span style={{color:C.tx3}}>×</span>
+                                  <span style={{color:C.tx,fontWeight:600}}>{repsLabel(sub)}</span>
+                                </span>
+                              ))}
+                              {restSec>0&&<span style={{fontSize:9,color:C.tx3}}>{restSec}s</span>}
+                            </div>
+                          ))}
+                        </div>);
+                      })()}
+                    </div>
+                  ):(
+                    <button onClick={()=>setMethodPickerEx({id:ex.id,sets:wd.sets||4,sid})} style={{padding:"6px 12px",borderRadius:7,border:"1px dashed "+C.ac+"60",background:C.acS,color:C.ac,fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Ajouter une méthode</button>
+                  )}
                 </div>)}
                 <div><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:6}}>Consigne technique</div><textarea value={wd.coachNote||""} onChange={e=>updField(ex.id,"coachNote",e.target.value)} placeholder="Ex: garder les omoplates retractees..." rows={2} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1px solid "+C.coach+"60",background:C.s2,color:C.tx,fontSize:12,fontFamily:"inherit",resize:"none",boxSizing:"border-box",lineHeight:1.5}}/></div>
                 {!isFlex&&wd.repsRange&&(()=>{
@@ -1218,10 +1283,6 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
             <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5}}>Type d'exercice</div>
             <div style={{display:"flex",gap:4}}>{[{k:"muscu",l:"Musculation",c:C.tx2},{k:"halterophilie",l:"Haltérophilie",c:"#8b5cf6"},{k:"plio",l:"Pliométrie",c:C.o},{k:"mobilite",l:"Mobilité",c:C.b}].map(({k,l,c})=>{const on=(newEx.exType||"muscu")===k;return(<button key={k} onClick={()=>setNewEx(p=>({...p,exType:k}))} style={{flex:1,padding:"7px 4px",borderRadius:7,border:"1px solid "+(on?c:C.brdL),background:on?c+"20":"transparent",color:on?c:C.tx3,fontSize:10,fontWeight:on?700:400,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>);})}</div>
           </div>
-          {["muscu","halterophilie"].includes(newEx.exType||"muscu")&&<div style={{marginBottom:10}}>
-            <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5}}>Categorie surcharge</div>
-            <div style={{display:"flex",gap:4}}>{[1,2,3].map(t=>{const tc=tierCfg[t];return(<button key={t} onClick={()=>setNewEx(p=>({...p,tier:t}))} style={{flex:1,padding:"6px 4px",borderRadius:7,border:"1px solid "+((newEx.tier||3)===t?tc.c:C.brdL),background:(newEx.tier||3)===t?tc.c+"20":"transparent",color:(newEx.tier||3)===t?tc.c:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{tc.label}</button>);})}</div>
-          </div>}
           <div style={{display:"grid",gridTemplateColumns:!["muscu","halterophilie"].includes(newEx.exType||"muscu")?"1fr":"1fr 1fr",gap:8,marginBottom:12}}>
             <div>
               <div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",marginBottom:5}}>Bloc</div>
@@ -1265,8 +1326,31 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
     onAttach={(attachment, method)=>{
       const exId=methodPickerEx.id;
       const exSid=methodPickerEx.sid;
-      const derived=methodConfigToWeekFields(method.config);
-      setExos(prev=>({...prev,[exSid]:(prev[exSid]||[]).map(e=>e.id===exId?{...e,weeks:{...e.weeks,[week]:{...(e.weeks[week]||{}),...derived,method_attachment:attachment}}}:e)}));
+      const weeklyConfigs=method.config?.weekly_configs;
+      setExos(prev=>({...prev,[exSid]:(prev[exSid]||[]).map(e=>{
+        if(e.id!==exId)return e;
+        if(weeklyConfigs&&weeklyConfigs.length>0){
+          // Multi-week method: fill each week from weekly_configs, carry-forward last derived for unconfigured weeks
+          const newWeeks={...e.weeks};
+          let lastDerived={};
+          weeksArr.forEach(w=>{
+            const wc=weeklyConfigs.find(x=>x.week===w);
+            if(wc){
+              lastDerived=methodConfigToWeekFields(wc.config);
+              newWeeks[w]={...(newWeeks[w]||{}),...lastDerived,method_attachment:attachment};
+            } else {
+              // Carry-forward last configured week's derived fields
+              newWeeks[w]={...(newWeeks[w]||{}),...lastDerived,method_attachment:attachment};
+            }
+          });
+          return {...e,weeks:newWeeks};
+        }
+        // Single-config method: apply derived to ALL weeks so S+1, S+2 are pre-filled
+        const derived=methodConfigToWeekFields(method.config);
+        const newWeeks={...e.weeks};
+        weeksArr.forEach(w=>{newWeeks[w]={...(newWeeks[w]||{}),...derived,method_attachment:attachment};});
+        return {...e,weeks:newWeeks};
+      })}));
       setMethodPickerEx(null);
     }}
     onClose={()=>setMethodPickerEx(null)}
@@ -1368,11 +1452,6 @@ function CoachExoParams({exMeta,setExMeta,exos,setExos,blockConfig}){
             <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:6}}>Type d'exercice</div>
             <div style={{display:"flex",gap:4}}>{[{v:"muscu",l:"Muscu"},{v:"halterophilie",l:"Halté."},{v:"plio",l:"Plio"},{v:"mobilite",l:"Mobilité"}].map(({v,l})=>(<button key={v} onClick={()=>updExTypeForEx(ex.name,v)} style={{flex:1,padding:"6px 4px",borderRadius:7,border:"1px solid "+(eType===v?C.ac:C.brdL),background:eType===v?C.acS:"transparent",color:eType===v?C.ac:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>))}</div>
           </div>
-          {isMuscu&&(<div style={{marginBottom:12}}>
-            <div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:6}}>Categorie surcharge</div>
-            <div style={{display:"flex",gap:4}}>{[1,2,3].map(t=>{const tc=tierCfg[t];return(<button key={t} onClick={()=>updTierForEx(ex.name,t)} style={{flex:1,padding:"6px 4px",borderRadius:7,border:"1px solid "+(curTier===t?tc.c:C.brdL),background:curTier===t?tc.c+"20":"transparent",color:curTier===t?tc.c:C.tx3,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{tc.label}</button>);})}</div>
-            <div style={{fontSize:9,color:C.tx3,marginTop:4}}>{curTc.mode==="rir"?"+"+( curTc.kgStep??2.5)+"kg/sem · RIR "+curTc.rirStart+"→"+curTc.rirEnd:curTc.mode==="reps"?"Reps "+curTc.repsStart+"→"+curTc.repsEnd+" puis +"+( curTc.kgStep??2.5)+"kg":"Reps "+curTc.repsStart+"→"+curTc.repsEnd+" échec puis +"+( curTc.kgStep??1.25)+"kg"}</div>
-          </div>)}
           {isMuscu&&<><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",marginBottom:8}}>Muscles principaux <span style={{fontWeight:400,textTransform:"none"}}>(max 4)</span></div><MuscleSelector value={primaries} onChange={v=>{const arr=normPrimary(v);if(arr.length<=4){const sec=(meta.secondary||[]).filter(m=>!arr.includes(m));setExMeta(p=>({...p,[ex.name]:{...(p[ex.name]||{}),primary:arr,secondary:sec}}));}}} multi/><div style={{fontSize:10,fontWeight:600,color:C.tx3,textTransform:"uppercase",margin:"12px 0 8px"}}>Muscles secondaires <span style={{fontWeight:400,textTransform:"none"}}>(comptent 50% du volume)</span></div><MuscleSelector value={meta.secondary||[]} onChange={v=>{const arr=normPrimary(v).filter(m=>!primaries.includes(m));setExMeta({...exMeta,[ex.name]:{...meta,secondary:arr}});}} multi/></>}</div></div>)}
       </div>);
     })}

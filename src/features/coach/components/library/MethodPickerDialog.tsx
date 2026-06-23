@@ -12,7 +12,7 @@ import { X, Search } from "lucide-react";
 import { C } from "@/lib/theme";
 import { MethodPreview } from "./MethodPreview";
 import { useTrainingMethods } from "@/features/shared/hooks/useTrainingMethods";
-import type { TrainingMethod, MethodAttachment, MethodScope, ClassicMethodConfig, SetMethodConfig } from "@/types/trainingMethods";
+import type { TrainingMethod, MethodAttachment, MethodScope, ClassicMethodConfig, SetMethodConfig, FullWeekConfig, MethodConfig } from "@/types/trainingMethods";
 import { methodConfigToText } from "./MethodPreview";
 
 // ─── Extract reference from config ────────────────────────────────────────────
@@ -64,11 +64,16 @@ export function MethodPickerDialog({ setsCount, onAttach, onClose }: MethodPicke
   function handleApply() {
     if (!selected) return;
     const ref = extractReference(selected);
+    const weeklyConfigs = (selected.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[] | undefined;
+    const prescription = weeklyConfigs?.length
+      ? `Multi-semaines (${weeklyConfigs.length} sem.)`
+      : methodConfigToText(selected.config);
     const attachment: MethodAttachment = {
       method_id:    selected.id,
       scope:        selected.scope,
       method_name:  selected.name,
-      prescription: methodConfigToText(selected.config),
+      prescription,
+      config:       selected.config,
       ...(selected.scope === "set" && appliedSets.length > 0 && { applied_to_sets: [...appliedSets].sort() }),
       ...(ref && { reference: ref }),
     };
@@ -191,7 +196,26 @@ export function MethodPickerDialog({ setsCount, onAttach, onClose }: MethodPicke
                   )}
                 </div>
 
-                <MethodPreview config={selected.config} />
+                {/* Afficher base config seulement si pas de weekly_configs */}
+                {!((selected.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[] | undefined)?.length && (
+                  <MethodPreview config={selected.config} />
+                )}
+                {/* Weekly protocol */}
+                {((): FullWeekConfig[] | undefined => (selected.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[] | undefined)()?.length ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
+                      Progression semaine par semaine
+                    </div>
+                    {((selected.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[]).map((wc) => (
+                      <div key={wc.week} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#7B6FFF", flexShrink: 0, minWidth: 24 }}>S{wc.week}</span>
+                        <span style={{ fontSize: 11, color: C.tx2, fontFamily: "monospace" }}>
+                          {wc.config ? methodConfigToText(wc.config as MethodConfig) : "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 {/* Set selector — scope='set' */}
                 {selected.scope === "set" && setsCount > 0 && (
