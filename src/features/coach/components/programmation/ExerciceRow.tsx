@@ -26,13 +26,14 @@ interface ExerciceRowProps {
   dragHandleProps?: Record<string, unknown>
 }
 
-function getDisplayParams(exercice: Exercice, activeWeek: number, multiSemaine: boolean) {
-  if (!multiSemaine) return exercice.params as import("./types").ExerciceParams
-  if (typeof exercice.params === 'object' && !('mode' in exercice.params)) {
-    const rec = exercice.params as Record<string, import("./types").ExerciceParams>
-    return rec[String(activeWeek)] ?? Object.values(rec)[0] ?? null
+function getDisplayParams(exercice: Exercice, activeWeek: number, _multiSemaine: boolean) {
+  const p = exercice.params
+  const isRecord = typeof p === 'object' && p !== null && Object.keys(p as object).some((k) => /^\d+$/.test(k))
+  if (isRecord) {
+    const rec = p as Record<string, import("./types").ExerciceParams>
+    return rec[String(activeWeek)] ?? rec['1'] ?? Object.values(rec)[0] ?? null
   }
-  return exercice.params as import("./types").ExerciceParams
+  return p as import("./types").ExerciceParams
 }
 
 export function ExerciceRow({
