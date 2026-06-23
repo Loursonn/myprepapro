@@ -10,7 +10,7 @@ import type { WorkoutBlocData } from "@/features/shared/hooks/useWorkoutSession"
 import { useSaveWorkoutSets } from "@/features/shared/hooks/useSaveWorkoutSets";
 import { usePrevWorkoutSets } from "@/features/shared/hooks/usePrevWorkoutSets";
 import type { AthleteModifications, SessionSetLog } from "@/features/shared/types/athlete";
-import type { ExerciceParams } from "@/features/coach/components/programmation/types";
+import type { ExerciceParams, ClusterConfig } from "@/features/coach/components/programmation/types";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +36,7 @@ const FIELD_CFG = {
 
 interface SetState { kg: string; reps: string; rir: string; done: boolean; skipped: boolean; }
 type AllSets = Record<string, SetState[]>;
-interface PadTarget { exId: string; setIdx: number; field: "kg" | "reps" | "rir"; chargeUnit: string; }
+interface PadTarget { exId: string; setIdx: number; field: "kg" | "reps" | "rir"; chargeUnit: string; clusterNb?: number; }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -373,6 +373,142 @@ function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCom
   );
 }
 
+// ── ClusterSubRow ──────────────────────────────────────────────────────────────
+
+const ORANGE = "#F5A623";
+
+interface ClusterSubRowProps {
+  clusterIdx: number;
+  prescribedReps: number;
+  state: SetState;
+  chargeUnit: string;
+  prevStr: string;
+  canEdit: boolean;
+  onToggle: () => void;
+  onOpenPad: () => void;
+}
+
+function ClusterSubRow({
+  clusterIdx,
+  prescribedReps,
+  state,
+  chargeUnit,
+  prevStr,
+  canEdit,
+  onToggle,
+  onOpenPad,
+}: ClusterSubRowProps) {
+  const isPDC = chargeUnit === "PDC";
+  const checkState = state.done ? "done" : state.skipped ? "skip" : "empty";
+
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: isPDC ? "26px 1fr 44px 34px" : "26px 1fr 1fr 44px 34px",
+      gap: 4,
+      alignItems: "center",
+      padding: "3px 0",
+      borderBottom: `1px solid ${C.brd}`,
+    }}>
+      {/* Cluster badge */}
+      <div style={{
+        textAlign: "center",
+        fontSize: 8,
+        fontWeight: 800,
+        color: ORANGE,
+        background: "rgba(245,166,35,0.15)",
+        borderRadius: 4,
+        padding: "2px 0",
+        lineHeight: "1.4",
+      }}>
+        C{clusterIdx + 1}
+      </div>
+
+      {/* Charge */}
+      {!isPDC && (
+        <div
+          onClick={() => canEdit && onOpenPad()}
+          style={{
+            background: state.done ? hexToRgba(GREEN, 0.06) : C.s2,
+            border: `1px solid ${state.done ? hexToRgba(GREEN, 0.3) : C.brdL}`,
+            borderRadius: 7,
+            padding: "5px 2px",
+            color: state.done ? GREEN : C.tx,
+            fontSize: 12,
+            fontWeight: 700,
+            textAlign: "center" as const,
+            cursor: canEdit ? "pointer" : "default",
+            minHeight: 28,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {state.kg || <span style={{ color: C.tx3, fontWeight: 400, fontSize: 10 }}>—</span>}
+        </div>
+      )}
+
+      {/* Prescribed reps (fixed) */}
+      <div style={{
+        background: "rgba(245,166,35,0.1)",
+        border: "1px solid rgba(245,166,35,0.25)",
+        borderRadius: 7,
+        padding: "5px 2px",
+        color: ORANGE,
+        fontSize: 12,
+        fontWeight: 800,
+        textAlign: "center" as const,
+        minHeight: 28,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        {prescribedReps}
+      </div>
+
+      {/* Prev */}
+      <div style={{
+        textAlign: "center",
+        fontSize: 10,
+        color: C.tx3,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}>
+        {prevStr ? (parsePrevVal(prevStr, "kg") || "—") : "—"}
+      </div>
+
+      {/* Checkmark */}
+      <button
+        onClick={() => { if (canEdit) { onToggle(); haptic(); } }}
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          border: `2px solid ${
+            checkState === "done" ? GREEN : checkState === "skip" ? ROSE : C.brdL
+          }`,
+          background: checkState === "done" ? GREEN : checkState === "skip" ? hexToRgba(ROSE, 0.18) : "transparent",
+          color: checkState === "done" ? "#fff" : checkState === "skip" ? ROSE : C.tx3,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: canEdit ? "pointer" : "default",
+          fontFamily: "inherit",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 150ms",
+          flexShrink: 0,
+          justifySelf: "center" as const,
+          opacity: checkState === "empty" ? 0.35 : 1,
+        }}
+      >
+        {checkState === "skip" ? "✕" : "✓"}
+      </button>
+    </div>
+  );
+}
+
 // ── InlineRestStrip ────────────────────────────────────────────────────────────
 
 interface InlineRestStripProps {
@@ -589,32 +725,128 @@ function ExerciceCard({
       })()}
 
       {/* Column headers */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isPDC
-            ? "34px 1fr 1.15fr 0.9fr 40px"
-            : "34px 1fr 1.15fr 1.15fr 0.9fr 40px",
-          gap: 5,
-          padding: "4px 14px 2px",
-          fontSize: 9,
-          color: C.tx3,
-          fontWeight: 600,
-          letterSpacing: "0.4px",
-          textTransform: "uppercase" as const,
-        }}
-      >
-        <div style={{ textAlign: "center" }}>#</div>
-        {!isPDC && <div style={{ textAlign: "center" }}>Charge</div>}
-        <div style={{ textAlign: "center" }}>Reps</div>
-        <div style={{ textAlign: "center" }}>Préc.</div>
-        <div style={{ textAlign: "center" }}>RIR</div>
-        <div />
-      </div>
+      {params.cluster ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isPDC ? "26px 1fr 44px 34px" : "26px 1fr 1fr 44px 34px",
+            gap: 4,
+            padding: "4px 14px 2px",
+            fontSize: 9,
+            color: C.tx3,
+            fontWeight: 600,
+            letterSpacing: "0.4px",
+            textTransform: "uppercase" as const,
+          }}
+        >
+          <div style={{ textAlign: "center" }}>C#</div>
+          {!isPDC && <div style={{ textAlign: "center" }}>Charge</div>}
+          <div style={{ textAlign: "center" }}>Reps</div>
+          <div style={{ textAlign: "center" }}>Préc.</div>
+          <div />
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isPDC
+              ? "34px 1fr 1.15fr 0.9fr 40px"
+              : "34px 1fr 1.15fr 1.15fr 0.9fr 40px",
+            gap: 5,
+            padding: "4px 14px 2px",
+            fontSize: 9,
+            color: C.tx3,
+            fontWeight: 600,
+            letterSpacing: "0.4px",
+            textTransform: "uppercase" as const,
+          }}
+        >
+          <div style={{ textAlign: "center" }}>#</div>
+          {!isPDC && <div style={{ textAlign: "center" }}>Charge</div>}
+          <div style={{ textAlign: "center" }}>Reps</div>
+          <div style={{ textAlign: "center" }}>Préc.</div>
+          <div style={{ textAlign: "center" }}>RIR</div>
+          <div />
+        </div>
+      )}
 
       {/* Set rows */}
       <div style={{ padding: "0 14px" }}>
-        {sets.map((s, i) => {
+        {params.cluster ? (() => {
+          const c = params.cluster;
+          const nb = c.nb_clusters;
+          const mainSetsCount = params.nb_series;
+          const safeReps = Array.isArray(c.reps) ? c.reps : Array(nb).fill(5);
+          return Array.from({ length: mainSetsCount }, (_, si) => {
+            const clusterSets = sets.slice(si * nb, (si + 1) * nb);
+            const allClusterDone = clusterSets.every((s) => s.done || s.skipped);
+            const setStripKey = `${exId}:set${si}`;
+            return (
+              <div key={si} style={{ marginBottom: si < mainSetsCount - 1 ? 6 : 0 }}>
+                {/* Main set label */}
+                <div style={{
+                  padding: "5px 0 2px",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 800,
+                    color: allClusterDone ? C.g : C.tx3,
+                    background: allClusterDone ? C.gS : C.s2,
+                    borderRadius: 5, padding: "1px 8px",
+                  }}>
+                    Série {si + 1}
+                  </span>
+                </div>
+                {/* Cluster sub-rows */}
+                {clusterSets.map((clusterState, ci) => {
+                  const flatIdx = si * nb + ci;
+                  const isLastCluster = ci === nb - 1;
+                  return (
+                    <div key={ci}>
+                      <ClusterSubRow
+                        clusterIdx={ci}
+                        prescribedReps={safeReps[ci] ?? 5}
+                        state={clusterState}
+                        chargeUnit={params.charge_unit}
+                        prevStr={prevSets[flatIdx] ?? ""}
+                        canEdit={canEdit}
+                        onToggle={() => onToggle(flatIdx)}
+                        onOpenPad={() => onOpenPad(flatIdx, "kg")}
+                      />
+                      {!isLastCluster && c.recup_sec > 0 && (
+                        <InlineRestStrip
+                          myKey={`${exId}:${flatIdx}:cluster`}
+                          seconds={c.recup_sec}
+                          label="entre clusters"
+                          activeKey={restActiveKey}
+                          left={restLeft}
+                          total={restTotal}
+                          onStart={() => onStartRest(`${exId}:${flatIdx}:cluster`, c.recup_sec)}
+                          onStop={onStopRest}
+                          canEdit={canEdit}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Inter-set rest after each complete set (not after last) */}
+                {si < mainSetsCount - 1 && (
+                  <InlineRestStrip
+                    myKey={setStripKey}
+                    seconds={stripSec}
+                    label={restLabel}
+                    activeKey={restActiveKey}
+                    left={restLeft}
+                    total={restTotal}
+                    onStart={() => onStartRest(setStripKey, restSec)}
+                    onStop={onStopRest}
+                    canEdit={canEdit}
+                  />
+                )}
+              </div>
+            );
+          });
+        })() : sets.map((s, i) => {
           const stripKey = `${exId}:${i}`;
           return (
             <div key={i}>
@@ -696,7 +928,7 @@ function ExerciceCard({
                 💬 Commentaire
               </button>
             )}
-            <button
+            {!params.cluster && <button
               onClick={onAddSet}
               style={{
                 flex: 1,
@@ -712,7 +944,7 @@ function ExerciceCard({
               }}
             >
               + Série bonus
-            </button>
+            </button>}
           </div>
         </div>
       )}
@@ -1523,9 +1755,33 @@ export default function WorkoutDetailPage() {
     for (const bloc of workout.blocs) {
       for (const ex of bloc.exercices) {
         const saved = savedSets[ex.id];
-        newSets[ex.id] = Array.from({ length: ex.params.nb_series }, (_, i) =>
-          initSetState(ex.params, i, saved?.[i]),
-        );
+        if (ex.params.cluster) {
+          const c = ex.params.cluster;
+          const safeReps = Array.isArray(c.reps) ? c.reps : Array(c.nb_clusters).fill(5);
+          const nbRows = ex.params.nb_series * c.nb_clusters;
+          const globalKg = ex.params.charge.mode === "global" && ex.params.charge.value != null
+            ? String(ex.params.charge.value).replace(".", ",")
+            : "";
+          newSets[ex.id] = Array.from({ length: nbRows }, (_, i) => {
+            const savedItem = saved?.[i];
+            const clusterIdx = i % c.nb_clusters;
+            const prescribed = safeReps[clusterIdx] ?? 5;
+            if (savedItem) {
+              return {
+                kg: savedItem.kg != null ? String(savedItem.kg).replace(".", ",") : "",
+                reps: savedItem.reps != null ? String(savedItem.reps) : String(prescribed),
+                rir: savedItem.rir != null ? String(savedItem.rir) : "",
+                done: savedItem.done,
+                skipped: savedItem.skipped ?? false,
+              };
+            }
+            return { kg: globalKg, reps: String(prescribed), rir: "", done: false, skipped: false };
+          });
+        } else {
+          newSets[ex.id] = Array.from({ length: ex.params.nb_series }, (_, i) =>
+            initSetState(ex.params, i, saved?.[i]),
+          );
+        }
       }
     }
 
@@ -1619,7 +1875,7 @@ export default function WorkoutDetailPage() {
 
   // ── Toggle 3-state checkmark ─────────────────────────────────────────────
   const toggleAndPersist = useCallback(
-    (exId: string, setIdx: number, restSec: number, nextInfo: string | null, timingMode = "repos", blocId = "", blocExIds: string[] = []) => {
+    (exId: string, setIdx: number, restSec: number, nextInfo: string | null, timingMode = "repos", blocId = "", blocExIds: string[] = [], clusterNb?: number) => {
       let shouldStop = false;
 
       setSets((prev) => {
@@ -1632,6 +1888,17 @@ export default function WorkoutDetailPage() {
           if (!s.reps && prevStr) s.reps = parsePrevVal(prevStr, "reps");
           s.done = true;
           s.skipped = false;
+
+          // Auto-fill next cluster charge when this cluster is done
+          if (clusterNb && clusterNb > 0 && s.kg) {
+            const ci = setIdx % clusterNb;
+            if (ci < clusterNb - 1) {
+              const nextIdx = setIdx + 1;
+              if (nextIdx < exSets.length && !exSets[nextIdx].done && !exSets[nextIdx].kg) {
+                exSets[nextIdx] = { ...exSets[nextIdx], kg: s.kg };
+              }
+            }
+          }
 
           if (timingMode === "depart" && restSec > 0) {
             startRest(restSec, null, `depart:${blocId}`, true /* loop */);
@@ -1672,9 +1939,9 @@ export default function WorkoutDetailPage() {
 
   // ── Open NumPad ──────────────────────────────────────────────────────────
   const openPad = useCallback(
-    (exId: string, setIdx: number, field: "kg" | "reps" | "rir", chargeUnit: string) => {
+    (exId: string, setIdx: number, field: "kg" | "reps" | "rir", chargeUnit: string, clusterNb?: number) => {
       const current = sets[exId]?.[setIdx];
-      setPadTarget({ exId, setIdx, field, chargeUnit });
+      setPadTarget({ exId, setIdx, field, chargeUnit, clusterNb });
       setPadVal(current?.[field] ?? "");
     },
     [sets],
@@ -1693,12 +1960,24 @@ export default function WorkoutDetailPage() {
         // Auto-validate: if not done/skipped, mark done
         if (!s.done && !s.skipped) {
           // If entering kg and reps still empty, autofill from prev
-          if (field === "kg" && !s.reps) {
+          if (field === "kg" && !s.reps && !padTarget.clusterNb) {
             const prevStr = prevSets[exId]?.[setIdx] ?? "";
             const prevReps = parsePrevVal(prevStr, "reps");
             if (prevReps) s.reps = prevReps;
           }
           s.done = true;
+
+          // Auto-fill next cluster's charge
+          if (field === "kg" && padTarget.clusterNb && padTarget.clusterNb > 0 && value) {
+            const clusterNb = padTarget.clusterNb;
+            const ci = setIdx % clusterNb;
+            if (ci < clusterNb - 1) {
+              const nextIdx = setIdx + 1;
+              if (nextIdx < exSets.length && !exSets[nextIdx].done && !exSets[nextIdx].kg) {
+                exSets[nextIdx] = { ...exSets[nextIdx], kg: value };
+              }
+            }
+          }
         }
 
         exSets[setIdx] = s;
@@ -2073,10 +2352,10 @@ export default function WorkoutDetailPage() {
                         restLeft={restLeft}
                         restTotal={restTotal}
                         onToggle={(setIdx) =>
-                          toggleAndPersist(ex.id, setIdx, restSec, nextInfo, bloc.timing_mode, bloc.id, bloc.exercices.map(e => e.id))
+                          toggleAndPersist(ex.id, setIdx, restSec, nextInfo, bloc.timing_mode, bloc.id, bloc.exercices.map(e => e.id), ex.params.cluster?.nb_clusters)
                         }
                         onOpenPad={(setIdx, field) =>
-                          openPad(ex.id, setIdx, field, ex.params.charge_unit)
+                          openPad(ex.id, setIdx, field, ex.params.charge_unit, ex.params.cluster?.nb_clusters)
                         }
                         onAddSet={() => addBonusSet(ex.id)}
                         onRemoveSet={(setIdx) => removeBonusSet(ex.id, setIdx)}

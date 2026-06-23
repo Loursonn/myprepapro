@@ -162,12 +162,14 @@ function Stepper({
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getParams(exercice: Exercice, activeWeek: number, multiSemaine: boolean): ExerciceParams {
-  if (multiSemaine && typeof exercice.params === 'object' && !('mode' in exercice.params)) {
+  const p = exercice.params
+  const isRecord = typeof p === 'object' && p !== null && Object.keys(p as object).some((k) => /^\d+$/.test(k))
+  if (isRecord) {
     const weekKey = String(activeWeek)
-    const rec = exercice.params as Record<string, ExerciceParams>
-    return rec[weekKey] ?? defaultExerciceParams()
+    const rec = p as Record<string, ExerciceParams>
+    return rec[weekKey] ?? rec['1'] ?? defaultExerciceParams()
   }
-  return exercice.params as ExerciceParams
+  return p as ExerciceParams
 }
 
 function setParams(exercice: Exercice, params: ExerciceParams, activeWeek: number, multiSemaine: boolean): Exercice {
@@ -175,7 +177,7 @@ function setParams(exercice: Exercice, params: ExerciceParams, activeWeek: numbe
     const weekKey = String(activeWeek)
     const existing = exercice.params
     // Only keep existing as Record base if it actually has numeric week keys (not a flat ExerciceParams)
-    const isExistingRecord = typeof existing === 'object' && existing !== null && !('nb_series' in (existing as object))
+    const isExistingRecord = typeof existing === 'object' && existing !== null && Object.keys(existing as object).some((k) => /^\d+$/.test(k))
     const rec = isExistingRecord ? { ...(existing as Record<string, ExerciceParams>) } : {}
     rec[weekKey] = params
     return { ...exercice, params: rec }
