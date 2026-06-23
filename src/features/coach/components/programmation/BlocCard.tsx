@@ -17,6 +17,18 @@ import { ExerciceRow } from "./ExerciceRow"
 const VIOLET = "#7B6FFF"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 
+const BLOC_PALETTE = [
+  "#7B6FFF", "#F97316", "#22C55E", "#EF4444",
+  "#3B9EFF", "#FACC15", "#EC4899", "#14B8A6",
+]
+
+function hexToRgba(hex: string, alpha: number) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
 interface BlocCardProps {
   bloc: Bloc
   index: number
@@ -140,6 +152,7 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
 
   const exCount = bloc.exercices.length
   const timing = timingLabel(bloc)
+  const bColor = bloc.color ?? BLOC_PALETTE[index % BLOC_PALETTE.length]
 
   return (
     <div style={{
@@ -148,8 +161,7 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
       overflow: "hidden",
       marginBottom: 12,
       background: C.s1,
-      // Left accent bar via box-shadow
-      boxShadow: "inset 4px 0 0 " + VIOLET,
+      boxShadow: "inset 4px 0 0 " + bColor,
     }}>
       {/* Header */}
       {editing ? (
@@ -174,7 +186,7 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
             {/* Bloc number badge */}
             <div style={{
               width: 18, height: 18, borderRadius: 5,
-              background: VIOLET_S, color: VIOLET,
+              background: hexToRgba(bColor, 0.15), color: bColor,
               fontSize: 9, fontWeight: 900,
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0,

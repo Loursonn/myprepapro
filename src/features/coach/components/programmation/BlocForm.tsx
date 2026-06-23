@@ -5,6 +5,11 @@ import type { Bloc } from "./types"
 const VIOLET = "#7B6FFF"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 
+const BLOC_PALETTE = [
+  "#7B6FFF", "#F97316", "#22C55E", "#EF4444",
+  "#3B9EFF", "#FACC15", "#EC4899", "#14B8A6",
+]
+
 type BlocFormData = Omit<Bloc, 'id' | 'exercices' | 'sort_order'>
 
 interface BlocFormProps {
@@ -39,6 +44,7 @@ function pill(active: boolean): React.CSSProperties {
 
 export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
   const [name, setName] = useState(initial?.name ?? "")
+  const [color, setColor] = useState<string>(initial?.color ?? BLOC_PALETTE[0])
   const [seriesMode, setSeriesMode] = useState<'libre' | 'fixe'>(initial?.series_mode ?? 'libre')
   const [seriesCount, setSeriesCount] = useState<number>(initial?.series_count ?? 4)
   const [timingMode, setTimingMode] = useState<'libre' | 'depart' | 'repos'>(initial?.timing_mode ?? 'libre')
@@ -50,6 +56,7 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
   function handleSubmit() {
     const data: BlocFormData = {
       name: name.trim() || "Bloc sans nom",
+      color,
       series_mode: seriesMode,
       series_count: seriesMode === 'fixe' ? seriesCount : undefined,
       timing_mode: timingMode,
@@ -77,6 +84,28 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
           placeholder="ex. Force, Hypertrophie…"
           style={inputStyle}
         />
+      </div>
+
+      {/* Couleur */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 6, fontWeight: 600 }}>Couleur</label>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {BLOC_PALETTE.map(c => (
+            <button
+              key={c}
+              onClick={() => setColor(c)}
+              style={{
+                width: 24, height: 24, borderRadius: 6,
+                background: c,
+                border: color === c ? "2px solid #fff" : "2px solid transparent",
+                outline: color === c ? `2px solid ${c}` : "none",
+                cursor: "pointer",
+                flexShrink: 0,
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Séries */}
