@@ -18,6 +18,7 @@ import { makeRootGroup } from "@/lib/energy/treeUtils";
 import { expandIntervals, computeTotals } from "@/lib/energy";
 import { formatSLong } from "@/lib/energy/formatTarget";
 import type { EnergyGroup, SessionKind, StructureType } from "@/types/energy";
+import { useAuth } from "@/hooks/useAuth";
 import IntervalBuilder from "../components/energy/IntervalBuilder";
 import SessionPreview from "../components/energy/SessionPreview";
 import {
@@ -93,6 +94,7 @@ function AssignModal({
 
 export default function EnergySessionEditorPage() {
   const { athleteId, sessionId } = useParams<{ athleteId?: string; sessionId?: string }>();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const isEdit = !!sessionId;
 
@@ -142,6 +144,7 @@ export default function EnergySessionEditorPage() {
       custom_kind: sessionKind === "custom" ? customKind : null,
       structure_type: structureType,
       intervals: root.children,
+      created_by: user?.id ?? null,
     };
 
     if (isEdit && sessionId) {
