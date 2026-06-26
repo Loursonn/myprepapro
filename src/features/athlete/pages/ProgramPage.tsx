@@ -693,9 +693,9 @@ function WorkoutPreviewDrawer({
                 </div>
                 <div style={{ background: C.s2, borderRadius: 12, overflow: "hidden" }}>
                   {bloc.exercices.map((ex, idx) => {
-                    const nb = ex.params.nb_series;
-                    const reps = ex.params.reps.mode === "global" ? ex.params.reps.value : "?";
-                    const rir = ex.params.rir.mode === "global" ? ex.params.rir.value : null;
+                    const nb = ex.params?.nb_series ?? 0;
+                    const reps = ex.params?.reps?.mode === "global" ? ex.params.reps.value : "?";
+                    const rir = ex.params?.rir?.mode === "global" ? ex.params.rir.value : null;
                     return (
                       <div
                         key={ex.id}

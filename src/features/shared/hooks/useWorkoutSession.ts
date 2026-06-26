@@ -299,13 +299,25 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
             params = ex.params as ExerciceParams;
           }
 
-          const effectiveNbSeries = nbSeriesFixed ?? params.nb_series;
+          // Guard against incomplete/corrupt stored params
+          const def = defaultExerciceParams(params.nb_series);
+          const safeParams: ExerciceParams = {
+            ...def,
+            ...params,
+            reps: params.reps ?? def.reps,
+            reps_mode: params.reps_mode ?? def.reps_mode,
+            charge: params.charge ?? def.charge,
+            rir: params.rir ?? def.rir,
+            tempo: params.tempo ?? def.tempo,
+          };
+
+          const effectiveNbSeries = nbSeriesFixed ?? safeParams.nb_series;
 
           return {
             id: ex.id,
             exercise_name: ex.exercise_name,
             muscle: (ex as { muscle?: string }).muscle,
-            params: { ...params, nb_series: effectiveNbSeries },
+            params: { ...safeParams, nb_series: effectiveNbSeries },
             mode: ex.mode,
             methode_id: ex.methode_id,
           };
