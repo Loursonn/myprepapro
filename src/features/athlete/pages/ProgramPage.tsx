@@ -696,6 +696,7 @@ function WorkoutPreviewDrawer({
                     const nb = ex.params?.nb_series ?? 0;
                     const reps = ex.params?.reps?.mode === "global" ? ex.params.reps.value : "?";
                     const rir = ex.params?.rir?.mode === "global" ? ex.params.rir.value : null;
+                    const tempo = ex.params?.tempo?.mode === "global" && ex.params.tempo.value ? ex.params.tempo.value : null;
                     return (
                       <div
                         key={ex.id}
@@ -721,6 +722,9 @@ function WorkoutPreviewDrawer({
                             <span style={{ fontSize: 10, color: C.tx3 }}>{nb} séries × {reps} reps</span>
                             {rir != null && (
                               <span style={{ fontSize: 10, color: C.tx3 }}>· RIR {rir}</span>
+                            )}
+                            {tempo && (
+                              <span style={{ fontSize: 10, color: C.tx3 }}>· T {tempo}</span>
                             )}
                           </div>
                         </div>

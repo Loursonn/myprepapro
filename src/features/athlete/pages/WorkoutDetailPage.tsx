@@ -137,6 +137,8 @@ function formatPrescription(params: ExerciceParams): string {
     let s = `${nb}×(${repsArr.join("+")} + ${c.recup_sec}s)`;
     const charge = params.charge.mode === "global" ? params.charge.value : null;
     if (charge != null && params.charge_unit !== "PDC") s += ` @ ${charge}${params.charge_unit}`;
+    const ct = params.tempo?.mode === "global" && params.tempo.value ? params.tempo.value : null;
+    if (ct) s += ` · T ${ct}`;
     return s;
   }
   if (params.reps.mode === "par_serie" || params.charge.mode === "par_serie") {
@@ -146,7 +148,10 @@ function formatPrescription(params: ExerciceParams): string {
       if (c != null && params.charge_unit !== "PDC") return `${r ?? "?"}@${c}${params.charge_unit}`;
       return String(r ?? "?");
     });
-    return `${nb}× ${parts.join(" / ")}`;
+    let ps = `${nb}× ${parts.join(" / ")}`;
+    const pt = params.tempo?.mode === "global" && params.tempo.value ? params.tempo.value : null;
+    if (pt) ps += ` · T ${pt}`;
+    return ps;
   }
   const reps = params.reps.mode === "global" ? params.reps.value : "?";
   const chargeVal =
@@ -159,6 +164,8 @@ function formatPrescription(params: ExerciceParams): string {
   let s = `${nb}×${reps}`;
   if (chargeVal) s += ` @ ${chargeVal}`;
   if (rirVal != null) s += ` · RIR ${rirVal}`;
+  const tempoVal = params.tempo?.mode === "global" && params.tempo.value ? params.tempo.value : null;
+  if (tempoVal) s += ` · T ${tempoVal}`;
   return s;
 }
 
