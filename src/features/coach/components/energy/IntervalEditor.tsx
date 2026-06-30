@@ -226,7 +226,15 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
 
         {/* Duration */}
         {label("Durée")}
-        <Select value={durKind} onValueChange={(v) => setDurKind(v as EnergyDuration["kind"])}>
+        <Select value={durKind} onValueChange={(v) => {
+          const next = v as EnergyDuration["kind"];
+          setDurKind(next);
+          // Reset value when switching kind to avoid format mismatch
+          if (next === "time") setDurValue("1:00");
+          else if (next === "distance") setDurValue("400");
+          else if (next === "calories") setDurValue("200");
+          else setDurValue("");
+        }}>
           <SelectTrigger style={{ background: C.s2, border: `1px solid ${C.brd}`, color: C.tx }}>
             <SelectValue />
           </SelectTrigger>
@@ -239,13 +247,21 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
         {durKind !== "lap_button" && (
           <div style={{ marginTop: 6 }}>
             <input
+              type={durKind === "time" ? "text" : "number"}
               style={inp.base}
               value={durValue}
               onChange={(e) => setDurValue(e.target.value)}
               placeholder={durKind === "time" ? "mm:ss" : durKind === "distance" ? "400" : "200"}
+              min={durKind !== "time" ? 0 : undefined}
             />
             {durKind === "time" && (
               <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>Format MM:SS (ex: 1:30)</div>
+            )}
+            {durKind === "distance" && (
+              <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>Distance en mètres</div>
+            )}
+            {durKind === "calories" && (
+              <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>Calories en kcal</div>
             )}
           </div>
         )}

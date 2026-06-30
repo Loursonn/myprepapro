@@ -14,19 +14,21 @@ import {
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { C } from "@/lib/theme";
-import { makeRootGroup } from "@/lib/energy/treeUtils";
+import { makeRootGroup, genId } from "@/lib/energy/treeUtils";
 import { expandIntervals, computeTotals } from "@/lib/energy";
 import { formatSLong } from "@/lib/energy/formatTarget";
-import type { EnergyGroup, SessionKind, StructureType } from "@/types/energy";
+import type { EnergyGroup, EnergyStep, SessionKind, StructureType } from "@/types/energy";
 import { useAuth } from "@/hooks/useAuth";
 import IntervalBuilder from "../components/energy/IntervalBuilder";
 import SessionPreview from "../components/energy/SessionPreview";
 import {
   useEnergySession,
+  useEnergySessions,
   useCreateEnergySession,
   useUpdateEnergySession,
 } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
+import type { EnergySessionRow } from "@/types/energy";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -90,6 +92,113 @@ function AssignModal({
   );
 }
 
+// ── Import session modal ─────────────────────────────────────────────────────
+
+const KIND_COLOR: Record<string, string> = {
+  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  footing: "#22C55E", fartlek: "#EC4899", autre: "#6B7280", custom: "#14B8A6",
+};
+
+function deepCloneIntervals(steps: EnergyStep[]): EnergyStep[] {
+  return steps.map((s): EnergyStep => {
+    if (s.type === "interval") return { ...s, id: genId() };
+    return {
+      ...s,
+      id: genId(),
+      children: deepCloneIntervals(s.children),
+      rest_between: s.rest_between ? { ...s.rest_between, id: genId() } : undefined,
+    };
+  });
+}
+
+function ImportSessionModal({ onImport, onClose }: {
+  onImport: (session: EnergySessionRow) => void;
+  onClose: () => void;
+}) {
+  const { data: sessions = [], isLoading } = useEnergySessions();
+  const [search, setSearch] = useState("");
+
+  const filtered = sessions.filter((s) =>
+    !search || s.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.6)" }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", zIndex: 61,
+        transform: "translate(-50%, -50%)",
+        width: 520, maxWidth: "94vw", maxHeight: "80vh",
+        background: C.s1, borderRadius: 16, border: `1px solid ${C.brd}`,
+        display: "flex", flexDirection: "column",
+        animation: "fadeScaleIn 150ms ease-out",
+      }}>
+        <style>{`@keyframes fadeScaleIn { from { opacity:0; transform:translate(-50%,-50%) scale(0.96) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }`}</style>
+
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.brd}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.tx }}>Importer une séance existante</div>
+          <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>La structure sera copiée — l'original ne sera pas modifié</div>
+        </div>
+
+        <div style={{ padding: "10px 20px", borderBottom: `1px solid ${C.brd}`, flexShrink: 0 }}>
+          <input
+            autoFocus value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher…"
+            style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${C.brdL}`, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
+          />
+        </div>
+
+        <div style={{ overflowY: "auto", padding: "12px 20px", flex: 1, scrollbarWidth: "none" }}>
+          {isLoading ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: C.tx3, fontSize: 12 }}>Chargement…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: C.tx3, fontSize: 13 }}>
+              {search ? "Aucun résultat" : "Aucune séance disponible"}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {filtered.map((s) => {
+                const kc = KIND_COLOR[s.session_kind] ?? "#6B7280";
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => onImport(s)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 12px", borderRadius: 10,
+                      border: `1px solid ${C.brdL}`, background: C.s2,
+                      cursor: "pointer", transition: "border-color 120ms",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = kc + "60")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.brdL)}
+                  >
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: kc + "20", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14 }}>
+                      ⚡
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
+                      <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+                        {s.session_kind}{s.total_duration_s ? ` · ${Math.round(s.total_duration_s / 60)} min` : ""}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, color: C.ac, fontWeight: 600, flexShrink: 0 }}>Importer</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.brd}`, flexShrink: 0 }}>
+          <button onClick={onClose} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${C.brdL}`, background: "transparent", color: C.tx2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+            Annuler
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function EnergySessionEditorPage() {
@@ -112,6 +221,7 @@ export default function EnergySessionEditorPage() {
   const [root, setRoot] = useState<EnergyGroup>(makeRootGroup);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
 
   // Hydrate from existing session
   useEffect(() => {
@@ -131,6 +241,19 @@ export default function EnergySessionEditorPage() {
       setRoot(rootG);
     }
   }, [existingSession]);
+
+  function handleImportSession(session: EnergySessionRow) {
+    setName(session.name + " (copie)");
+    setSessionKind(session.session_kind);
+    setCustomKind(session.custom_kind ?? "");
+    setStructureType(session.structure_type);
+    const clonedChildren = deepCloneIntervals(session.intervals ?? []);
+    setRoot({
+      type: "group", id: "__root__", role: "open", repeat: 1,
+      children: clonedChildren,
+    });
+    setShowImport(false);
+  }
 
   // Computed preview totals
   const flat = expandIntervals(root);
@@ -252,6 +375,14 @@ export default function EnergySessionEditorPage() {
 
         {/* Action buttons */}
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+          {!isEdit && (
+            <button
+              onClick={() => setShowImport(true)}
+              style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.ac}40`, background: C.ac + "12", color: C.ac, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              Importer une séance
+            </button>
+          )}
           <button
             onClick={navigateBack}
             style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.brd}`, background: "transparent", color: C.tx2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
@@ -338,6 +469,14 @@ export default function EnergySessionEditorPage() {
           )}
         </div>
       </div>
+
+      {/* ── Import modal ── */}
+      {showImport && (
+        <ImportSessionModal
+          onImport={handleImportSession}
+          onClose={() => setShowImport(false)}
+        />
+      )}
 
       {/* ── Assign modal ── */}
       {showAssignModal && savedSessionId && athleteId && (

@@ -68,18 +68,19 @@ export function duplicateStep(root: EnergyGroup, id: string): EnergyGroup {
   const info = findParent(root, id);
   if (!info) return root;
   const { parent, index } = info;
-  const original = parent.children[index];
-  const cloned = deepCloneWithNewIds(original);
+  const cloned = deepCloneWithNewIds(parent.children[index]);
 
-  const newParent: EnergyGroup = {
-    ...parent,
-    children: [
-      ...parent.children.slice(0, index + 1),
-      cloned,
-      ...parent.children.slice(index + 1),
-    ],
-  };
-  return updateStep(root, newParent);
+  const newChildren = [
+    ...parent.children.slice(0, index + 1),
+    cloned,
+    ...parent.children.slice(index + 1),
+  ];
+
+  // If parent is root, return root with new children directly
+  if (parent.id === root.id) {
+    return { ...root, children: newChildren };
+  }
+  return updateStep(root, { ...parent, children: newChildren });
 }
 
 /** Réordonne les enfants directs d'un groupe (même parent). */

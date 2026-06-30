@@ -108,7 +108,14 @@ function IntervalRow({
       {/* Summary */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, color: C.tx, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {dur > 0 ? formatS(dur) : "?"}{targetStr && targetStr !== "Libre" ? ` @ ${targetStr}` : ""}
+          {interval.duration.kind === "distance"
+            ? `${interval.duration.value ?? 0}m`
+            : interval.duration.kind === "calories"
+            ? `${interval.duration.value ?? 0} kcal`
+            : interval.duration.kind === "lap_button"
+            ? "Lap"
+            : dur > 0 ? formatS(dur) : "?"
+          }{targetStr && targetStr !== "Libre" ? ` @ ${targetStr}` : ""}
         </div>
         {interval.notes && (
           <div style={{ fontSize: 10, color: C.tx3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
