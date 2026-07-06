@@ -19,8 +19,9 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { C } from "@/lib/theme";
-import type { EnergySessionAssignmentRow, SessionKind } from "@/types/energy";
-import { useEnergyAssignments, useUpdateEnergyAssignment } from "@/features/shared/hooks/useEnergyAssignments";
+import type { EnergySessionAssignmentRow, EnergySessionRow, SessionKind } from "@/types/energy";
+import { useEnergyAssignments, useUpdateEnergyAssignment, useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
+import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import { EnergyAssignmentDrawer } from "./EnergyAssignmentDrawer";
 import { SessionPickerDialog } from "./SessionPickerDialog";
 
@@ -29,29 +30,32 @@ import { SessionPickerDialog } from "./SessionPickerDialog";
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 const KIND_COLORS: Record<string, string> = {
-  vo2:     "#A855F7",
-  tempo:   "#3B8DF0",
-  seuil:   "#FB923C",
-  footing: "#22C993",
-  fartlek: "#E8C93A",
-  autre:   "#7C7480",
-  custom:  "#F472B6",
+  vo2:        "#A855F7",
+  tempo:      "#3B8DF0",
+  seuil:      "#FB923C",
+  footing:    "#22C993",
+  fartlek:    "#E8C93A",
+  autre:      "#7C7480",
+  custom:     "#F472B6",
+  specifique: "#F5A623",
 };
 
 const KIND_LABELS: Record<string, string> = {
-  vo2:     "VO₂",
-  tempo:   "Tempo",
-  seuil:   "Seuil",
-  footing: "Footing",
-  fartlek: "Fartlek",
-  autre:   "Autre",
-  custom:  "Custom",
+  vo2:        "VO₂",
+  tempo:      "Tempo",
+  seuil:      "Seuil",
+  footing:    "Footing",
+  fartlek:    "Fartlek",
+  autre:      "Autre",
+  custom:     "Custom",
+  specifique: "Spécifique",
 };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   athleteId: string;
+  sessionKindFilter?: string;
 }
 
 // ── EventBadge (draggable) ────────────────────────────────────────────────────
@@ -211,14 +215,114 @@ function DragOverlayBadge({ assignment }: { assignment: EnergySessionAssignmentR
   );
 }
 
+// ── Session bank sidebar ──────────────────────────────────────────────────────
+
+function DraggableBankSession({ session }: { session: EnergySessionRow }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `bank_${session.id}`,
+    data: { bankSession: session },
+  });
+  const kc = KIND_COLORS[session.session_kind] ?? "#A855F7";
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        padding: "6px 8px", borderRadius: 7,
+        border: `1px solid ${kc}30`,
+        background: kc + "10",
+        cursor: "grab", opacity: isDragging ? 0.4 : 1,
+        transition: "opacity 120ms",
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {session.name}
+      </div>
+      <div style={{ fontSize: 9, color: C.tx3, display: "flex", gap: 6, marginTop: 2 }}>
+        <span style={{ color: kc, fontWeight: 700 }}>
+          {KIND_LABELS[session.custom_kind ?? ""] ?? KIND_LABELS[session.session_kind] ?? session.session_kind}
+        </span>
+        {session.total_duration_s != null && (
+          <span>{Math.round(session.total_duration_s / 60)} min</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SessionBankSidebar({ sessions, sessionKindFilter }: { sessions: EnergySessionRow[]; sessionKindFilter?: string }) {
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    let list = sessions;
+    if (sessionKindFilter) {
+      list = list.filter((s) => s.session_kind === sessionKindFilter);
+    } else {
+      list = list.filter((s) => s.session_kind !== "specifique");
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((s) => s.name.toLowerCase().includes(q));
+    }
+    return list;
+  }, [sessions, sessionKindFilter, search]);
+
+  return (
+    <div style={{
+      width: 200, flexShrink: 0,
+      background: C.s1, borderRadius: 14,
+      border: `1px solid ${C.brd}`,
+      display: "flex", flexDirection: "column",
+      overflow: "hidden", maxHeight: "100%",
+    }}>
+      <div style={{ padding: "10px 12px 8px", borderBottom: `1px solid ${C.brd}` }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+          {sessionKindFilter === "specifique" ? "Séances spécifiques" : "Séances énergétiques"}
+        </div>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Filtrer..."
+          style={{
+            width: "100%", padding: "5px 8px", borderRadius: 7,
+            border: `1px solid ${C.brdL}`, background: C.s2,
+            color: C.tx, fontSize: 11, fontFamily: "inherit", outline: "none",
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+      <div style={{
+        flex: 1, overflowY: "auto", padding: 8,
+        display: "flex", flexDirection: "column", gap: 5,
+        scrollbarWidth: "none",
+      }}>
+        {filtered.length === 0 ? (
+          <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>
+            {search ? "Aucun résultat" : "Aucune séance"}
+          </div>
+        ) : (
+          filtered.map((s) => <DraggableBankSession key={s.id} session={s} />)
+        )}
+      </div>
+      <div style={{ padding: "8px 10px", borderTop: `1px solid ${C.brd}` }}>
+        <div style={{ fontSize: 9, color: C.tx3, textAlign: "center" }}>↕ Glisser sur le calendrier</div>
+      </div>
+    </div>
+  );
+}
+
 // ── EnergyCalendarView ────────────────────────────────────────────────────────
 
-export function EnergyCalendarView({ athleteId }: Props) {
+export function EnergyCalendarView({ athleteId, sessionKindFilter }: Props) {
   const [month, setMonth] = useState(() => new Date());
   const [selectedAssignment, setSelectedAssignment] = useState<EnergySessionAssignmentRow | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pickerDate, setPickerDate] = useState<string | null>(null);
   const [activeAssignment, setActiveAssignment] = useState<EnergySessionAssignmentRow | null>(null);
+
+  const { data: bankSessions = [] } = useEnergySessions();
+  const assignMut = useAssignEnergySession();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -247,16 +351,21 @@ export function EnergyCalendarView({ athleteId }: Props) {
 
   const updateMut = useUpdateEnergyAssignment();
 
-  // Group by date
+  // Filter by session kind if needed, then group by date
+  const filteredAssignments = useMemo(() => {
+    if (!sessionKindFilter) return assignments;
+    return assignments.filter((a) => a.energy_sessions?.session_kind === sessionKindFilter);
+  }, [assignments, sessionKindFilter]);
+
   const byDate = useMemo(() => {
     const map: Record<string, EnergySessionAssignmentRow[]> = {};
-    for (const a of assignments) {
+    for (const a of filteredAssignments) {
       const d = a.scheduled_date;
       if (!map[d]) map[d] = [];
       map[d].push(a);
     }
     return map;
-  }, [assignments]);
+  }, [filteredAssignments]);
 
   // Handlers
   const handleClickAssignment = useCallback((a: EnergySessionAssignmentRow) => {
@@ -281,22 +390,38 @@ export function EnergyCalendarView({ athleteId }: Props) {
       setActiveAssignment(null);
       const { active, over } = event;
       if (!over) return;
-      const assignmentId = active.id as string;
+      const activeId = active.id as string;
       const newDate = over.id as string;
-      // Find the assignment
-      const found = assignments.find((a) => a.id === assignmentId);
+
+      // Bank session drop → create assignment
+      if (activeId.startsWith("bank_")) {
+        const bankSession = active.data.current?.bankSession as EnergySessionRow | undefined;
+        if (bankSession) {
+          assignMut.mutate({
+            energy_session_id: bankSession.id,
+            athlete_id: athleteId,
+            scheduled_date: newDate,
+            status: "planned",
+          });
+        }
+        return;
+      }
+
+      // Existing assignment drag → reschedule
+      const found = assignments.find((a) => a.id === activeId);
       if (!found) return;
       if (found.scheduled_date === newDate) return;
-      updateMut.mutate({ id: assignmentId, athleteId, scheduled_date: newDate });
+      updateMut.mutate({ id: activeId, athleteId, scheduled_date: newDate });
     },
-    [assignments, athleteId, updateMut]
+    [assignments, athleteId, updateMut, assignMut]
   );
 
   const monthLabel = format(month, "MMMM yyyy", { locale: fr });
   const monthLabelCapitalized = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
   return (
-    <div style={{ width: "100%" }}>
+    <div style={{ width: "100%", display: "flex", gap: 16 }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       {/* Navigation */}
       <div
         style={{
@@ -421,8 +546,13 @@ export function EnergyCalendarView({ athleteId }: Props) {
           onClose={() => setPickerDate(null)}
           date={pickerDate}
           athleteId={athleteId}
+          sessionKindFilter={sessionKindFilter}
         />
       )}
+    </div>
+
+    {/* Session bank sidebar */}
+    <SessionBankSidebar sessions={bankSessions} sessionKindFilter={sessionKindFilter} />
     </div>
   );
 }

@@ -339,11 +339,11 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByD
 
   const ENERGY_KIND_COLOR: Record<string, string> = {
     vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
-    footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+    footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280",
   };
   const ENERGY_KIND_LABEL: Record<string, string> = {
     vo2: "VO₂", tempo: "Tempo", seuil: "Seuil",
-    footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+    footing: "Footing", fartlek: "Fartlek", specifique: "Spécifique", autre: "Autre", custom: "Custom",
   };
 
   return (
@@ -1107,8 +1107,8 @@ export default function TodayPage() {
 
         {/* Section 2 — Séance du jour */}
         {(() => {
-          const EKC: Record<string, string> = { vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B", footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280" };
-          const EKL: Record<string, string> = { vo2: "VO₂", tempo: "Tempo", seuil: "Seuil", footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom" };
+          const EKC: Record<string, string> = { vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B", footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280" };
+          const EKL: Record<string, string> = { vo2: "VO₂", tempo: "Tempo", seuil: "Seuil", footing: "Footing", fartlek: "Fartlek", specifique: "Spécifique", autre: "Autre", custom: "Custom" };
 
           const pendingWorkouts = workouts.filter(w => !w.isCompleted);
           const pendingEnergy   = todayEnergySessions.filter(ev => ev.status !== "completed");
@@ -1173,7 +1173,7 @@ export default function TodayPage() {
                     return (
                       <button
                         key={ev.id}
-                        onClick={() => { setEnergyPreview(ev); haptic(); }}
+                        onClick={() => { if (ev.sessionKind === "specifique") { navigate(`/athlete/specific/${ev.id}`); } else { setEnergyPreview(ev); } haptic(); }}
                         style={{ width: "100%", background: kc + "12", borderRadius: 14, padding: "14px 16px", border: "1px solid " + kc + "40", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const }}
                       >
                         <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: kc + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏃</div>
@@ -1615,7 +1615,13 @@ export default function TodayPage() {
         onStartSession={(sess) => navigate("/athlete/log", { state: { initialSess: sess } })}
         freeSessions={freeSessions}
         energyByDate={energyByDate}
-        onEnergyPreview={(ev) => setEnergyPreview(ev)}
+        onEnergyPreview={(ev) => {
+          if (ev.sessionKind === "specifique") {
+            navigate(`/athlete/specific/${ev.id}`);
+          } else {
+            setEnergyPreview(ev);
+          }
+        }}
         onAddActivity={(date) => setActivityDate(date)}
         onEditActivity={(f) => setEditActivity(f)}
         onTestPress={(id) => setTestPreviewId(id)}

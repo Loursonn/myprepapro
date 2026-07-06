@@ -27,6 +27,7 @@ const ProfilPage         = lazy(() => import("./features/athlete/pages/ProfilPag
 const LogSeancePage   = lazy(() => import("./features/athlete/pages/LogSeancePage.tsx"));
 const AlimPage        = lazy(() => import("./features/athlete/pages/AlimPage.tsx"));
 const AthleteTestPage = lazy(() => import("./features/athlete/pages/AthleteTestPage.tsx"));
+const SpecificExecutionPage = lazy(() => import("./features/athlete/pages/SpecificExecutionPage.tsx"));
 
 // Pages coach globales (lazy)
 const CoachHomePage      = lazy(() => import("./features/coach/pages/CoachHomePage.tsx"));
@@ -99,6 +100,7 @@ function AnimatedRoutes() {
             <Route path="log" element={<LogSeancePage />} />
             <Route path="alim" element={<AlimPage />} />
             <Route path="test" element={<AthleteTestPage />} />
+            <Route path="specific/:assignmentId" element={<SpecificExecutionPage />} />
           </Route>
 
           {/* Vue coach — sidebar + toutes sous-routes */}

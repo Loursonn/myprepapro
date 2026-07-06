@@ -227,7 +227,8 @@ function ExerciseBank({coachId,onAddToExos}){
                 <div style={{position:'absolute',top:4,left:4,padding:'2px 6px',borderRadius:5,background:'rgba(0,0,0,0.72)',fontSize:9,color:ex.is_verified?C.g:C.o,fontWeight:700}}>{ex.is_verified?'✓ Off.':'Comm.'}</div>
               </div>
               <div style={{padding:'8px 10px'}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:3,lineHeight:1.3,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{ex.name}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:2,lineHeight:1.3,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{ex.name}</div>
+                {ex.youtube_id&&<a href={`https://youtube.com/watch?v=${ex.youtube_id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:'#E5484D',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:3,marginBottom:3}}>▶ Voir la vidéo</a>}
                 <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                   {ex.target&&<span style={{fontSize:9,padding:'2px 6px',borderRadius:4,background:C.acS,color:C.ac,fontWeight:600}}>{ex.target}</span>}
                   {ex.equipment&&<span style={{fontSize:9,padding:'2px 6px',borderRadius:4,background:C.s2,color:C.tx3}}>{ex.equipment}</span>}

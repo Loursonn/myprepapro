@@ -43,6 +43,18 @@ const TARGET_KINDS = [
   { value: "text",            label: "Texte libre" },
 ] as const;
 
+const EQUIPMENT_OPTIONS = [
+  { value: "none",      label: "Aucun" },
+  { value: "rameur",    label: "Rameur" },
+  { value: "skierg",    label: "SkiErg" },
+  { value: "bikeerg",   label: "BikeErg" },
+  { value: "velo",      label: "Vélo" },
+  { value: "course",    label: "Course" },
+  { value: "elliptique",label: "Elliptique" },
+  { value: "corde",     label: "Corde à sauter" },
+  { value: "autre",     label: "Autre" },
+] as const;
+
 const PACE_TEST_METRICS = ["VMA", "VC", "PMA", "FTP", "Allure 10K", "Allure semi", "Allure marathon"];
 const POWER_TEST_METRICS = ["PMA", "FTP", "PC30", "PC5"];
 
@@ -121,6 +133,7 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
   const [durKind, setDurKind] = useState<EnergyDuration["kind"]>("time");
   const [durValue, setDurValue] = useState<string>("1:00");
   const [targetKind, setTargetKind] = useState<EnergyTarget["kind"]>("none");
+  const [equipment, setEquipment] = useState("none");
   const [notes, setNotes] = useState("");
 
   // target field state
@@ -136,6 +149,7 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
   useEffect(() => {
     if (!interval) return;
     setRole(interval.role);
+    setEquipment(interval.equipment ?? "none");
     setNotes(interval.notes ?? "");
 
     // Duration
@@ -191,6 +205,7 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
       role,
       duration: buildDuration(),
       target: buildTarget(),
+      equipment: equipment !== "none" ? equipment : undefined,
       notes: notes || undefined,
     });
     onOpenChange(false);
@@ -220,6 +235,19 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
           <SelectContent>
             {ROLES.map((r) => (
               <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Equipment */}
+        {label("Matériel")}
+        <Select value={equipment} onValueChange={setEquipment}>
+          <SelectTrigger style={{ background: C.s2, border: `1px solid ${C.brd}`, color: C.tx }}>
+            <SelectValue placeholder="Aucun" />
+          </SelectTrigger>
+          <SelectContent>
+            {EQUIPMENT_OPTIONS.map((eq) => (
+              <SelectItem key={eq.value} value={eq.value}>{eq.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -301,9 +329,8 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
           )}
           {targetKind === "pace" && (
             <>
-              <RangeInputs min={rangeMin} max={rangeMax} onMin={setRangeMin} onMax={setRangeMax} />
               <Select value={paceUnit} onValueChange={(v) => setPaceUnit(v as "min_per_km"|"kmh")} >
-                <SelectTrigger style={{ background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, marginTop: 6 }}>
+                <SelectTrigger style={{ background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, marginBottom: 6 }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -311,6 +338,26 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
                   <SelectItem value="kmh">km/h</SelectItem>
                 </SelectContent>
               </Select>
+              {paceUnit === "min_per_km" ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    type="text" style={{ ...inp.base, width: 80 }}
+                    value={toMMSS(rangeMin)}
+                    onChange={(e) => setRangeMin(parseMMSS(e.target.value))}
+                    placeholder="4:00"
+                  />
+                  <span style={{ color: C.tx3, fontSize: 12 }}>–</span>
+                  <input
+                    type="text" style={{ ...inp.base, width: 80 }}
+                    value={toMMSS(rangeMax)}
+                    onChange={(e) => setRangeMax(parseMMSS(e.target.value))}
+                    placeholder="5:00"
+                  />
+                  <span style={{ color: C.tx3, fontSize: 12 }}>min/km</span>
+                </div>
+              ) : (
+                <RangeInputs min={rangeMin} max={rangeMax} unit="km/h" onMin={setRangeMin} onMax={setRangeMax} />
+              )}
             </>
           )}
           {(targetKind === "pace_test_pct" || targetKind === "power_test_pct") && (

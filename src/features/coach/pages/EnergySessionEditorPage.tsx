@@ -8,7 +8,7 @@
  *   /coach/energy-library/:sessionId/edit
  */
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -33,14 +33,24 @@ import type { EnergySessionRow } from "@/types/energy";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SESSION_KINDS: { value: SessionKind; label: string }[] = [
-  { value: "vo2",     label: "VO₂max / VMA" },
-  { value: "tempo",   label: "Tempo" },
-  { value: "seuil",   label: "Seuil lactique" },
-  { value: "footing", label: "Footing / Endurance" },
-  { value: "fartlek", label: "Fartlek" },
-  { value: "autre",   label: "Autres" },
-  { value: "custom",  label: "Type personnalisé…" },
+  { value: "vo2",        label: "VO₂max / VMA" },
+  { value: "tempo",      label: "Tempo" },
+  { value: "seuil",      label: "Seuil lactique" },
+  { value: "footing",    label: "Footing / Endurance" },
+  { value: "fartlek",    label: "Fartlek" },
+  { value: "autre",      label: "Autres" },
+  { value: "custom",     label: "Type personnalisé…" },
 ];
+
+const SPECIFIQUE_CATEGORIES: { value: string; label: string }[] = [
+  { value: "vo2",        label: "VO₂max / VMA" },
+  { value: "tempo",      label: "Tempo" },
+  { value: "seuil",      label: "Seuil lactique" },
+  { value: "footing",    label: "Footing / Endurance" },
+  { value: "fartlek",    label: "Fartlek" },
+  { value: "autre",      label: "Autres" },
+];
+
 
 // ── Assign modal (simple) ─────────────────────────────────────────────────────
 
@@ -101,6 +111,7 @@ const KIND_COLOR: Record<string, string> = {
 
 function deepCloneIntervals(steps: EnergyStep[]): EnergyStep[] {
   return steps.map((s): EnergyStep => {
+    if (s.type === "interval" || s.type === "exercise") return { ...s, id: genId() };
     if (s.type === "interval") return { ...s, id: genId() };
     return {
       ...s,
@@ -203,9 +214,11 @@ function ImportSessionModal({ onImport, onClose }: {
 
 export default function EnergySessionEditorPage() {
   const { athleteId, sessionId } = useParams<{ athleteId?: string; sessionId?: string }>();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const isEdit = !!sessionId;
+  const kindFromUrl = searchParams.get("kind") as SessionKind | null;
 
   // Load existing session when editing
   const { data: existingSession, isLoading } = useEnergySession(sessionId);
@@ -215,8 +228,8 @@ export default function EnergySessionEditorPage() {
 
   // Form state
   const [name, setName] = useState("");
-  const [sessionKind, setSessionKind] = useState<SessionKind>("vo2");
-  const [customKind, setCustomKind] = useState("");
+  const [sessionKind, setSessionKind] = useState<SessionKind>(kindFromUrl ?? "vo2");
+  const [customKind, setCustomKind] = useState("vo2");
   const [structureType, setStructureType] = useState<StructureType>("fractionne");
   const [root, setRoot] = useState<EnergyGroup>(makeRootGroup);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -228,7 +241,7 @@ export default function EnergySessionEditorPage() {
     if (existingSession) {
       setName(existingSession.name);
       setSessionKind(existingSession.session_kind);
-      setCustomKind(existingSession.custom_kind ?? "");
+      setCustomKind(existingSession.custom_kind || "vo2");
       setStructureType(existingSession.structure_type);
       // Wrap intervals in a root group
       const rootG: EnergyGroup = {
@@ -245,6 +258,7 @@ export default function EnergySessionEditorPage() {
   function handleImportSession(session: EnergySessionRow) {
     setName(session.name + " (copie)");
     setSessionKind(session.session_kind);
+    setCustomKind(session.custom_kind || "vo2");
     setCustomKind(session.custom_kind ?? "");
     setStructureType(session.structure_type);
     const clonedChildren = deepCloneIntervals(session.intervals ?? []);
@@ -264,7 +278,8 @@ export default function EnergySessionEditorPage() {
     const payload = {
       name: name.trim() || "Séance sans titre",
       session_kind: effectiveKind,
-      custom_kind: sessionKind === "custom" ? customKind : null,
+      custom_kind: sessionKind === "specifique" ? customKind : (sessionKind === "custom" ? customKind : null),
+      modality: null,
       structure_type: structureType,
       intervals: root.children,
       created_by: user?.id ?? null,
@@ -292,6 +307,8 @@ export default function EnergySessionEditorPage() {
   function navigateBack() {
     if (athleteId) {
       navigate(`/coach/athletes/${athleteId}/programmation`);
+    } else if (sessionKind === "specifique") {
+      navigate("/coach/library");
     } else {
       navigate("/coach/energy-library");
     }
@@ -334,30 +351,54 @@ export default function EnergySessionEditorPage() {
         />
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {/* Session kind */}
-          <Select value={sessionKind} onValueChange={(v) => setSessionKind(v as SessionKind)}>
-            <SelectTrigger style={{ width: 170, background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, fontSize: 12 }}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SESSION_KINDS.map((k) => (
-                <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Custom kind input */}
-          {sessionKind === "custom" && (
-            <input
-              value={customKind}
-              onChange={(e) => setCustomKind(e.target.value)}
-              placeholder="Nom du type…"
-              style={{
-                width: 140, background: C.s2, border: `1px solid ${C.brd}`,
-                borderRadius: 6, color: C.tx, fontSize: 12,
-                padding: "6px 10px", fontFamily: "inherit", outline: "none",
-              }}
-            />
+          {sessionKind === "specifique" ? (
+            <>
+              {/* Spécifique badge */}
+              <span style={{
+                padding: "5px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                background: "#F5A623" + "20", color: "#F5A623",
+              }}>
+                Spécifique
+              </span>
+              {/* Category */}
+              <Select value={customKind} onValueChange={setCustomKind}>
+                <SelectTrigger style={{ width: 160, background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, fontSize: 12 }}>
+                  <SelectValue placeholder="Catégorie" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPECIFIQUE_CATEGORIES.map((k) => (
+                    <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          ) : (
+            <>
+              {/* Energy session kind */}
+              <Select value={sessionKind} onValueChange={(v) => setSessionKind(v as SessionKind)}>
+                <SelectTrigger style={{ width: 170, background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, fontSize: 12 }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SESSION_KINDS.map((k) => (
+                    <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {/* Custom kind input */}
+              {sessionKind === "custom" && (
+                <input
+                  value={customKind}
+                  onChange={(e) => setCustomKind(e.target.value)}
+                  placeholder="Nom du type…"
+                  style={{
+                    width: 140, background: C.s2, border: `1px solid ${C.brd}`,
+                    borderRadius: 6, color: C.tx, fontSize: 12,
+                    padding: "6px 10px", fontFamily: "inherit", outline: "none",
+                  }}
+                />
+              )}
+            </>
           )}
 
           {/* Structure type */}
@@ -425,7 +466,7 @@ export default function EnergySessionEditorPage() {
           <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
             Structure
           </div>
-          <IntervalBuilder root={root} onChange={setRoot} athleteId={athleteId} />
+          <IntervalBuilder root={root} onChange={setRoot} athleteId={athleteId} sessionKind={sessionKind} />
         </div>
 
         {/* ── Preview col (1/3) ── */}

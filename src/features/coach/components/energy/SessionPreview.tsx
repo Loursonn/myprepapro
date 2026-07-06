@@ -113,7 +113,7 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
   });
 
   // ── SVG layout constants ────────────────────────────────────────────────────
-  const CHART_H   = compact ? 120 : 200;
+  const CHART_H   = compact ? 70 : 200;
   const AXIS_H    = 20;
   const BAR_AREA  = CHART_H - AXIS_H;
   const PAD_LEFT  = 0;
@@ -338,33 +338,33 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
       )}
 
       {/* ── Totals ── */}
-      <div
-        style={{
-          display: "flex",
-          gap: 16,
-          marginTop: compact ? 6 : 10,
-          fontSize: 11,
-          color: C.tx2,
-          flexWrap: "wrap",
-        }}
-      >
-        <span>
-          <span style={{ color: C.tx3 }}>Durée totale</span>{" "}
-          <strong style={{ color: C.tx }}>{formatSLong(totalDur)}</strong>
-        </span>
-        {!compact && totals.distanceM > 0 && (
+      {!compact && (
+        <div
+          style={{
+            display: "flex",
+            gap: 16,
+            marginTop: 10,
+            fontSize: 11,
+            color: C.tx2,
+            flexWrap: "wrap",
+          }}
+        >
           <span>
-            <span style={{ color: C.tx3 }}>Distance</span>{" "}
-            <strong style={{ color: C.tx }}>{(totals.distanceM / 1000).toFixed(1)} km</strong>
+            <span style={{ color: C.tx3 }}>Durée totale</span>{" "}
+            <strong style={{ color: C.tx }}>{formatSLong(totalDur)}</strong>
           </span>
-        )}
-        {!compact && (
+          {totals.distanceM > 0 && (
+            <span>
+              <span style={{ color: C.tx3 }}>Distance</span>{" "}
+              <strong style={{ color: C.tx }}>{(totals.distanceM / 1000).toFixed(1)} km</strong>
+            </span>
+          )}
           <span>
             <span style={{ color: C.tx3 }}>Intervalles d'effort</span>{" "}
             <strong style={{ color: C.tx }}>{totals.workCount}</strong>
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

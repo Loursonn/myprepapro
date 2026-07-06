@@ -8,7 +8,7 @@ const VIOLET = "#7B6FFF"
 
 interface ExerciceSearchProps {
   value: string
-  onSelect: (exercise: { id: string; name: string; ex_type?: string }) => void
+  onSelect: (exercise: { id: string; name: string; ex_type?: string; youtube_id?: string }) => void
   onClose: () => void
 }
 
@@ -16,6 +16,7 @@ interface ExerciseRow {
   id: string
   name: string
   ex_type?: string | null
+  youtube_id?: string | null
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -50,7 +51,7 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
       setLoading(true)
       const { data } = await supabase
         .from('exercises')
-        .select('id, name, ex_type')
+        .select('id, name, ex_type, youtube_id')
         .ilike('name', `%${search.trim()}%`)
         .limit(10)
       setResults((data ?? []) as ExerciseRow[])
@@ -66,11 +67,11 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
       const { data, error } = await supabase
         .from('exercises')
         .insert({ name, is_verified: false })
-        .select('id, name, ex_type')
+        .select('id, name, ex_type, youtube_id')
         .single()
       if (error) throw error
       toast.success(`Exercice "${name}" créé`)
-      onSelect({ id: data.id, name: data.name, ex_type: data.ex_type ?? undefined })
+      onSelect({ id: data.id, name: data.name, ex_type: data.ex_type ?? undefined, youtube_id: data.youtube_id ?? undefined })
     } catch {
       toast.error("Erreur lors de la création de l'exercice")
     }
@@ -107,7 +108,7 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
           {results.map(ex => (
             <button
               key={ex.id}
-              onClick={() => onSelect({ id: ex.id, name: ex.name, ex_type: ex.ex_type ?? undefined })}
+              onClick={() => onSelect({ id: ex.id, name: ex.name, ex_type: ex.ex_type ?? undefined, youtube_id: ex.youtube_id ?? undefined })}
               style={{
                 width: "100%", display: "flex", alignItems: "center", gap: 8,
                 padding: "8px 12px", border: "none", borderBottom: "1px solid " + C.brd,

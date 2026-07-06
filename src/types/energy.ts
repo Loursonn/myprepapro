@@ -68,6 +68,7 @@ export interface EnergyInterval {
   role: IntervalRole;
   duration: EnergyDuration;
   target: EnergyTarget;
+  equipment?: string;
   notes?: string;
 }
 
@@ -85,10 +86,30 @@ export interface EnergyGroup {
   children: EnergyStep[];
   /** Intervalle de repos inséré après chaque répétition (optionnel) */
   rest_between?: EnergyInterval;
+  /** Départ fixe : chaque répétition commence toutes les N secondes (EMOM-style) */
+  departure_every_s?: number;
+}
+
+// ── ExerciseInterval ──────────────────────────────────────────────────────────
+/** Step exercice muscu/gym dans une séance spécifique (CrossFit, MetCon…). */
+export interface ExerciseInterval {
+  type: 'exercise';
+  id: string;
+  role: IntervalRole;
+  exercise_id: string;
+  exercise_name: string;
+  reps_min?: number;
+  reps_max?: number;
+  weight_kg?: number;
+  weight_unit?: 'kg' | 'bw' | 'pct_rm';
+  duration?: EnergyDuration;
+  target: EnergyTarget;
+  notes?: string;
+  youtube_id?: string;
 }
 
 // ── EnergyStep (union discriminée sur `type`) ─────────────────────────────────
-export type EnergyStep = EnergyInterval | EnergyGroup;
+export type EnergyStep = EnergyInterval | EnergyGroup | ExerciseInterval;
 
 // ── Constantes de domaine ─────────────────────────────────────────────────────
 
@@ -99,7 +120,8 @@ export type SessionKind =
   | 'footing'  // Endurance fondamentale
   | 'fartlek'  // Jeu de fartlek / variabilité libre
   | 'autre'    // Non classifié
-  | 'custom';  // Personnalisé (custom_kind obligatoire)
+  | 'custom'      // Personnalisé (custom_kind obligatoire)
+  | 'specifique'; // Spécifique (CrossFit, MetCon…)
 
 export type StructureType = 'continu' | 'fractionne';
 
@@ -117,6 +139,7 @@ export interface EnergySessionRow {
   name: string;
   session_kind: SessionKind;
   custom_kind?: string | null;
+  modality?: string | null;
   structure_type: StructureType;
   /** Tableau sérialisé EnergyStep[] */
   intervals: EnergyStep[];
@@ -124,6 +147,8 @@ export interface EnergySessionRow {
   total_distance_m?: number | null;
   notes?: string | null;
   created_by?: string | null;
+  athlete_id?: string | null;
+  parent_session_id?: string | null;
   is_public: boolean;
   is_verified: boolean;
   verified_by?: string | null;
