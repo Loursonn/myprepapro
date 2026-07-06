@@ -157,42 +157,79 @@ function AddMuscuSessionModal({ onAdd, onClose }: {
 }
 
 // ── BankPickerModal ────────────────────────────────────────────────────────────
-// Modale pour piocher une séance de la banque générale et la copier dans sa banque perso.
+// Modale pour importer une séance et la dupliquer pour un athlète.
+// 3 sources : banque générale, banque perso coach, séances d'autres athlètes.
 
-function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () => void }) {
+type PickerTab = "generale" | "perso" | "athletes";
+
+function BankPickerModal({ coachId, athleteId, onClose }: { coachId: string; athleteId?: string; onClose: () => void }) {
+  const { athletes } = useAuth();
   const { data: allSessions = [], isLoading } = useEnergySessions();
   const createMutation = useCreateEnergySession();
   const [search, setSearch] = useState("");
   const [copying, setCopying] = useState<string | null>(null);
+  const [tab, setTab] = useState<PickerTab>("generale");
 
-  // Exclure les séances déjà créées par ce coach
-  const generalSessions = allSessions.filter((s) => s.created_by !== coachId);
+  // Banque générale : publiques, pas liées à un athlète
+  const generalSessions = allSessions.filter((s) => s.is_public && !s.athlete_id);
+  // Banque perso coach : créées par le coach, pas liées à un athlète
+  const coachSessions = allSessions.filter((s) => s.created_by === coachId && !s.athlete_id);
+  // Séances d'autres athlètes du coach (pas l'athlète courant)
+  const otherAthleteSessions = allSessions.filter(
+    (s) => s.athlete_id && s.athlete_id !== athleteId
+      && athletes.some((a) => a.id === s.athlete_id)
+  );
 
-  const filtered = generalSessions.filter((s) =>
+  const sourceMap: Record<PickerTab, EnergySessionRow[]> = {
+    generale: generalSessions,
+    perso: coachSessions,
+    athletes: otherAthleteSessions,
+  };
+
+  const currentList = sourceMap[tab];
+  const filtered = currentList.filter((s) =>
     !search || s.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  async function handleCopy(s: (typeof allSessions)[0]) {
-    if (copying) return;
+  /** Remonter à la source racine pour parent_session_id */
+  function getRootParentId(s: EnergySessionRow): string {
+    return s.parent_session_id ?? s.id;
+  }
+
+  /** Trouver le nom de l'athlète */
+  function athleteName(id: string): string {
+    return athletes.find((a) => a.id === id)?.full_name ?? "Athlète";
+  }
+
+  async function handleImport(s: EnergySessionRow) {
+    if (copying || !athleteId) return;
     setCopying(s.id);
     try {
       await createMutation.mutateAsync({
-        name:           s.name + " (copie)",
-        session_kind:   s.session_kind,
-        custom_kind:    s.custom_kind ?? null,
-        structure_type: s.structure_type,
-        intervals:      s.intervals,
-        notes:          s.notes ?? null,
-        created_by:     coachId,
+        name:              s.name,
+        session_kind:      s.session_kind,
+        custom_kind:       s.custom_kind ?? null,
+        structure_type:    s.structure_type,
+        intervals:         s.intervals,
+        notes:             s.notes ?? null,
+        created_by:        coachId,
+        athlete_id:        athleteId,
+        parent_session_id: getRootParentId(s),
       });
-      toast.success(`"${s.name}" ajoutée à ta banque`);
+      toast.success(`"${s.name}" importée pour l'athlète`);
       onClose();
     } catch {
-      toast.error("Erreur lors de la copie");
+      toast.error("Erreur lors de l'import");
     } finally {
       setCopying(null);
     }
   }
+
+  const TABS: { key: PickerTab; label: string; count: number }[] = [
+    { key: "generale", label: "Banque générale", count: generalSessions.length },
+    { key: "perso",    label: "Mes séances",     count: coachSessions.length },
+    { key: "athletes", label: "Autres athlètes", count: otherAthleteSessions.length },
+  ];
 
   return (
     <>
@@ -201,7 +238,7 @@ function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () =>
         style={{
           position: "fixed", top: "50%", left: "50%", zIndex: 61,
           transform: "translate(-50%, -50%)",
-          width: 520, maxWidth: "94vw", maxHeight: "80vh",
+          width: 560, maxWidth: "94vw", maxHeight: "80vh",
           background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
           display: "flex", flexDirection: "column",
           animation: "fadeScaleIn 150ms ease-out",
@@ -213,12 +250,35 @@ function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () =>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <Library size={16} color={C.coach} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: C.tx }}>Banque générale</div>
-            <div style={{ fontSize: 11, color: C.tx3 }}>Clique sur une séance pour la copier dans ta banque</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.tx }}>Importer une séance</div>
+            <div style={{ fontSize: 11, color: C.tx3 }}>La séance sera dupliquée pour cet athlète — l'originale reste intacte.</div>
           </div>
           <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <X size={14} />
           </button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid " + C.brd, flexShrink: 0 }}>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                flex: 1, padding: "9px 8px", border: "none",
+                borderBottom: "2px solid " + (tab === t.key ? C.coach : "transparent"),
+                background: "transparent",
+                color: tab === t.key ? C.coach : C.tx3,
+                fontSize: 11, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit", transition: "color 150ms, border-color 150ms",
+              }}
+            >
+              {t.label}
+              {t.count > 0 && (
+                <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.7 }}>({t.count})</span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Search */}
@@ -245,7 +305,7 @@ function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () =>
             </div>
           ) : filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "30px 0", color: C.tx3, fontSize: 13 }}>
-              {search ? "Aucun résultat" : "Banque générale vide"}
+              {search ? "Aucun résultat" : "Aucune séance disponible"}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -255,7 +315,7 @@ function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () =>
                 return (
                   <div
                     key={s.id}
-                    onClick={() => handleCopy(s)}
+                    onClick={() => handleImport(s)}
                     style={{
                       display: "flex", alignItems: "center", gap: 10,
                       padding: "10px 12px", borderRadius: 10,
@@ -282,10 +342,13 @@ function BankPickerModal({ coachId, onClose }: { coachId: string; onClose: () =>
                         {s.is_verified && (
                           <span style={{ fontSize: 9, color: C.g, fontWeight: 700 }}>✓ vérifiée</span>
                         )}
+                        {tab === "athletes" && s.athlete_id && (
+                          <span style={{ fontSize: 9, color: C.tx3 }}>· {athleteName(s.athlete_id)}</span>
+                        )}
                       </div>
                     </div>
                     <span style={{ fontSize: 11, color: C.tx3, flexShrink: 0 }}>
-                      {isCopying ? "Copie…" : "+ Ma banque"}
+                      {isCopying ? "Import…" : "+ Importer"}
                     </span>
                   </div>
                 );
@@ -310,7 +373,11 @@ interface EnergyPanelProps {
 }
 
 function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
-  const { data: sessions = [], isLoading } = useEnergySessions({ created_by: coachId });
+  const { data: allAthlSessions = [], isLoading } = useEnergySessions();
+  // Filtrage client : séances de cet athlète, ou banque perso coach si pas d'athlète
+  const sessions = athleteId
+    ? allAthlSessions.filter((s) => s.athlete_id === athleteId)
+    : allAthlSessions.filter((s) => s.created_by === coachId && !s.athlete_id);
   const [search, setSearch] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [previewSession, setPreviewSession] = useState<EnergySessionRow | null>(null);
@@ -324,7 +391,7 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
-          Ma banque énergétique
+          Séances énergétiques
           {sessions.length > 0 && (
             <span style={{ fontSize: 11, color: C.tx3, fontWeight: 400, marginLeft: 8 }}>
               {sessions.length} séance{sessions.length > 1 ? "s" : ""}
@@ -342,7 +409,7 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
             }}
           >
             <Library size={13} />
-            Choisir une séance existante
+            Importer une séance
           </button>
           <button
             onClick={onNew}
@@ -359,7 +426,7 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
         </div>
       </div>
 
-      {showPicker && <BankPickerModal coachId={coachId} onClose={() => setShowPicker(false)} />}
+      {showPicker && <BankPickerModal coachId={coachId} athleteId={athleteId} onClose={() => setShowPicker(false)} />}
 
       {previewSession && (
         <SessionPreviewModal
@@ -377,10 +444,10 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
         background: C.ac + "10", border: "1px solid " + C.ac + "30",
         fontSize: 11, color: C.tx2, lineHeight: 1.5,
       }}>
-        <span style={{ fontSize: 14, flexShrink: 0 }}>📅</span>
+        <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
         <span>
-          Pour planifier une séance sur un athlète, glisse-la depuis{" "}
-          <strong style={{ color: C.ac }}>Planning → Mois → Banque Énergie</strong> vers le jour voulu.
+          Importe une séance depuis la banque ou un autre athlète. La copie est personnalisable sans modifier l'originale.
+          Pour la planifier, glisse-la depuis <strong style={{ color: C.ac }}>Planning → Mois</strong> vers le jour voulu.
         </span>
       </div>
 
@@ -415,7 +482,7 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
           <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>
             {search
               ? "Modifie ta recherche."
-              : "Crée ta première séance énergétique ou copie-en une depuis la banque générale."}
+              : "Importe une séance depuis la banque ou crée-en une nouvelle."}
           </div>
           {!search && (
             <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
@@ -428,7 +495,7 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
                   display: "flex", alignItems: "center", gap: 6,
                 }}
               >
-                <Library size={14} /> Choisir une séance existante
+                <Library size={14} /> Importer une séance
               </button>
               <button
                 onClick={onNew}
@@ -490,6 +557,154 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SpecifiquePanel ──────────────────────────────────────────────────────────
+
+const SPECIFIQUE_COLOR = "#F5A623";
+
+function SpecifiquePanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
+  const { data: allSessions = [], isLoading } = useEnergySessions();
+  const sessions = (athleteId
+    ? allSessions.filter((s) => s.athlete_id === athleteId && s.session_kind === "specifique")
+    : allSessions.filter((s) => s.created_by === coachId && !s.athlete_id && s.session_kind === "specifique")
+  );
+  const [search, setSearch] = useState("");
+  const [previewSession, setPreviewSession] = useState<EnergySessionRow | null>(null);
+
+  const filtered = sessions.filter((s) =>
+    !search || s.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
+          Séances spécifiques
+          {sessions.length > 0 && (
+            <span style={{ fontSize: 11, color: C.tx3, fontWeight: 400, marginLeft: 8 }}>
+              {sessions.length} séance{sessions.length > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onNew}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "7px 14px", borderRadius: 9,
+            border: "none", background: C.coach, color: "#fff",
+            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+          }}
+        >
+          <Plus size={13} />
+          Créer une séance
+        </button>
+      </div>
+
+      {previewSession && (
+        <SessionPreviewModal
+          session={previewSession}
+          athleteId={athleteId}
+          onEdit={() => { setPreviewSession(null); onEdit(previewSession.id); }}
+          onClose={() => setPreviewSession(null)}
+        />
+      )}
+
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        padding: "10px 14px", borderRadius: 10, marginBottom: 16,
+        background: SPECIFIQUE_COLOR + "10", border: "1px solid " + SPECIFIQUE_COLOR + "30",
+        fontSize: 11, color: C.tx2, lineHeight: 1.5,
+      }}>
+        <span style={{ fontSize: 14, flexShrink: 0 }}>🎯</span>
+        <span>
+          Séances spécifiques type CrossFit / MetCon : combine intervalles énergétiques et exercices dans un même builder.
+        </span>
+      </div>
+
+      {sessions.length > 4 && (
+        <input
+          value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher…"
+          style={{
+            width: "100%", padding: "8px 10px", borderRadius: 8,
+            border: "1px solid " + C.brdL, background: C.s2,
+            color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
+            boxSizing: "border-box", marginBottom: 12,
+          }}
+        />
+      )}
+
+      {isLoading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} style={{ height: 64, borderRadius: 12, background: C.s1 }} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px 20px" }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🎯</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>
+            {search ? "Aucun résultat" : "Aucune séance spécifique"}
+          </div>
+          <div style={{ fontSize: 12, color: C.tx3, marginBottom: 16 }}>
+            {search ? "Modifie ta recherche." : "Crée ta première séance spécifique."}
+          </div>
+          {!search && (
+            <button
+              onClick={onNew}
+              style={{
+                padding: "10px 20px", borderRadius: 10, border: "none",
+                background: C.coach, color: "#fff",
+                fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              Créer une séance
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtered.map((s) => (
+            <div
+              key={s.id}
+              onClick={() => setPreviewSession(s)}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "12px 14px", borderRadius: 12,
+                border: "1px solid " + C.brdL, background: C.s1,
+                cursor: "pointer", transition: "border-color 120ms",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = SPECIFIQUE_COLOR + "50")}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.brdL)}
+            >
+              <div style={{
+                width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                background: SPECIFIQUE_COLOR + "20", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 16,
+              }}>
+                🎯
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {s.name}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: SPECIFIQUE_COLOR + "20", color: SPECIFIQUE_COLOR }}>
+                    spécifique
+                  </span>
+                  {s.total_duration_s != null && (
+                    <span style={{ fontSize: 10, color: C.tx3 }}>{Math.round(s.total_duration_s / 60)} min</span>
+                  )}
+                </div>
+              </div>
+              <ChevronRight size={14} style={{ color: C.tx3, flexShrink: 0 }} />
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -774,11 +989,17 @@ export default function ProgrammationPage() {
 
       {/* ── Spécifique ── */}
       {subTab === "specifique" && (
-        <div style={{ textAlign: "center", padding: "40px 20px" }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>🎯</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>Séances Spécifiques</div>
-          <div style={{ fontSize: 12, color: C.tx3, marginTop: 4 }}>Disponible prochainement.</div>
-        </div>
+        <SpecifiquePanel
+          coachId={user?.id ?? ""}
+          athleteId={athleteId ?? undefined}
+          onNew={() => {
+            const base = athleteId
+              ? `/coach/athletes/${athleteId}/energy/new`
+              : "/coach/energy-library/new";
+            navigate(`${base}?kind=specifique`);
+          }}
+          onEdit={(sessionId: string) => navigate(`/coach/energy-library/${sessionId}/edit`)}
+        />
       )}
 
       {/* ── AddMuscuSessionModal ── */}

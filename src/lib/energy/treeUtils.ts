@@ -2,7 +2,7 @@
  * Utilitaires de mutation de l'arbre EnergyGroup.
  * Toutes les fonctions sont pures (retournent un nouveau root).
  */
-import type { EnergyGroup, EnergyInterval, EnergyStep } from "@/types/energy";
+import type { EnergyGroup, EnergyInterval, ExerciseInterval, EnergyStep } from "@/types/energy";
 
 export function genId(): string {
   return crypto.randomUUID();
@@ -124,7 +124,7 @@ export function addStepToGroup(
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function deepCloneWithNewIds(step: EnergyStep): EnergyStep {
-  if (step.type === "interval") {
+  if (step.type === "interval" || step.type === "exercise") {
     return { ...step, id: genId() };
   }
   return {
@@ -156,6 +156,19 @@ export function makeGroup(): EnergyGroup {
     role: "work",
     repeat: 3,
     children: [makeInterval()],
+  };
+}
+
+export function makeExerciseInterval(exercise: { id: string; name: string; youtube_id?: string | null }): ExerciseInterval {
+  return {
+    type: "exercise",
+    id: genId(),
+    role: "work",
+    exercise_id: exercise.id,
+    exercise_name: exercise.name,
+    reps_min: 10,
+    target: { kind: "none" },
+    ...(exercise.youtube_id ? { youtube_id: exercise.youtube_id } : {}),
   };
 }
 

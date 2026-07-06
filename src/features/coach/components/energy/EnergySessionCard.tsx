@@ -7,6 +7,8 @@ import { C } from "@/lib/theme";
 import SessionPreview from "./SessionPreview";
 import type { EnergySessionRow, EnergyGroup, SessionKind } from "@/types/energy";
 import { useVerifyEnergySession, useDeleteEnergySession, useCreateEnergySession } from "@/features/shared/hooks/useEnergySessions";
+import { useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
+import { useAuth } from "@/hooks/useAuth";
 import { formatSLong } from "@/lib/energy/formatTarget";
 import { expandIntervals, computeTotals } from "@/lib/energy";
 import { makeRootGroup } from "@/lib/energy/treeUtils";
@@ -14,28 +16,30 @@ import { makeRootGroup } from "@/lib/energy/treeUtils";
 // ── Kind badge colors ─────────────────────────────────────────────────────────
 
 const KIND_COLOR: Record<SessionKind | string, string> = {
-  vo2:     "#A855F7",
-  tempo:   "#3B8DF0",
-  seuil:   "#FB923C",
-  footing: "#22C993",
-  fartlek: "#E8C93A",
-  autre:   "#7C7480",
-  custom:  "#F472B6",
+  vo2:        "#A855F7",
+  tempo:      "#3B8DF0",
+  seuil:      "#FB923C",
+  footing:    "#22C993",
+  fartlek:    "#E8C93A",
+  autre:      "#7C7480",
+  custom:     "#F472B6",
+  specifique: "#F5A623",
 };
 
 const KIND_LABEL: Record<SessionKind | string, string> = {
-  vo2:     "VO₂max",
-  tempo:   "Tempo",
-  seuil:   "Seuil",
-  footing: "Footing",
-  fartlek: "Fartlek",
-  autre:   "Autres",
-  custom:  "Custom",
+  vo2:        "VO₂max",
+  tempo:      "Tempo",
+  seuil:      "Seuil",
+  footing:    "Footing",
+  fartlek:    "Fartlek",
+  autre:      "Autres",
+  custom:     "Custom",
+  specifique: "Spécifique",
 };
 
 // ── Dot menu ──────────────────────────────────────────────────────────────────
 
-function DotMenu({ onDuplicate, onDelete }: { onDuplicate: () => void; onDelete: () => void }) {
+function DotMenu({ onDuplicate, onDelete, onAssign }: { onDuplicate: () => void; onDelete: () => void; onAssign?: () => void }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -59,6 +63,7 @@ function DotMenu({ onDuplicate, onDelete }: { onDuplicate: () => void; onDelete:
           overflow: "hidden",
         }}>
           {[
+            ...(onAssign ? [{ label: "Programmer", action: onAssign, color: C.g }] : []),
             { label: "Dupliquer", action: onDuplicate, color: C.tx },
             { label: "Supprimer", action: onDelete, color: C.r },
           ].map(({ label, action, color }) => (
@@ -93,9 +98,14 @@ interface Props {
 
 export default function EnergySessionCard({ session, canEdit, canVerify, canDelete }: Props) {
   const navigate = useNavigate();
+  const { athletes } = useAuth();
   const verifyMutation  = useVerifyEnergySession();
   const deleteMutation  = useDeleteEnergySession();
   const createMutation  = useCreateEnergySession();
+  const assignMutation  = useAssignEnergySession();
+  const [showAssign, setShowAssign] = useState(false);
+  const [assignAthleteId, setAssignAthleteId] = useState("");
+  const [assignDate, setAssignDate] = useState(new Date().toISOString().slice(0, 10));
 
   // Build root group for preview
   const root: EnergyGroup = {
@@ -109,7 +119,9 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
   const flat   = expandIntervals(root);
   const totals = computeTotals(flat);
   const kindColor = KIND_COLOR[session.session_kind] ?? C.tx3;
-  const kindLabel = session.session_kind === "custom" && session.custom_kind
+  const kindLabel = session.session_kind === "specifique"
+    ? (KIND_LABEL[session.custom_kind ?? ""] ?? session.custom_kind ?? "Spécifique")
+    : session.session_kind === "custom" && session.custom_kind
     ? session.custom_kind
     : KIND_LABEL[session.session_kind] ?? session.session_kind;
 
@@ -159,7 +171,7 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
       {/* Top bar — kind color accent */}
       <div style={{ height: 3, background: kindColor, opacity: 0.7 }} />
 
-      <div style={{ padding: "12px 14px", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ padding: "10px 12px", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
 
         {/* Header row */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -209,6 +221,7 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
             )}
             {canDelete && (
               <DotMenu
+                onAssign={() => setShowAssign(true)}
                 onDuplicate={handleDuplicate}
                 onDelete={() => deleteMutation.mutate(session.id)}
               />
@@ -240,6 +253,80 @@ export default function EnergySessionCard({ session, canEdit, canVerify, canDele
           )}
         </div>
       </div>
+
+      {/* Assign modal */}
+      {showAssign && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div style={{ background: C.s1, borderRadius: 12, padding: 24, width: 340, border: `1px solid ${C.brd}` }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 16 }}>
+              Programmer « {session.name} »
+            </div>
+
+            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 6 }}>Athlète</div>
+            <select
+              value={assignAthleteId}
+              onChange={(e) => setAssignAthleteId(e.target.value)}
+              style={{
+                width: "100%", background: C.s2, border: `1px solid ${C.brd}`,
+                borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 10px", fontFamily: "inherit", marginBottom: 12,
+              }}
+            >
+              <option value="">Choisir un athlète…</option>
+              {athletes.map((a) => (
+                <option key={a.id} value={a.id}>{a.full_name}</option>
+              ))}
+            </select>
+
+            <div style={{ fontSize: 11, color: C.tx3, marginBottom: 6 }}>Date</div>
+            <input
+              type="date"
+              value={assignDate}
+              onChange={(e) => setAssignDate(e.target.value)}
+              style={{
+                width: "100%", background: C.s2, border: `1px solid ${C.brd}`,
+                borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 10px", fontFamily: "inherit",
+                boxSizing: "border-box",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowAssign(false)}
+                style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.brd}`, background: "transparent", color: C.tx2, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  if (!assignAthleteId) return;
+                  await assignMutation.mutateAsync({
+                    energy_session_id: session.id,
+                    athlete_id: assignAthleteId,
+                    scheduled_date: assignDate,
+                    status: "planned",
+                  });
+                  setShowAssign(false);
+                }}
+                disabled={!assignAthleteId || assignMutation.isPending}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, border: "none",
+                  background: assignAthleteId ? C.g : C.tx3, color: "#fff",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  opacity: assignAthleteId ? 1 : 0.5,
+                }}
+              >
+                {assignMutation.isPending ? "…" : "Programmer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

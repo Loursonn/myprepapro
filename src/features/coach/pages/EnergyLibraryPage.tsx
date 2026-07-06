@@ -31,7 +31,7 @@ const KIND_OPTIONS: { value: string; label: string }[] = [
   { value: "footing", label: "Footing" },
   { value: "fartlek", label: "Fartlek" },
   { value: "autre",   label: "Autres" },
-  { value: "custom",  label: "Personnalisé" },
+  { value: "custom",     label: "Personnalisé" },
 ];
 
 // ── Skeleton card ─────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ export default function EnergyLibraryPage() {
 
   // Client-side filtering
   const filtered = useMemo(() => {
-    let list = sessions;
+    let list = sessions.filter((s) => s.session_kind !== "specifique");
 
     if (tab === "mine" && profile?.id) {
       list = list.filter((s) => s.created_by === profile.id);

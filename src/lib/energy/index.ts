@@ -6,7 +6,7 @@
  * Toutes les fonctions sont déterministes et testables unitairement.
  */
 
-import type { EnergyDuration, EnergyGroup, EnergyInterval, EnergyStep, EnergyTarget } from '@/types/energy';
+import type { EnergyDuration, EnergyGroup, EnergyInterval, ExerciseInterval, EnergyStep, EnergyTarget } from '@/types/energy';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types internes
@@ -14,7 +14,7 @@ import type { EnergyDuration, EnergyGroup, EnergyInterval, EnergyStep, EnergyTar
 
 export interface FlatInterval {
   /** L'intervalle atomique développé */
-  interval: EnergyInterval;
+  interval: EnergyInterval | ExerciseInterval;
   /** Profondeur d'imbrication (0 = enfant direct du groupe racine) */
   depth: number;
   /** Index de cet intervalle dans son parent immédiat */
@@ -66,7 +66,7 @@ function _expand(group: EnergyGroup, depth: number): FlatInterval[] {
   for (let rep = 0; rep < repeat; rep++) {
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
-      if (child.type === 'interval') {
+      if (child.type === 'interval' || child.type === 'exercise') {
         result.push({ interval: child, depth, indexInParent: i });
       } else {
         const nested = _expand(child, depth + 1);
@@ -99,9 +99,12 @@ function _expand(group: EnergyGroup, depth: number): FlatInterval[] {
  *    Permet de résoudre les cibles en % test (pace_test_pct, power_test_pct) en durée réelle.
  */
 export function estimateIntervalDuration(
-  interval: EnergyInterval,
+  interval: EnergyInterval | ExerciseInterval,
   options?: EnergyCalcOptions,
 ): number {
+  if (interval.type === 'exercise') {
+    return interval.duration ? _durationToSeconds(interval.duration, interval.target, options) : 0;
+  }
   const { duration, target } = interval;
   return _durationToSeconds(duration, target, options);
 }
@@ -184,7 +187,7 @@ export function computeTotals(flat: FlatInterval[], options?: EnergyCalcOptions)
   for (const { interval } of flat) {
     durationS += estimateIntervalDuration(interval, options);
 
-    if (interval.duration.kind === 'distance') {
+    if (interval.duration?.kind === 'distance') {
       distanceM += interval.duration.value ?? 0;
     }
 

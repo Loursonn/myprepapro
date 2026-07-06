@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { BlockConfig, Session, WellnessData } from "@/features/shared/types/athlete";
 import { useProgrammation } from "@/features/coach/components/programmation/hooks/useProgrammation";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, X as XIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, Target, X as XIcon } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -231,7 +231,7 @@ function DraggableEventChip({
 
 // ── DraggableSession ─────────────────────────────────────────────────────────
 
-type BankItemType = "workout" | "energy" | "test";
+type BankItemType = "workout" | "energy" | "specifique" | "test";
 
 function DraggableSession({
   session,
@@ -242,8 +242,8 @@ function DraggableSession({
   sessionType: BankItemType;
   isDragging: boolean;
 }) {
-  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "test" ? TEST_COLOR : C.ac;
-  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "test" ? TEST_COLOR + "20" : C.acS;
+  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : C.ac;
+  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : C.acS;
 
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: session.id,
@@ -445,7 +445,11 @@ function SessionBank({
   );
 
   const filteredEnergy = energySessions.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
+    s.session_kind !== "specifique" && s.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredSpecifique = energySessions.filter((s) =>
+    s.session_kind === "specifique" && s.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const tabBtn = (t: BankItemType, label: string, icon: React.ReactNode, color: string) => (
@@ -488,6 +492,7 @@ function SessionBank({
         <div style={{ display: "flex", gap: 4, marginBottom: 8, background: C.s2, borderRadius: 9, padding: 3 }}>
           {tabBtn("workout", "Muscu", <Dumbbell size={10} />, C.ac)}
           {tabBtn("energy", "Énergie", <Zap size={10} />, "#A855F7")}
+          {tabBtn("specifique", "Spécif.", <Target size={10} />, "#F5A623")}
         </div>
         <input
           value={search}
@@ -525,7 +530,7 @@ function SessionBank({
               />
             ))
           )
-        ) : (
+        ) : tab === "energy" ? (
           filteredEnergy.length === 0 ? (
             <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucune séance énergétique</div>
           ) : (
@@ -548,7 +553,31 @@ function SessionBank({
               );
             })
           )
-        )}
+        ) : tab === "specifique" ? (
+          filteredSpecifique.length === 0 ? (
+            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucune séance spécifique</div>
+          ) : (
+            filteredSpecifique.map((s) => {
+              const kc = "#F5A623";
+              const subLabel = ENERGY_KIND_LABEL[s.custom_kind ?? ""] ?? s.custom_kind ?? "Spécifique";
+              return (
+                <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <DraggableSession
+                    session={{ id: s.id, name: s.name }}
+                    sessionType="specifique"
+                    isDragging={activeDragId === s.id}
+                  />
+                  <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ color: kc, fontWeight: 700 }}>{subLabel}</span>
+                    {s.total_duration_s != null && (
+                      <span>{Math.round(s.total_duration_s / 60)} min</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )
+        ) : null}
       </div>
 
       <div style={{ padding: "8px 10px", borderTop: "1px solid " + C.brd }}>
@@ -880,7 +909,7 @@ export function CalendarMonthView({
       const sess = active.data.current as { id: string; name?: string; label?: string; sessionType?: BankItemType };
       if (!sess) return;
 
-      if (sess.sessionType === "energy") {
+      if (sess.sessionType === "energy" || sess.sessionType === "specifique") {
         assignEnergy({
           energy_session_id: sess.id,
           athlete_id: athleteId,

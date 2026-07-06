@@ -8,11 +8,11 @@ import { formatTarget, formatS } from "@/lib/energy/formatTarget";
 
 export const KIND_LABEL: Record<string, string> = {
   vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
-  footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
+  footing: "Footing", fartlek: "Fartlek", specifique: "Spécifique", autre: "Autre", custom: "Custom",
 };
 export const KIND_COLOR: Record<string, string> = {
   vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
-  footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
+  footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280",
 };
 
 export const ROLE_COLOR: Record<string, string> = {
@@ -73,6 +73,36 @@ export function StepTree({ steps, depth = 0 }: { steps: EnergyStep[]; depth?: nu
                   {tgt}
                 </span>
               )}
+              {step.notes && (
+                <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginLeft: "auto", flexShrink: 0 }}>
+                  {step.notes}
+                </span>
+              )}
+            </div>
+          );
+        }
+        // Exercise
+        if (step.type === "exercise") {
+          const exoColor = "#7B6FFF";
+          const detail = [
+            step.reps_min ? (step.reps_max && step.reps_max !== step.reps_min ? `${step.reps_min}-${step.reps_max} reps` : `${step.reps_min} reps`) : null,
+            step.weight_kg ? `${step.weight_kg} ${step.weight_unit === "bw" ? "BW" : step.weight_unit === "pct_rm" ? "%RM" : "kg"}` : null,
+          ].filter(Boolean).join(" · ");
+          return (
+            <div
+              key={step.id ?? i}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "5px 8px",
+                marginLeft: depth * 14,
+                borderRadius: 6,
+                background: depth > 0 ? "rgba(255,255,255,0.02)" : "transparent",
+              }}
+            >
+              <div style={{ width: 3, height: 20, borderRadius: 2, background: exoColor, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: exoColor, minWidth: 36 }}>Exo</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{step.exercise_name}</span>
+              {detail && <span style={{ fontSize: 10, color: C.tx3 }}>{detail}</span>}
               {step.notes && (
                 <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginLeft: "auto", flexShrink: 0 }}>
                   {step.notes}

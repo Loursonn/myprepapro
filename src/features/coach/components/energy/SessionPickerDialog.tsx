@@ -13,35 +13,38 @@ interface Props {
   onClose: () => void;
   date: string; // YYYY-MM-DD
   athleteId: string;
+  sessionKindFilter?: string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const KIND_COLORS: Record<SessionKind, string> = {
-  vo2:     "#A855F7",
-  tempo:   "#3B8DF0",
-  seuil:   "#FB923C",
-  footing: "#22C993",
-  fartlek: "#E8C93A",
-  autre:   "#7C7480",
-  custom:  "#F472B6",
+const KIND_COLORS: Record<string, string> = {
+  vo2:        "#A855F7",
+  tempo:      "#3B8DF0",
+  seuil:      "#FB923C",
+  footing:    "#22C993",
+  fartlek:    "#E8C93A",
+  autre:      "#7C7480",
+  custom:     "#F472B6",
+  specifique: "#F5A623",
 };
 
-const KIND_LABELS: Record<SessionKind, string> = {
-  vo2:     "VO₂",
-  tempo:   "Tempo",
-  seuil:   "Seuil",
-  footing: "Footing",
-  fartlek: "Fartlek",
-  autre:   "Autre",
-  custom:  "Custom",
+const KIND_LABELS: Record<string, string> = {
+  vo2:        "VO₂",
+  tempo:      "Tempo",
+  seuil:      "Seuil",
+  footing:    "Footing",
+  fartlek:    "Fartlek",
+  autre:      "Autre",
+  custom:     "Custom",
+  specifique: "Spécifique",
 };
 
 const ALL_KINDS: SessionKind[] = ["vo2", "tempo", "seuil", "footing", "fartlek"];
 
 // ── SessionPickerDialog ───────────────────────────────────────────────────────
 
-export function SessionPickerDialog({ open, onClose, date, athleteId }: Props) {
+export function SessionPickerDialog({ open, onClose, date, athleteId, sessionKindFilter }: Props) {
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<SessionKind | null>(null);
 
@@ -58,13 +61,16 @@ export function SessionPickerDialog({ open, onClose, date, athleteId }: Props) {
 
   const filtered = useMemo(() => {
     return sessions.filter((s) => {
+      // Filter by session kind category (specifique vs energy)
+      if (sessionKindFilter && s.session_kind !== sessionKindFilter) return false;
+      if (!sessionKindFilter && s.session_kind === "specifique") return false;
       const matchKind = kindFilter ? s.session_kind === kindFilter : true;
       const matchSearch = search.trim()
         ? s.name.toLowerCase().includes(search.trim().toLowerCase())
         : true;
       return matchKind && matchSearch;
     });
-  }, [sessions, kindFilter, search]);
+  }, [sessions, kindFilter, search, sessionKindFilter]);
 
   function handleSelect(sessionId: string) {
     assignMut.mutate(

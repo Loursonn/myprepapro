@@ -36,7 +36,10 @@ export interface EnergySessionFilters {
   session_kind?: string;
   is_verified?: boolean;
   created_by?: string;
+  athlete_id?: string | null;
   search?: string;
+  /** Exclude athlete-specific copies from results (bank queries) */
+  bank_only?: boolean;
 }
 
 async function fetchEnergySessions(filters?: EnergySessionFilters): Promise<EnergySessionRow[]> {
@@ -48,6 +51,11 @@ async function fetchEnergySessions(filters?: EnergySessionFilters): Promise<Ener
   if (filters?.session_kind) q = q.eq('session_kind', filters.session_kind);
   if (filters?.is_verified !== undefined) q = q.eq('is_verified', filters.is_verified);
   if (filters?.created_by) q = q.eq('created_by', filters.created_by);
+  if (filters?.athlete_id !== undefined) {
+    if (filters.athlete_id === null) q = q.is('athlete_id', null);
+    else q = q.eq('athlete_id', filters.athlete_id);
+  }
+  if (filters?.bank_only) q = q.is('athlete_id', null);
   if (filters?.search) q = q.ilike('name', `%${filters.search}%`);
 
   const { data, error } = await q;
