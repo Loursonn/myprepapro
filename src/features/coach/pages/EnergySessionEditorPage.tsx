@@ -112,6 +112,7 @@ const KIND_COLOR: Record<string, string> = {
 function deepCloneIntervals(steps: EnergyStep[]): EnergyStep[] {
   return steps.map((s): EnergyStep => {
     if (s.type === "interval" || s.type === "exercise") return { ...s, id: genId() };
+    if (s.type === "interval") return { ...s, id: genId() };
     return {
       ...s,
       id: genId(),
@@ -258,6 +259,7 @@ export default function EnergySessionEditorPage() {
     setName(session.name + " (copie)");
     setSessionKind(session.session_kind);
     setCustomKind(session.custom_kind || "vo2");
+    setCustomKind(session.custom_kind ?? "");
     setStructureType(session.structure_type);
     const clonedChildren = deepCloneIntervals(session.intervals ?? []);
     setRoot({
