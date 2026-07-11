@@ -37,6 +37,13 @@ export function buildRootGroup(session: EnergySessionRow): EnergyGroup {
   return { type: "group", id: "__root__", role: "open", repeat: 1, children: session.intervals ?? [] };
 }
 
+// ── Equipment labels ─────────────────────────────────────────────────────────
+
+const EQUIPMENT_LABEL: Record<string, string> = {
+  rameur: "Rameur", skierg: "SkiErg", bikeerg: "BikeErg", velo: "Vélo",
+  course: "Course", elliptique: "Elliptique", corde: "Corde", autre: "Autre",
+};
+
 // ── StepTree ──────────────────────────────────────────────────────────────────
 
 export function StepTree({ steps, depth = 0 }: { steps: EnergyStep[]; depth?: number }) {
@@ -72,6 +79,11 @@ export function StepTree({ steps, depth = 0 }: { steps: EnergyStep[]; depth?: nu
               {tgt && tgt !== "Libre" && (
                 <span style={{ fontSize: 10, color: C.tx3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {tgt}
+                </span>
+              )}
+              {step.equipment && step.equipment !== "none" && (
+                <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(255,255,255,0.08)", color: C.tx2, flexShrink: 0 }}>
+                  {EQUIPMENT_LABEL[step.equipment] ?? step.equipment}
                 </span>
               )}
               {step.notes && (
