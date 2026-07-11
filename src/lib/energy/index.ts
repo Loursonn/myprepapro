@@ -103,7 +103,10 @@ export function estimateIntervalDuration(
   options?: EnergyCalcOptions,
 ): number {
   if (interval.type === 'exercise') {
-    return interval.duration ? _durationToSeconds(interval.duration, interval.target, options) : 0;
+    if (interval.duration) return _durationToSeconds(interval.duration, interval.target, options);
+    // Estimate ~4s per rep when no explicit duration (for chart rendering)
+    const reps = interval.reps_max ?? interval.reps_min ?? 10;
+    return reps * 4;
   }
   const { duration, target } = interval;
   return _durationToSeconds(duration, target, options);

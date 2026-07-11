@@ -353,10 +353,25 @@ function EnergyPreviewOverlay({
   onComplete: (log: Map<string, StepState>) => void;
   onCancel: () => void;
 }) {
-  const { data: session, isLoading } = useEnergySession(energySessionId);
+  const { data: session, isLoading, isError } = useEnergySession(energySessionId);
   const [isNowToday,    setIsNowToday]    = useState(scheduledDate === today);
   const [sessionActive, setSessionActive] = useState(false);
 
+  if (!energySessionId || isError || (!isLoading && !session)) return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", zIndex: 61,
+        transform: "translate(-50%,-50%)", width: 420, maxWidth: "96vw",
+        background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+        padding: 40, textAlign: "center", color: C.tx3, fontSize: 13,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+      }}>
+        <span>Séance introuvable</span>
+        <button onClick={onClose} style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
+      </div>
+    </>
+  );
   if (isLoading) return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
@@ -662,7 +677,7 @@ function WorkoutPreviewDrawer({
 }: {
   session: WeekSession;
   today: string;
-  onStart: () => void;
+  onStart?: () => void;
   onReschedule: () => void;
   onClose: () => void;
 }) {
@@ -739,16 +754,18 @@ function WorkoutPreviewDrawer({
 
         {/* Actions — sticky */}
         <div style={{ padding: "12px 16px 24px", flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-          <button
-            onClick={onStart}
-            style={{
-              width: "100%", padding: "14px 0", borderRadius: 12, border: "none",
-              background: C.ac, color: "#fff",
-              fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minHeight: 44,
-            }}
-          >
-            Démarrer la séance ▶
-          </button>
+          {onStart && (
+            <button
+              onClick={onStart}
+              style={{
+                width: "100%", padding: "14px 0", borderRadius: 12, border: "none",
+                background: C.ac, color: "#fff",
+                fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minHeight: 44,
+              }}
+            >
+              Démarrer la séance ▶
+            </button>
+          )}
 
           {!isPast && (
             <button
@@ -992,7 +1009,7 @@ function localMonday(): string {
 export default function ProgramPage() {
   const navigate  = useNavigate();
   const qc        = useQueryClient();
-  const { athleteId } = useAthleteContext();
+  const { athleteId, viewOnly } = useAthleteContext();
   const { data, isLoading } = useActivePlan(athleteId ?? "");
 
   const [workoutPreview,   setWorkoutPreview]   = useState<WeekSession | null>(null);
@@ -1163,10 +1180,10 @@ export default function ProgramPage() {
         <WorkoutPreviewDrawer
           session={workoutPreview}
           today={today}
-          onStart={() => {
+          onStart={viewOnly ? undefined : (() => {
             setWorkoutPreview(null);
             navigate("/athlete/program/workout/" + workoutPreview.id);
-          }}
+          })}
           onReschedule={() => { setRescheduleTarget(workoutPreview); setWorkoutPreview(null); }}
           onClose={() => setWorkoutPreview(null)}
         />

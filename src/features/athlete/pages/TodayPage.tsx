@@ -324,9 +324,10 @@ interface DayPreviewSheetProps {
   onAddActivity: (date: string) => void;
   onEditActivity: (session: FreeSession) => void;
   onTestPress: (id: string) => void;
+  viewOnly?: boolean;
 }
 
-function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByDate, onEnergyPreview, onAddActivity, onEditActivity, onTestPress }: DayPreviewSheetProps) {
+function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByDate, onEnergyPreview, onAddActivity, onEditActivity, onTestPress, viewOnly }: DayPreviewSheetProps) {
   if (!day) return null;
   const date = new Date(day.date + "T12:00:00");
   const dateLabel = `${DAYS_FULL_FR[day.dow]} ${date.getDate()} ${MONTHS_FR[date.getMonth()]}`;
@@ -424,7 +425,7 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByD
                     </div>
                   )}
 
-                  {!isCompleted && !isPast && (
+                  {!isCompleted && !isPast && !viewOnly && (
                     <button
                       onClick={() => { onStartSession(session); onClose(); haptic(); }}
                       style={{
@@ -642,7 +643,7 @@ function EnergyPreviewOverlay({
   const [actualDuration, setActualDuration] = useState<string>("");
   const [rpeSelected, setRpeSelected]   = useState<number | null>(null);
 
-  const { data: session, isLoading } = useEnergySession(sessionId);
+  const { data: session, isLoading, isError } = useEnergySession(sessionId);
   const complete        = useCompleteEnergyAssignment();
   const updateAssignment = useUpdateEnergyAssignment();
   const upsertRpe       = useUpsertEnergyRpe();
@@ -678,6 +679,25 @@ function EnergyPreviewOverlay({
     updateAssignment.mutate(
       { id: assignmentId, athleteId, status: "planned", block_logs: {}, rpe_score: null },
       { onSuccess: onClose },
+    );
+  }
+
+  if (!sessionId || isError || (!isLoading && !session)) {
+    return (
+      <>
+        <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
+        <div style={{
+          position: "fixed", top: "50%", left: "50%", zIndex: 61,
+          transform: "translate(-50%, -50%)",
+          width: 420, maxWidth: "96vw",
+          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+          padding: "40px", textAlign: "center", color: C.tx3, fontSize: 13,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+        }}>
+          <span>Séance introuvable</span>
+          <button onClick={onClose} style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
+        </div>
+      </>
     );
   }
 
@@ -905,6 +925,7 @@ export default function TodayPage() {
     athleteId, athleteProfile, wellnessHistory,
     setShowWellness, freeSessions, setFreeSessions,
     athleteProfile: profile,
+    viewOnly,
   } = useAthleteContext();
 
   const wellness        = useTodayWellness();
@@ -1157,12 +1178,14 @@ export default function TodayPage() {
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => { haptic(); navigate("/athlete/program/workout/" + w.workoutLogId); }}
-                        style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: C.coach, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minHeight: 44 }}
-                      >
-                        Démarrer ▶
-                      </button>
+                      {!viewOnly && (
+                        <button
+                          onClick={() => { haptic(); navigate("/athlete/program/workout/" + w.workoutLogId); }}
+                          style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: C.coach, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", minHeight: 44 }}
+                        >
+                          Démarrer ▶
+                        </button>
+                      )}
                     </div>
                   ))}
 
@@ -1173,7 +1196,7 @@ export default function TodayPage() {
                     return (
                       <button
                         key={ev.id}
-                        onClick={() => { if (ev.sessionKind === "specifique") { navigate(`/athlete/specific/${ev.id}`); } else { setEnergyPreview(ev); } haptic(); }}
+                        onClick={() => { if (ev.sessionKind === "specifique" && !viewOnly) { navigate(`/athlete/specific/${ev.id}`); } else { setEnergyPreview(ev); } haptic(); }}
                         style={{ width: "100%", background: kc + "12", borderRadius: 14, padding: "14px 16px", border: "1px solid " + kc + "40", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const }}
                       >
                         <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: kc + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏃</div>
@@ -1220,7 +1243,7 @@ export default function TodayPage() {
         )}
 
         {/* Section 2c — Faire une autre séance */}
-        {(allDoneToday || restDay) && otherUndoneSessions.length > 0 && (
+        {!viewOnly && (allDoneToday || restDay) && otherUndoneSessions.length > 0 && (
           <div style={{ marginBottom: 20 }}>
             <button
               onClick={() => { setShowOtherSessions((v) => !v); haptic(); }}
@@ -1612,16 +1635,17 @@ export default function TodayPage() {
       <DayPreviewSheet
         day={selectedDay}
         onClose={() => setSelectedDay(null)}
-        onStartSession={(sess) => navigate("/athlete/log", { state: { initialSess: sess } })}
+        onStartSession={viewOnly ? () => {} : (sess) => navigate("/athlete/log", { state: { initialSess: sess } })}
         freeSessions={freeSessions}
         energyByDate={energyByDate}
         onEnergyPreview={(ev) => {
-          if (ev.sessionKind === "specifique") {
+          if (ev.sessionKind === "specifique" && !viewOnly) {
             navigate(`/athlete/specific/${ev.id}`);
           } else {
             setEnergyPreview(ev);
           }
         }}
+        viewOnly={viewOnly}
         onAddActivity={(date) => setActivityDate(date)}
         onEditActivity={(f) => setEditActivity(f)}
         onTestPress={(id) => setTestPreviewId(id)}

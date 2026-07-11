@@ -1,17 +1,42 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Ruler, Camera, Plus, ChevronLeft, Check, Pencil, Trash2, X } from 'lucide-react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { C } from '@/lib/theme';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
-  MEASUREMENT_FIELDS, PHOTO_SLOTS,
+  MEASUREMENT_FIELDS, PHOTO_SLOTS, ALL_MEASUREMENT_KEYS,
   type MeasurementKey, type PhotoSlot, type MeasurementLog,
 } from '@/features/shared/types/measurements';
 import {
   useMeasurementLogs, useCreateMeasurementLog,
   useUpdateMeasurementLog, useDeleteMeasurementLog, useMeasurementPhotoUrls,
 } from '@/features/shared/hooks/useMeasurements';
+
+// ── Draft persistence ─────────────────────────────────────────────────────────
+
+interface DraftData {
+  weight: string;
+  values: Record<string, string>;
+  editId?: string;
+}
+
+function draftKey(athleteId: string) { return `mensuration_draft_${athleteId}`; }
+
+function saveDraft(athleteId: string, data: DraftData) {
+  try { localStorage.setItem(draftKey(athleteId), JSON.stringify(data)); } catch { /* quota */ }
+}
+
+function loadDraft(athleteId: string): DraftData | null {
+  try {
+    const raw = localStorage.getItem(draftKey(athleteId));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearDraft(athleteId: string) {
+  try { localStorage.removeItem(draftKey(athleteId)); } catch { /* */ }
+}
 
 interface Props {
   athleteId: string;
@@ -36,12 +61,29 @@ function LogCard({
   onDelete: () => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
-  const filled = MEASUREMENT_FIELDS.filter(f => log[f.key] != null);
   const photoPaths = Object.entries(log.photos ?? {});
+
+  // Build display chips for measurements
+  const chips: { label: string; value: string }[] = [];
+  for (const f of MEASUREMENT_FIELDS) {
+    if (f.bilateral) {
+      const g = log[f.bilateral.gKey];
+      const d = log[f.bilateral.dKey];
+      const legacy = log[f.key];
+      if (g != null || d != null) {
+        if (g != null) chips.push({ label: `${f.label} G`, value: `${g} cm` });
+        if (d != null) chips.push({ label: `${f.label} D`, value: `${d} cm` });
+      } else if (legacy != null) {
+        chips.push({ label: f.label, value: `${legacy} cm` });
+      }
+    } else if (log[f.key] != null) {
+      chips.push({ label: f.label, value: `${log[f.key]} cm` });
+    }
+  }
 
   return (
     <div style={{ background: C.s1, borderRadius: 12, border: '1px solid ' + C.brd, padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: filled.length ? 10 : 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: chips.length ? 10 : 0 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>
           {format(new Date(log.date + 'T12:00:00'), 'd MMM yyyy', { locale: fr })}
         </span>
@@ -60,15 +102,15 @@ function LogCard({
         )}
       </div>
 
-      {filled.length > 0 && (
+      {chips.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {filled.map(f => (
-            <div key={f.key} style={{
+          {chips.map((c, i) => (
+            <div key={i} style={{
               padding: '4px 10px', borderRadius: 7,
               background: 'rgba(34,201,147,0.08)', border: '1px solid rgba(34,201,147,0.15)',
             }}>
-              <span style={{ fontSize: 11, color: C.tx3 }}>{f.label} </span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: C.g }}>{log[f.key]} cm</span>
+              <span style={{ fontSize: 11, color: C.tx3 }}>{c.label} </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.g }}>{c.value}</span>
             </div>
           ))}
         </div>
@@ -128,17 +170,37 @@ function EntryForm({
 
   const existingPhotos = editLog?.photos ?? {};
 
-  const [weight, setWeight] = useState(editLog?.weight_kg != null ? String(editLog.weight_kg) : '');
+  // Restore draft or init from editLog
+  const [weight, setWeight] = useState(() => {
+    if (editLog?.weight_kg != null) return String(editLog.weight_kg);
+    const draft = loadDraft(athleteId);
+    if (draft && !draft.editId) return draft.weight;
+    return '';
+  });
   const [values, setValues] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    if (editLog) for (const f of MEASUREMENT_FIELDS) {
-      if (editLog[f.key] != null) init[f.key] = String(editLog[f.key]);
+    if (editLog) {
+      const init: Record<string, string> = {};
+      for (const k of ALL_MEASUREMENT_KEYS) {
+        if (editLog[k] != null) init[k] = String(editLog[k]);
+      }
+      const draft = loadDraft(athleteId);
+      if (draft?.editId === editLog.id) return { ...init, ...draft.values };
+      return init;
     }
-    return init;
+    const draft = loadDraft(athleteId);
+    if (draft && !draft.editId) return draft.values;
+    return {};
   });
   const [files, setFiles] = useState<Partial<Record<PhotoSlot, File>>>({});
   const [previews, setPreviews] = useState<Partial<Record<PhotoSlot, string>>>({});
   const [removed, setRemoved] = useState<Set<PhotoSlot>>(new Set());
+
+  // Auto-save draft on change
+  const persistDraft = useCallback(() => {
+    saveDraft(athleteId, { weight, values, editId: editLog?.id });
+  }, [athleteId, weight, values, editLog?.id]);
+
+  useEffect(() => { persistDraft(); }, [persistDraft]);
 
   function setVal(key: MeasurementKey, v: string) {
     setValues(prev => ({ ...prev, [key]: v }));
@@ -165,11 +227,11 @@ function EntryForm({
 
   function handleSave() {
     const measurements: Partial<Record<MeasurementKey, number>> = {};
-    for (const f of MEASUREMENT_FIELDS) {
-      const raw = values[f.key]?.trim();
+    for (const k of ALL_MEASUREMENT_KEYS) {
+      const raw = values[k]?.trim();
       if (!raw) continue;
       const n = parseFloat(raw.replace(',', '.'));
-      if (!isNaN(n) && n > 0) measurements[f.key] = n;
+      if (!isNaN(n) && n > 0) measurements[k] = n;
     }
     const photoFiles: Partial<Record<PhotoSlot, File>> = {};
     for (const [slot, file] of Object.entries(files)) {
@@ -177,6 +239,11 @@ function EntryForm({
     }
     const w = parseFloat(weight.trim().replace(',', '.'));
     const weight_kg = !isNaN(w) && w > 0 ? w : undefined;
+
+    function onSuccess() {
+      clearDraft(athleteId);
+      onDone();
+    }
 
     if (isEdit) {
       update.mutate({
@@ -186,12 +253,19 @@ function EntryForm({
         measurements,
         newPhotoFiles: photoFiles,
         removedSlots: [...removed],
-      }, { onSuccess: onDone });
+      }, { onSuccess });
     } else {
       if (weight_kg == null && Object.keys(measurements).length === 0 && Object.keys(photoFiles).length === 0) return;
-      create.mutate({ weight_kg, measurements, photoFiles }, { onSuccess: onDone });
+      create.mutate({ weight_kg, measurements, photoFiles }, { onSuccess });
     }
   }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '6px 8px', borderRadius: 8,
+    border: '1px solid ' + C.brdL, background: C.s1,
+    color: C.tx, fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+    outline: 'none', boxSizing: 'border-box',
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -216,25 +290,50 @@ function EntryForm({
       {/* Mensurations */}
       <div>
         <SectionLabel icon={<Ruler size={12} color={C.g} />} text="Mensurations (cm)" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {MEASUREMENT_FIELDS.map(f => (
-            <div key={f.key} style={{ background: C.s2, borderRadius: 10, padding: '8px 12px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.tx2, marginBottom: 4 }}>{f.label}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="number" inputMode="decimal" value={values[f.key] ?? ''}
-                  onChange={(e) => setVal(f.key, e.target.value)} placeholder="0"
-                  style={{
-                    width: '100%', padding: '6px 8px', borderRadius: 8,
-                    border: '1px solid ' + C.brdL, background: C.s1,
-                    color: C.tx, fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-                    outline: 'none', boxSizing: 'border-box',
-                  }}
-                />
-                <span style={{ fontSize: 11, color: C.tx3 }}>cm</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {MEASUREMENT_FIELDS.map(f => {
+            if (f.bilateral) {
+              const { gKey, dKey } = f.bilateral;
+              return (
+                <div key={f.key} style={{ background: C.s2, borderRadius: 10, padding: '8px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.tx2, marginBottom: 6 }}>{f.label}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: C.tx3, minWidth: 14 }}>G</span>
+                      <input
+                        type="number" inputMode="decimal" value={values[gKey] ?? ''}
+                        onChange={(e) => setVal(gKey, e.target.value)} placeholder="0"
+                        style={inputStyle}
+                      />
+                      <span style={{ fontSize: 11, color: C.tx3 }}>cm</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: C.tx3, minWidth: 14 }}>D</span>
+                      <input
+                        type="number" inputMode="decimal" value={values[dKey] ?? ''}
+                        onChange={(e) => setVal(dKey, e.target.value)} placeholder="0"
+                        style={inputStyle}
+                      />
+                      <span style={{ fontSize: 11, color: C.tx3 }}>cm</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={f.key} style={{ background: C.s2, borderRadius: 10, padding: '8px 12px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.tx2, marginBottom: 4 }}>{f.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="number" inputMode="decimal" value={values[f.key] ?? ''}
+                    onChange={(e) => setVal(f.key, e.target.value)} placeholder="0"
+                    style={inputStyle}
+                  />
+                  <span style={{ fontSize: 11, color: C.tx3 }}>cm</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -314,7 +413,16 @@ function SectionLabel({ icon, text }: { icon: React.ReactNode; text: string }) {
 // ── Drawer ────────────────────────────────────────────────────────────────────
 
 export function MensurationsDrawer({ athleteId, viewOnly, onClose }: Props) {
-  const [mode, setMode] = useState<Mode>({ kind: 'list' });
+  // Auto-resume draft if one exists
+  const [mode, setMode] = useState<Mode>(() => {
+    if (viewOnly) return { kind: 'list' };
+    const draft = loadDraft(athleteId);
+    if (draft && (draft.weight || Object.keys(draft.values).length > 0)) {
+      if (draft.editId) return { kind: 'list' }; // edit draft needs the log object, show list
+      return { kind: 'new' };
+    }
+    return { kind: 'list' };
+  });
   const { data: logs = [], isLoading } = useMeasurementLogs(athleteId);
   const del = useDeleteMeasurementLog(athleteId);
 

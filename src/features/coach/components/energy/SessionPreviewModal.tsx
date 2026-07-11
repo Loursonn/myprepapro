@@ -1,6 +1,7 @@
 import { X, Zap } from "lucide-react";
 import { C } from "@/lib/theme";
 import SessionPreview from "./SessionPreview";
+import { SchemaViewerWithZoom } from "./SchemaViewer";
 import type { EnergySessionRow, EnergyStep, EnergyGroup } from "@/types/energy";
 import { formatTarget, formatS } from "@/lib/energy/formatTarget";
 
@@ -170,18 +171,23 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)" }} />
       <div
         style={{
-          position: "fixed", top: "50%", left: "50%", zIndex: 61,
-          transform: "translate(-50%, -50%)",
-          width: 780, maxWidth: "96vw", maxHeight: "88vh",
-          background: C.s1, borderRadius: 16, border: "1px solid " + C.brd,
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 61,
+          maxHeight: "92vh",
+          background: C.s1, borderRadius: "18px 18px 0 0", border: "1px solid " + C.brd,
+          borderBottom: "none",
           display: "flex", flexDirection: "column",
-          animation: "fadeScaleIn 150ms ease-out",
+          animation: "slideUp 200ms ease-out",
         }}
       >
-        <style>{`@keyframes fadeScaleIn { from { opacity:0; transform:translate(-50%,-50%) scale(0.96) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }`}</style>
+        <style>{`@keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }`}</style>
+
+        {/* Drag handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 0" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: C.brdL }} />
+        </div>
 
         {/* Header */}
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid " + C.brd, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        <div style={{ padding: "10px 18px 12px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
           <div style={{ width: 34, height: 34, borderRadius: 9, background: kc + "25", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Zap size={16} color={kc} />
           </div>
@@ -204,59 +210,67 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
           </button>
         </div>
 
-        {/* Body — 2 colonnes */}
-        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-          {/* Gauche : graphe */}
-          <div style={{ flex: "0 0 55%", padding: "16px 18px", borderRight: "1px solid " + C.brd, overflowY: "auto", scrollbarWidth: "none" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
-              Aperçu
-            </div>
+        {/* Scrollable body — single column: chart then steps */}
+        <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+          {/* Chart */}
+          <div style={{ padding: "0 18px 12px" }}>
             <SessionPreview intervals={rootGroup} athleteId={athleteId} />
-            {session.notes && (
-              <div style={{ marginTop: 14, padding: "9px 12px", borderRadius: 9, background: C.s2, border: "1px solid " + C.brd, fontSize: 11, color: C.tx2, lineHeight: 1.6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 3 }}>Notes</span>
-                {session.notes}
-              </div>
-            )}
           </div>
 
-          {/* Droite : déroulé */}
-          <div style={{ flex: 1, padding: "16px 16px", overflowY: "auto", scrollbarWidth: "none" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
-              Déroulé
+          {/* Notes */}
+          {session.notes && (
+            <div style={{ margin: "0 18px 12px", padding: "9px 12px", borderRadius: 9, background: C.s2, border: "1px solid " + C.brd, fontSize: 11, color: C.tx2, lineHeight: 1.6 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 3 }}>Notes</span>
+              {session.notes}
+            </div>
+          )}
+
+          {/* Schema */}
+          {session.schema && (
+            <div style={{ margin: "0 18px 12px", borderRadius: 9, overflow: "hidden", border: "1px solid " + C.brd }}>
+              <SchemaViewerWithZoom schema={session.schema} />
+            </div>
+          )}
+
+          {/* Steps detail */}
+          <div style={{ padding: "0 18px 20px" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+              Déroulé de la séance
             </div>
             <StepTree steps={session.intervals ?? []} />
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{ padding: "10px 18px", borderTop: "1px solid " + C.brd, display: "flex", justifyContent: "flex-end", gap: 8, flexShrink: 0 }}>
-          <button onClick={onClose} style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-            Fermer
-          </button>
-          {onEdit && (
-            <button onClick={onEdit} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-              Modifier la séance
-            </button>
-          )}
-          {onStart && (
-            <button onClick={onStart} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: C.ac, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-              {startLabel ?? "Faire la séance aujourd'hui"}
+        {/* Footer actions */}
+        <div style={{ padding: "10px 18px", paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))", borderTop: "1px solid " + C.brd, display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {onUnvalidate && (
+            <button onClick={onUnvalidate} style={{ padding: "9px 16px", borderRadius: 10, border: "1px solid " + C.r + "50", background: "transparent", color: C.r, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              Dévalider
             </button>
           )}
           {onCancel && (
-            <button onClick={onCancel} style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onCancel} style={{ padding: "9px 16px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Annuler la séance
             </button>
           )}
+          {onEdit && (
+            <button onClick={onEdit} style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Modifier
+            </button>
+          )}
+          {onStart && (
+            <button onClick={onStart} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", background: C.ac, color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+              {startLabel ?? "Faire la séance ▶"}
+            </button>
+          )}
           {onValidate && (
-            <button onClick={onValidate} style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: "#22C993", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onValidate} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", background: "#22C993", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
               Valider la séance ✓
             </button>
           )}
-          {onUnvalidate && (
-            <button onClick={onUnvalidate} style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid " + C.r + "50", background: "transparent", color: C.r, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-              Dévalider
+          {!onStart && !onValidate && !onEdit && !onCancel && !onUnvalidate && (
+            <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              Fermer
             </button>
           )}
         </div>
