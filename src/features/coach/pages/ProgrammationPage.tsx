@@ -376,8 +376,8 @@ function EnergyPanel({ coachId, athleteId, onNew, onEdit }: EnergyPanelProps) {
   const { data: allAthlSessions = [], isLoading } = useEnergySessions();
   // Filtrage client : séances de cet athlète, ou banque perso coach si pas d'athlète
   const sessions = athleteId
-    ? allAthlSessions.filter((s) => s.athlete_id === athleteId)
-    : allAthlSessions.filter((s) => s.created_by === coachId && !s.athlete_id);
+    ? allAthlSessions.filter((s) => s.athlete_id === athleteId && s.session_kind !== "specifique")
+    : allAthlSessions.filter((s) => s.created_by === coachId && !s.athlete_id && s.session_kind !== "specifique");
   const [search, setSearch] = useState("");
   const [showPicker, setShowPicker] = useState(false);
   const [previewSession, setPreviewSession] = useState<EnergySessionRow | null>(null);
@@ -982,8 +982,8 @@ export default function ProgrammationPage() {
         <EnergyPanel
           coachId={user?.id ?? ""}
           athleteId={athleteId ?? undefined}
-          onNew={() => navigate("/coach/library?tab=energetique")}
-          onEdit={(sessionId: string) => navigate(`/coach/energy-library/${sessionId}/edit`)}
+          onNew={() => navigate(athleteId ? `/coach/athletes/${athleteId}/energy/new` : "/coach/energy-library/new")}
+          onEdit={(sessionId: string) => navigate(athleteId ? `/coach/athletes/${athleteId}/energy/${sessionId}/edit` : `/coach/energy-library/${sessionId}/edit`)}
         />
       )}
 
@@ -998,7 +998,7 @@ export default function ProgrammationPage() {
               : "/coach/energy-library/new";
             navigate(`${base}?kind=specifique`);
           }}
-          onEdit={(sessionId: string) => navigate(`/coach/energy-library/${sessionId}/edit`)}
+          onEdit={(sessionId: string) => navigate(athleteId ? `/coach/athletes/${athleteId}/energy/${sessionId}/edit` : `/coach/energy-library/${sessionId}/edit`)}
         />
       )}
 

@@ -30,26 +30,60 @@ function fmtDelta(d: number, unit: string): { text: string; color: string } {
 
 function MeasurementsTab({ logs }: { logs: MeasurementLog[] }) {
   // Premier item ayant au moins une valeur, sinon 'bras'
-  const firstFilled = MEASUREMENT_FIELDS.find(f => logs.some(l => l[f.key] != null))?.key ?? 'bras';
+  function hasFieldData(l: MeasurementLog, f: typeof MEASUREMENT_FIELDS[number]): boolean {
+    if (f.bilateral) return l[f.bilateral.gKey] != null || l[f.bilateral.dKey] != null || l[f.key] != null;
+    return l[f.key] != null;
+  }
+
+  const firstFilled = MEASUREMENT_FIELDS.find(f => logs.some(l => hasFieldData(l, f)))?.key ?? 'bras';
   const [sel, setSel] = useState<MeasurementKey>(firstFilled);
+
+  const selField = MEASUREMENT_FIELDS.find(f => f.key === sel);
 
   // Logs ascendants ayant une valeur pour l'item sélectionné
   const rows = useMemo(() => {
     const filtered = logs
-      .filter(l => l[sel] != null)
+      .filter(l => {
+        if (selField?.bilateral) {
+          return l[selField.bilateral.gKey] != null || l[selField.bilateral.dKey] != null || l[sel] != null;
+        }
+        return l[sel] != null;
+      })
       .slice()
-      .sort((a, b) => a.date.localeCompare(b.date)); // ascendant
+      .sort((a, b) => a.date.localeCompare(b.date));
     return filtered.map((l, i) => {
       const prev = i > 0 ? filtered[i - 1] : null;
-      const val = l[sel] as number;
-      const prevVal = prev ? (prev[sel] as number) : null;
+      // For bilateral, show avg of G+D, or legacy single value
+      let val: number;
+      let label = '';
+      if (selField?.bilateral) {
+        const g = l[selField.bilateral.gKey] as number | null;
+        const d = l[selField.bilateral.dKey] as number | null;
+        if (g != null && d != null) { val = (g + d) / 2; label = `G:${g} D:${d}`; }
+        else if (g != null) { val = g; label = `G:${g}`; }
+        else if (d != null) { val = d; label = `D:${d}`; }
+        else { val = l[sel] as number; }
+      } else {
+        val = l[sel] as number;
+      }
+      const prevVal = prev ? (() => {
+        if (selField?.bilateral) {
+          const pg = prev[selField.bilateral.gKey] as number | null;
+          const pd = prev[selField.bilateral.dKey] as number | null;
+          if (pg != null && pd != null) return (pg + pd) / 2;
+          if (pg != null) return pg;
+          if (pd != null) return pd;
+          return prev[sel] as number | null;
+        }
+        return prev[sel] as number | null;
+      })() : null;
       const deltaVal = prevVal != null ? val - prevVal : null;
       const deltaDays = prev ? daysBetween(prev.date, l.date) : null;
       const deltaWeight = prev && l.weight_kg != null && prev.weight_kg != null
         ? l.weight_kg - prev.weight_kg : null;
-      return { log: l, val, deltaVal, deltaDays, deltaWeight };
-    }).reverse(); // affichage chronologique décroissant (plus récent en haut)
-  }, [logs, sel]);
+      return { log: l, val, label, deltaVal, deltaDays, deltaWeight };
+    }).reverse();
+  }, [logs, sel, selField]);
 
   return (
     <div>
@@ -57,7 +91,7 @@ function MeasurementsTab({ logs }: { logs: MeasurementLog[] }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
         {MEASUREMENT_FIELDS.map(f => {
           const active = f.key === sel;
-          const has = logs.some(l => l[f.key] != null);
+          const has = logs.some(l => hasFieldData(l, f));
           return (
             <button
               key={f.key}
@@ -84,7 +118,7 @@ function MeasurementsTab({ logs }: { logs: MeasurementLog[] }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {rows.map(({ log, val, deltaVal, deltaDays, deltaWeight }) => {
+          {rows.map(({ log, val, label, deltaVal, deltaDays, deltaWeight }) => {
             const dv = deltaVal != null ? fmtDelta(deltaVal, 'cm') : null;
             const dw = deltaWeight != null ? fmtDelta(deltaWeight, 'kg') : null;
             return (
@@ -97,9 +131,12 @@ function MeasurementsTab({ logs }: { logs: MeasurementLog[] }) {
                     {format(new Date(log.date + 'T12:00:00'), 'd MMM yy', { locale: fr })}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 76 }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, color: C.tx }}>{val}</span>
-                  <span style={{ fontSize: 11, color: C.tx3 }}>cm</span>
+                <div style={{ minWidth: 76 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{ fontSize: 20, fontWeight: 800, color: C.tx }}>{Math.round(val * 10) / 10}</span>
+                    <span style={{ fontSize: 11, color: C.tx3 }}>cm</span>
+                  </div>
+                  {label && <div style={{ fontSize: 9, color: C.tx3 }}>{label}</div>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 64 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: C.tx2 }}>

@@ -5,7 +5,7 @@ import { QK } from '@/lib/queryKeys';
 import { compressImage } from '@/lib/compressImage';
 import {
   MEASUREMENT_BUCKET,
-  MEASUREMENT_FIELDS,
+  ALL_MEASUREMENT_KEYS,
   type MeasurementLog,
   type MeasurementPhotos,
   type NewMeasurementInput,
@@ -137,8 +137,8 @@ export function useUpdateMeasurementLog(athleteId: string) {
 
       // Toutes les mensurations (les non saisies repassent à null)
       const fields: Record<string, number | null> = {};
-      for (const f of MEASUREMENT_FIELDS) {
-        fields[f.key] = input.measurements[f.key] ?? null;
+      for (const k of ALL_MEASUREMENT_KEYS) {
+        fields[k] = input.measurements[k] ?? null;
       }
 
       const { error } = await db

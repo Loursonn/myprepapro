@@ -1,19 +1,37 @@
 // Mensurations + photos d'évolution corporelle
 
 export type MeasurementKey =
-  | 'bras' | 'epaules' | 'poitrine' | 'taille' | 'hanche' | 'cuisse' | 'mollet';
+  | 'bras' | 'bras_g' | 'bras_d'
+  | 'epaules' | 'poitrine' | 'taille' | 'hanche'
+  | 'cuisse' | 'cuisse_g' | 'cuisse_d'
+  | 'mollet' | 'mollet_g' | 'mollet_d';
 
 export type PhotoSlot =
   | 'face' | 'cote' | 'dos' | 'jambes_face' | 'jambes_dos';
 
-export const MEASUREMENT_FIELDS: { key: MeasurementKey; label: string }[] = [
-  { key: 'bras',     label: 'Bras'     },
+export interface MeasurementField {
+  key: MeasurementKey;
+  label: string;
+  /** If set, this is a bilateral measurement with left/right keys */
+  bilateral?: { gKey: MeasurementKey; dKey: MeasurementKey };
+}
+
+export const MEASUREMENT_FIELDS: MeasurementField[] = [
+  { key: 'bras',     label: 'Bras',     bilateral: { gKey: 'bras_g',   dKey: 'bras_d'   } },
   { key: 'epaules',  label: 'Épaules'  },
   { key: 'poitrine', label: 'Poitrine' },
   { key: 'taille',   label: 'Taille'   },
   { key: 'hanche',   label: 'Hanche'   },
-  { key: 'cuisse',   label: 'Cuisse'   },
-  { key: 'mollet',   label: 'Mollet'   },
+  { key: 'cuisse',   label: 'Cuisse',   bilateral: { gKey: 'cuisse_g', dKey: 'cuisse_d' } },
+  { key: 'mollet',   label: 'Mollet',   bilateral: { gKey: 'mollet_g', dKey: 'mollet_d' } },
+];
+
+/** All column keys that map to DB columns (for iteration) */
+export const ALL_MEASUREMENT_KEYS: MeasurementKey[] = [
+  'bras', 'bras_g', 'bras_d',
+  'epaules', 'poitrine', 'taille', 'hanche',
+  'cuisse', 'cuisse_g', 'cuisse_d',
+  'mollet', 'mollet_g', 'mollet_d',
 ];
 
 export const PHOTO_SLOTS: { key: PhotoSlot; label: string }[] = [
@@ -34,12 +52,18 @@ export interface MeasurementLog {
   date: string;            // YYYY-MM-DD
   weight_kg: number | null;
   bras: number | null;
+  bras_g: number | null;
+  bras_d: number | null;
   epaules: number | null;
   poitrine: number | null;
   taille: number | null;
   hanche: number | null;
   cuisse: number | null;
+  cuisse_g: number | null;
+  cuisse_d: number | null;
   mollet: number | null;
+  mollet_g: number | null;
+  mollet_d: number | null;
   photos: MeasurementPhotos;
   created_at: string;
 }

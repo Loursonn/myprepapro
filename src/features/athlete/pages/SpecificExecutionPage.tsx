@@ -17,6 +17,7 @@ import StepTimeline from "@/features/athlete/components/specific/StepTimeline";
 import ExecutionCard from "@/features/athlete/components/specific/ExecutionCard";
 import SessionEndForm from "@/features/athlete/components/specific/SessionEndForm";
 import type { EnergySessionAssignmentRow } from "@/types/energy";
+import { SchemaViewerWithZoom } from "@/features/coach/components/energy/SchemaViewer";
 import { formatSLong } from "@/lib/energy/formatTarget";
 
 export default function SpecificExecutionPage() {
@@ -149,6 +150,13 @@ export default function SpecificExecutionPage() {
               Note coach
             </strong>
             {session.notes}
+          </div>
+        )}
+
+        {/* ── Schema ── */}
+        {session.schema && (
+          <div style={{ marginBottom: 16, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border, #2E2D33)" }}>
+            <SchemaViewerWithZoom schema={session.schema} />
           </div>
         )}
 

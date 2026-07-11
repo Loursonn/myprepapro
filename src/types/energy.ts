@@ -113,6 +113,29 @@ export type EnergyStep = EnergyInterval | EnergyGroup | ExerciseInterval;
 
 // ── Constantes de domaine ─────────────────────────────────────────────────────
 
+// ── Schema (dessin terrain) ──────────────────────────────────────────────────
+
+export type FieldType = 'rugby' | 'foot' | 'basket' | 'piste' | 'vide';
+
+export interface SchemaElement {
+  type: 'polyline' | 'arrow' | 'cone' | 'text';
+  points?: { x: number; y: number }[];
+  x?: number;
+  y?: number;
+  color: string;
+  text?: string;
+  tx?: number;
+  ty?: number;
+}
+
+export interface FieldSchema {
+  field: FieldType;
+  elements: SchemaElement[];
+  showDistances?: boolean;
+}
+
+// ── Session kinds ────────────────────────────────────────────────────────────
+
 export type SessionKind =
   | 'vo2'      // VO₂max / VMA
   | 'tempo'    // Allure tempo / course continue modérée
@@ -146,6 +169,7 @@ export interface EnergySessionRow {
   total_duration_s?: number | null;
   total_distance_m?: number | null;
   notes?: string | null;
+  schema?: FieldSchema | null;
   created_by?: string | null;
   athlete_id?: string | null;
   parent_session_id?: string | null;

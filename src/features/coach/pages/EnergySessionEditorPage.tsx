@@ -17,10 +17,12 @@ import { C } from "@/lib/theme";
 import { makeRootGroup, genId } from "@/lib/energy/treeUtils";
 import { expandIntervals, computeTotals } from "@/lib/energy";
 import { formatSLong } from "@/lib/energy/formatTarget";
-import type { EnergyGroup, EnergyStep, SessionKind, StructureType } from "@/types/energy";
+import type { EnergyGroup, EnergyStep, SessionKind, StructureType, FieldSchema } from "@/types/energy";
 import { useAuth } from "@/hooks/useAuth";
 import IntervalBuilder from "../components/energy/IntervalBuilder";
 import SessionPreview from "../components/energy/SessionPreview";
+import SchemaEditor from "../components/energy/SchemaEditor";
+import { SchemaViewerWithZoom } from "../components/energy/SchemaViewer";
 import {
   useEnergySession,
   useEnergySessions,
@@ -232,6 +234,8 @@ export default function EnergySessionEditorPage() {
   const [customKind, setCustomKind] = useState("vo2");
   const [structureType, setStructureType] = useState<StructureType>("fractionne");
   const [root, setRoot] = useState<EnergyGroup>(makeRootGroup);
+  const [fieldSchema, setFieldSchema] = useState<FieldSchema | null>(null);
+  const [showSchemaEditor, setShowSchemaEditor] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -252,6 +256,7 @@ export default function EnergySessionEditorPage() {
         children: existingSession.intervals ?? [],
       };
       setRoot(rootG);
+      setFieldSchema(existingSession.schema ?? null);
     }
   }, [existingSession]);
 
@@ -282,7 +287,9 @@ export default function EnergySessionEditorPage() {
       modality: null,
       structure_type: structureType,
       intervals: root.children,
+      schema: fieldSchema ?? null,
       created_by: user?.id ?? null,
+      ...(athleteId ? { athlete_id: athleteId } : {}),
     };
 
     if (isEdit && sessionId) {
@@ -492,6 +499,46 @@ export default function EnergySessionEditorPage() {
               <SessionPreview intervals={root} />
             </div>
           )}
+
+          {/* Schema drawing */}
+          <div style={{ marginTop: 16 }}>
+            {fieldSchema && (
+              <div style={{ background: C.s1, borderRadius: 10, padding: 10, border: `1px solid ${C.brd}`, marginBottom: 8 }}>
+                <SchemaViewerWithZoom schema={fieldSchema} />
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setShowSchemaEditor(true)}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 10,
+                  border: `1px dashed ${C.brdL}`, background: "transparent",
+                  color: C.tx3, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                {fieldSchema ? "Modifier le schéma" : "Ajouter un schéma terrain"}
+              </button>
+              {fieldSchema && (
+                <button
+                  onClick={() => setFieldSchema(null)}
+                  style={{
+                    padding: "10px 12px", borderRadius: 10,
+                    border: `1px solid rgba(239,68,68,0.3)`, background: "rgba(239,68,68,0.08)",
+                    color: "#EF4444", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <SchemaEditor
+            open={showSchemaEditor}
+            onOpenChange={setShowSchemaEditor}
+            value={fieldSchema}
+            onSave={(s) => { setFieldSchema(s); setShowSchemaEditor(false); }}
+          />
 
           {/* Mini totals recap */}
           {totals.durationS > 0 && (

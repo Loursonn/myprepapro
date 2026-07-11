@@ -156,10 +156,10 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
           const x      = xOf(start);
           const x2     = xOf(start + dur);
           const w      = Math.max(1, x2 - x);
-          const barH   = Math.max(2, (displayPct / 100) * BAR_AREA);
-          // Couleur : vraie intensité = solid, fallback rôle = même couleur mais légèrement désaturée
-          const fill   = intensityToColor(displayPct);
-          const opacity = isFallback ? 0.55 : 0.85;
+          const isExo  = fi.interval.type === "exercise";
+          const barH   = isExo ? Math.max(2, 0.55 * BAR_AREA) : Math.max(2, (displayPct / 100) * BAR_AREA);
+          const fill   = isExo ? "#7B6FFF" : intensityToColor(displayPct);
+          const opacity = isExo ? 0.8 : isFallback ? 0.55 : 0.85;
           const barY   = BAR_AREA - barH;
 
           return (
@@ -176,22 +176,39 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
                 onMouseEnter={(e) => {
                   const svgRect = svgRef.current?.getBoundingClientRect();
                   if (!svgRect) return;
-                  const p = displayPct;
-                  const zone = p <= 30 ? "Zone 1"
-                    : p <= 50 ? "Zone 2"
-                    : p <= 70 ? "Zone 3"
-                    : p <= 85 ? "Zone 4"
-                    : "Zone 5";
-                  const targetStr = formatTarget(fi.interval.target);
-                  const pctLabel = ` ${Math.round(p)}%${isFallback ? " (estimé)" : ""}`;
-                  setTooltip({
-                    x: e.clientX - svgRect.left,
-                    y: barY,
-                    role: ROLE_LABEL[fi.interval.role] ?? fi.interval.role,
-                    duration: formatS(dur),
-                    target: `${zone}${pctLabel}${targetStr && targetStr !== "Libre" ? ` · ${targetStr}` : ""}`,
-                    notes: fi.interval.notes,
-                  });
+                  if (isExo) {
+                    const exo = fi.interval as import("@/types/energy").ExerciseInterval;
+                    const repsLabel = exo.reps_min
+                      ? exo.reps_max && exo.reps_max !== exo.reps_min
+                        ? `${exo.reps_min}-${exo.reps_max} reps`
+                        : `${exo.reps_min} reps`
+                      : "";
+                    setTooltip({
+                      x: e.clientX - svgRect.left,
+                      y: barY,
+                      role: "Exercice",
+                      duration: exo.exercise_name,
+                      target: repsLabel,
+                      notes: exo.notes,
+                    });
+                  } else {
+                    const p = displayPct;
+                    const zone = p <= 30 ? "Zone 1"
+                      : p <= 50 ? "Zone 2"
+                      : p <= 70 ? "Zone 3"
+                      : p <= 85 ? "Zone 4"
+                      : "Zone 5";
+                    const targetStr = formatTarget(fi.interval.target);
+                    const pctLabel = ` ${Math.round(p)}%${isFallback ? " (estimé)" : ""}`;
+                    setTooltip({
+                      x: e.clientX - svgRect.left,
+                      y: barY,
+                      role: ROLE_LABEL[fi.interval.role] ?? fi.interval.role,
+                      duration: formatS(dur),
+                      target: `${zone}${pctLabel}${targetStr && targetStr !== "Libre" ? ` · ${targetStr}` : ""}`,
+                      notes: fi.interval.notes,
+                    });
+                  }
                 }}
               />
               {/* Subtle gap between bars */}
