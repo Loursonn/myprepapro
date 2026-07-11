@@ -82,6 +82,11 @@ function ProgramSkeleton() {
 
 // ── Energy active session — interactive step validation ───────────────────────
 
+const EQUIPMENT_LABEL: Record<string, string> = {
+  rameur: "Rameur", skierg: "SkiErg", bikeerg: "BikeErg", velo: "Vélo",
+  course: "Course", elliptique: "Elliptique", corde: "Corde", autre: "Autre",
+};
+
 // ── Per-step state ────────────────────────────────────────────────────────────
 
 type StepStatus = "done" | "partial";
@@ -127,6 +132,13 @@ function StepCheckRow({
           </div>
           {tgt && tgt !== "Libre" && (
             <div style={{ fontSize: 10, color: C.tx3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tgt}</div>
+          )}
+          {step.equipment && step.equipment !== "none" && (
+            <div style={{ marginTop: 2 }}>
+              <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: "rgba(255,255,255,0.08)", color: C.tx2 }}>
+                {EQUIPMENT_LABEL[step.equipment] ?? step.equipment}
+              </span>
+            </div>
           )}
           {step.notes && (
             <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginTop: 1 }}>{step.notes}</div>

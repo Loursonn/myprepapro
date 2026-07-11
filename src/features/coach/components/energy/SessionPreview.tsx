@@ -49,6 +49,7 @@ interface TooltipState {
   role: string;
   duration: string;
   target: string;
+  equipment?: string;
   notes?: string;
 }
 
@@ -60,6 +61,11 @@ const ROLE_LABEL: Record<string, string> = {
   rest:     "Repos",
   cooldown: "Retour calme",
   open:     "Libre",
+};
+
+const EQUIPMENT_LABEL: Record<string, string> = {
+  rameur: "Rameur", skierg: "SkiErg", bikeerg: "BikeErg", velo: "Vélo",
+  course: "Course", elliptique: "Elliptique", corde: "Corde", autre: "Autre",
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,12 +206,15 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
                       : "Zone 5";
                     const targetStr = formatTarget(fi.interval.target);
                     const pctLabel = ` ${Math.round(p)}%${isFallback ? " (estimé)" : ""}`;
+                    const eq = fi.interval.type === "interval" && fi.interval.equipment && fi.interval.equipment !== "none"
+                      ? (EQUIPMENT_LABEL[fi.interval.equipment] ?? fi.interval.equipment) : undefined;
                     setTooltip({
                       x: e.clientX - svgRect.left,
                       y: barY,
                       role: ROLE_LABEL[fi.interval.role] ?? fi.interval.role,
                       duration: formatS(dur),
                       target: `${zone}${pctLabel}${targetStr && targetStr !== "Libre" ? ` · ${targetStr}` : ""}`,
+                      equipment: eq,
                       notes: fi.interval.notes,
                     });
                   }
@@ -307,6 +316,9 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
           <div style={{ color: C.tx2 }}>Durée : <strong style={{ color: C.tx }}>{tooltip.duration}</strong></div>
           {tooltip.target && tooltip.target !== "Libre" && (
             <div style={{ color: C.tx2 }}>Cible : <strong style={{ color: C.tx }}>{tooltip.target}</strong></div>
+          )}
+          {tooltip.equipment && (
+            <div style={{ color: C.tx2 }}>Matériel : <strong style={{ color: C.tx }}>{tooltip.equipment}</strong></div>
           )}
           {tooltip.notes && (
             <div style={{ color: C.tx3, marginTop: 4, fontStyle: "italic", fontSize: 10 }}>{tooltip.notes}</div>
