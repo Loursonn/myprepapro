@@ -186,7 +186,7 @@ async function fetchWeekData(
       .order("scheduled_date"),
 
     db.from("energy_session_assignments")
-      .select("id, scheduled_date, status, notes, rpe_score, block_logs, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m, intervals)")
+      .select("id, scheduled_date, status, notes, rpe_score, block_logs, actual_duration_min, energy_sessions(id, name, session_kind, total_duration_s, total_distance_m, intervals)")
       .eq("athlete_id", athleteId)
       .gte("scheduled_date", start)
       .lte("scheduled_date", end),
@@ -320,6 +320,7 @@ async function fetchWeekData(
       completed:     e.status === "completed",
       partial,
       duration_min:  es.total_duration_s != null ? Math.round(es.total_duration_s / 60) : null,
+      actual_duration_min: e.actual_duration_min ?? null,
       distance_m:    es.total_distance_m ?? null,
       session_kind:  es.session_kind     ?? null,
       note,

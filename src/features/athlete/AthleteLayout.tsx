@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
@@ -51,6 +51,27 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
     const k = `freeSession_${s.id}`;
     return (freeSessions as Array<{ sessionKey: string; active: boolean }>).some(fs => fs.sessionKey === k && fs.active);
   });
+
+  // Active musculation workout session (persisted in localStorage)
+  const [activeWorkout, setActiveWorkout] = useState<{ id: string; name: string; startedAt: number } | null>(null);
+  const isOnWorkoutPage = location.pathname.includes("/workout/");
+
+  // Check localStorage on mount + route change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const check = () => {
+      const stored = localStorage.getItem("activeWorkoutSession");
+      if (stored) {
+        try { setActiveWorkout(JSON.parse(stored)); } catch { setActiveWorkout(null); }
+      } else {
+        setActiveWorkout(null);
+      }
+    };
+    check();
+    // Re-check when navigating back
+    window.addEventListener("focus", check);
+    return () => window.removeEventListener("focus", check);
+  }, [location.pathname]);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -152,7 +173,7 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
         </div>
       )}
 
-      {/* ── "Reprendre" floating button ── */}
+      {/* ── "Reprendre" floating button (free session) ── */}
       {activeFreeSess && (
         <div style={{ position: "fixed", bottom: 64, right: 16, zIndex: 140 }}>
           <button
@@ -160,6 +181,30 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
             style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 50, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 16px rgba(0,0,0,0.5)" }}
           >
             <span style={{ fontSize: 16 }}>▶</span><span>Reprendre — {activeFreeSess.name}</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── "Revenir à la séance" floating button (musculation workout) ── */}
+      {activeWorkout && !isOnWorkoutPage && (
+        <div style={{ position: "fixed", bottom: 72, left: 16, right: 16, zIndex: 140 }}>
+          <button
+            onClick={() => navigate(`program/workout/${activeWorkout.id}`)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 10,
+              padding: "12px 16px", borderRadius: 14,
+              border: "none", background: "linear-gradient(135deg, #7B6FFF 0%, #5B4FDF 100%)",
+              color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+              fontFamily: "inherit", boxShadow: "0 6px 24px rgba(123,111,255,0.4)",
+            }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>▶</span>
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div>Revenir à la séance</div>
+              <div style={{ fontSize: 10, fontWeight: 500, opacity: 0.8, marginTop: 1 }}>
+                {activeWorkout.name} — {Math.floor((Date.now() - activeWorkout.startedAt) / 60000)} min
+              </div>
+            </div>
           </button>
         </div>
       )}

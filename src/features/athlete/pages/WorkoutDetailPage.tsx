@@ -36,7 +36,7 @@ const FIELD_CFG = {
 
 interface SetState { kg: string; reps: string; rir: string; done: boolean; skipped: boolean; }
 type AllSets = Record<string, SetState[]>;
-interface PadTarget { exId: string; setIdx: number; field: "kg" | "reps" | "rir"; chargeUnit: string; clusterNb?: number; }
+interface PadTarget { exId: string; setIdx: number; field: "kg" | "reps" | "rir"; chargeUnit: string; clusterNb?: number; isIso?: boolean; }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -154,6 +154,10 @@ function formatPrescription(params: ExerciceParams): string {
     return ps;
   }
   const reps = params.reps.mode === "global" ? params.reps.value : "?";
+  const repsMax = params.reps_max?.mode === "global" ? params.reps_max.value : null;
+  const isIso = (params.reps_mode?.mode === "global" && params.reps_mode.value === "iso");
+  const repsLabel = repsMax != null && repsMax !== reps ? `${reps}-${repsMax}` : String(reps);
+  const unit = isIso ? "sec" : "";
   const chargeVal =
     params.charge_unit === "PDC"
       ? "PDC"
@@ -161,7 +165,7 @@ function formatPrescription(params: ExerciceParams): string {
       ? `${params.charge.value}${params.charge_unit}`
       : null;
   const rirVal = params.rir.mode === "global" && params.rir.value != null ? params.rir.value : null;
-  let s = `${nb}×${reps}`;
+  let s = `${nb}×${repsLabel}${unit ? " " + unit : ""}`;
   if (chargeVal) s += ` @ ${chargeVal}`;
   if (rirVal != null) s += ` · RIR ${rirVal}`;
   const tempoVal = params.tempo?.mode === "global" && params.tempo.value ? params.tempo.value : null;
@@ -598,6 +602,7 @@ interface ExerciceCardProps {
   name: string;
   muscle?: string;
   prescription: string;
+  coachComment?: string;
   params: ExerciceParams;
   sets: SetState[];
   prevSets: string[];
@@ -624,6 +629,7 @@ function ExerciceCard({
   name,
   muscle,
   prescription,
+  coachComment,
   params,
   sets,
   prevSets,
@@ -707,6 +713,12 @@ function ExerciceCard({
           <BadgeTag label={prescription} color={VIOLET} />
           {muscle && <BadgeTag label={muscle} color={blocColor} />}
         </div>
+        {/* Coach comment */}
+        {coachComment && (
+          <div style={{ marginTop: 5, fontSize: 10, color: C.tx2, fontStyle: "italic", lineHeight: 1.4 }}>
+            💬 {coachComment}
+          </div>
+        )}
       </div>
 
       {/* Cluster info strip */}
@@ -970,7 +982,10 @@ interface NumPadProps {
 }
 
 function NumPad({ target, value, onChange, onConfirm, onClose }: NumPadProps) {
-  const cfg = FIELD_CFG[target.field];
+  const baseCfg = FIELD_CFG[target.field];
+  const cfg = target.field === "reps" && target.isIso
+    ? { ...baseCfg, label: "Durée", unit: "sec" }
+    : baseCfg;
 
   function step(delta: number) {
     const v = parseFloat(value.replace(",", ".")) || 0;
@@ -1750,7 +1765,19 @@ export default function WorkoutDetailPage() {
   const [restActiveKey, setRestActiveKey] = useState<string | null>(null);
   const [showFinish, setShowFinish] = useState(false);
   const [showRpe, setShowRpe] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [elapsed, setElapsed] = useState(() => {
+    // Recover elapsed from persisted startedAt
+    const stored = localStorage.getItem("activeWorkoutSession");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.id === id && parsed.startedAt) {
+          return Math.floor((Date.now() - parsed.startedAt) / 1000);
+        }
+      } catch { /* ignore */ }
+    }
+    return 0;
+  });
 
   const restRef = useRef<ReturnType<typeof setInterval>>();
   const elapsedRef = useRef<ReturnType<typeof setInterval>>();
@@ -1855,6 +1882,67 @@ export default function WorkoutDetailPage() {
     if (workout.status === "completed") return;
     elapsedRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(elapsedRef.current);
+  }, [workout.status]);
+
+  // ── Persist active session to localStorage (timer + "revenir" button) ──
+  useEffect(() => {
+    if (!id || workout.isLoading) return;
+    if (workout.status === "completed") {
+      localStorage.removeItem("activeWorkoutSession");
+      return;
+    }
+    const stored = localStorage.getItem("activeWorkoutSession");
+    let startedAt = Date.now();
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed.id === id && parsed.startedAt) startedAt = parsed.startedAt;
+      } catch { /* ignore */ }
+    }
+    localStorage.setItem("activeWorkoutSession", JSON.stringify({
+      id,
+      name: workout.sessionName,
+      startedAt,
+    }));
+  }, [id, workout.isLoading, workout.status, workout.sessionName]);
+
+  // ── Flush save on unmount + visibility change ──────────────────────────
+  const setsRef = useRef(sets);
+  const localModsRef = useRef(localMods);
+  setsRef.current = sets;
+  localModsRef.current = localMods;
+
+  useEffect(() => {
+    const flush = () => {
+      if (!id || workout.status === "completed") return;
+      const mods = allSetsToMods(setsRef.current, localModsRef.current);
+      saveWorkoutSets(mods);
+    };
+    const onVisChange = () => { if (document.hidden) flush(); };
+    document.addEventListener("visibilitychange", onVisChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisChange);
+      flush(); // flush on unmount
+    };
+  }, [id, workout.status, saveWorkoutSets]);
+
+  // ── Inactivity reminder (10 min without interaction) ───────────────────
+  const lastActivityRef = useRef(Date.now());
+  const [showInactiveReminder, setShowInactiveReminder] = useState(false);
+
+  // Reset activity timestamp on any set change
+  useEffect(() => { lastActivityRef.current = Date.now(); setShowInactiveReminder(false); }, [sets]);
+
+  useEffect(() => {
+    if (workout.status === "completed") return;
+    const CHECK_INTERVAL = 30_000; // check every 30s
+    const INACTIVE_THRESHOLD = 10 * 60 * 1000; // 10 min
+    const interval = setInterval(() => {
+      if (Date.now() - lastActivityRef.current >= INACTIVE_THRESHOLD) {
+        setShowInactiveReminder(true);
+      }
+    }, CHECK_INTERVAL);
+    return () => clearInterval(interval);
   }, [workout.status]);
 
   // ── Rest timer helpers ───────────────────────────────────────────────────
@@ -1963,9 +2051,9 @@ export default function WorkoutDetailPage() {
 
   // ── Open NumPad ──────────────────────────────────────────────────────────
   const openPad = useCallback(
-    (exId: string, setIdx: number, field: "kg" | "reps" | "rir", chargeUnit: string, clusterNb?: number) => {
+    (exId: string, setIdx: number, field: "kg" | "reps" | "rir", chargeUnit: string, clusterNb?: number, isIso?: boolean) => {
       const current = sets[exId]?.[setIdx];
-      setPadTarget({ exId, setIdx, field, chargeUnit, clusterNb });
+      setPadTarget({ exId, setIdx, field, chargeUnit, clusterNb, isIso });
       setPadVal(current?.[field] ?? "");
     },
     [sets],
@@ -2118,6 +2206,7 @@ export default function WorkoutDetailPage() {
       if (error) throw error;
     },
     onSuccess: () => {
+      localStorage.removeItem("activeWorkoutSession");
       qc.invalidateQueries({ queryKey: ["workout-log-detail", id] });
       qc.invalidateQueries({ queryKey: ["workout-logs-week", athleteId] });
       qc.invalidateQueries({ queryKey: ["activePlan", athleteId] });
@@ -2438,6 +2527,7 @@ export default function WorkoutDetailPage() {
                         name={ex.exercise_name}
                         muscle={ex.muscle}
                         prescription={formatPrescription(ex.params)}
+                        coachComment={ex.comment}
                         params={ex.params}
                         sets={sets[ex.id] ?? []}
                         prevSets={prevSets[ex.id] ?? []}
@@ -2454,7 +2544,7 @@ export default function WorkoutDetailPage() {
                           toggleAndPersist(ex.id, setIdx, restSec, nextInfo, bloc.timing_mode, bloc.id, bloc.exercices.map(e => e.id), ex.params.cluster?.nb_clusters)
                         }
                         onOpenPad={(setIdx, field) =>
-                          openPad(ex.id, setIdx, field, ex.params.charge_unit, ex.params.cluster?.nb_clusters)
+                          openPad(ex.id, setIdx, field, ex.params.charge_unit, ex.params.cluster?.nb_clusters, ex.params.reps_mode?.mode === "global" && ex.params.reps_mode.value === "iso")
                         }
                         onAddSet={() => addBonusSet(ex.id)}
                         onRemoveSet={(setIdx) => removeBonusSet(ex.id, setIdx)}
@@ -2601,6 +2691,33 @@ export default function WorkoutDetailPage() {
           loop={restActiveKey?.startsWith("depart:") ?? false}
           onDismiss={stopRest}
         />
+      )}
+
+      {/* ── Inactivity reminder ── */}
+      {showInactiveReminder && !isCompleted && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: C.s1, borderRadius: 18, padding: "28px 24px", maxWidth: 320, width: "100%", textAlign: "center", border: "1px solid " + C.brd }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⏸</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.tx, marginBottom: 6 }}>Séance en pause ?</div>
+            <div style={{ fontSize: 12, color: C.tx2, lineHeight: 1.5, marginBottom: 20 }}>
+              Aucune activité depuis 10 minutes. Pensez à enregistrer votre séance si vous avez terminé.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                onClick={() => { setShowInactiveReminder(false); lastActivityRef.current = Date.now(); }}
+                style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "none", background: VIOLET, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Continuer la séance
+              </button>
+              <button
+                onClick={() => { setShowInactiveReminder(false); setShowFinish(true); }}
+                style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "1px solid " + C.g + "60", background: C.g + "15", color: C.g, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                Terminer la séance
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Finish dialog ── */}

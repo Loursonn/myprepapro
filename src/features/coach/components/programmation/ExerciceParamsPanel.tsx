@@ -389,12 +389,29 @@ export function ExerciceParamsPanel({
       <Section>
         {/* Label row — always one line */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <InlineLabel>Répétitions</InlineLabel>
+          <InlineLabel>{currentRepsMode === 'iso' ? "Durée (sec)" : "Répétitions"}</InlineLabel>
 
           {/* Inline value when global + no cluster */}
           {!params.cluster && params.reps.mode === 'global' && (
             <>
               <Stepper value={repsGlobal} onChange={v => updateParams({ reps: { mode: 'global', value: v } })} min={1} max={100} />
+              {/* Rep range: optional max */}
+              {params.reps_max?.mode === 'global' && params.reps_max.value != null ? (
+                <>
+                  <span style={{ fontSize: 12, color: C.tx3, fontWeight: 700 }}>–</span>
+                  <Stepper value={params.reps_max.value} onChange={v => updateParams({ reps_max: { mode: 'global', value: v } })} min={repsGlobal + 1} max={100} />
+                  <button onClick={() => updateParams({ reps_max: undefined })} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid " + C.r + "40", background: C.r + "15", color: C.r, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>×</button>
+                </>
+              ) : (
+                <button
+                  onClick={() => updateParams({ reps_max: { mode: 'global', value: repsGlobal + 4 } })}
+                  style={{ padding: "4px 10px", borderRadius: 6, border: "1px dashed " + VIOLET + "60", background: VIOLET + "10", color: VIOLET, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                  title="Ajouter une fourchette (ex: 8-12)"
+                >
+                  8–12
+                </button>
+              )}
+              {currentRepsMode === 'iso' && <span style={{ fontSize: 10, color: C.tx3, fontWeight: 600 }}>sec</span>}
               <button onClick={() => updateParams({ reps_mode: { mode: 'global', value: 'EC' } })} style={pillSmall(currentRepsMode === 'EC')}>EC</button>
               <button onClick={() => updateParams({ reps_mode: { mode: 'global', value: 'iso' } })} style={pillSmall(currentRepsMode === 'iso')}>ISO</button>
             </>
@@ -483,8 +500,20 @@ export function ExerciceParamsPanel({
         </div>
 
         {params.charge_unit === '%RM' && !bestRM && (
-          <div style={{ padding: "7px 10px", borderRadius: 8, marginBottom: 8, background: C.oS, border: "1px solid " + C.o + "40", fontSize: 11, color: C.o, textAlign: "center" as const }}>
-            Aucun 1RM enregistré
+          <div style={{ padding: "7px 10px", borderRadius: 8, marginBottom: 8, background: C.oS, border: "1px solid " + C.o + "40", fontSize: 11, color: C.o }}>
+            <div style={{ textAlign: "center", marginBottom: 6 }}>Aucun 1RM enregistré</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
+              <span style={{ fontSize: 10, color: C.tx3 }}>1RM estimé :</span>
+              <input
+                type="number"
+                value={params.manual_rm ?? ""}
+                onChange={e => updateParams({ manual_rm: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="ex: 100"
+                min={0}
+                style={{ width: 70, padding: "4px 6px", borderRadius: 6, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 12, fontWeight: 700, fontFamily: "inherit", outline: "none", textAlign: "center" as const }}
+              />
+              <span style={{ fontSize: 10, color: C.tx3 }}>kg</span>
+            </div>
           </div>
         )}
 
@@ -499,9 +528,9 @@ export function ExerciceParamsPanel({
                   style={{ width: 80, padding: "7px 8px", borderRadius: 7, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 14, fontWeight: 700, fontFamily: "inherit", outline: "none", textAlign: "center" as const }}
                 />
                 <span style={{ fontSize: 12, color: C.tx3, fontWeight: 600 }}>{params.charge_unit}</span>
-                {params.charge_unit === '%RM' && bestRM && chargeGlobal !== null && (
+                {params.charge_unit === '%RM' && (bestRM || params.manual_rm) && chargeGlobal !== null && (
                   <span style={{ fontSize: 12, color: VIOLET, fontWeight: 700, background: VIOLET_S, padding: "2px 7px", borderRadius: 6, flexShrink: 0 }}>
-                    ≈ {Math.round(bestRM.kg * (chargeGlobal as number) / 100)}kg
+                    ≈ {Math.round((bestRM?.kg ?? params.manual_rm ?? 0) * (chargeGlobal as number) / 100)}kg
                   </span>
                 )}
               </div>
@@ -648,7 +677,25 @@ export function ExerciceParamsPanel({
         </div>
       )}
 
-      {/* 9. Synthèse */}
+      {/* 9. Commentaire coach */}
+      <Section>
+        <SectionLabel label="Note / consigne" />
+        <textarea
+          value={exercice.comment ?? ""}
+          onChange={e => onChange({ ...exercice, comment: e.target.value || undefined })}
+          placeholder="Instruction pour l'athlète (ex: Garder les coudes serrés, tempo contrôlé...)"
+          rows={2}
+          style={{
+            width: "100%", padding: "8px 10px", borderRadius: 8,
+            border: "1px solid " + C.brdL, background: C.s1,
+            color: C.tx, fontSize: 12, fontFamily: "inherit",
+            outline: "none", resize: "vertical" as const,
+            boxSizing: "border-box" as const,
+          }}
+        />
+      </Section>
+
+      {/* 10. Synthèse */}
       <div style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s2 }}>
         <SyntheseBar params={{ ...params, nb_series: nb }} />
       </div>
