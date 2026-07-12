@@ -12,11 +12,13 @@ export interface ExerciceParams {
   nb_series: number
   cluster?: ClusterConfig
   reps: ParamValue<number>
+  reps_max?: ParamValue<number | null>  // When set, creates a range (reps - reps_max)
   reps_mode: ParamValue<'EC' | 'iso'>
   charge_unit: '%RM' | 'kg' | 'PDC'
   charge: ParamValue<number | null>
   rir: ParamValue<number | null>
   tempo: ParamValue<string>
+  manual_rm?: number | null  // Fictive 1RM when no real PR exists
 }
 
 export interface Exercice {
@@ -28,6 +30,7 @@ export interface Exercice {
   applied_to_sets?: number[]  // scope='set' methods: which set numbers (1-indexed) the method applies to
   sort_order: number
   multi_semaine?: boolean  // per-exercise override (only used when session multi_semaine is false)
+  comment?: string  // Coach note/instruction for this exercise
   // If multi_semaine active (session OR exercise level): Record<weekNumber, ExerciceParams>; else ExerciceParams
   params: ExerciceParams | Record<string, ExerciceParams>
 }

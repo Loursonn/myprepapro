@@ -92,7 +92,8 @@ export interface EnergySessionDetail {
   status: string;
   completed: boolean;
   partial: boolean;
-  duration_min: number | null;   // energy_sessions.total_duration_s / 60
+  duration_min: number | null;   // energy_sessions.total_duration_s / 60 (planned)
+  actual_duration_min: number | null; // athlete-reported actual duration
   distance_m: number | null;     // energy_sessions.total_distance_m
   session_kind: string | null;   // energy_sessions.session_kind
   note: string | null;           // plain-text note (coach or athlete)

@@ -22,6 +22,7 @@ export interface WorkoutExerciceData {
   params: ExerciceParams;
   mode: "classique" | "methode";
   methode_id?: string;
+  comment?: string;
 }
 
 export interface WorkoutBlocData {
@@ -320,6 +321,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
             params: { ...safeParams, nb_series: effectiveNbSeries },
             mode: ex.mode,
             methode_id: ex.methode_id,
+            comment: (ex as { comment?: string }).comment,
           };
         }),
       };
