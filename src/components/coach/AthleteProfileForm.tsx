@@ -130,11 +130,22 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
   }
 
   function computeMinMax(pct: string, strategy: NutritionStrategyType): [number | null, number | null] {
-    const v = parseFloat(pct);
+    const v = Math.abs(parseFloat(pct));
     if (!v) return [null, null];
-    if (strategy === "seche")          return [-v, -v / 2];
-    if (strategy === "prise_de_masse") return [v / 2, v];
+    if (strategy === "seche")          return [-v, -v];
+    if (strategy === "prise_de_masse") return [v, v];
     return [-v, v];
+  }
+
+  // Fourchette : les inputs sont saisis en valeur absolue pour sèche/prise
+  // (déficit 8 à 12 → fenêtre signée [-12, -8]). Maintenance : valeurs signées.
+  function normalizedRangeWindow(): [number | null, number | null] {
+    const a = parseFloat(nutRangeMin), b = parseFloat(nutRangeMax);
+    if (isNaN(a) || isNaN(b)) return [null, null];
+    let x = a, y = b;
+    if (nutStrategy === "seche")          { x = -Math.abs(a); y = -Math.abs(b); }
+    else if (nutStrategy === "prise_de_masse") { x = Math.abs(a); y = Math.abs(b); }
+    return [Math.min(x, y), Math.max(x, y)];
   }
 
   function computeTargetKcal(tdeeVal: number, pct: string, strategy: NutritionStrategyType): number {
@@ -157,12 +168,24 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
     setNutWeeklyTargetKg(String(rate));
   }
 
-  // ── Sync kcal quand TDEE ou targetPct changent ────────────────────────────
+  // Fourchette kcal dérivée (mode range) : TDEE ajusté par la fenêtre % normalisée
+  const [rangeWinMin, rangeWinMax] = nutDeficitMode === "range" ? normalizedRangeWindow() : [null, null];
+  const rangeKcalMin = tdee > 0 && rangeWinMin != null ? Math.round(tdee * (1 + rangeWinMin / 100)) : null;
+  const rangeKcalMax = tdee > 0 && rangeWinMax != null ? Math.round(tdee * (1 + rangeWinMax / 100)) : null;
+
+  // ── Sync kcal quand TDEE, mode ou % changent ──────────────────────────────
   useEffect(() => {
     if (!tdee) return;
-    const kcal = computeTargetKcal(tdee, nutTargetPct, nutStrategy);
-    if (kcal) setNutTotalCalCoach(String(kcal));
-  }, [tdee, nutTargetPct, nutStrategy]);
+    if (nutDeficitMode === "range") {
+      // Cible = milieu de fourchette (les bornes sont sauvegardées à part)
+      if (rangeKcalMin != null && rangeKcalMax != null) {
+        setNutTotalCalCoach(String(Math.round((rangeKcalMin + rangeKcalMax) / 2)));
+      }
+    } else {
+      const kcal = computeTargetKcal(tdee, nutTargetPct, nutStrategy);
+      if (kcal) setNutTotalCalCoach(String(kcal));
+    }
+  }, [tdee, nutTargetPct, nutStrategy, nutDeficitMode, nutRangeMin, nutRangeMax]);
 
   // ── Sync grammes quand totalRefKcal change ────────────────────────────────
   useEffect(() => {
@@ -217,8 +240,18 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
           const dm = s.deficit_mode ?? "fixed";
           setNutDeficitMode(dm);
           if (dm === "range") {
-            setNutRangeMin(s.surplus_deficit_min?.toString() ?? "");
-            setNutRangeMax(s.surplus_deficit_max?.toString() ?? "");
+            const wMin = s.surplus_deficit_min, wMax = s.surplus_deficit_max;
+            if (s.strategy === "seche") {
+              // fenêtre [-12, -8] → inputs "déficit 8" / "déficit 12"
+              setNutRangeMin(wMax != null ? String(Math.abs(wMax)) : "");
+              setNutRangeMax(wMin != null ? String(Math.abs(wMin)) : "");
+            } else if (s.strategy === "prise_de_masse") {
+              setNutRangeMin(wMin != null ? String(Math.abs(wMin)) : "");
+              setNutRangeMax(wMax != null ? String(Math.abs(wMax)) : "");
+            } else {
+              setNutRangeMin(wMin?.toString() ?? "");
+              setNutRangeMax(wMax?.toString() ?? "");
+            }
           } else {
             setNutTargetPct(deriveTargetPct(s.surplus_deficit_min ?? null, s.surplus_deficit_max ?? null, s.strategy));
           }
@@ -278,8 +311,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
     setErrorNut("");
     let sdMin: number | null, sdMax: number | null;
     if (nutDeficitMode === "range") {
-      sdMin = nutRangeMin !== "" ? parseFloat(nutRangeMin) : null;
-      sdMax = nutRangeMax !== "" ? parseFloat(nutRangeMax) : null;
+      [sdMin, sdMax] = normalizedRangeWindow();
     } else {
       [sdMin, sdMax] = computeMinMax(nutTargetPct, nutStrategy);
     }
@@ -292,6 +324,9 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
         nap: nutNap ? parseFloat(nutNap) : null,
         target_weight: nutTargetWeight ? parseFloat(nutTargetWeight) : null,
         total_calories_coach: nutTotalCalCoach ? parseInt(nutTotalCalCoach) : null,
+        total_calories_min: nutDeficitMode === "range" ? rangeKcalMin : null,
+        total_calories_max: nutDeficitMode === "range" ? rangeKcalMax : null,
+        tdee_ref: tdee > 0 ? tdee : null,
         surplus_deficit_min: sdMin,
         surplus_deficit_max: sdMax,
         weekly_target_kg: nutWeeklyTargetKg ? parseFloat(nutWeeklyTargetKg) : null,
@@ -585,38 +620,45 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
                   <span style={{ fontWeight: 800, color: nutStrategy === "seche" ? C.r : nutStrategy === "prise_de_masse" ? C.g : C.b }}>
                     {computeTargetKcal(tdee, nutTargetPct, nutStrategy).toLocaleString("fr-FR")} kcal/j
                   </span>
-                  <span style={{ color: C.tx3, fontSize: 11 }}> · tolérance ±5%</span>
+                  <span style={{ color: C.tx3, fontSize: 11 }}> · tolérance ±2%</span>
                 </div>
               )}
             </>
           ) : (
             <>
               <div style={{ fontSize: 11, color: C.tx3, marginBottom: 6 }}>
-                Écart acceptable vs la cible kcal (valeurs signées, ex: -10 à +5)
+                {nutStrategy === "seche" ? "Déficit visé, de X à Y % sous la dépense (ex: 8 à 12)"
+                  : nutStrategy === "prise_de_masse" ? "Surplus visé, de X à Y % au-dessus de la dépense (ex: 5 à 10)"
+                  : "Écart acceptable vs la dépense (valeurs signées, ex: -3 à +3)"}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Min %</div>
-                  <input style={inputStyle} type="number" step={0.5} placeholder={nutStrategy === "prise_de_masse" ? "ex: +5" : "ex: -15"} value={nutRangeMin} onChange={e => setNutRangeMin(e.target.value)} />
+                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>
+                    {nutStrategy === "seche" ? "Déficit min %" : nutStrategy === "prise_de_masse" ? "Surplus min %" : "Min %"}
+                  </div>
+                  <input style={inputStyle} type="number" step={0.5} min={nutStrategy === "maintenance" ? undefined : 0}
+                    placeholder={nutStrategy === "seche" ? "ex: 8" : nutStrategy === "prise_de_masse" ? "ex: 5" : "ex: -3"}
+                    value={nutRangeMin} onChange={e => setNutRangeMin(e.target.value)} />
                 </div>
                 <div style={{ color: C.tx3, fontSize: 13, paddingTop: 18 }}>→</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>Max %</div>
-                  <input style={inputStyle} type="number" step={0.5} placeholder={nutStrategy === "seche" ? "ex: -5" : "ex: +15"} value={nutRangeMax} onChange={e => setNutRangeMax(e.target.value)} />
+                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4 }}>
+                    {nutStrategy === "seche" ? "Déficit max %" : nutStrategy === "prise_de_masse" ? "Surplus max %" : "Max %"}
+                  </div>
+                  <input style={inputStyle} type="number" step={0.5} min={nutStrategy === "maintenance" ? undefined : 0}
+                    placeholder={nutStrategy === "seche" ? "ex: 12" : nutStrategy === "prise_de_masse" ? "ex: 10" : "ex: +3"}
+                    value={nutRangeMax} onChange={e => setNutRangeMax(e.target.value)} />
                 </div>
               </div>
-              {nutRangeMin !== "" && nutRangeMax !== "" && tdee > 0 && (() => {
-                const minV = parseFloat(nutRangeMin), maxV = parseFloat(nutRangeMax);
-                const kcal = parseInt(nutTotalCalCoach) || tdee;
-                return (
-                  <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
-                    <span style={{ color: C.tx3 }}>Fourchette : </span>
-                    <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + minV / 100)).toLocaleString("fr-FR")}</span>
-                    <span style={{ color: C.tx3 }}> → </span>
-                    <span style={{ fontWeight: 800, color: C.tx }}>{Math.round(kcal * (1 + maxV / 100)).toLocaleString("fr-FR")} kcal</span>
-                  </div>
-                );
-              })()}
+              {rangeKcalMin != null && rangeKcalMax != null && (
+                <div style={{ marginTop: 6, padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, fontSize: 12 }}>
+                  <span style={{ color: C.tx3 }}>Fourchette : </span>
+                  <span style={{ fontWeight: 800, color: nutStrategy === "seche" ? C.r : nutStrategy === "prise_de_masse" ? C.g : C.b }}>{rangeKcalMin.toLocaleString("fr-FR")}</span>
+                  <span style={{ color: C.tx3 }}> → </span>
+                  <span style={{ fontWeight: 800, color: nutStrategy === "seche" ? C.r : nutStrategy === "prise_de_masse" ? C.g : C.b }}>{rangeKcalMax.toLocaleString("fr-FR")} kcal/j</span>
+                  <span style={{ color: C.tx3, fontSize: 11 }}> · vs TDEE {tdee.toLocaleString("fr-FR")}</span>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -644,8 +686,32 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
         {/* Total kcal */}
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>Total calorique journalier cible (kcal)</label>
-          <input style={{ ...inputStyle, border: "1px solid " + (tdee > 0 ? C.coach + "60" : C.brdL) }} type="number" min={500} max={8000} placeholder="ex: 2200" value={nutTotalCalCoach} onChange={e => setNutTotalCalCoach(e.target.value)} />
-          {tdee > 0 && <div style={{ fontSize: 10, color: C.tx3, marginTop: 4 }}>Auto-calculé depuis TDEE — modifiable si besoin</div>}
+          {nutDeficitMode === "range" && rangeKcalMin != null && rangeKcalMax != null ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 10, background: C.s2, border: "1px solid " + C.coach + "50" }}>
+              <div style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 2 }}>Min</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: C.tx }}>{rangeKcalMin.toLocaleString("fr-FR")}</div>
+              </div>
+              <div style={{ color: C.tx3, fontSize: 14 }}>→</div>
+              <div style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: C.tx3, marginBottom: 2 }}>Max</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: C.tx }}>{rangeKcalMax.toLocaleString("fr-FR")}</div>
+              </div>
+              <div style={{ paddingLeft: 10, borderLeft: "1px solid " + C.brdL, textAlign: "center" }}>
+                <div style={{ fontSize: 9, color: C.tx3, marginBottom: 2 }}>Milieu</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.coach }}>{nutTotalCalCoach || "—"}</div>
+              </div>
+            </div>
+          ) : (
+            <input style={{ ...inputStyle, border: "1px solid " + (tdee > 0 ? C.coach + "60" : C.brdL) }} type="number" min={500} max={8000} placeholder="ex: 2200" value={nutTotalCalCoach} onChange={e => setNutTotalCalCoach(e.target.value)} />
+          )}
+          {tdee > 0 && (
+            <div style={{ fontSize: 10, color: C.tx3, marginTop: 4 }}>
+              {nutDeficitMode === "range"
+                ? "Fourchette auto-calculée depuis TDEE × % min/max — les macros se basent sur le milieu"
+                : "Auto-calculé depuis TDEE — modifiable si besoin"}
+            </div>
+          )}
         </div>
 
         {/* Macronutriments */}
