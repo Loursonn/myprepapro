@@ -8,9 +8,11 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { C } from "@/lib/theme"
-import { Plus, Pencil, X, ChevronDown, ChevronUp, BarChart2 } from "lucide-react"
+import { Plus, Pencil, X, ChevronDown, ChevronUp, BarChart2, Copy } from "lucide-react"
+import { toast } from "sonner"
 import { useProgrammation } from "./hooks/useProgrammation"
 import { useUpdateProgrammation } from "./hooks/useUpdateProgrammation"
+import { useDuplicateProgSession } from "./hooks/useDuplicateProgSession"
 import { usePlaceSession } from "@/features/shared/hooks/usePlaceSession"
 import { useAuth } from "@/hooks/useAuth"
 import type { ProgSession } from "./types"
@@ -49,9 +51,17 @@ interface SessionCardProps {
 function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, onDelete, onChange, onOpenWeekDrawer, dragHandleProps }: SessionCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showPlace, setShowPlace] = useState(false)
+  const [showDuplicate, setShowDuplicate] = useState(false)
   const [placeDate, setPlaceDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const { user } = useAuth()
+  const { user, profile, athletes } = useAuth()
   const placeSession = usePlaceSession()
+  const duplicateSession = useDuplicateProgSession()
+
+  // Own profile included first (coach / coach_athlete can duplicate for themselves), same pattern as ContextBar
+  const targetAthletes = [
+    ...(profile && (profile.role === "coach" || profile.role === "coach_athlete") ? [profile] : []),
+    ...athletes.filter(a => a.id !== profile?.id),
+  ].filter(a => a.id !== athleteId)
 
   return (
     <div style={{
@@ -134,10 +144,16 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
           ><BarChart2 size={12} /></button>
 
           <button
-            onClick={() => setShowPlace(p => !p)}
+            onClick={() => { setShowPlace(p => !p); setShowDuplicate(false) }}
             title="Placer dans le planning"
             style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: showPlace ? VIOLET_S : "transparent", color: showPlace ? VIOLET : C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}
           >📅</button>
+
+          <button
+            onClick={() => { setShowDuplicate(p => !p); setShowPlace(false) }}
+            title="Dupliquer chez un autre athlète"
+            style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: showDuplicate ? VIOLET_S : "transparent", color: showDuplicate ? VIOLET : C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          ><Copy size={12} /></button>
 
           {confirmDelete ? (
             <>
@@ -222,6 +238,48 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
           )}
           <button
             onClick={() => setShowPlace(false)}
+            style={{ width: "100%", marginTop: 6, padding: "6px 0", borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
+
+      {/* Duplicate panel */}
+      {showDuplicate && (
+        <div style={{ padding: "10px 14px", borderTop: "1px solid " + C.brdL, background: C.s2 }}>
+          <div style={{ fontSize: 10, color: C.tx3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+            Dupliquer chez un athlète
+          </div>
+          {targetAthletes.length === 0 ? (
+            <div style={{ fontSize: 12, color: C.tx3, padding: "6px 0" }}>Aucun autre athlète disponible</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {targetAthletes.map(a => (
+                <button
+                  key={a.id}
+                  disabled={duplicateSession.isPending}
+                  onClick={async () => {
+                    await duplicateSession.mutateAsync({ session, targetAthleteId: a.id })
+                    setShowDuplicate(false)
+                    toast.success(`"${session.name || session.short}" dupliquée chez ${a.full_name} — place-la dans un cycle depuis sa programmation`)
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, textAlign: "left",
+                    padding: "8px 10px", borderRadius: 8,
+                    border: "1px solid " + C.brdL, background: C.s1, color: C.tx,
+                    fontSize: 12, fontWeight: 600, cursor: duplicateSession.isPending ? "not-allowed" : "pointer",
+                    fontFamily: "inherit", opacity: duplicateSession.isPending ? 0.6 : 1,
+                  }}
+                >
+                  <Copy size={11} style={{ color: VIOLET, flexShrink: 0 }} />
+                  {a.id === profile?.id ? `Moi — ${a.full_name}` : a.full_name}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setShowDuplicate(false)}
             style={{ width: "100%", marginTop: 6, padding: "6px 0", borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
           >
             Annuler
