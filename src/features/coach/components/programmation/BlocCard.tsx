@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   type DragEndEvent,
@@ -8,7 +8,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { C } from "@/lib/theme"
-import { Settings, X, Plus, GripVertical } from "lucide-react"
+import { Settings, X, Plus, GripVertical, Link2 } from "lucide-react"
 import type { Bloc, Exercice } from "./types"
 import { defaultExerciceParams } from "./types"
 import { BlocForm } from "./BlocForm"
@@ -268,20 +268,45 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
             <SortableContext items={bloc.exercices.map(e => e.id)} strategy={verticalListSortingStrategy}>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {bloc.exercices.map((ex, i) => (
-                  <SortableExercice
-                    key={ex.id}
-                    exercice={ex}
-                    index={i}
-                    total={bloc.exercices.length}
-                    bloc={bloc}
-                    athleteId={athleteId}
-                    activeWeek={activeWeek}
-                    sessionMultiSemaine={sessionMultiSemaine}
-                    onMoveUp={() => moveExercice(i, -1)}
-                    onMoveDown={() => moveExercice(i, 1)}
-                    onDelete={() => deleteExercice(i)}
-                    onChange={updated => updateExercice(i, updated)}
-                  />
+                  <Fragment key={ex.id}>
+                    <SortableExercice
+                      exercice={ex}
+                      index={i}
+                      total={bloc.exercices.length}
+                      bloc={bloc}
+                      athleteId={athleteId}
+                      activeWeek={activeWeek}
+                      sessionMultiSemaine={sessionMultiSemaine}
+                      onMoveUp={() => moveExercice(i, -1)}
+                      onMoveDown={() => moveExercice(i, 1)}
+                      onDelete={() => deleteExercice(i)}
+                      onChange={updated => updateExercice(i, updated)}
+                    />
+                    {/* Superset link toggle between consecutive exercises */}
+                    {i < bloc.exercices.length - 1 && (
+                      <div style={{ display: "flex", justifyContent: "center", margin: "-2px 0" }}>
+                        <button
+                          onClick={() => updateExercice(i, { ...ex, superset_with_next: !ex.superset_with_next })}
+                          title={ex.superset_with_next ? "Délier (retirer le superset)" : "Lier en superset avec l'exercice suivant"}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            padding: "1px 8px", borderRadius: 10,
+                            border: "1px " + (ex.superset_with_next ? "solid " + VIOLET : "dashed " + C.brdL),
+                            background: ex.superset_with_next ? VIOLET_S : "transparent",
+                            color: ex.superset_with_next ? VIOLET : C.tx3,
+                            fontSize: 9, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                            opacity: ex.superset_with_next ? 1 : 0.55,
+                            transition: "all 120ms",
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = "1" }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = ex.superset_with_next ? "1" : "0.55" }}
+                        >
+                          <Link2 size={9} />
+                          {ex.superset_with_next ? "Superset" : "Lier"}
+                        </button>
+                      </div>
+                    )}
+                  </Fragment>
                 ))}
               </div>
             </SortableContext>

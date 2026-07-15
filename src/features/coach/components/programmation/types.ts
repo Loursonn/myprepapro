@@ -31,6 +31,7 @@ export interface Exercice {
   sort_order: number
   multi_semaine?: boolean  // per-exercise override (only used when session multi_semaine is false)
   comment?: string  // Coach note/instruction for this exercise
+  superset_with_next?: boolean  // Linked to the next exercise in the bloc (chain of 2+ = superset; rest after each full round)
   // If multi_semaine active (session OR exercise level): Record<weekNumber, ExerciceParams>; else ExerciceParams
   params: ExerciceParams | Record<string, ExerciceParams>
 }

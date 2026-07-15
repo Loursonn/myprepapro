@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,6 +8,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useWorkoutSession } from "@/features/shared/hooks/useWorkoutSession";
 import type { WorkoutBlocData } from "@/features/shared/hooks/useWorkoutSession";
 import { useSaveWorkoutSets } from "@/features/shared/hooks/useSaveWorkoutSets";
+import { useExerciseVideos } from "@/features/shared/hooks/useExerciseVideos";
 import { usePrevWorkoutSets } from "@/features/shared/hooks/usePrevWorkoutSets";
 import type { AthleteModifications, SessionSetLog } from "@/features/shared/types/athlete";
 import type { ExerciceParams, ClusterConfig } from "@/features/coach/components/programmation/types";
@@ -603,6 +604,9 @@ interface ExerciceCardProps {
   muscle?: string;
   prescription: string;
   coachComment?: string;
+  youtubeId?: string;
+  onShowVideo?: () => void;
+  supersetTag?: string;
   params: ExerciceParams;
   sets: SetState[];
   prevSets: string[];
@@ -630,6 +634,9 @@ function ExerciceCard({
   muscle,
   prescription,
   coachComment,
+  youtubeId,
+  onShowVideo,
+  supersetTag,
   params,
   sets,
   prevSets,
@@ -656,8 +663,9 @@ function ExerciceCard({
   // For cluster: cluster.recup_sec is intra-cluster rest (shown as badge); inter-set rest = bloc rest
   const restSec = blocRestSec;
   const restLabel = blocRestLabel;
-  // stripSec: InlineRestStrip only for repos timing (bloc-level) — not for depart or cluster-only
-  const stripSec = timingMode === "repos" ? blocRestSec : 0;
+  // stripSec: InlineRestStrip only for repos timing (bloc-level) — not for depart, cluster-only
+  // or superset members (rest is taken at the end of each round, not between own sets)
+  const stripSec = timingMode === "repos" && !supersetTag ? blocRestSec : 0;
   const totalSets = sets.length;
   const allDone = doneSets === totalSets && totalSets > 0;
 
@@ -692,6 +700,20 @@ function ExerciceCard({
               {name}
             </div>
           </div>
+          {youtubeId && onShowVideo && (
+            <button
+              onClick={onShowVideo}
+              title="Voir la vidéo de l'exercice"
+              style={{
+                width: 24, height: 24, borderRadius: 7, flexShrink: 0,
+                border: `1px solid ${hexToRgba(VIOLET, 0.4)}`,
+                background: hexToRgba(VIOLET, 0.12), color: VIOLET,
+                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: 0,
+              }}
+            >🎥</button>
+          )}
           {doneSets > 0 && (
             <div
               style={{
@@ -710,6 +732,7 @@ function ExerciceCard({
         </div>
         {/* Badge row */}
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {supersetTag && <BadgeTag label={supersetTag} color="#F5A623" />}
           <BadgeTag label={prescription} color={VIOLET} />
           {muscle && <BadgeTag label={muscle} color={blocColor} />}
         </div>
@@ -1765,6 +1788,7 @@ export default function WorkoutDetailPage() {
   const [restActiveKey, setRestActiveKey] = useState<string | null>(null);
   const [showFinish, setShowFinish] = useState(false);
   const [showRpe, setShowRpe] = useState(false);
+  const [videoModal, setVideoModal] = useState<{ name: string; ytId: string } | null>(null);
   const [elapsed, setElapsed] = useState(() => {
     // Recover elapsed from persisted startedAt
     const stored = localStorage.getItem("activeWorkoutSession");
@@ -1796,6 +1820,13 @@ export default function WorkoutDetailPage() {
     allExIds,
     workout.weekNumber,
   );
+
+  // ── Vidéos banque d'exercices (exercise_id → youtube_id) ─────────────────
+  const bankExerciseIds = useMemo(
+    () => [...new Set(workout.blocs.flatMap((b) => b.exercices.map((e) => e.exercise_id).filter((x): x is string => !!x)))],
+    [workout.blocs],
+  );
+  const { data: videoMap = {} } = useExerciseVideos(bankExerciseIds);
 
   // ── Init sets once workout loaded ────────────────────────────────────────
   useEffect(() => {
@@ -1989,8 +2020,10 @@ export default function WorkoutDetailPage() {
 
   // ── Toggle 3-state checkmark ─────────────────────────────────────────────
   const toggleAndPersist = useCallback(
-    (exId: string, setIdx: number, restSec: number, nextInfo: string | null, timingMode = "repos", blocId = "", blocExIds: string[] = [], clusterNb?: number) => {
+    (exId: string, setIdx: number, restSec: number, nextInfo: string | null, timingMode = "repos", blocId = "", blocExIds: string[] = [], clusterNb?: number, supersetExIds: string[] = []) => {
       let shouldStop = false;
+      const inSuperset = supersetExIds.length > 1;
+      let justDone = false;
 
       setSets((prev) => {
         const exSets = [...(prev[exId] ?? [])];
@@ -2002,6 +2035,7 @@ export default function WorkoutDetailPage() {
           if (!s.reps && prevStr) s.reps = parsePrevVal(prevStr, "reps");
           s.done = true;
           s.skipped = false;
+          justDone = true;
 
           // Auto-fill ALL empty cluster sub-rows with the same charge
           if (clusterNb && s.kg) {
@@ -2014,7 +2048,7 @@ export default function WorkoutDetailPage() {
 
           if (timingMode === "depart" && restSec > 0) {
             startRest(restSec, null, `depart:${blocId}`, true /* loop */);
-          } else if (restSec > 0) {
+          } else if (restSec > 0 && !inSuperset) {
             startRest(restSec, nextInfo, `${exId}:${setIdx}`);
           }
         } else if (s.done) {
@@ -2028,6 +2062,16 @@ export default function WorkoutDetailPage() {
 
         exSets[setIdx] = s;
         const next = { ...prev, [exId]: exSets };
+
+        // Superset: rest only at the end of a full round (one set of each linked
+        // exercise done) — otherwise the athlete chains directly to the next exo.
+        if (justDone && inSuperset && timingMode !== "depart" && restSec > 0) {
+          const doneCount = (eid: string) =>
+            (next[eid] ?? []).filter((ss) => ss.done || ss.skipped).length;
+          const myCount = doneCount(exId);
+          const roundDone = supersetExIds.every((eid) => doneCount(eid) >= myCount);
+          if (roundDone) startRest(restSec, nextInfo, `${exId}:${setIdx}`);
+        }
 
         // Départ mode: stop looping timer when all bloc sets are done/skipped
         if (timingMode === "depart" && blocExIds.length > 0) {
@@ -2516,18 +2560,38 @@ export default function WorkoutDetailPage() {
                     gap: 8,
                   }}
                 >
-                  {bloc.exercices.map((ex, exIdx) => {
+                  {(() => {
+                    // Superset chains: consecutive exercises linked via superset_with_next
+                    const groupInfo = new Map<number, { ids: string[]; pos: number; total: number }>();
+                    let chain: number[] = [];
+                    bloc.exercices.forEach((e, i) => {
+                      chain.push(i);
+                      if (!e.superset_with_next || i === bloc.exercices.length - 1) {
+                        const ids = chain.map((j) => bloc.exercices[j].id);
+                        chain.forEach((j, pos) => groupInfo.set(j, { ids, pos: pos + 1, total: chain.length }));
+                        chain = [];
+                      }
+                    });
+                    return bloc.exercices.map((ex, exIdx) => {
                     const nextEx = bloc.exercices[exIdx + 1];
                     const nextInfo = nextEx ? nextEx.exercise_name : null;
+                    const g = groupInfo.get(exIdx);
+                    const supersetIds = g && g.total > 1 ? g.ids : [];
 
                     return (
+                      <Fragment key={ex.id}>
                       <ExerciceCard
-                        key={ex.id}
                         exId={ex.id}
                         name={ex.exercise_name}
                         muscle={ex.muscle}
                         prescription={formatPrescription(ex.params)}
                         coachComment={ex.comment}
+                        youtubeId={ex.exercise_id ? videoMap[ex.exercise_id] : undefined}
+                        onShowVideo={() => {
+                          const ytId = ex.exercise_id ? videoMap[ex.exercise_id] : undefined;
+                          if (ytId) setVideoModal({ name: ex.exercise_name, ytId });
+                        }}
+                        supersetTag={supersetIds.length ? `⛓ Superset ${g!.pos}/${g!.total}` : undefined}
                         params={ex.params}
                         sets={sets[ex.id] ?? []}
                         prevSets={prevSets[ex.id] ?? []}
@@ -2541,7 +2605,7 @@ export default function WorkoutDetailPage() {
                         restLeft={restLeft}
                         restTotal={restTotal}
                         onToggle={(setIdx) =>
-                          toggleAndPersist(ex.id, setIdx, restSec, nextInfo, bloc.timing_mode, bloc.id, bloc.exercices.map(e => e.id), ex.params.cluster?.nb_clusters)
+                          toggleAndPersist(ex.id, setIdx, restSec, nextInfo, bloc.timing_mode, bloc.id, bloc.exercices.map(e => e.id), ex.params.cluster?.nb_clusters, supersetIds)
                         }
                         onOpenPad={(setIdx, field) =>
                           openPad(ex.id, setIdx, field, ex.params.charge_unit, ex.params.cluster?.nb_clusters, ex.params.reps_mode?.mode === "global" && ex.params.reps_mode.value === "iso")
@@ -2552,8 +2616,22 @@ export default function WorkoutDetailPage() {
                         onStartRest={(key, sec) => startRest(sec, null, key)}
                         onStopRest={stopRest}
                       />
+                      {/* Superset connector — no rest between linked exercises */}
+                      {ex.superset_with_next && nextEx && (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, margin: "-4px 0" }}>
+                          <span style={{
+                            padding: "1px 8px", borderRadius: 8,
+                            background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.4)",
+                            color: "#F5A623", fontSize: 9, fontWeight: 800,
+                          }}>
+                            ⛓ enchaîner sans repos
+                          </span>
+                        </div>
+                      )}
+                      </Fragment>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
               </div>
             );
@@ -2733,6 +2811,53 @@ export default function WorkoutDetailPage() {
           onClose={() => setShowFinish(false)}
           completing={completing}
         />
+      )}
+
+      {/* ── Video modal ── */}
+      {videoModal && (
+        <div
+          onClick={() => setVideoModal(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 400,
+            background: "rgba(0,0,0,0.88)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 460,
+              background: C.s1, borderRadius: 16, border: `1px solid ${C.brd}`,
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px" }}>
+              <div style={{ flex: 1, fontSize: 14, fontWeight: 800, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                🎥 {videoModal.name}
+              </div>
+              <button
+                onClick={() => setVideoModal(null)}
+                style={{
+                  width: 28, height: 28, borderRadius: 7, border: `1px solid ${C.brdL}`,
+                  background: "transparent", color: C.tx3, fontSize: 16,
+                  cursor: "pointer", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: 0, flexShrink: 0,
+                }}
+              >×</button>
+            </div>
+            <div style={{ width: "100%", aspectRatio: "16/9", background: "#000" }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${videoModal.ytId}?rel=0`}
+                style={{ width: "100%", height: "100%", border: "none" }}
+                allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+                allowFullScreen
+                title={videoModal.name}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── RPE sheet ── */}
