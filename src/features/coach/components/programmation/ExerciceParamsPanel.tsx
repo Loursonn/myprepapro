@@ -244,7 +244,7 @@ export function ExerciceParamsPanel({
     onChange(setParams(exercice, { ...params, ...partial }, activeWeek, multiSemaine))
   }
 
-  function updateMode(mode: 'classique' | 'methode') {
+  function updateMode(mode: 'classique' | 'methode' | 'libre') {
     onChange({ ...exercice, mode, methode_id: undefined, applied_to_sets: undefined })
   }
 
@@ -307,10 +307,27 @@ export function ExerciceParamsPanel({
       {/* 2. Mode + Méthode */}
       <Section>
         <SectionLabel label="Mode" />
-        <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: exercice.mode === 'methode' ? 10 : 0 }}>
+        <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: exercice.mode === 'methode' || exercice.mode === 'libre' ? 10 : 0 }}>
           <button onClick={() => updateMode('classique')} style={pill(exercice.mode === 'classique')}>Classique</button>
           <button onClick={() => updateMode('methode')} style={pill(exercice.mode === 'methode')}>Méthode</button>
+          <button onClick={() => updateMode('libre')} style={pill(exercice.mode === 'libre')}>Libre</button>
         </div>
+        {exercice.mode === 'libre' && (
+          <textarea
+            value={exercice.libre_text ?? ""}
+            onChange={e => onChange({ ...exercice, libre_text: e.target.value || undefined })}
+            placeholder="Texte libre (ex: 10 min de gainage au choix, circuit mobilité épaules...)"
+            rows={3}
+            autoFocus
+            style={{
+              width: "100%", padding: "8px 10px", borderRadius: 8,
+              border: "1px solid " + C.brdL, background: C.s1,
+              color: C.tx, fontSize: 12, fontFamily: "inherit",
+              outline: "none", resize: "vertical" as const,
+              boxSizing: "border-box" as const,
+            }}
+          />
+        )}
         {exercice.mode === 'methode' && (
           <>
             <button onClick={() => setShowMethodPicker(true)} style={{
@@ -373,6 +390,9 @@ export function ExerciceParamsPanel({
         )}
       </Section>
 
+      {/* Sections 3-8 + synthèse masquées en mode libre (juste texte) */}
+      {exercice.mode !== 'libre' && (
+      <>
       {/* 3. Séries — one line */}
       <Section>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -676,6 +696,8 @@ export function ExerciceParamsPanel({
           </button>
         </div>
       )}
+      </>
+      )}
 
       {/* 9. Commentaire coach */}
       <Section>
@@ -696,9 +718,11 @@ export function ExerciceParamsPanel({
       </Section>
 
       {/* 10. Synthèse */}
-      <div style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s2 }}>
-        <SyntheseBar params={{ ...params, nb_series: nb }} />
-      </div>
+      {exercice.mode !== 'libre' && (
+        <div style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s2 }}>
+          <SyntheseBar params={{ ...params, nb_series: nb }} />
+        </div>
+      )}
 
       {/* Method picker modal */}
       {showMethodPicker && (

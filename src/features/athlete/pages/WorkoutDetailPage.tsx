@@ -245,6 +245,9 @@ interface SetRowProps {
   state: SetState;
   prevStr: string;
   chargeUnit: string;
+  isIso?: boolean;
+  indexLabel?: string;
+  indexColor?: string;
   onToggle: () => void;
   onOpenPad: (field: "kg" | "reps" | "rir") => void;
   isCompleted: boolean;
@@ -252,7 +255,7 @@ interface SetRowProps {
   onRemoveSet?: () => void;
 }
 
-function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCompleted, canRemove, onRemoveSet }: SetRowProps) {
+function SetRow({ setIdx, state, prevStr, chargeUnit, isIso, indexLabel, indexColor, onToggle, onOpenPad, isCompleted, canRemove, onRemoveSet }: SetRowProps) {
   const isPDC = chargeUnit === "PDC";
   const checkState = state.done ? "done" : state.skipped ? "skip" : "empty";
   const gridCols = isPDC
@@ -298,7 +301,7 @@ function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCom
       }}
     >
       {/* Set number / remove bonus */}
-      <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: C.tx3 }}>
+      <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: indexColor ?? C.tx3 }}>
         {canRemove && onRemoveSet ? (
           <button
             onClick={onRemoveSet}
@@ -312,14 +315,14 @@ function SetRow({ setIdx, state, prevStr, chargeUnit, onToggle, onOpenPad, isCom
               padding: 0,
             }}
           >×</button>
-        ) : setIdx + 1}
+        ) : (indexLabel ?? setIdx + 1)}
       </div>
 
       {/* kg */}
       {!isPDC && cell("kg", state.kg)}
 
-      {/* reps */}
-      {cell("reps", state.reps)}
+      {/* reps — en iso la valeur est une durée en secondes */}
+      {cell("reps", state.reps ? (isIso ? `${state.reps}s` : state.reps) : "")}
 
       {/* prev perf */}
       <div
@@ -596,6 +599,216 @@ function InlineRestStrip({ myKey, seconds, label, activeKey, left, total, onStar
   );
 }
 
+// ── SupersetCard ───────────────────────────────────────────────────────────────
+// Superset = 1 série de chaque exo enchaînée sans repos, puis repos du bloc.
+// Affichage par tours : Série 1 (A puis B) → repos → Série 2 (A puis B) → ...
+
+const SS_LETTERS = "ABCDEFGH";
+const SS_ORANGE = "#F5A623";
+
+interface SupersetMemberData {
+  id: string;
+  name: string;
+  muscle?: string;
+  prescription: string;
+  coachComment?: string;
+  youtubeId?: string;
+  onShowVideo?: () => void;
+  params: ExerciceParams;
+  sets: SetState[];
+  prevSets: string[];
+  isIso: boolean;
+  onToggle: (setIdx: number) => void;
+  onOpenPad: (setIdx: number, field: "kg" | "reps" | "rir") => void;
+}
+
+interface SupersetCardProps {
+  groupKey: string;
+  members: SupersetMemberData[];
+  blocColor: string;
+  restSec: number;
+  timingMode: string;
+  restActiveKey: string | null;
+  restLeft: number | null;
+  restTotal: number;
+  canEdit: boolean;
+  onStartRest: (key: string, sec: number) => void;
+  onStopRest: () => void;
+}
+
+function SupersetCard({
+  groupKey, members, blocColor, restSec, timingMode,
+  restActiveKey, restLeft, restTotal, canEdit, onStartRest, onStopRest,
+}: SupersetCardProps) {
+  const rounds = Math.max(...members.map((m) => m.sets.length), 0);
+  // Repos entre tours : seulement en timing "repos" (départ = chrono bloc, libre = rien)
+  const stripSec = timingMode === "repos" ? restSec : 0;
+  const anyNonPDC = members.some((m) => m.params.charge_unit !== "PDC");
+
+  const totalSets = members.reduce((sum, m) => sum + m.sets.length, 0);
+  const doneSets = members.reduce((sum, m) => sum + m.sets.filter((s) => s.done).length, 0);
+  const allDone = doneSets === totalSets && totalSets > 0;
+
+  return (
+    <div style={{
+      background: C.s1,
+      borderRadius: 14,
+      border: `1px solid ${hexToRgba(SS_ORANGE, 0.45)}`,
+      overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{ padding: "11px 14px 9px", borderBottom: `1px solid ${C.brd}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{
+            padding: "2px 9px", borderRadius: 8,
+            background: hexToRgba(SS_ORANGE, 0.14), border: `1px solid ${hexToRgba(SS_ORANGE, 0.4)}`,
+            color: SS_ORANGE, fontSize: 10, fontWeight: 800,
+          }}>
+            ⛓ Superset ×{members.length}
+          </span>
+          <span style={{ fontSize: 9, color: C.tx3, flex: 1, minWidth: 0 }}>
+            enchaîner les exos, repos après chaque tour
+          </span>
+          {doneSets > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 700,
+              color: allDone ? C.g : C.tx3,
+              background: allDone ? C.gS : C.s2,
+              padding: "2px 8px", borderRadius: 20, flexShrink: 0,
+            }}>
+              {doneSets}/{totalSets} ✓
+            </span>
+          )}
+        </div>
+
+        {/* Légende exos */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {members.map((m, mi) => (
+            <div key={m.id}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+                <span style={{
+                  width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                  background: hexToRgba(SS_ORANGE, 0.15), color: SS_ORANGE,
+                  fontSize: 10, fontWeight: 900,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {SS_LETTERS[mi]}
+                </span>
+                <span style={{
+                  fontSize: 12, fontWeight: 800, color: C.tx,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0,
+                }}>
+                  {m.name}
+                </span>
+                {m.youtubeId && m.onShowVideo && (
+                  <button
+                    onClick={m.onShowVideo}
+                    title="Voir la vidéo de l'exercice"
+                    style={{
+                      width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                      border: `1px solid ${hexToRgba(VIOLET, 0.4)}`,
+                      background: hexToRgba(VIOLET, 0.12), color: VIOLET,
+                      fontSize: 10, cursor: "pointer", fontFamily: "inherit",
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      padding: 0,
+                    }}
+                  >🎥</button>
+                )}
+                <span style={{ flexShrink: 0 }}>
+                  <BadgeTag label={m.prescription} color={VIOLET} />
+                </span>
+                {m.muscle && <span style={{ flexShrink: 0 }}><BadgeTag label={m.muscle} color={blocColor} /></span>}
+              </div>
+              {m.coachComment && (
+                <div style={{ marginTop: 2, marginLeft: 25, fontSize: 10, color: C.tx2, fontStyle: "italic", lineHeight: 1.4 }}>
+                  💬 {m.coachComment}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Column headers */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: anyNonPDC
+          ? "34px 1fr 1.15fr 1.15fr 0.9fr 40px"
+          : "34px 1fr 1.15fr 0.9fr 40px",
+        gap: 5,
+        padding: "4px 14px 2px",
+        fontSize: 9, color: C.tx3, fontWeight: 600,
+        letterSpacing: "0.4px", textTransform: "uppercase" as const,
+      }}>
+        <div style={{ textAlign: "center" }}>Exo</div>
+        {anyNonPDC && <div style={{ textAlign: "center" }}>Charge</div>}
+        <div style={{ textAlign: "center" }}>Reps</div>
+        <div style={{ textAlign: "center" }}>Préc.</div>
+        <div style={{ textAlign: "center" }}>RIR</div>
+        <div />
+      </div>
+
+      {/* Tours */}
+      <div style={{ padding: "0 14px 10px" }}>
+        {Array.from({ length: rounds }, (_, r) => {
+          const roundMembers = members.filter((m) => m.sets[r]);
+          const roundDone = roundMembers.length > 0 && roundMembers.every((m) => m.sets[r].done || m.sets[r].skipped);
+          return (
+            <div key={r}>
+              {/* Label tour */}
+              <div style={{ padding: "6px 0 2px", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  fontSize: 9, fontWeight: 800,
+                  color: roundDone ? C.g : SS_ORANGE,
+                  background: roundDone ? C.gS : hexToRgba(SS_ORANGE, 0.12),
+                  borderRadius: 5, padding: "1px 8px",
+                }}>
+                  Série {r + 1}
+                </span>
+                <span style={{ fontSize: 9, color: C.tx3 }}>
+                  {roundMembers.map((_, i) => SS_LETTERS[i]).join(" → ")} sans repos
+                </span>
+              </div>
+
+              {/* Une série de chaque exo, enchaînées */}
+              {roundMembers.map((m, mi) => (
+                <SetRow
+                  key={m.id}
+                  setIdx={r}
+                  state={m.sets[r]}
+                  prevStr={m.prevSets[r] ?? "—"}
+                  chargeUnit={m.params.charge_unit}
+                  isIso={m.isIso}
+                  indexLabel={SS_LETTERS[mi]}
+                  indexColor={SS_ORANGE}
+                  onToggle={() => m.onToggle(r)}
+                  onOpenPad={(field) => m.onOpenPad(r, field)}
+                  isCompleted={!canEdit}
+                />
+              ))}
+
+              {/* Repos après le tour (pas après le dernier) */}
+              {r < rounds - 1 && (
+                <InlineRestStrip
+                  myKey={`ss:${groupKey}:${r}`}
+                  seconds={stripSec}
+                  label="repos"
+                  activeKey={restActiveKey}
+                  left={restLeft}
+                  total={restTotal}
+                  onStart={() => onStartRest(`ss:${groupKey}:${r}`, restSec)}
+                  onStop={onStopRest}
+                  canEdit={canEdit}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── ExerciceCard ───────────────────────────────────────────────────────────────
 
 interface ExerciceCardProps {
@@ -659,6 +872,7 @@ function ExerciceCard({
 }: ExerciceCardProps) {
   const [showComment, setShowComment] = useState(false);
   const isPDC = params.charge_unit === "PDC";
+  const isIso = params.reps_mode?.mode === "global" && params.reps_mode.value === "iso";
   const doneSets = sets.filter((s) => s.done).length;
   // For cluster: cluster.recup_sec is intra-cluster rest (shown as badge); inter-set rest = bloc rest
   const restSec = blocRestSec;
@@ -805,7 +1019,7 @@ function ExerciceCard({
         >
           <div style={{ textAlign: "center" }}>#</div>
           {!isPDC && <div style={{ textAlign: "center" }}>Charge</div>}
-          <div style={{ textAlign: "center" }}>Reps</div>
+          <div style={{ textAlign: "center" }}>{isIso ? "Durée (s)" : "Reps"}</div>
           <div style={{ textAlign: "center" }}>Préc.</div>
           <div style={{ textAlign: "center" }}>RIR</div>
           <div />
@@ -897,6 +1111,7 @@ function ExerciceCard({
                 state={s}
                 prevStr={prevSets[i] ?? "—"}
                 chargeUnit={params.charge_unit}
+                isIso={isIso}
                 onToggle={() => onToggle(i)}
                 onOpenPad={(field) => onOpenPad(i, field)}
                 isCompleted={!canEdit}
@@ -1839,7 +2054,15 @@ export default function WorkoutDetailPage() {
     for (const bloc of workout.blocs) {
       for (const ex of bloc.exercices) {
         const saved = savedSets[ex.id];
-        if (ex.params.cluster) {
+        if (ex.mode === "libre") {
+          // Libre: un seul "set" virtuel = case à cocher de validation
+          const savedItem = saved?.[0];
+          newSets[ex.id] = [{
+            kg: "", reps: "", rir: "",
+            done: savedItem?.done ?? false,
+            skipped: savedItem?.skipped ?? false,
+          }];
+        } else if (ex.params.cluster) {
           const c = ex.params.cluster;
           const safeReps = Array.isArray(c.reps) ? c.reps : Array(c.nb_clusters).fill(5);
           const nbRows = ex.params.nb_series * c.nb_clusters;
@@ -2562,21 +2785,121 @@ export default function WorkoutDetailPage() {
                 >
                   {(() => {
                     // Superset chains: consecutive exercises linked via superset_with_next
-                    const groupInfo = new Map<number, { ids: string[]; pos: number; total: number }>();
+                    const chains: number[][] = [];
                     let chain: number[] = [];
                     bloc.exercices.forEach((e, i) => {
                       chain.push(i);
                       if (!e.superset_with_next || i === bloc.exercices.length - 1) {
-                        const ids = chain.map((j) => bloc.exercices[j].id);
-                        chain.forEach((j, pos) => groupInfo.set(j, { ids, pos: pos + 1, total: chain.length }));
+                        chains.push(chain);
                         chain = [];
                       }
                     });
-                    return bloc.exercices.map((ex, exIdx) => {
+
+                    return chains.map((ch) => {
+                      const chainIds = ch.map((j) => bloc.exercices[j].id);
+                      const isSS = ch.length > 1;
+                      // Cluster/libre dans un superset : pas gérés par la carte tour-par-tour → cartes séparées
+                      const hasComplex = ch.some((j) => bloc.exercices[j].mode === "libre" || bloc.exercices[j].params.cluster);
+
+                      if (isSS && !hasComplex) {
+                        const lastIdx = ch[ch.length - 1];
+                        const afterEx = bloc.exercices[lastIdx + 1];
+                        return (
+                          <SupersetCard
+                            key={chainIds[0]}
+                            groupKey={chainIds[0]}
+                            members={ch.map((j) => {
+                              const ex = bloc.exercices[j];
+                              const iso = ex.params.reps_mode?.mode === "global" && ex.params.reps_mode.value === "iso";
+                              return {
+                                id: ex.id,
+                                name: ex.exercise_name,
+                                muscle: ex.muscle,
+                                prescription: formatPrescription(ex.params),
+                                coachComment: ex.comment,
+                                youtubeId: ex.exercise_id ? videoMap[ex.exercise_id] : undefined,
+                                onShowVideo: () => {
+                                  const ytId = ex.exercise_id ? videoMap[ex.exercise_id] : undefined;
+                                  if (ytId) setVideoModal({ name: ex.exercise_name, ytId });
+                                },
+                                params: ex.params,
+                                sets: sets[ex.id] ?? [],
+                                prevSets: prevSets[ex.id] ?? [],
+                                isIso: iso,
+                                onToggle: (setIdx: number) =>
+                                  toggleAndPersist(ex.id, setIdx, restSec, afterEx ? afterEx.exercise_name : null, bloc.timing_mode, bloc.id, bloc.exercices.map(e => e.id), undefined, chainIds),
+                                onOpenPad: (setIdx: number, field: "kg" | "reps" | "rir") =>
+                                  openPad(ex.id, setIdx, field, ex.params.charge_unit, undefined, iso),
+                              };
+                            })}
+                            blocColor={bColor}
+                            restSec={restSec}
+                            timingMode={bloc.timing_mode}
+                            restActiveKey={restActiveKey}
+                            restLeft={restLeft}
+                            restTotal={restTotal}
+                            canEdit={canEdit}
+                            onStartRest={(key, sec) => startRest(sec, null, key)}
+                            onStopRest={stopRest}
+                          />
+                        );
+                      }
+
+                      // Exos seuls, ou chaîne superset avec cluster/libre → cartes individuelles
+                      return (
+                        <Fragment key={chainIds[0]}>
+                        {ch.map((exIdx) => {
+                    const ex = bloc.exercices[exIdx];
                     const nextEx = bloc.exercices[exIdx + 1];
                     const nextInfo = nextEx ? nextEx.exercise_name : null;
-                    const g = groupInfo.get(exIdx);
-                    const supersetIds = g && g.total > 1 ? g.ids : [];
+                    const supersetIds = isSS ? chainIds : [];
+                    const ssPos = ch.indexOf(exIdx) + 1;
+
+                    // Libre: pas de séries/reps — juste une case à cocher de validation
+                    if (ex.mode === "libre") {
+                      const s0 = (sets[ex.id] ?? [])[0];
+                      const isDone = s0?.done ?? false;
+                      const isSkipped = s0?.skipped ?? false;
+                      return (
+                        <div
+                          key={ex.id}
+                          onClick={() => canEdit && toggleAndPersist(ex.id, 0, 0, null, "libre")}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 12,
+                            padding: "12px 14px", borderRadius: 12,
+                            background: isDone ? hexToRgba(GREEN, 0.06) : C.s1,
+                            border: `1px solid ${isDone ? hexToRgba(GREEN, 0.35) : isSkipped ? hexToRgba(ROSE, 0.4) : C.brd}`,
+                            cursor: canEdit ? "pointer" : "default",
+                            transition: "border-color 150ms, background 150ms",
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontSize: 13, fontWeight: 700,
+                              color: isDone ? GREEN : C.tx,
+                              textDecoration: isSkipped ? "line-through" : "none",
+                            }}>
+                              {ex.exercise_name || "Note libre"}
+                            </div>
+                            {ex.libre_text && (
+                              <div style={{ fontSize: 12, color: C.tx2, marginTop: 3, whiteSpace: "pre-wrap" }}>
+                                {ex.libre_text}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{
+                            width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                            border: `2px solid ${isDone ? GREEN : isSkipped ? ROSE : C.brdL}`,
+                            background: isDone ? hexToRgba(GREEN, 0.15) : isSkipped ? hexToRgba(ROSE, 0.12) : "transparent",
+                            color: isDone ? GREEN : ROSE,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 14, fontWeight: 900,
+                          }}>
+                            {isDone ? "✓" : isSkipped ? "✕" : ""}
+                          </div>
+                        </div>
+                      );
+                    }
 
                     return (
                       <Fragment key={ex.id}>
@@ -2591,7 +2914,7 @@ export default function WorkoutDetailPage() {
                           const ytId = ex.exercise_id ? videoMap[ex.exercise_id] : undefined;
                           if (ytId) setVideoModal({ name: ex.exercise_name, ytId });
                         }}
-                        supersetTag={supersetIds.length ? `⛓ Superset ${g!.pos}/${g!.total}` : undefined}
+                        supersetTag={supersetIds.length ? `⛓ Superset ${ssPos}/${ch.length}` : undefined}
                         params={ex.params}
                         sets={sets[ex.id] ?? []}
                         prevSets={prevSets[ex.id] ?? []}
@@ -2630,7 +2953,10 @@ export default function WorkoutDetailPage() {
                       )}
                       </Fragment>
                     );
-                  });
+                  })}
+                        </Fragment>
+                      );
+                    });
                   })()}
                 </div>
               </div>

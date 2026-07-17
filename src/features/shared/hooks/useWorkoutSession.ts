@@ -21,7 +21,8 @@ export interface WorkoutExerciceData {
   exercise_name: string;
   muscle?: string;
   params: ExerciceParams;
-  mode: "classique" | "methode";
+  mode: "classique" | "methode" | "libre";
+  libre_text?: string;
   methode_id?: string;
   comment?: string;
   superset_with_next?: boolean;
@@ -324,6 +325,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
             muscle: (ex as { muscle?: string }).muscle,
             params: { ...safeParams, nb_series: effectiveNbSeries },
             mode: ex.mode,
+            libre_text: ex.libre_text,
             methode_id: ex.methode_id,
             comment: (ex as { comment?: string }).comment,
             superset_with_next: ex.superset_with_next,

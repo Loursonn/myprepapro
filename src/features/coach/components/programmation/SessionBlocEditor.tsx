@@ -8,11 +8,14 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { C } from "@/lib/theme"
-import { Plus } from "lucide-react"
+import { Plus, Library } from "lucide-react"
+import { useAuth } from "@/hooks/useAuth"
 import type { Bloc, ProgSession } from "./types"
+import { BLOC_CATEGORIES } from "./types"
 import { BlocCard } from "./BlocCard"
 import { BlocForm } from "./BlocForm"
 import { SemaineNav } from "./SemaineNav"
+import { useBlocBank } from "./hooks/useBlocBank"
 
 const VIOLET = "#7B6FFF"
 
@@ -61,7 +64,10 @@ function SortableBloc({ bloc, index, athleteId, activeWeek, sessionMultiSemaine,
 
 export function SessionBlocEditor({ session, cycleId, athleteId, onChange }: SessionBlocEditorProps) {
   const [isAddingBloc, setIsAddingBloc] = useState(false)
+  const [showBankPicker, setShowBankPicker] = useState(false)
   const [activeWeek, setActiveWeek] = useState(1)
+  const { user } = useAuth()
+  const { data: bankBlocs = [] } = useBlocBank(user?.id)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -109,6 +115,19 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange }: Ses
     }
     onChange({ ...session, blocs: [...session.blocs, newBloc] })
     setIsAddingBloc(false)
+  }
+
+  function addBlocFromBank(bank: Bloc) {
+    // Deep copy + fresh ids: the inserted bloc is independent from the bank version
+    const clone = structuredClone(bank) as Bloc
+    const newBloc: Bloc = {
+      ...clone,
+      id: crypto.randomUUID(),
+      exercices: clone.exercices.map((ex, i) => ({ ...ex, id: crypto.randomUUID(), sort_order: i })),
+      sort_order: session.blocs.length,
+    }
+    onChange({ ...session, blocs: [...session.blocs, newBloc] })
+    setShowBankPicker(false)
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -176,24 +195,105 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange }: Ses
         />
       )}
 
-      {/* Add bloc button */}
-      <button
-        onClick={() => setIsAddingBloc(true)}
-        style={{
-          width: "100%", marginTop: 8,
-          padding: "10px 0", borderRadius: 9,
-          border: "1px dashed " + C.brdL, background: "transparent",
-          color: C.tx3, fontSize: 12, fontWeight: 600,
-          cursor: "pointer", fontFamily: "inherit",
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-          transition: "border-color 120ms, color 120ms",
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = VIOLET; e.currentTarget.style.color = VIOLET }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = C.brdL; e.currentTarget.style.color = C.tx3 }}
-      >
-        <Plus size={13} />
-        Ajouter un bloc
-      </button>
+      {/* Bank picker */}
+      {showBankPicker && (
+        <div style={{
+          marginTop: 8, padding: 10, borderRadius: 10,
+          border: "1px solid " + VIOLET + "40", background: VIOLET + "08",
+        }}>
+          <div style={{ fontSize: 10, color: C.tx3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+            Blocs de la banque
+          </div>
+          {bankBlocs.length === 0 ? (
+            <div style={{ fontSize: 12, color: C.tx3, padding: "4px 0 8px" }}>
+              Aucun bloc préconstruit — crée-les dans Banque → Musculation → Blocs.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {BLOC_CATEGORIES.map(cat => {
+                const catBlocs = bankBlocs.filter(b => (b.category ?? 'Mixte') === cat)
+                if (catBlocs.length === 0) return null
+                return (
+                  <div key={cat}>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>
+                      {cat}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {catBlocs.map(b => (
+                        <button
+                          key={b.id}
+                          onClick={() => addBlocFromBank(b)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8, textAlign: "left",
+                            padding: "9px 10px", borderRadius: 8,
+                            border: "1px solid " + C.brdL, background: C.s1, color: C.tx,
+                            fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                          }}
+                        >
+                          <span style={{ width: 8, height: 8, borderRadius: 3, background: b.color ?? VIOLET, flexShrink: 0 }} />
+                          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {b.name || "Bloc sans nom"}
+                          </span>
+                          <span style={{ fontSize: 10, color: C.tx3, flexShrink: 0 }}>
+                            {b.exercices.length} ex.
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <button
+            onClick={() => setShowBankPicker(false)}
+            style={{ width: "100%", marginTop: 6, padding: "6px 0", borderRadius: 7, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Annuler
+          </button>
+        </div>
+      )}
+
+      {/* Add bloc buttons */}
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button
+          onClick={() => { setIsAddingBloc(true); setShowBankPicker(false) }}
+          style={{
+            flex: 1,
+            padding: "10px 0", borderRadius: 9,
+            border: "1px dashed " + C.brdL, background: "transparent",
+            color: C.tx3, fontSize: 12, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            transition: "border-color 120ms, color 120ms",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = VIOLET; e.currentTarget.style.color = VIOLET }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = C.brdL; e.currentTarget.style.color = C.tx3 }}
+        >
+          <Plus size={13} />
+          Nouveau bloc
+        </button>
+        <button
+          onClick={() => { setShowBankPicker(p => !p); setIsAddingBloc(false) }}
+          style={{
+            flex: 1,
+            padding: "10px 0", borderRadius: 9,
+            border: "1px dashed " + (showBankPicker ? VIOLET : C.brdL),
+            background: showBankPicker ? VIOLET + "0F" : "transparent",
+            color: showBankPicker ? VIOLET : C.tx3, fontSize: 12, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+            transition: "border-color 120ms, color 120ms",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = VIOLET; e.currentTarget.style.color = VIOLET }}
+          onMouseLeave={e => {
+            if (!showBankPicker) { e.currentTarget.style.borderColor = C.brdL; e.currentTarget.style.color = C.tx3 }
+          }}
+        >
+          <Library size={13} />
+          Depuis la banque
+        </button>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { C } from "@/lib/theme"
-import { GripVertical, Settings, X, Check } from "lucide-react"
+import { GripVertical, X, Check } from "lucide-react"
 import type { Exercice } from "./types"
 import { SyntheseBar } from "./SyntheseBar"
 import { ExerciceParamsPanel } from "./ExerciceParamsPanel"
@@ -8,7 +8,6 @@ import { RmDrawer } from "./RmDrawer"
 import { useExerciceRM } from "./hooks/useExerciceRM"
 
 const VIOLET = "#7B6FFF"
-const VIOLET_S = "rgba(123,111,255,0.12)"
 
 interface ExerciceRowProps {
   exercice: Exercice
@@ -19,6 +18,7 @@ interface ExerciceRowProps {
   activeWeek: number
   blocSeriesMode: 'libre' | 'fixe'
   blocSeriesCount?: number
+  accentColor?: string
   onMoveUp: () => void
   onMoveDown: () => void
   onDelete: () => void
@@ -50,6 +50,7 @@ export function ExerciceRow({
   activeWeek,
   blocSeriesMode,
   blocSeriesCount,
+  accentColor,
   onMoveUp: _onMoveUp,
   onMoveDown: _onMoveDown,
   onDelete,
@@ -59,6 +60,9 @@ export function ExerciceRow({
   const [showParams, setShowParams] = useState(false)
   const [showRm, setShowRm] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  const accent = accentColor ?? VIOLET
+  const accentSoft = accent + "1F"
 
   const { best: bestRM } = useExerciceRM(athleteId, exercice.exercise_name)
 
@@ -70,17 +74,21 @@ export function ExerciceRow({
   return (
     <div style={{
       borderRadius: 10,
-      border: "1px solid " + (showParams ? VIOLET + "50" : C.brdL),
-      background: showParams ? VIOLET + "04" : C.s1,
+      border: "1px solid " + (showParams ? accent + "50" : C.brdL),
+      background: showParams ? accent + "08" : C.s1,
       overflow: "hidden",
       transition: "border-color 150ms, background 150ms",
     }}>
       {/* Row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px" }}>
+      <div
+        onClick={() => setShowParams(p => !p)}
+        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", cursor: "pointer" }}
+      >
 
         {/* Drag */}
         <div
           {...(dragHandleProps ?? {})}
+          onClick={(e) => e.stopPropagation()}
           style={{ cursor: "grab", color: C.tx3 + "70", display: "flex", alignItems: "center", flexShrink: 0 }}
         >
           <GripVertical size={12} />
@@ -89,8 +97,8 @@ export function ExerciceRow({
         {/* Index badge */}
         <div style={{
           width: 18, height: 18, borderRadius: 5,
-          background: hasName ? VIOLET_S : C.s2,
-          color: hasName ? VIOLET : C.tx3,
+          background: hasName ? accentSoft : C.s2,
+          color: hasName ? accent : C.tx3,
           fontSize: 9, fontWeight: 800,
           display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0,
@@ -108,23 +116,29 @@ export function ExerciceRow({
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               minWidth: 0, flex: 1,
             }}>
-              {exercice.exercise_name || "Exercice non défini"}
+              {exercice.exercise_name || (exercice.mode === 'libre' ? "Note libre" : "Exercice non défini")}
             </div>
 
             {exercice.mode === 'methode' && exercice.methode_id && (
-              <div style={{ fontSize: 8, fontWeight: 700, color: VIOLET, background: VIOLET_S, padding: "1px 5px", borderRadius: 4, flexShrink: 0 }}>
+              <div style={{ fontSize: 8, fontWeight: 700, color: accent, background: accentSoft, padding: "1px 5px", borderRadius: 4, flexShrink: 0 }}>
                 méthode
+              </div>
+            )}
+
+            {exercice.mode === 'libre' && (
+              <div style={{ fontSize: 8, fontWeight: 700, color: accent, background: accentSoft, padding: "1px 5px", borderRadius: 4, flexShrink: 0 }}>
+                libre
               </div>
             )}
 
             {/* 1RM — always visible when exercise selected */}
             {hasName && (
               <button
-                onClick={() => setShowRm(true)}
+                onClick={(e) => { e.stopPropagation(); setShowRm(true) }}
                 style={{
-                  background: bestRM ? VIOLET_S : C.s2,
-                  border: "1px solid " + (bestRM ? VIOLET + "40" : C.brdL),
-                  color: bestRM ? VIOLET : C.tx3,
+                  background: bestRM ? accentSoft : C.s2,
+                  border: "1px solid " + (bestRM ? accent + "40" : C.brdL),
+                  color: bestRM ? accent : C.tx3,
                   fontSize: 9, fontWeight: 700,
                   borderRadius: 5, padding: "1px 6px",
                   cursor: "pointer", fontFamily: "inherit",
@@ -136,42 +150,35 @@ export function ExerciceRow({
             )}
           </div>
 
-          {displayParams && (
+          {exercice.mode === 'libre' ? (
+            exercice.libre_text && (
+              <div style={{ marginTop: 2, fontSize: 11, color: accent, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {exercice.libre_text}
+              </div>
+            )
+          ) : displayParams && (
             <div style={{ marginTop: 2 }}>
-              <SyntheseBar params={displayParams} />
+              <SyntheseBar params={displayParams} color={accent} />
             </div>
           )}
         </div>
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-          <button
-            onClick={() => setShowParams(p => !p)}
-            style={{
-              width: 24, height: 24, borderRadius: 6,
-              border: "1px solid " + (showParams ? VIOLET : C.brdL),
-              background: showParams ? VIOLET_S : "transparent",
-              color: showParams ? VIOLET : C.tx3,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}
-            title="Paramètres"
-          ><Settings size={11} /></button>
-
           {confirmingDelete ? (
             <>
               <button
-                onClick={onDelete}
+                onClick={(e) => { e.stopPropagation(); onDelete() }}
                 style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: C.r, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
               ><Check size={11} /></button>
               <button
-                onClick={() => setConfirmingDelete(false)}
+                onClick={(e) => { e.stopPropagation(); setConfirmingDelete(false) }}
                 style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
               ><X size={11} /></button>
             </>
           ) : (
             <button
-              onClick={() => setConfirmingDelete(true)}
+              onClick={(e) => { e.stopPropagation(); setConfirmingDelete(true) }}
               style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid " + C.r + "40", background: C.rS, color: C.r, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
             ><X size={11} /></button>
           )}
@@ -180,7 +187,7 @@ export function ExerciceRow({
 
       {/* Params panel */}
       {showParams && (
-        <div style={{ borderTop: "1px solid " + VIOLET + "30", padding: "0 10px 12px" }}>
+        <div style={{ borderTop: "1px solid " + accent + "30", padding: "0 10px 12px" }}>
           <ExerciceParamsPanel
             exercice={exercice}
             blocSeriesMode={blocSeriesMode}

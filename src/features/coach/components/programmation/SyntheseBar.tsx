@@ -5,6 +5,7 @@ const VIOLET = "#7B6FFF"
 
 interface SyntheseBarProps {
   params: ExerciceParams
+  color?: string
 }
 
 function getVal<T>(pv: ParamValue<T>): T | undefined {
@@ -18,7 +19,8 @@ function formatCharge(value: number | null, unit: ExerciceParams['charge_unit'])
   return String(value)
 }
 
-export function SyntheseBar({ params }: SyntheseBarProps) {
+export function SyntheseBar({ params, color }: SyntheseBarProps) {
+  const accent = color ?? VIOLET
   const { nb_series, cluster, reps, reps_mode: _reps_mode, charge_unit, charge, rir, tempo } = params
 
   // Guard: old/incomplete data missing required fields
@@ -33,7 +35,7 @@ export function SyntheseBar({ params }: SyntheseBarProps) {
     if (rirVal != null) text += ` — RIR ${rirVal}`
     if (tempoVal) text += ` — Tempo ${tempoVal}`
     return (
-      <div style={{ fontSize: 11, color: VIOLET, fontFamily: "inherit", fontWeight: 600 }}>
+      <div style={{ fontSize: 11, color: accent, fontFamily: "inherit", fontWeight: 600 }}>
         {text}
       </div>
     )
@@ -53,7 +55,7 @@ export function SyntheseBar({ params }: SyntheseBarProps) {
     let text = parts.join(' / ')
     if (rirVal != null) text += ` — RIR ${rirVal}`
     return (
-      <div style={{ fontSize: 11, color: VIOLET, fontFamily: "inherit", fontWeight: 600 }}>
+      <div style={{ fontSize: 11, color: accent, fontFamily: "inherit", fontWeight: 600 }}>
         {text}
       </div>
     )
@@ -72,7 +74,7 @@ export function SyntheseBar({ params }: SyntheseBarProps) {
     if (chargeVal != null) text += ` @ ${formatCharge(chargeVal, charge_unit)}`
     if (rirVal != null) text += ` — RIR ${rirVal}`
     return (
-      <div style={{ fontSize: 11, color: VIOLET, fontFamily: "inherit", fontWeight: 600 }}>
+      <div style={{ fontSize: 11, color: accent, fontFamily: "inherit", fontWeight: 600 }}>
         {text}
       </div>
     )
@@ -90,7 +92,7 @@ export function SyntheseBar({ params }: SyntheseBarProps) {
   if (tempoVal) text += ` — Tempo ${tempoVal}`
 
   return (
-    <div style={{ fontSize: 11, color: VIOLET, fontFamily: "inherit", fontWeight: 600 }}>
+    <div style={{ fontSize: 11, color: accent, fontFamily: "inherit", fontWeight: 600 }}>
       {text || <span style={{ color: C.tx3 }}>Aucun paramètre défini</span>}
     </div>
   )

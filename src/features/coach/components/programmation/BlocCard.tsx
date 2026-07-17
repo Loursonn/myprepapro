@@ -48,13 +48,14 @@ interface SortableExerciceProps {
   athleteId: string | undefined
   activeWeek: number
   sessionMultiSemaine: boolean
+  accentColor: string
   onMoveUp: () => void
   onMoveDown: () => void
   onDelete: () => void
   onChange: (updated: Exercice) => void
 }
 
-function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek, sessionMultiSemaine, onMoveUp, onMoveDown, onDelete, onChange }: SortableExerciceProps) {
+function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek, sessionMultiSemaine, accentColor, onMoveUp, onMoveDown, onDelete, onChange }: SortableExerciceProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: exercice.id })
   return (
     <div
@@ -71,6 +72,7 @@ function SortableExercice({ exercice, index, total, bloc, athleteId, activeWeek,
         activeWeek={activeWeek}
         blocSeriesMode={bloc.series_mode}
         blocSeriesCount={bloc.series_count}
+        accentColor={accentColor}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
         onDelete={onDelete}
@@ -277,6 +279,7 @@ export function BlocCard({ bloc, index, athleteId, activeWeek, sessionMultiSemai
                       athleteId={athleteId}
                       activeWeek={activeWeek}
                       sessionMultiSemaine={sessionMultiSemaine}
+                      accentColor={bColor}
                       onMoveUp={() => moveExercice(i, -1)}
                       onMoveDown={() => moveExercice(i, 1)}
                       onDelete={() => deleteExercice(i)}

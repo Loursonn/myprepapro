@@ -7,6 +7,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ExerciseBank } from "@/components/coach/ExerciseBank";
+import { BlocBankView } from "@/features/coach/components/programmation/BlocBankView";
 import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import EnergySessionCard from "@/features/coach/components/energy/EnergySessionCard";
 import { EmptyState } from "@/features/shared/components/EmptyState";
@@ -606,6 +607,7 @@ export default function LibraryPage() {
 
   const tabParam = searchParams.get("tab") as LibTab | null;
   const activeTab: LibTab = TABS.some((t) => t.key === tabParam) ? (tabParam as LibTab) : "musculaire";
+  const [muscuTab, setMuscuTab] = useState<"exercices" | "blocs">("exercices");
 
   function setTab(key: LibTab) {
     setSearchParams({ tab: key }, { replace: true });
@@ -647,7 +649,28 @@ export default function LibraryPage() {
 
       {/* Tab content */}
       <div style={{ paddingTop: 20 }}>
-        {activeTab === "musculaire"  && <ExerciseBank coachId={user.id} onAddToExos={undefined} />}
+        {activeTab === "musculaire" && (
+          <>
+            {/* Sous-onglets Exercices / Blocs */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+              {[{ k: "exercices", l: "Exercices" }, { k: "blocs", l: "Blocs" }].map(t => (
+                <button
+                  key={t.k}
+                  onClick={() => setMuscuTab(t.k as "exercices" | "blocs")}
+                  style={{
+                    padding: "6px 14px", borderRadius: 8,
+                    border: "1px solid " + (muscuTab === t.k ? C.ac : C.brdL),
+                    background: muscuTab === t.k ? C.acS : "transparent",
+                    color: muscuTab === t.k ? C.ac : C.tx3,
+                    fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >{t.l}</button>
+              ))}
+            </div>
+            {muscuTab === "exercices" && <ExerciseBank coachId={user.id} onAddToExos={undefined} />}
+            {muscuTab === "blocs" && <BlocBankView />}
+          </>
+        )}
         {activeTab === "energetique" && <EnergyTab />}
         {activeTab === "methodes"    && <MethodsTab coachId={user.id} />}
         {activeTab === "specifique"  && <SpecifiqueTab />}

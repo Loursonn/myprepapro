@@ -109,15 +109,17 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
           </div>
         ) : null}
 
-        {/* Short badge */}
-        <div style={{
-          padding: "3px 8px", borderRadius: 6,
-          background: C.s2, color: C.tx2,
-          fontSize: 10, fontWeight: 700, flexShrink: 0,
-          border: "1px solid " + C.brdL,
-        }}>
-          {session.short}
-        </div>
+        {/* Short badge — hidden when no code defined */}
+        {session.short && session.short !== "?" && (
+          <div style={{
+            padding: "3px 8px", borderRadius: 6,
+            background: C.s2, color: C.tx2,
+            fontSize: 10, fontWeight: 700, flexShrink: 0,
+            border: "1px solid " + C.brdL,
+          }}>
+            {session.short}
+          </div>
+        )}
 
         {/* Name + meta */}
         <div style={{ flex: 1, minWidth: 0 }}>
