@@ -86,10 +86,24 @@ export function useCreateMeasurementLog(athleteId: string) {
         if (updErr) throw updErr;
       }
 
+      // 4. Complète les mesures biométriques planifiées par le coach (échues ou du jour)
+      await db
+        .from('test_sessions')
+        .update({ completed: true })
+        .eq('athlete_id', athleteId)
+        .eq('type', 'biometric')
+        .eq('completed', false)
+        .lte('date', todayISO());
+
       return row as MeasurementLog;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: QK.measurementLogs(athleteId) });
+      qc.invalidateQueries({ queryKey: QK.testSessions(athleteId) });
+      qc.invalidateQueries({ queryKey: QK.activePlan(athleteId) });
+      qc.invalidateQueries({ queryKey: ['cal', athleteId] });
+      qc.invalidateQueries({ queryKey: ['calendar-events', athleteId] });
+      qc.invalidateQueries({ queryKey: ['week-schedule', athleteId] });
       toast.success('Mensurations enregistrées ✓');
     },
     onError: (err: unknown) => {

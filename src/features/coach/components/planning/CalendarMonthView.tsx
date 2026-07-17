@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { BlockConfig, Session, WellnessData } from "@/features/shared/types/athlete";
 import { useProgrammation } from "@/features/coach/components/programmation/hooks/useProgrammation";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, Target, X as XIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, Target, Ruler, X as XIcon } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -56,6 +56,13 @@ const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 const FREE_COLOR    = "#0D9488";
 const TEST_COLOR    = "#C49A6C";
+const BIO_COLOR     = "#22C993";
+const BIO_BANK_ID   = "bio-mensurations";
+const BIO_TITLE     = "Mensurations / Photos";
+
+function isBiometric(event: CalEvent): boolean {
+  return event.type === "test" && event.raw?.type === "biometric";
+}
 
 function energyChipColor(_event: CalEvent): string {
   return C.o;
@@ -97,9 +104,10 @@ function EventChip({
   const isProjected = event.raw?.source === "block_plan";
   const st = event.status;
 
-  // Energy events use session_kind color
-  const baseColor = event.type === "energy" ? energyChipColor(event) : TYPE_COLOR[event.type];
-  const baseBg    = event.type === "energy" ? energyChipColor(event) + "20" : TYPE_BG[event.type];
+  // Energy events use session_kind color; biometric tests get their own color
+  const bio = isBiometric(event);
+  const baseColor = event.type === "energy" ? energyChipColor(event) : bio ? BIO_COLOR : TYPE_COLOR[event.type];
+  const baseBg    = event.type === "energy" ? energyChipColor(event) + "20" : bio ? BIO_COLOR + "20" : TYPE_BG[event.type];
 
   // Status overrides base type color — partial takes priority over completed
   const isPartialEnergy = event.type === "energy" && event.partial;
@@ -139,7 +147,7 @@ function EventChip({
       }}
     >
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-        {event.type === "workout" ? "🏋️ " : event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ") : ""}
+        {event.type === "workout" ? "🏋️ " : event.type === "competition" ? "🏆 " : event.type === "test" ? (bio ? "📏 " : "🧪 ") : event.type === "energy" ? "⚡ " : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ") : ""}
         {event.title}
         {isPartialEnergy && totalCount > 0 && (
           <span style={{ opacity: 0.45, fontWeight: 500, marginLeft: 3 }}>{doneCount}/{totalCount}</span>
@@ -231,7 +239,7 @@ function DraggableEventChip({
 
 // ── DraggableSession ─────────────────────────────────────────────────────────
 
-type BankItemType = "workout" | "energy" | "specifique" | "test";
+type BankItemType = "workout" | "energy" | "specifique" | "test" | "biometric";
 
 function DraggableSession({
   session,
@@ -242,8 +250,8 @@ function DraggableSession({
   sessionType: BankItemType;
   isDragging: boolean;
 }) {
-  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : C.ac;
-  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : C.acS;
+  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : sessionType === "biometric" ? BIO_COLOR : C.ac;
+  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : sessionType === "biometric" ? BIO_COLOR + "20" : C.acS;
 
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: session.id,
@@ -273,7 +281,7 @@ function DraggableSession({
         display: "flex", alignItems: "center", gap: 6,
       }}
     >
-      {sessionType === "energy" ? <Zap size={11} /> : sessionType === "test" ? <FlaskConical size={11} /> : <Dumbbell size={11} />}
+      {sessionType === "energy" ? <Zap size={11} /> : sessionType === "test" ? <FlaskConical size={11} /> : sessionType === "biometric" ? <Ruler size={11} /> : <Dumbbell size={11} />}
       {name}
     </div>
   );
@@ -666,6 +674,47 @@ function TestBank({
   );
 }
 
+// ── BiometricBank ─────────────────────────────────────────────────────────────
+
+function BiometricBank({ activeDragId }: { activeDragId: string | null }) {
+  return (
+    <div
+      style={{
+        width: 200, flexShrink: 0,
+        background: C.s1,
+        borderRadius: 14,
+        border: "1px solid " + C.brd,
+        display: "flex", flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: 5 }}>
+          <Ruler size={11} color={BIO_COLOR} />
+          Biométrie
+        </div>
+      </div>
+
+      <div style={{ padding: "8px", display: "flex", flexDirection: "column", gap: 5 }}>
+        <DraggableSession
+          session={{ id: BIO_BANK_ID, name: BIO_TITLE }}
+          sessionType="biometric"
+          isDragging={activeDragId === BIO_BANK_ID}
+        />
+        <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6 }}>
+          L'athlète saisit mensurations &amp; photos
+        </div>
+      </div>
+
+      <div style={{ padding: "8px 10px", borderTop: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 9, color: C.tx3, textAlign: "center" }}>
+          ↕ Glisser sur le calendrier
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── CalendarMonthView ─────────────────────────────────────────────────────────
 
 interface CalendarMonthViewProps {
@@ -925,6 +974,14 @@ export function CalendarMonthView({
           type:  "musculation",
           date:  dateStr,
         });
+      } else if (sess.sessionType === "biometric") {
+        createTestSession({
+          athleteId,
+          coachId,
+          title: BIO_TITLE,
+          type:  "biometric",
+          date:  dateStr,
+        });
       } else {
         assignWorkout({
           sessionId: sess.id,
@@ -942,10 +999,11 @@ export function CalendarMonthView({
     ? (progSessions.find((s) => s.id === activeDragId)
         ?? energySessions.find((s) => s.id === activeDragId)
         ?? testDefinitions.find((s) => s.id === activeDragId)
-        ?? null)
+        ?? (activeDragId === BIO_BANK_ID ? { id: BIO_BANK_ID, name: BIO_TITLE } : null))
     : null;
   const activeDragIsEnergy = activeDragId ? energySessions.some((s) => s.id === activeDragId) : false;
   const activeDragIsTest   = activeDragId ? testDefinitions.some((s) => s.id === activeDragId) : false;
+  const activeDragIsBio    = activeDragId === BIO_BANK_ID;
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -1175,6 +1233,7 @@ export function CalendarMonthView({
         <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
           <SessionBank sessions={progSessions} energySessions={energySessions} activeDragId={activeDragId} />
           <TestBank testDefinitions={testDefinitions} activeDragId={activeDragId} />
+          <BiometricBank activeDragId={activeDragId} />
         </div>
       </div>
 
@@ -1197,16 +1256,16 @@ export function CalendarMonthView({
           <div
             style={{
               padding: "7px 10px", borderRadius: 8,
-              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : C.ac) + "60",
-              background: activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : C.ac,
+              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac) + "60",
+              background: activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac,
               color: "#fff",
               fontSize: 11, fontWeight: 600,
-              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : activeDragIsTest ? "rgba(196,154,108,0.4)" : "rgba(59,141,240,0.4)"}`,
+              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : activeDragIsTest ? "rgba(196,154,108,0.4)" : activeDragIsBio ? "rgba(34,201,147,0.4)" : "rgba(59,141,240,0.4)"}`,
               pointerEvents: "none",
               display: "flex", alignItems: "center", gap: 6,
             }}
           >
-            {activeDragIsEnergy ? <Zap size={12} /> : activeDragIsTest ? <FlaskConical size={12} /> : <Dumbbell size={12} />}
+            {activeDragIsEnergy ? <Zap size={12} /> : activeDragIsTest ? <FlaskConical size={12} /> : activeDragIsBio ? <Ruler size={12} /> : <Dumbbell size={12} />}
             {activeDragSession.name ?? "Séance"}
           </div>
         ) : null}
