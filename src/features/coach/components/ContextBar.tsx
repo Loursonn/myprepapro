@@ -40,6 +40,11 @@ const SUB_TABS: Record<string, { key: string; label: string }[]> = {
     { key: "summary",      label: "Synthèse"      },
     { key: "competitions", label: "Compétitions"  },
   ],
+  donnees: [
+    { key: "profil",     label: "Profil"     },
+    { key: "strategie",  label: "Stratégie"  },
+    { key: "historique", label: "Historique" },
+  ],
   programmation: [],
 };
 
