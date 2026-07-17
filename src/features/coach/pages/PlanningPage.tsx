@@ -20,7 +20,7 @@ type PlanView = "timeline" | "month" | "summary" | "competitions";
 
 export default function PlanningPage() {
   const [searchParams] = useSearchParams();
-  const view = (searchParams.get("view") as PlanView) ?? "timeline";
+  const view = (searchParams.get("view") as PlanView) ?? "month";
 
   const { user } = useAuth();
   const { athleteId, loaded, sessions, blockConfig, setBlockConfig, exos, sets, completedSessions, currentWeek, wellnessHistory, nutritionLog } = useAthleteContext();
