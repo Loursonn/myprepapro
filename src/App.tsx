@@ -10,6 +10,7 @@ import { AnimatePresence, motion, type Variants } from "framer-motion";
 
 // Pages publiques (chargées immédiatement — nécessaires au démarrage)
 import Login from "./pages/Login.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 import InviteAccept from "./pages/InviteAccept.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -85,6 +86,7 @@ function AnimatedRoutes() {
         <Routes location={location}>
           {/* Pages publiques */}
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/invite/:token" element={<InviteAccept />} />
 
           {/* Redirection selon le rôle */}
