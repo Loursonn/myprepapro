@@ -53,6 +53,10 @@ export const QK = {
   // ── Méthodes d'entraînement ───────────────────────────────────────────────────
   trainingMethods: (filters?: object) => ['training_methods', filters ?? {}] as const,
   trainingMethod:  (id: string)       => ['training_methods', id]            as const,
+  // ── Banque Spécifique ─────────────────────────────────────────────────────────
+  specificSports:    ['specific-sports']    as const,
+  physicalQualities: ['physical-qualities'] as const,
+  specificBlocks:    ['specific-blocks']    as const,
   // ── Roadmap ───────────────────────────────────────────────────────────────────
   roadmapPhases: ['roadmap-phases'] as const,
   roadmapItems:  (phaseId?: string) => phaseId ? ['roadmap-items', phaseId] : ['roadmap-items'] as const,
