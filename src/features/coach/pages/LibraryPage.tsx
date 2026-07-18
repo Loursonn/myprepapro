@@ -9,6 +9,7 @@ import {
 import { ExerciseBank } from "@/components/coach/ExerciseBank";
 import { BlocBankView } from "@/features/coach/components/programmation/BlocBankView";
 import SpecificCatalog from "@/features/coach/components/specific/SpecificCatalog";
+import SpecificBlockBankView from "@/features/coach/components/specific/SpecificBlockBankView";
 import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import EnergySessionCard from "@/features/coach/components/energy/EnergySessionCard";
 import { EmptyState } from "@/features/shared/components/EmptyState";
@@ -479,6 +480,7 @@ export default function LibraryPage() {
   const tabParam = searchParams.get("tab") as LibTab | null;
   const activeTab: LibTab = TABS.some((t) => t.key === tabParam) ? (tabParam as LibTab) : "musculaire";
   const [muscuTab, setMuscuTab] = useState<"exercices" | "blocs">("exercices");
+  const [specTab, setSpecTab]   = useState<"seances" | "blocs">("seances");
 
   function setTab(key: LibTab) {
     setSearchParams({ tab: key }, { replace: true });
@@ -544,7 +546,28 @@ export default function LibraryPage() {
         )}
         {activeTab === "energetique" && <EnergyTab />}
         {activeTab === "methodes"    && <MethodsTab coachId={user.id} />}
-        {activeTab === "specifique"  && <SpecificCatalog />}
+        {activeTab === "specifique"  && (
+          <>
+            {/* Sous-onglets Séances / Blocs */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+              {[{ k: "seances", l: "Séances" }, { k: "blocs", l: "Blocs" }].map(t => (
+                <button
+                  key={t.k}
+                  onClick={() => setSpecTab(t.k as "seances" | "blocs")}
+                  style={{
+                    padding: "6px 14px", borderRadius: 8,
+                    border: "1px solid " + (specTab === t.k ? "#F5A623" : C.brdL),
+                    background: specTab === t.k ? "#F5A62315" : "transparent",
+                    color: specTab === t.k ? "#F5A623" : C.tx3,
+                    fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >{t.l}</button>
+              ))}
+            </div>
+            {specTab === "seances" && <SpecificCatalog />}
+            {specTab === "blocs" && <SpecificBlockBankView />}
+          </>
+        )}
       </div>
     </div>
   );
