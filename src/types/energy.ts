@@ -168,8 +168,8 @@ export interface EnergySessionRow {
   quality_id?: string | null;
   /** 'wod' = builder intervalles ; 'classique' = builder par blocs (spécifique only) */
   format?: 'wod' | 'classique';
-  /** Structure du format classique — voir @/types/specific ClassiqueStructure */
-  classique_structure?: { blocks: import('./specific').ClassiqueBlock[] } | null;
+  /** Structure du format classique (blocs mix Classique/WOD) — voir @/types/specific */
+  classique_structure?: { blocks: import('./specific').SessionBlock[] } | null;
   structure_type: StructureType;
   /** Tableau sérialisé EnergyStep[] */
   intervals: EnergyStep[];

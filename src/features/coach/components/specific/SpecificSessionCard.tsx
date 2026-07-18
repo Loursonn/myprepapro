@@ -8,6 +8,7 @@ import { C } from "@/lib/theme";
 import SessionPreview from "../energy/SessionPreview";
 import type { EnergySessionRow, EnergyGroup } from "@/types/energy";
 import type { SpecificSport, PhysicalQuality } from "@/types/specific";
+import { isWodBlock } from "@/types/specific";
 import { useDeleteEnergySession, useCreateEnergySession, useVerifyEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
 import { useAuth } from "@/hooks/useAuth";
@@ -48,6 +49,14 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
   };
   const totals = computeTotals(expandIntervals(root));
   const blocks = session.classique_structure?.blocks ?? [];
+  const nWod = blocks.filter(isWodBlock).length;
+  const formatLabel = !isClassique
+    ? "WOD"
+    : nWod === 0
+    ? "Classique"
+    : nWod === blocks.length
+    ? "WOD"
+    : "Mixte";
 
   function handleEdit() {
     if (canEdit) navigate(`/coach/energy-library/${session.id}/edit`);
@@ -136,10 +145,10 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
               {/* Format pill */}
               <span style={{
                 fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                background: isClassique ? "#22C99320" : ORANGE + "20",
-                color: isClassique ? "#22C993" : ORANGE,
+                background: formatLabel === "Classique" ? "#22C99320" : formatLabel === "Mixte" ? "#A855F720" : ORANGE + "20",
+                color: formatLabel === "Classique" ? "#22C993" : formatLabel === "Mixte" ? "#A855F7" : ORANGE,
               }}>
-                {isClassique ? "Classique" : "WOD"}
+                {formatLabel}
               </span>
               {session.is_verified && (
                 <span style={{
@@ -172,19 +181,25 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
         {isClassique ? (
           blocks.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {blocks.slice(0, 3).map((b) => (
-                <div key={b.id} style={{
-                  background: C.s2, borderRadius: 6, padding: "5px 8px",
-                  display: "flex", alignItems: "center", gap: 6,
-                }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: C.tx2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {b.title || "Bloc"}
-                  </span>
-                  <span style={{ fontSize: 9, color: C.tx3, flexShrink: 0, marginLeft: "auto" }}>
-                    {b.items.length} exo{b.items.length > 1 ? "s" : ""}
-                  </span>
-                </div>
-              ))}
+              {blocks.slice(0, 3).map((b) => {
+                const wod = isWodBlock(b);
+                return (
+                  <div key={b.id} style={{
+                    background: C.s2, borderRadius: 6, padding: "5px 8px",
+                    display: "flex", alignItems: "center", gap: 6,
+                    borderLeft: `2px solid ${wod ? ORANGE : "#22C993"}80`,
+                  }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: C.tx2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {b.title || "Bloc"}
+                    </span>
+                    <span style={{ fontSize: 9, color: C.tx3, flexShrink: 0, marginLeft: "auto" }}>
+                      {wod
+                        ? `${b.steps.length} étape${b.steps.length > 1 ? "s" : ""}`
+                        : `${b.items.length} exo${b.items.length > 1 ? "s" : ""}`}
+                    </span>
+                  </div>
+                );
+              })}
               {blocks.length > 3 && (
                 <span style={{ fontSize: 9, color: C.tx3, paddingLeft: 2 }}>+ {blocks.length - 3} bloc{blocks.length - 3 > 1 ? "s" : ""}</span>
               )}
@@ -209,7 +224,9 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
           {!isClassique && totals.durationS > 0 && <span>⏱ {formatSLong(totals.durationS)}</span>}
           {!isClassique && totals.workCount > 0 && <span>⚡ {totals.workCount} eff.</span>}
           {isClassique && blocks.length > 0 && (
-            <span>🧱 {blocks.length} bloc{blocks.length > 1 ? "s" : ""} · {blocks.reduce((n, b) => n + b.items.length, 0)} exos</span>
+            <span>
+              🧱 {blocks.length} bloc{blocks.length > 1 ? "s" : ""} · {blocks.reduce((n, b) => n + (isWodBlock(b) ? b.steps.length : b.items.length), 0)} élts
+            </span>
           )}
 
           <div

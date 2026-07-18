@@ -1,13 +1,22 @@
 /**
- * ClassiquePreview — aperçu lecture seule d'une séance au format Classique.
+ * ClassiquePreview — aperçu lecture seule d'une séance par blocs (mix Classique / WOD).
  */
 import { C } from "@/lib/theme";
-import type { ClassiqueBlock } from "@/types/specific";
+import SessionPreview from "../energy/SessionPreview";
+import type { EnergyGroup } from "@/types/energy";
+import type { SessionBlock, ClassiqueBlock, WodBlock } from "@/types/specific";
+import { isWodBlock } from "@/types/specific";
 
 const ORANGE = "#F5A623";
+const GREEN  = "#22C993";
 
-export default function ClassiquePreview({ blocks }: { blocks: ClassiqueBlock[] }) {
-  const realBlocks = blocks.filter((b) => b.title.trim() || b.items.some((i) => i.name.trim()));
+function hasContent(b: SessionBlock): boolean {
+  if (isWodBlock(b)) return b.title.trim().length > 0 || b.steps.length > 0;
+  return b.title.trim().length > 0 || b.items.some((i) => i.name.trim());
+}
+
+export default function ClassiquePreview({ blocks }: { blocks: SessionBlock[] }) {
+  const realBlocks = blocks.filter(hasContent);
 
   if (realBlocks.length === 0) {
     return (
@@ -19,34 +28,63 @@ export default function ClassiquePreview({ blocks }: { blocks: ClassiqueBlock[] 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {realBlocks.map((block, idx) => (
-        <div key={block.id} style={{ background: C.s1, borderRadius: 10, border: `1px solid ${C.brd}`, overflow: "hidden" }}>
-          <div style={{
-            padding: "8px 12px", background: ORANGE + "0D",
-            borderBottom: `1px solid ${C.brd}`,
-            display: "flex", alignItems: "center", gap: 8,
-          }}>
-            <span style={{ fontSize: 10, fontWeight: 800, color: ORANGE }}>{idx + 1}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{block.title || "Bloc"}</span>
-            <span style={{ fontSize: 10, color: C.tx3, marginLeft: "auto" }}>
-              {block.items.filter((i) => i.name.trim()).length} exo{block.items.filter((i) => i.name.trim()).length > 1 ? "s" : ""}
-            </span>
-          </div>
-          <div style={{ padding: "6px 12px 8px" }}>
-            {block.items.filter((i) => i.name.trim()).map((item) => (
-              <div key={item.id} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", borderBottom: `1px solid ${C.brd}30` }}>
-                <span style={{ fontSize: 11, color: C.tx, flex: 1, minWidth: 0 }}>{item.name}</span>
-                {item.prescription && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: ORANGE, flexShrink: 0 }}>{item.prescription}</span>
-                )}
-                {item.rest && (
-                  <span style={{ fontSize: 10, color: C.tx3, flexShrink: 0 }}>R : {item.rest}</span>
+      {realBlocks.map((block, idx) => {
+        const wod = isWodBlock(block);
+        const accent = wod ? ORANGE : GREEN;
+        return (
+          <div key={block.id} style={{ background: C.s1, borderRadius: 10, border: `1px solid ${C.brd}`, overflow: "hidden" }}>
+            <div style={{
+              padding: "8px 12px", background: accent + "0D",
+              borderBottom: `1px solid ${C.brd}`,
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: accent }}>{idx + 1}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{block.title || "Bloc"}</span>
+              <span style={{
+                fontSize: 8, fontWeight: 800, padding: "1px 6px", borderRadius: 4,
+                background: accent + "20", color: accent,
+              }}>
+                {wod ? "WOD" : "CLASSIQUE"}
+              </span>
+              {!wod && (
+                <span style={{ fontSize: 10, color: C.tx3, marginLeft: "auto" }}>
+                  {(block as ClassiqueBlock).items.filter((i) => i.name.trim()).length} exo{(block as ClassiqueBlock).items.filter((i) => i.name.trim()).length > 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+
+            {wod ? (
+              <div style={{ padding: "8px 10px" }}>
+                {(block as WodBlock).steps.length > 0 ? (
+                  <SessionPreview
+                    intervals={{
+                      type: "group", id: `__pv_${block.id}__`, role: "open", repeat: 1,
+                      children: (block as WodBlock).steps,
+                    } as EnergyGroup}
+                    compact
+                  />
+                ) : (
+                  <span style={{ fontSize: 11, color: C.tx3 }}>Aucun intervalle</span>
                 )}
               </div>
-            ))}
+            ) : (
+              <div style={{ padding: "6px 12px 8px" }}>
+                {(block as ClassiqueBlock).items.filter((i) => i.name.trim()).map((item) => (
+                  <div key={item.id} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", borderBottom: `1px solid ${C.brd}30` }}>
+                    <span style={{ fontSize: 11, color: C.tx, flex: 1, minWidth: 0 }}>{item.name}</span>
+                    {item.prescription && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, flexShrink: 0 }}>{item.prescription}</span>
+                    )}
+                    {item.rest && (
+                      <span style={{ fontSize: 10, color: C.tx3, flexShrink: 0 }}>R : {item.rest}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

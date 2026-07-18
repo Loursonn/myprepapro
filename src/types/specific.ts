@@ -29,7 +29,9 @@ export interface PhysicalQuality {
   created_at: string;
 }
 
-// ── Format Classique ──────────────────────────────────────────────────────────
+// ── Format par blocs (mix Classique / WOD) ───────────────────────────────────
+
+export type BlockKind = 'classique' | 'wod';
 
 export interface ClassiqueItem {
   id: string;
@@ -44,15 +46,33 @@ export interface ClassiqueItem {
 export interface ClassiqueBlock {
   id: string;
   title: string;
+  /** Absent = 'classique' (legacy) */
+  kind?: 'classique';
   /** Renseigné si importé depuis specific_blocks */
   sourceBlockId?: string;
   items: ClassiqueItem[];
 }
 
-export interface ClassiqueStructure {
-  blocks: ClassiqueBlock[];
+/** Bloc WOD : intervalles construits avec le builder existant (EnergyStep[]). */
+export interface WodBlock {
+  id: string;
+  title: string;
+  kind: 'wod';
+  sourceBlockId?: string;
+  steps: import('./energy').EnergyStep[];
 }
 
+export type SessionBlock = ClassiqueBlock | WodBlock;
+
+export function isWodBlock(b: SessionBlock): b is WodBlock {
+  return b.kind === 'wod';
+}
+
+export interface ClassiqueStructure {
+  blocks: SessionBlock[];
+}
+
+/** 'wod' = legacy intervalles pleine page ; 'classique' = séance par blocs (mix possible) */
 export type SessionFormat = 'wod' | 'classique';
 
 // ── Banque de blocs spécifiques (privée par coach) ───────────────────────────
@@ -63,8 +83,13 @@ export interface SpecificBlockRow {
   name: string;
   sport_id: string | null;
   quality_id: string | null;
-  /** Un ClassiqueBlock sans id/sourceBlockId : { title, items } */
-  content: { title: string; items: ClassiqueItem[] };
+  /** Contenu du bloc sans id/sourceBlockId. kind absent = classique. */
+  content: {
+    title: string;
+    kind?: BlockKind;
+    items?: ClassiqueItem[];
+    steps?: import('./energy').EnergyStep[];
+  };
   created_at: string;
   updated_at: string;
 }

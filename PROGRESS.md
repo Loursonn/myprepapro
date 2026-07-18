@@ -311,3 +311,4 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 - [ ] Visuel athlète pour le format Classique (décidé : plus tard)
 
 **Dernière mise à jour :** 2026-07-18 — PROMPT 9 code terminé (migration à déployer + TEST MANUEL restants)
+- [x] Évolution : plus de toggle global WOD/Classique — nouvelle séance spécifique = par blocs, chaque bloc typé Classique ou WOD (mix possible, pastille Mixte), legacy WOD pleine page éditable + bouton « Convertir en blocs »

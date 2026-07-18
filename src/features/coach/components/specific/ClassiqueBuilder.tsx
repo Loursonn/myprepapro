@@ -1,7 +1,8 @@
 /**
- * ClassiqueBuilder — builder de séance spécifique au format Classique :
- * blocs → exercices/consignes avec prescription libre, réorganisation dnd-kit,
- * import depuis la banque de blocs, enregistrement d'un bloc dans la banque.
+ * ClassiqueBuilder — builder de séance spécifique par blocs.
+ * Chaque bloc est de type Classique (exercices/consignes + prescription libre)
+ * ou WOD (intervalles via le builder existant). Mix possible dans une séance.
+ * Réorganisation dnd-kit, import depuis la banque de blocs, enregistrement en banque.
  */
 import { useState } from "react";
 import {
@@ -12,14 +13,18 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Trash2, Save, Plus } from "lucide-react";
+import { GripVertical, Trash2, Save, Plus, Zap, ListChecks } from "lucide-react";
 import { C } from "@/lib/theme";
 import { genId } from "@/lib/energy/treeUtils";
-import type { ClassiqueBlock, ClassiqueItem } from "@/types/specific";
+import IntervalBuilder from "../energy/IntervalBuilder";
+import type { EnergyGroup, EnergyStep } from "@/types/energy";
+import type { SessionBlock, ClassiqueBlock, ClassiqueItem, WodBlock } from "@/types/specific";
+import { isWodBlock } from "@/types/specific";
 
 const ORANGE = "#F5A623";
+const GREEN  = "#22C993";
 
-// ── Item row (sortable) ───────────────────────────────────────────────────────
+// ── Item row (sortable, bloc classique) ──────────────────────────────────────
 
 function ItemRow({ blockId, item, onChange, onDelete }: {
   blockId: string;
@@ -82,31 +87,36 @@ function ItemRow({ blockId, item, onChange, onDelete }: {
   );
 }
 
-// ── Block card (sortable) ─────────────────────────────────────────────────────
+// ── Block card (sortable, classique OU wod) ──────────────────────────────────
 
 function BlockCard({ block, onChange, onDelete, onSaveToBank }: {
-  block: ClassiqueBlock;
-  onChange: (patch: Partial<ClassiqueBlock>) => void;
+  block: SessionBlock;
+  onChange: (patch: Partial<SessionBlock>) => void;
   onDelete: () => void;
-  onSaveToBank?: (block: ClassiqueBlock) => void;
+  onSaveToBank?: (block: SessionBlock) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: block.id });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const wod = isWodBlock(block);
+  const accent = wod ? ORANGE : GREEN;
 
   function handleItemDragEnd(e: DragEndEvent) {
+    if (wod) return;
+    const cb = block as ClassiqueBlock;
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const ids = block.items.map((i) => `${block.id}::${i.id}`);
+    const ids = cb.items.map((i) => `${block.id}::${i.id}`);
     const from = ids.indexOf(String(active.id));
     const to   = ids.indexOf(String(over.id));
     if (from < 0 || to < 0) return;
-    onChange({ items: arrayMove(block.items, from, to) });
+    onChange({ items: arrayMove(cb.items, from, to) } as Partial<SessionBlock>);
   }
 
   function updateItem(itemId: string, patch: Partial<ClassiqueItem>) {
-    onChange({ items: block.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) });
+    const cb = block as ClassiqueBlock;
+    onChange({ items: cb.items.map((i) => (i.id === itemId ? { ...i, ...patch } : i)) } as Partial<SessionBlock>);
   }
 
   return (
@@ -116,6 +126,7 @@ function BlockCard({ block, onChange, onDelete, onSaveToBank }: {
         transform: CSS.Transform.toString(transform), transition,
         opacity: isDragging ? 0.6 : 1,
         background: C.s1, border: `1px solid ${C.brd}`, borderRadius: 12,
+        borderLeft: `3px solid ${accent}80`,
         padding: "12px 14px",
       }}
     >
@@ -128,9 +139,17 @@ function BlockCard({ block, onChange, onDelete, onSaveToBank }: {
         >
           <GripVertical size={15} />
         </button>
+        <span style={{
+          fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 4,
+          background: accent + "20", color: accent, flexShrink: 0,
+          display: "flex", alignItems: "center", gap: 4,
+        }}>
+          {wod ? <Zap size={9} /> : <ListChecks size={9} />}
+          {wod ? "WOD" : "CLASSIQUE"}
+        </span>
         <input
           value={block.title}
-          onChange={(e) => onChange({ title: e.target.value })}
+          onChange={(e) => onChange({ title: e.target.value } as Partial<SessionBlock>)}
           placeholder="Titre du bloc…"
           style={{
             flex: 1, background: "transparent", border: "none",
@@ -146,8 +165,8 @@ function BlockCard({ block, onChange, onDelete, onSaveToBank }: {
             style={{
               display: "flex", alignItems: "center", gap: 5,
               padding: "4px 9px", borderRadius: 6,
-              border: `1px solid ${ORANGE}40`, background: ORANGE + "12",
-              color: ORANGE, fontSize: 10, fontWeight: 600,
+              border: `1px solid ${accent}40`, background: accent + "12",
+              color: accent, fontSize: 10, fontWeight: 600,
               cursor: "pointer", fontFamily: "inherit",
             }}
           >
@@ -164,35 +183,51 @@ function BlockCard({ block, onChange, onDelete, onSaveToBank }: {
         </button>
       </div>
 
-      {/* Items */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleItemDragEnd}>
-        <SortableContext items={block.items.map((i) => `${block.id}::${i.id}`)} strategy={verticalListSortingStrategy}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {block.items.map((item) => (
-              <ItemRow
-                key={item.id}
-                blockId={block.id}
-                item={item}
-                onChange={(patch) => updateItem(item.id, patch)}
-                onDelete={() => onChange({ items: block.items.filter((i) => i.id !== item.id) })}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      {/* Body */}
+      {wod ? (
+        <IntervalBuilder
+          root={{
+            type: "group", id: `__block_${block.id}__`, role: "open", repeat: 1,
+            children: (block as WodBlock).steps,
+          } as EnergyGroup}
+          onChange={(r: EnergyGroup) => onChange({ steps: r.children as EnergyStep[] } as Partial<SessionBlock>)}
+          sessionKind="specifique"
+        />
+      ) : (
+        <>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleItemDragEnd}>
+            <SortableContext
+              items={(block as ClassiqueBlock).items.map((i) => `${block.id}::${i.id}`)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {(block as ClassiqueBlock).items.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    blockId={block.id}
+                    item={item}
+                    onChange={(patch) => updateItem(item.id, patch)}
+                    onDelete={() => onChange({ items: (block as ClassiqueBlock).items.filter((i) => i.id !== item.id) } as Partial<SessionBlock>)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
 
-      <button
-        onClick={() => onChange({ items: [...block.items, { id: genId(), name: "" }] })}
-        style={{
-          marginTop: 8, display: "flex", alignItems: "center", gap: 5,
-          padding: "5px 10px", borderRadius: 6,
-          border: `1px dashed ${C.brdL}`, background: "transparent",
-          color: C.tx3, fontSize: 11, fontWeight: 600,
-          cursor: "pointer", fontFamily: "inherit",
-        }}
-      >
-        <Plus size={11} /> Exercice / consigne
-      </button>
+          <button
+            onClick={() => onChange({ items: [...(block as ClassiqueBlock).items, { id: genId(), name: "" }] } as Partial<SessionBlock>)}
+            style={{
+              marginTop: 8, display: "flex", alignItems: "center", gap: 5,
+              padding: "5px 10px", borderRadius: 6,
+              border: `1px dashed ${C.brdL}`, background: "transparent",
+              color: C.tx3, fontSize: 11, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <Plus size={11} /> Exercice / consigne
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -200,15 +235,14 @@ function BlockCard({ block, onChange, onDelete, onSaveToBank }: {
 // ── Builder ───────────────────────────────────────────────────────────────────
 
 interface Props {
-  blocks: ClassiqueBlock[];
-  onChange: (blocks: ClassiqueBlock[]) => void;
+  blocks: SessionBlock[];
+  onChange: (blocks: SessionBlock[]) => void;
   onImportFromBank: () => void;
-  onSaveBlockToBank?: (block: ClassiqueBlock) => void;
+  onSaveBlockToBank?: (block: SessionBlock) => void;
 }
 
 export default function ClassiqueBuilder({ blocks, onChange, onImportFromBank, onSaveBlockToBank }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  // Force remount of inner DndContexts when block order changes to keep ids stable
   const [, setVersion] = useState(0);
 
   function handleBlockDragEnd(e: DragEndEvent) {
@@ -221,9 +255,17 @@ export default function ClassiqueBuilder({ blocks, onChange, onImportFromBank, o
     setVersion((v) => v + 1);
   }
 
-  function updateBlock(id: string, patch: Partial<ClassiqueBlock>) {
-    onChange(blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+  function updateBlock(id: string, patch: Partial<SessionBlock>) {
+    onChange(blocks.map((b) => (b.id === id ? { ...b, ...patch } as SessionBlock : b)));
   }
+
+  const addBtnStyle = (color: string): React.CSSProperties => ({
+    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    padding: "12px 0", borderRadius: 10,
+    border: `1px dashed ${color}50`, background: color + "08",
+    color, fontSize: 13, fontWeight: 600,
+    cursor: "pointer", fontFamily: "inherit", transition: "all 150ms",
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -241,27 +283,28 @@ export default function ClassiqueBuilder({ blocks, onChange, onImportFromBank, o
         </SortableContext>
       </DndContext>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
           onClick={() => onChange([...blocks, { id: genId(), title: "", items: [{ id: genId(), name: "" }] }])}
-          style={{
-            flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            padding: "12px 0", borderRadius: 10,
-            border: `1px dashed ${C.brdL}`, background: "transparent",
-            color: C.tx2, fontSize: 13, fontWeight: 600,
-            cursor: "pointer", fontFamily: "inherit", transition: "all 150ms",
-          }}
+          style={addBtnStyle(GREEN)}
         >
-          <Plus size={14} /> Bloc
+          <ListChecks size={14} /> + Bloc classique
+        </button>
+        <button
+          onClick={() => onChange([...blocks, { id: genId(), title: "", kind: "wod", steps: [] } as WodBlock])}
+          style={addBtnStyle(ORANGE)}
+        >
+          <Zap size={14} /> + Bloc WOD
         </button>
         <button
           onClick={onImportFromBank}
           style={{
             flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             padding: "12px 0", borderRadius: 10,
-            border: `1px solid ${ORANGE}40`, background: ORANGE + "0D",
-            color: ORANGE, fontSize: 13, fontWeight: 600,
+            border: `1px solid ${C.brdL}`, background: "transparent",
+            color: C.tx2, fontSize: 13, fontWeight: 600,
             cursor: "pointer", fontFamily: "inherit", transition: "all 150ms",
+            minWidth: 220,
           }}
         >
           Importer depuis la banque de blocs

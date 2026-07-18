@@ -9,12 +9,29 @@ import { C } from "@/lib/theme";
 import { genId } from "@/lib/energy/treeUtils";
 import { useSpecificBlocks, useUpdateSpecificBlock, useDeleteSpecificBlock } from "@/features/shared/hooks/useSpecificBlocks";
 import { useSpecificSports, usePhysicalQualities } from "@/features/shared/hooks/useSpecificTaxonomy";
-import type { ClassiqueBlock, SpecificBlockRow } from "@/types/specific";
+import type { EnergyStep } from "@/types/energy";
+import type { SessionBlock, SpecificBlockRow } from "@/types/specific";
 
 const ORANGE = "#F5A623";
+const GREEN  = "#22C993";
+
+/** Clone récursif d'EnergyStep[] avec nouveaux ids. */
+function cloneSteps(steps: EnergyStep[]): EnergyStep[] {
+  return steps.map((s): EnergyStep => {
+    if (s.type === "group") {
+      return {
+        ...s,
+        id: genId(),
+        children: cloneSteps(s.children),
+        rest_between: s.rest_between ? { ...s.rest_between, id: genId() } : undefined,
+      };
+    }
+    return { ...s, id: genId() };
+  });
+}
 
 interface Props {
-  onInsert: (blocks: ClassiqueBlock[]) => void;
+  onInsert: (blocks: SessionBlock[]) => void;
   onClose: () => void;
 }
 
@@ -57,12 +74,23 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
 
   function handleInsert() {
     const chosen = blocks.filter((b) => selected.has(b.id));
-    const asBlocks: ClassiqueBlock[] = chosen.map((b) => ({
-      id: genId(),
-      title: b.content.title || b.name,
-      sourceBlockId: b.id,
-      items: (b.content.items ?? []).map((i) => ({ ...i, id: genId() })),
-    }));
+    const asBlocks: SessionBlock[] = chosen.map((b) => {
+      if (b.content.kind === "wod") {
+        return {
+          id: genId(),
+          title: b.content.title || b.name,
+          kind: "wod" as const,
+          sourceBlockId: b.id,
+          steps: cloneSteps(b.content.steps ?? []),
+        };
+      }
+      return {
+        id: genId(),
+        title: b.content.title || b.name,
+        sourceBlockId: b.id,
+        items: (b.content.items ?? []).map((i) => ({ ...i, id: genId() })),
+      };
+    });
     onInsert(asBlocks);
     onClose();
   }
@@ -153,7 +181,9 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
                 const isSel   = selected.has(b.id);
                 const sport   = b.sport_id ? sportById.get(b.sport_id) : undefined;
                 const quality = b.quality_id ? qualityById.get(b.quality_id) : undefined;
+                const isWod   = b.content.kind === "wod";
                 const items   = b.content.items ?? [];
+                const nSteps  = (b.content.steps ?? []).length;
                 return (
                   <div
                     key={b.id}
@@ -217,6 +247,12 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
                     </div>
 
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6, marginLeft: 24 }}>
+                      <span style={{
+                        fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 4,
+                        background: (isWod ? ORANGE : GREEN) + "20", color: isWod ? ORANGE : GREEN,
+                      }}>
+                        {isWod ? "WOD" : "CLASSIQUE"}
+                      </span>
                       {sport && (
                         <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: (sport.color || ORANGE) + "20", color: sport.color || ORANGE }}>
                           {sport.name}
@@ -228,8 +264,9 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
                         </span>
                       )}
                       <span style={{ fontSize: 9, color: C.tx3, padding: "2px 0" }}>
-                        {items.length} exo{items.length > 1 ? "s" : ""}
-                        {items.length > 0 && ` — ${items.slice(0, 3).map((i) => i.name).filter(Boolean).join(", ")}${items.length > 3 ? "…" : ""}`}
+                        {isWod
+                          ? `${nSteps} étape${nSteps > 1 ? "s" : ""}`
+                          : `${items.length} exo${items.length > 1 ? "s" : ""}${items.length > 0 ? ` — ${items.slice(0, 3).map((i) => i.name).filter(Boolean).join(", ")}${items.length > 3 ? "…" : ""}` : ""}`}
                       </span>
                     </div>
                   </div>

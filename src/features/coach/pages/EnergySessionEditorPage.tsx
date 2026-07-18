@@ -31,7 +31,8 @@ import {
 } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
 import type { EnergySessionRow } from "@/types/energy";
-import type { ClassiqueBlock, SessionFormat } from "@/types/specific";
+import type { SessionBlock, SessionFormat, WodBlock } from "@/types/specific";
+import { isWodBlock } from "@/types/specific";
 import TaxonomySelect from "../components/specific/TaxonomySelect";
 import ClassiqueBuilder from "../components/specific/ClassiqueBuilder";
 import ClassiquePreview from "../components/specific/ClassiquePreview";
@@ -241,10 +242,12 @@ export default function EnergySessionEditorPage() {
   const [showImport, setShowImport] = useState(false);
 
   // Spécifique : sport / qualité / format
+  // Nouvelle séance spécifique = toujours par blocs (mix Classique/WOD).
+  // 'wod' ne subsiste que pour les séances legacy (intervalles pleine page).
   const [sportId, setSportId]     = useState<string | null>(null);
   const [qualityId, setQualityId] = useState<string | null>(null);
-  const [format, setFormat]       = useState<SessionFormat>("wod");
-  const [classiqueBlocks, setClassiqueBlocks] = useState<ClassiqueBlock[]>([]);
+  const [format, setFormat]       = useState<SessionFormat>(kindFromUrl === "specifique" ? "classique" : "wod");
+  const [classiqueBlocks, setClassiqueBlocks] = useState<SessionBlock[]>([]);
   const [showBlockBank, setShowBlockBank]     = useState(false);
 
   const isSpecifique = sessionKind === "specifique";
@@ -295,27 +298,39 @@ export default function EnergySessionEditorPage() {
     setQualityId(session.quality_id ?? null);
     setFormat(session.format ?? "wod");
     setClassiqueBlocks(
-      (session.classique_structure?.blocks ?? []).map((b) => ({
-        ...b,
-        id: genId(),
-        items: b.items.map((i) => ({ ...i, id: genId() })),
-      }))
+      (session.classique_structure?.blocks ?? []).map((b): SessionBlock =>
+        isWodBlock(b)
+          ? { ...b, id: genId(), steps: deepCloneIntervals(b.steps) }
+          : { ...b, id: genId(), items: b.items.map((i) => ({ ...i, id: genId() })) }
+      )
     );
     setShowImport(false);
   }
 
-  function handleSaveBlockToBank(block: ClassiqueBlock) {
+  function handleSaveBlockToBank(block: SessionBlock) {
     if (!user?.id) return;
     createBlock.mutate({
       coach_id: user.id,
       name: block.title.trim() || "Bloc sans titre",
       sport_id: sportId,
       quality_id: qualityId,
-      content: {
-        title: block.title,
-        items: block.items.filter((i) => i.name.trim()),
-      },
+      content: isWodBlock(block)
+        ? { title: block.title, kind: "wod", steps: block.steps }
+        : { title: block.title, items: block.items.filter((i) => i.name.trim()) },
     });
+  }
+
+  /** Legacy WOD pleine page → séance par blocs (intervalles encapsulés dans un bloc WOD). */
+  function convertLegacyToBlocks() {
+    const wodBlock: WodBlock = {
+      id: genId(),
+      title: name.trim() || "WOD",
+      kind: "wod",
+      steps: root.children,
+    };
+    setClassiqueBlocks((prev) => [...prev, ...(root.children.length > 0 ? [wodBlock] : [])]);
+    setRoot(makeRootGroup());
+    setFormat("classique");
   }
 
   // Computed preview totals
@@ -439,24 +454,21 @@ export default function EnergySessionEditorPage() {
                 width={150}
                 accent="#7B6FFF"
               />
-              {/* Format WOD | Classique */}
-              <div style={{ display: "flex", gap: 2, background: C.s2, borderRadius: 8, padding: 2 }}>
-                {(["wod", "classique"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFormat(f)}
-                    style={{
-                      padding: "5px 12px", borderRadius: 6, border: "none",
-                      background: format === f ? (f === "wod" ? ORANGE : "#22C993") : "transparent",
-                      color: format === f ? "#1a1204" : C.tx3,
-                      fontSize: 11, fontWeight: format === f ? 700 : 400,
-                      cursor: "pointer", fontFamily: "inherit", transition: "all 120ms",
-                    }}
-                  >
-                    {f === "wod" ? "WOD" : "Classique"}
-                  </button>
-                ))}
-              </div>
+              {/* Legacy WOD pleine page : proposer la conversion en blocs */}
+              {format === "wod" && (
+                <button
+                  onClick={convertLegacyToBlocks}
+                  title="Encapsule les intervalles actuels dans un bloc WOD"
+                  style={{
+                    padding: "5px 12px", borderRadius: 6,
+                    border: `1px solid ${ORANGE}40`, background: ORANGE + "0D",
+                    color: ORANGE, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Convertir en blocs
+                </button>
+              )}
             </>
           ) : (
             <>
