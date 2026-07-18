@@ -33,6 +33,7 @@ export default function SpecificItemFields({ item, onChange }: Props) {
         {searching ? (
           <ExerciceSearch
             value={item.name}
+            showTypeFilter
             onSelect={(ex) => {
               onChange({ name: ex.name, exercise_id: ex.id, youtube_id: ex.youtube_id });
               setSearching(false);

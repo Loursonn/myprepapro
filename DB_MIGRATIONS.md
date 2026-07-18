@@ -275,3 +275,16 @@ DROP TABLE IF EXISTS public.specific_sports CASCADE;
 
 - L'app tolère l'absence des tables (référentiels vides → rails/sélecteurs vides), mais l'enregistrement d'une séance spécifique échouera tant que les colonnes n'existent pas.
 - L'ancien dropdown catégorie (`SPECIFIQUE_CATEGORIES` → `custom_kind`) est remplacé par le sélecteur Qualité ; `custom_kind` est préservé en lecture pour le legacy.
+
+---
+
+## Migration 2026-07-18 (2) — Édition exercices par coach certifié
+
+**Fichier :** `supabase/migrations/20260718100000_exercises_certified_update.sql`
+**Statut : ⚠️ NON APPLIQUÉE** — même déploiement que la précédente.
+
+Policy `exercises_update_certified` : coach certifié (`is_certified_coach`) ou admin peut modifier n''importe quel exercice (caractéristiques de tri : type, muscles, équipement, difficulté…). Indépendante de la migration Banque Spécifique — peut se déployer seule.
+
+Rollback : `DROP POLICY IF EXISTS "exercises_update_certified" ON public.exercises;`
+
+Note taxonomie `ex_type` : valeurs DB `muscu | halterophilie | mobilite | plio | vitesse | gainage` (labels français dans `src/lib/exerciseTypes.ts`). Pas de contrainte CHECK sur la colonne — les deux nouvelles valeurs ne nécessitent pas de migration.
