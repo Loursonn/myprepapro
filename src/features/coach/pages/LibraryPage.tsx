@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Dumbbell, X } from "lucide-react";
 import { C } from "@/lib/theme";
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/select";
 import { ExerciseBank } from "@/components/coach/ExerciseBank";
 import { BlocBankView } from "@/features/coach/components/programmation/BlocBankView";
+import SpecificCatalog from "@/features/coach/components/specific/SpecificCatalog";
 import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import EnergySessionCard from "@/features/coach/components/energy/EnergySessionCard";
 import { EmptyState } from "@/features/shared/components/EmptyState";
@@ -469,136 +470,6 @@ function MethodsTab({ coachId }: { coachId: string }) {
   );
 }
 
-// ── Specific tab ─────────────────────────────────────────────────────────────
-
-function SpecifiqueTab() {
-  const navigate = useNavigate();
-  const { profile } = useAuth();
-
-  const [filterTab, setFilterTab] = useState<FilterTab>("all");
-  const [search, setSearch]       = useState("");
-
-  const { data: sessions = [], isLoading } = useEnergySessions();
-  const canVerify = !!(profile?.is_certified_coach || profile?.is_admin);
-
-  const filtered = useMemo(() => {
-    let list = sessions.filter((s) => s.session_kind === "specifique");
-    if (filterTab === "mine" && profile?.id) {
-      list = list.filter((s) => s.created_by === profile.id);
-    } else if (filterTab === "verified") {
-      list = list.filter((s) => s.is_verified);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((s) => s.name.toLowerCase().includes(q));
-    }
-    return list;
-  }, [sessions, filterTab, search, profile?.id]);
-
-  return (
-    <div>
-      {/* Filters row */}
-      <div style={{
-        display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap",
-        padding: "14px 0 16px",
-        borderBottom: `1px solid ${C.brd}`,
-        marginBottom: 20,
-      }}>
-        {/* Filter tabs */}
-        <div style={{ display: "flex", gap: 2, background: C.s2, borderRadius: 8, padding: 2 }}>
-          {FILTER_TABS.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setFilterTab(t.value)}
-              style={{
-                padding: "5px 12px", borderRadius: 6, border: "none",
-                background: filterTab === t.value ? "#F5A623" : "transparent",
-                color: filterTab === t.value ? "#fff" : C.tx3,
-                fontSize: 12, fontWeight: filterTab === t.value ? 600 : 400,
-                cursor: "pointer", fontFamily: "inherit", transition: "all 120ms",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher…"
-          style={{
-            flex: 1, minWidth: 140, maxWidth: 260,
-            background: C.s2, border: `1px solid ${C.brd}`,
-            borderRadius: 6, color: C.tx, fontSize: 12,
-            padding: "5px 10px", fontFamily: "inherit", outline: "none",
-          }}
-        />
-
-        {!isLoading && (
-          <span style={{ fontSize: 11, color: C.tx3, whiteSpace: "nowrap" }}>
-            {filtered.length} séance{filtered.length !== 1 ? "s" : ""}
-          </span>
-        )}
-
-        <button
-          onClick={() => navigate("/coach/energy-library/new?kind=specifique")}
-          style={{
-            marginLeft: "auto", padding: "7px 14px", borderRadius: 8, border: "none",
-            background: "#F5A623", color: "#1a1204", fontSize: 12,
-            fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
-          }}
-        >
-          + Nouvelle séance
-        </button>
-      </div>
-
-      {/* Grid */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-        gap: 16,
-        alignItems: "start",
-      }}>
-        {isLoading ? (
-          Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
-        ) : filtered.length === 0 ? (
-          <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "60px 20px", color: C.tx3 }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🎯</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: C.tx2, marginBottom: 6 }}>Aucune séance spécifique</div>
-            <div style={{ fontSize: 13, marginBottom: 20 }}>Créez la première séance spécifique (CrossFit, MetCon…).</div>
-            <button
-              onClick={() => navigate("/coach/energy-library/new?kind=specifique")}
-              style={{
-                padding: "9px 20px", borderRadius: 8, border: "none",
-                background: "#F5A623", color: "#1a1204", fontSize: 13,
-                fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              + Nouvelle séance
-            </button>
-          </div>
-        ) : (
-          filtered.map((session) => {
-            const isAuthor = session.created_by === profile?.id;
-            const isAdmin  = !!profile?.is_admin;
-            return (
-              <EnergySessionCard
-                key={session.id}
-                session={session}
-                canEdit={isAuthor || isAdmin}
-                canVerify={canVerify}
-                canDelete={isAuthor || isAdmin}
-              />
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── LibraryPage ───────────────────────────────────────────────────────────────
 
 export default function LibraryPage() {
@@ -673,7 +544,7 @@ export default function LibraryPage() {
         )}
         {activeTab === "energetique" && <EnergyTab />}
         {activeTab === "methodes"    && <MethodsTab coachId={user.id} />}
-        {activeTab === "specifique"  && <SpecifiqueTab />}
+        {activeTab === "specifique"  && <SpecificCatalog />}
       </div>
     </div>
   );
