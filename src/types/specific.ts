@@ -35,8 +35,12 @@ export type BlockKind = 'classique' | 'wod';
 
 export interface ClassiqueItem {
   id: string;
-  /** Exercice ou consigne libre */
+  /** Nom affiché : exercice de la banque ou consigne libre */
   name: string;
+  /** Lien vers la banque d'exercices (table exercises) — absent = consigne libre */
+  exercise_id?: string;
+  /** Vidéo de démonstration (exercises.youtube_id) pour la vue athlète */
+  youtube_id?: string;
   /** Prescription libre : "4x30m", "5 séries · 8 reps", "3'" */
   prescription?: string;
   rest?: string;

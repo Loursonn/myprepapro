@@ -1,6 +1,7 @@
 /**
  * ClassiquePreview — aperçu lecture seule d'une séance par blocs (mix Classique / WOD).
  */
+import { Youtube } from "lucide-react";
 import { C } from "@/lib/theme";
 import SessionPreview from "../energy/SessionPreview";
 import type { EnergyGroup } from "@/types/energy";
@@ -71,7 +72,10 @@ export default function ClassiquePreview({ blocks }: { blocks: SessionBlock[] })
               <div style={{ padding: "6px 12px 8px" }}>
                 {(block as ClassiqueBlock).items.filter((i) => i.name.trim()).map((item) => (
                   <div key={item.id} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "4px 0", borderBottom: `1px solid ${C.brd}30` }}>
-                    <span style={{ fontSize: 11, color: C.tx, flex: 1, minWidth: 0 }}>{item.name}</span>
+                    <span style={{ fontSize: 11, color: C.tx, flex: 1, minWidth: 0, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      {item.name}
+                      {item.youtube_id && <Youtube size={11} color="#EF4444" style={{ flexShrink: 0 }} />}
+                    </span>
                     {item.prescription && (
                       <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, flexShrink: 0 }}>{item.prescription}</span>
                     )}

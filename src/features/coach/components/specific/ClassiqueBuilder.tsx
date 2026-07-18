@@ -17,6 +17,7 @@ import { GripVertical, Trash2, Save, Plus, Zap, ListChecks } from "lucide-react"
 import { C } from "@/lib/theme";
 import { genId } from "@/lib/energy/treeUtils";
 import IntervalBuilder from "../energy/IntervalBuilder";
+import SpecificItemFields from "./SpecificItemFields";
 import type { EnergyGroup, EnergyStep } from "@/types/energy";
 import type { SessionBlock, ClassiqueBlock, ClassiqueItem, WodBlock } from "@/types/specific";
 import { isWodBlock } from "@/types/specific";
@@ -35,12 +36,6 @@ function ItemRow({ blockId, item, onChange, onDelete }: {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `${blockId}::${item.id}` });
 
-  const inputStyle: React.CSSProperties = {
-    background: C.s2, border: `1px solid ${C.brd}`, borderRadius: 6,
-    color: C.tx, fontSize: 12, padding: "6px 8px",
-    fontFamily: "inherit", outline: "none", minWidth: 0,
-  };
-
   return (
     <div
       ref={setNodeRef}
@@ -57,24 +52,7 @@ function ItemRow({ blockId, item, onChange, onDelete }: {
       >
         <GripVertical size={13} />
       </button>
-      <input
-        value={item.name}
-        onChange={(e) => onChange({ name: e.target.value })}
-        placeholder="Exercice / consigne…"
-        style={{ ...inputStyle, flex: 2 }}
-      />
-      <input
-        value={item.prescription ?? ""}
-        onChange={(e) => onChange({ prescription: e.target.value })}
-        placeholder="4x30m, 5×8, 3'…"
-        style={{ ...inputStyle, flex: 1.2 }}
-      />
-      <input
-        value={item.rest ?? ""}
-        onChange={(e) => onChange({ rest: e.target.value })}
-        placeholder="Repos"
-        style={{ ...inputStyle, width: 70 }}
-      />
+      <SpecificItemFields item={item} onChange={onChange} />
       <button
         onClick={onDelete}
         style={{ background: "none", border: "none", color: C.tx3, cursor: "pointer", padding: 2, display: "flex" }}

@@ -10,6 +10,8 @@ interface ExerciceSearchProps {
   value: string
   onSelect: (exercise: { id: string; name: string; ex_type?: string; youtube_id?: string }) => void
   onClose: () => void
+  /** Si fourni, propose "Consigne libre" dans le dropdown (texte sans lien banque) */
+  onFreeText?: (text: string) => void
 }
 
 interface ExerciseRow {
@@ -30,7 +32,7 @@ function typeColor(ex_type: string | null | undefined): string {
   return TYPE_COLOR[ex_type ?? ""] ?? C.tx3
 }
 
-export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps) {
+export function ExerciceSearch({ value, onSelect, onClose, onFreeText }: ExerciceSearchProps) {
   const [search, setSearch] = useState(value)
   const [results, setResults] = useState<ExerciseRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -87,7 +89,10 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
           ref={inputRef}
           value={search}
           onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') onClose()
+            if (e.key === 'Enter' && onFreeText && search.trim()) onFreeText(search.trim())
+          }}
           placeholder="Rechercher un exercice…"
           style={{
             flex: 1, background: "transparent", border: "none",
@@ -99,7 +104,7 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
         )}
       </div>
 
-      {(results.length > 0 || showCreate) && (
+      {(results.length > 0 || showCreate || (onFreeText && search.trim())) && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
           background: C.s1, border: "1px solid " + C.brdL, borderRadius: 10,
@@ -127,6 +132,22 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
               <span style={{ fontSize: 13, color: C.tx }}>{ex.name}</span>
             </button>
           ))}
+          {onFreeText && search.trim() && (
+            <button
+              onClick={() => onFreeText(search.trim())}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 12px", border: "none", borderBottom: "1px solid " + C.brd,
+                background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = C.s2)}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              <span style={{ fontSize: 13, color: C.tx3 }}>
+                Consigne libre : <span style={{ color: C.tx, fontWeight: 600 }}>"{search.trim()}"</span>
+              </span>
+            </button>
+          )}
           {showCreate && (
             <button
               onClick={handleCreate}

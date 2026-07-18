@@ -10,6 +10,7 @@ import { genId } from "@/lib/energy/treeUtils";
 import { useAuth } from "@/hooks/useAuth";
 import IntervalBuilder from "../energy/IntervalBuilder";
 import TaxonomySelect from "./TaxonomySelect";
+import SpecificItemFields from "./SpecificItemFields";
 import {
   useSpecificBlocks, useCreateSpecificBlock, useUpdateSpecificBlock, useDeleteSpecificBlock,
 } from "@/features/shared/hooks/useSpecificBlocks";
@@ -163,24 +164,7 @@ function BlockEditorModal({ initial, onClose }: {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {items.map((item) => (
                 <div key={item.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    value={item.name}
-                    onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                    placeholder="Exercice / consigne…"
-                    style={{ ...inputStyle, flex: 2 }}
-                  />
-                  <input
-                    value={item.prescription ?? ""}
-                    onChange={(e) => updateItem(item.id, { prescription: e.target.value })}
-                    placeholder="4x30m, 5×8, 3'…"
-                    style={{ ...inputStyle, flex: 1.2 }}
-                  />
-                  <input
-                    value={item.rest ?? ""}
-                    onChange={(e) => updateItem(item.id, { rest: e.target.value })}
-                    placeholder="Repos"
-                    style={{ ...inputStyle, width: 70 }}
-                  />
+                  <SpecificItemFields item={item} onChange={(patch) => updateItem(item.id, patch)} />
                   <button
                     onClick={() => setItems((prev) => prev.filter((i) => i.id !== item.id))}
                     style={{ background: "none", border: "none", color: C.tx3, cursor: "pointer", padding: 2, display: "flex" }}
