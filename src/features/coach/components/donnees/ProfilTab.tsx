@@ -1,6 +1,5 @@
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
-import PerformanceProfile from "@/components/athlete/PerformanceProfile";
 import CoachPerfNotification from "@/components/coach/CoachPerfNotification";
 import type { Profile } from "@/hooks/useAuth";
 import { useMedicalHistory } from "@/features/shared/hooks/useMedicalHistory";
@@ -69,9 +68,6 @@ export function ProfilTab() {
           Aucun antécédent renseigné par l'athlète
         </div>
       )}
-
-      {/* Performances sportives */}
-      <div style={{ marginBottom: 20 }}><PerformanceProfile athleteId={athleteId} viewOnly={false} isCoach={true} C={C} /></div>
 
       {/* Validations de performances */}
       <div style={{ marginBottom: 20 }}>
