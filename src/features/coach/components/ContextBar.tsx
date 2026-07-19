@@ -28,8 +28,8 @@ const TABS: { key: string; label: string; pushRight?: boolean }[] = [
   { key: "programmation",   label: "Programmation"   },
   { key: "retours",         label: "Retours"         },
   { key: "profil-sportif",  label: "Profil athlète"  },
-  { key: "athlete-view",    label: "👁 Vue athlète"  },
-  { key: "donnees",         label: "Historique", pushRight: true },
+  { key: "athlete-view",    label: "👁 Vue athlète", pushRight: true },
+  { key: "donnees",         label: "Historique" },
 ];
 
 const SUB_TABS: Record<string, { key: string; label: string }[]> = {
