@@ -10,7 +10,6 @@ export const EX_TYPES = [
   { value: "mobilite",      label: "Mobilité" },
   { value: "plio",          label: "Pliométrie & Sauts" },
   { value: "vitesse",       label: "Vitesse" },
-  { value: "gainage",       label: "Gainage" },
 ] as const;
 
 export type ExType = typeof EX_TYPES[number]["value"];
@@ -25,7 +24,6 @@ export const EX_TYPE_COLOR: Record<string, string> = {
   plio:          "#F5A623",
   mobilite:      "#22C993",
   vitesse:       "#3B8DF0",
-  gainage:       "#D4538E",
 };
 
 export function exTypeLabel(v: string | null | undefined): string {
