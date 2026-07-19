@@ -18,8 +18,6 @@ export function ProfilTab() {
   return (
     <div>
       {/* Athlete profile card */}
-      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Profil athlète</div>
-      <div style={{ fontSize: 12, color: C.tx2, marginBottom: 12 }}>Informations personnelles</div>
       {ap ? (
         <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden", marginBottom: 16 }}>
           <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid " + C.brd }}>

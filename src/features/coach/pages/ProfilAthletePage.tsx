@@ -1,11 +1,12 @@
 /**
  * ProfilAthletePage — onglet « Profil athlète » (route profil-sportif).
- * Sous-onglets (?view=) :
- *   - sportif  : Profil Sportif Actuel (ancienne page Profil sportif)
- *   - general  : Profil Général (ancien onglet Profil de Données)
- *   - testing  : Suivi Testing (ancienne page Tests)
+ * Header unifié pour les 3 sous-onglets (?view=) :
+ *   - sportif  : Profil Sportif Actuel
+ *   - general  : Profil Général (profil + antécédents + stratégie)
+ *   - testing  : Suivi Testing
  */
 import { useSearchParams } from "react-router-dom";
+import { C } from "@/lib/theme";
 import ProfilSportifPage from "./ProfilSportifPage";
 import TestPage from "./TestPage";
 import { ProfilTab } from "@/features/coach/components/donnees/ProfilTab";
@@ -13,22 +14,46 @@ import { StrategieTab } from "@/features/coach/components/donnees/StrategieTab";
 
 type ProfilView = "sportif" | "general" | "testing";
 
+const HEADERS: Record<ProfilView, { title: string; subtitle: string }> = {
+  sportif: {
+    title: "Profil Sportif Actuel",
+    subtitle: "Références de performance — alimentent les calculs de zones et l'éditeur de séances énergétiques.",
+  },
+  general: {
+    title: "Profil Général",
+    subtitle: "Informations personnelles, antécédents médicaux et stratégie de suivi.",
+  },
+  testing: {
+    title: "Suivi Testing",
+    subtitle: "Tests à remplir, évolution par catégorie et historique des résultats.",
+  },
+};
+
 export default function ProfilAthletePage() {
   const [searchParams] = useSearchParams();
   const raw = searchParams.get("view");
   // Legacy ?view=strategie → fusionné dans Profil Général
   const view: ProfilView = raw === "general" || raw === "strategie" ? "general" : raw === "testing" ? "testing" : "sportif";
+  const { title, subtitle } = HEADERS[view];
 
-  if (view === "general") {
-    return (
-      <div style={{ padding: "16px 16px 40px" }}>
-        <ProfilTab />
-        <div style={{ marginTop: 28 }}>
-          <StrategieTab />
-        </div>
+  return (
+    <div style={{ padding: "0 24px 60px" }}>
+      {/* Header commun aux 3 sous-onglets */}
+      <div style={{ padding: "20px 0 16px" }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.tx }}>{title}</div>
+        <div style={{ fontSize: 12, color: C.tx3, marginTop: 4 }}>{subtitle}</div>
       </div>
-    );
-  }
-  if (view === "testing") return <TestPage />;
-  return <ProfilSportifPage />;
+
+      {view === "sportif" && <ProfilSportifPage />}
+      {view === "general" && (
+        <>
+          <ProfilTab />
+          <div style={{ marginTop: 28 }}>
+            <StrategieTab />
+          </div>
+        </>
+      )}
+      {view === "testing" && <TestPage embedded />}
+    </div>
+  );
 }

@@ -797,16 +797,7 @@ export default function ProfilSportifPage() {
   }
 
   return (
-    <div style={{ padding: "0 24px 60px" }}>
-
-      {/* Header */}
-      <div style={{ padding: "20px 0 16px" }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.tx }}>Profil sportif</div>
-        <div style={{ fontSize: 12, color: C.tx3, marginTop: 4 }}>
-          Références de performance — alimentent les calculs de zones et l'éditeur de séances énergétiques.
-        </div>
-      </div>
-
+    <div>
       {isLoading ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
           {Array.from({ length: 8 }).map((_, i) => (
