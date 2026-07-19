@@ -122,21 +122,13 @@ CREATE POLICY "pq_delete" ON public.physical_qualities FOR DELETE
   TO authenticated
   USING (coach_id = auth.uid());
 
--- Seeds qualités globales (inclut les anciennes catégories spécifiques pour backfill)
+-- Seeds qualités globales : socle minimal commun à tous les coachs.
+-- Chaque coach crée ses propres qualités via « + Ajouter » (custom, coach_id).
 INSERT INTO public.physical_qualities (name, slug, coach_id, is_default) VALUES
-  ('Vitesse',          'vitesse',        NULL, true),
-  ('Endurance',        'endurance',      NULL, true),
-  ('VO₂max / VMA',     'vo2max-vma',     NULL, true),
-  ('Seuil lactique',   'seuil-lactique', NULL, true),
-  ('Tempo',            'tempo',          NULL, true),
-  ('Fartlek',          'fartlek',        NULL, true),
-  ('Force',            'force',          NULL, true),
-  ('Puissance',        'puissance',      NULL, true),
-  ('Explosivité',      'explosivite',    NULL, true),
-  ('Agilité',          'agilite',        NULL, true),
-  ('Coordination',     'coordination',   NULL, true),
-  ('Mobilité',         'mobilite',       NULL, true),
-  ('Technique',        'technique',      NULL, true)
+  ('Force',        'force',        NULL, true),
+  ('Vitesse',      'vitesse',      NULL, true),
+  ('Hypertrophie', 'hypertrophie', NULL, true),
+  ('Mobilité',     'mobilite',     NULL, true)
 ON CONFLICT DO NOTHING;
 
 -- ── 3. energy_sessions : sport / qualité / format ────────────────────────────
@@ -160,21 +152,9 @@ ALTER TABLE public.energy_sessions
 CREATE INDEX IF NOT EXISTS idx_energy_sessions_sport_quality
   ON public.energy_sessions (sport_id, quality_id);
 
--- Backfill : catégorie spécifique legacy (custom_kind) → quality_id
-UPDATE public.energy_sessions es
-SET quality_id = pq.id
-FROM public.physical_qualities pq
-WHERE es.session_kind = 'specifique'
-  AND es.quality_id IS NULL
-  AND pq.coach_id IS NULL
-  AND pq.slug = CASE es.custom_kind
-    WHEN 'vo2'     THEN 'vo2max-vma'
-    WHEN 'tempo'   THEN 'tempo'
-    WHEN 'seuil'   THEN 'seuil-lactique'
-    WHEN 'footing' THEN 'endurance'
-    WHEN 'fartlek' THEN 'fartlek'
-    ELSE NULL
-  END;
+-- Pas de backfill custom_kind → quality_id : le socle de qualités est minimal
+-- (Force/Vitesse/Hypertrophie/Mobilité), les anciennes catégories spécifiques
+-- (vo2, tempo, seuil…) n'ont pas d'équivalent. custom_kind reste lisible en legacy.
 
 -- ── 4. specific_blocks (banque privée par coach) ─────────────────────────────
 
