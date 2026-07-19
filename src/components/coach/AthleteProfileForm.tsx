@@ -320,6 +320,18 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false, i
       [sdMin, sdMax] = computeMinMax(nutTargetPct, nutStrategy);
     }
     try {
+      // Composition corporelle + MB vivent dans l'onglet nutrition : persister aussi le profil
+      await updateAthleteProfile(athlete.id, {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        age: derivedAge,
+        birth_date: birthDate || null,
+        height_cm: heightCm ? parseInt(heightCm) : null,
+        gender: (gender as "male" | "female") || null,
+        weight_kg: weightKg ? parseFloat(weightKg) : null,
+        body_fat_pct: bodyFatPct ? parseFloat(bodyFatPct) : null,
+        base_metabolism: metaManual ? parseInt(metaManual) : null,
+      });
       await upsertNutritionStrategy(athlete.id, {
         strategy: nutStrategy,
         can_track_calories: nutCalorieMode !== "nap",
@@ -438,7 +450,21 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false, i
           </div>
         </div>
 
-        {/* Corps */}
+        {errorProfile && <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: C.r + "15", border: "1px solid " + C.r + "40", fontSize: 13, color: C.r }}>{errorProfile}</div>}
+
+        <button
+          onClick={handleSaveProfile}
+          disabled={savingProfile}
+          style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: savingProfile ? C.s2 : C.coach, color: savingProfile ? C.tx3 : "#fff", fontSize: 15, fontWeight: 700, cursor: savingProfile ? "default" : "pointer", fontFamily: "inherit", marginTop: 24 }}
+        >
+          {savingProfile ? "Enregistrement..." : "Enregistrer le profil"}
+        </button>
+      </>)}
+
+      {/* ═══════════════════════════════════ TAB NUTRITION ═══════════════════════════════════ */}
+      {dataTab === "nutrition" && (<>
+
+        {/* Composition corporelle (base des calculs nutritionnels) */}
         <div style={sectionTitle}>Composition corporelle</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div><label style={labelStyle}>Poids de référence (kg)</label><input style={inputStyle} type="number" min={30} max={250} step={0.1} value={weightKg} onChange={e => setWeightKg(e.target.value)} placeholder="ex: 75.5" /></div>
@@ -457,7 +483,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false, i
         {metaMode === "formula_no_bf" && (
           <div style={{ background: C.s2, borderRadius: 10, padding: 10, marginBottom: 12, border: "1px solid " + C.brd, fontSize: 11, color: C.tx3 }}>
             Formule Mifflin-St Jeor — nécessite poids, taille, âge et genre
-            {(!heightCm || !derivedAge || !gender) && <div style={{ color: C.o, marginTop: 6 }}>Complète taille, date de naissance et genre ci-dessus</div>}
+            {(!heightCm || !derivedAge || !gender) && <div style={{ color: C.o, marginTop: 6 }}>Complète taille, date de naissance et genre dans « Modifier l'identité »</div>}
           </div>
         )}
         {metaMode === "formula_bf" && (
@@ -465,25 +491,11 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false, i
             Formule Katch-McArdle — nécessite poids et % de masse grasse
           </div>
         )}
-        <div>
+        <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>{metaMode === "manual" ? "Métabolisme de base (kcal/j)" : "Résultat calculé (kcal/j) — modifiable"}</label>
           <input style={{ ...inputStyle, border: "1px solid " + (metaMode !== "manual" ? C.coach + "60" : C.brdL) }} type="number" min={800} max={6000} value={metaManual} onChange={e => setMetaManual(e.target.value)} placeholder="ex: 1850" />
           {metaManual && <div style={{ fontSize: 11, color: C.tx3, marginTop: 4 }}>{parseInt(metaManual).toLocaleString("fr-FR")} kcal / jour</div>}
         </div>
-
-        {errorProfile && <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: C.r + "15", border: "1px solid " + C.r + "40", fontSize: 13, color: C.r }}>{errorProfile}</div>}
-
-        <button
-          onClick={handleSaveProfile}
-          disabled={savingProfile}
-          style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: savingProfile ? C.s2 : C.coach, color: savingProfile ? C.tx3 : "#fff", fontSize: 15, fontWeight: 700, cursor: savingProfile ? "default" : "pointer", fontFamily: "inherit", marginTop: 24 }}
-        >
-          {savingProfile ? "Enregistrement..." : "Enregistrer le profil"}
-        </button>
-      </>)}
-
-      {/* ═══════════════════════════════════ TAB NUTRITION ═══════════════════════════════════ */}
-      {dataTab === "nutrition" && (<>
 
         {/* Stratégie */}
         <div style={sectionTitle}>Stratégie</div>
@@ -798,8 +810,17 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false, i
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 520, background: C.s1, borderRadius: "16px 16px 0 0", maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+      <div
+        style={{
+          width: "100%", maxWidth: 680,
+          background: C.s1, borderRadius: 16,
+          border: "1px solid " + C.brdL,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          maxHeight: "90vh", overflowY: "auto",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
         {formContent}
       </div>
     </div>
