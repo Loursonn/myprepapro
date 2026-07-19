@@ -7,8 +7,10 @@ import { useMemo, useState } from "react";
 import { X, Trash2, Pencil, Check } from "lucide-react";
 import { C } from "@/lib/theme";
 import { genId } from "@/lib/energy/treeUtils";
+import { useAuth } from "@/hooks/useAuth";
 import { useSpecificBlocks, useUpdateSpecificBlock, useDeleteSpecificBlock } from "@/features/shared/hooks/useSpecificBlocks";
-import { useSpecificSports, usePhysicalQualities } from "@/features/shared/hooks/useSpecificTaxonomy";
+import { useSpecificSports, usePhysicalQualities, useCreateSport, useCreateQuality } from "@/features/shared/hooks/useSpecificTaxonomy";
+import TaxonomySelect from "./TaxonomySelect";
 import type { EnergyStep } from "@/types/energy";
 import type { SessionBlock, SpecificBlockRow } from "@/types/specific";
 
@@ -36,11 +38,14 @@ interface Props {
 }
 
 export default function BlockBankDrawer({ onInsert, onClose }: Props) {
+  const { user } = useAuth();
   const { data: blocks = [], isLoading } = useSpecificBlocks();
   const { data: sports = [] }    = useSpecificSports();
   const { data: qualities = [] } = usePhysicalQualities();
   const updateBlock = useUpdateSpecificBlock();
   const deleteBlock = useDeleteSpecificBlock();
+  const createSport   = useCreateSport();
+  const createQuality = useCreateQuality();
 
   const [sportFilter, setSportFilter]     = useState<string>("all");
   const [qualityFilter, setQualityFilter] = useState<string>("all");
@@ -107,12 +112,6 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
     setEditingId(null);
   }
 
-  const selStyle = (active: boolean): React.CSSProperties => ({
-    padding: "5px 10px", borderRadius: 8, border: `1px solid ${active ? ORANGE : C.brd}`,
-    background: active ? ORANGE + "15" : C.s2, color: active ? ORANGE : C.tx,
-    fontSize: 12, fontFamily: "inherit", cursor: "pointer", outline: "none", height: 30,
-  });
-
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(0,0,0,0.6)" }} />
@@ -139,14 +138,24 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
 
         {/* Filters */}
         <div style={{ padding: "10px 20px", borderBottom: `1px solid ${C.brd}`, display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
-          <select value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} style={selStyle(sportFilter !== "all")}>
-            <option value="all">Tous les sports</option>
-            {sports.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <select value={qualityFilter} onChange={(e) => setQualityFilter(e.target.value)} style={selStyle(qualityFilter !== "all")}>
-            <option value="all">Toutes les qualités</option>
-            {qualities.map((q) => <option key={q.id} value={q.id}>{q.name}</option>)}
-          </select>
+          <TaxonomySelect
+            placeholder="Tous les sports"
+            options={sports}
+            value={sportFilter === "all" ? null : sportFilter}
+            onChange={(id) => setSportFilter(id ?? "all")}
+            onCreate={async (n) => user?.id ? await createSport.mutateAsync({ name: n, coachId: user.id }) : undefined}
+            width={150}
+            accent={ORANGE}
+          />
+          <TaxonomySelect
+            placeholder="Toutes les qualités"
+            options={qualities}
+            value={qualityFilter === "all" ? null : qualityFilter}
+            onChange={(id) => setQualityFilter(id ?? "all")}
+            onCreate={async (n) => user?.id ? await createQuality.mutateAsync({ name: n, coachId: user.id }) : undefined}
+            width={160}
+            accent="#7B6FFF"
+          />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}

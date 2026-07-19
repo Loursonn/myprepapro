@@ -219,10 +219,13 @@ function BlockEditorModal({ initial, onClose }: {
 // ── Vue banque ───────────────────────────────────────────────────────────────
 
 export default function SpecificBlockBankView() {
+  const { user } = useAuth();
   const { data: blocks = [], isLoading } = useSpecificBlocks();
   const { data: sports = [] }    = useSpecificSports();
   const { data: qualities = [] } = usePhysicalQualities();
   const deleteBlock = useDeleteSpecificBlock();
+  const createSport   = useCreateSport();
+  const createQuality = useCreateQuality();
 
   const [sportFilter, setSportFilter]     = useState("all");
   const [qualityFilter, setQualityFilter] = useState("all");
@@ -248,12 +251,6 @@ export default function SpecificBlockBankView() {
   function openCreate() { setEditing(null); setEditorOpen(true); }
   function openEdit(b: SpecificBlockRow) { setEditing(b); setEditorOpen(true); }
 
-  const selectStyle: React.CSSProperties = {
-    padding: "5px 10px", borderRadius: 8, border: `1px solid ${C.brd}`,
-    background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit",
-    cursor: "pointer", outline: "none", height: 32,
-  };
-
   return (
     <div>
       {/* Filters row */}
@@ -261,14 +258,24 @@ export default function SpecificBlockBankView() {
         display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap",
         padding: "14px 0 16px", borderBottom: `1px solid ${C.brd}`, marginBottom: 20,
       }}>
-        <select value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} style={selectStyle}>
-          <option value="all">Tous les sports</option>
-          {sports.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <select value={qualityFilter} onChange={(e) => setQualityFilter(e.target.value)} style={selectStyle}>
-          <option value="all">Toutes les qualités</option>
-          {qualities.map((q) => <option key={q.id} value={q.id}>{q.name}</option>)}
-        </select>
+        <TaxonomySelect
+          placeholder="Tous les sports"
+          options={sports}
+          value={sportFilter === "all" ? null : sportFilter}
+          onChange={(id) => setSportFilter(id ?? "all")}
+          onCreate={async (n) => user?.id ? await createSport.mutateAsync({ name: n, coachId: user.id }) : undefined}
+          width={160}
+          accent={ORANGE}
+        />
+        <TaxonomySelect
+          placeholder="Toutes les qualités"
+          options={qualities}
+          value={qualityFilter === "all" ? null : qualityFilter}
+          onChange={(id) => setQualityFilter(id ?? "all")}
+          onCreate={async (n) => user?.id ? await createQuality.mutateAsync({ name: n, coachId: user.id }) : undefined}
+          width={170}
+          accent="#7B6FFF"
+        />
 
         <input
           value={search}

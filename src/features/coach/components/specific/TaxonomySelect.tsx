@@ -97,10 +97,11 @@ export default function TaxonomySelect({ placeholder, options, value, onChange, 
         onChange(v === NONE ? null : v);
       }}
     >
-      <SelectTrigger style={{ width, background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, fontSize: 12 }}>
+      <SelectTrigger style={{ width, background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, fontSize: 12, borderRadius: 8 }}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent>
+      {/* zIndex > modals (91/310) sinon le dropdown passe derrière les popups */}
+      <SelectContent style={{ zIndex: 400 }}>
         <SelectItem value={NONE}>
           <span style={{ color: C.tx3 }}>{placeholder}</span>
         </SelectItem>
