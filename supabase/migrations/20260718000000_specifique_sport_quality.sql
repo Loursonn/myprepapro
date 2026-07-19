@@ -1,4 +1,4 @@
--- ─────────────────────────────────────────────────────────────────────────────
+﻿-- ─────────────────────────────────────────────────────────────────────────────
 -- Migration : refonte Banque Spécifique — référentiels Sport / Qualité physique,
 -- format WOD | Classique, banque de blocs spécifiques (privée coach)
 -- 2026-07-18
@@ -33,11 +33,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_specific_sports_coach_slug
 ALTER TABLE public.specific_sports ENABLE ROW LEVEL SECURITY;
 
 -- SELECT : défauts globaux + ses customs
+DROP POLICY IF EXISTS "ss_select" ON public.specific_sports;
 CREATE POLICY "ss_select" ON public.specific_sports FOR SELECT
   TO authenticated
   USING (coach_id IS NULL OR coach_id = auth.uid());
 
 -- INSERT : coach crée uniquement ses customs
+DROP POLICY IF EXISTS "ss_insert" ON public.specific_sports;
 CREATE POLICY "ss_insert" ON public.specific_sports FOR INSERT
   TO authenticated
   WITH CHECK (
@@ -50,11 +52,13 @@ CREATE POLICY "ss_insert" ON public.specific_sports FOR INSERT
   );
 
 -- UPDATE / DELETE : uniquement ses customs
+DROP POLICY IF EXISTS "ss_update" ON public.specific_sports;
 CREATE POLICY "ss_update" ON public.specific_sports FOR UPDATE
   TO authenticated
   USING (coach_id = auth.uid())
   WITH CHECK (coach_id = auth.uid());
 
+DROP POLICY IF EXISTS "ss_delete" ON public.specific_sports;
 CREATE POLICY "ss_delete" ON public.specific_sports FOR DELETE
   TO authenticated
   USING (coach_id = auth.uid());
@@ -90,10 +94,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_physical_qualities_coach_slug
 
 ALTER TABLE public.physical_qualities ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "pq_select" ON public.physical_qualities;
 CREATE POLICY "pq_select" ON public.physical_qualities FOR SELECT
   TO authenticated
   USING (coach_id IS NULL OR coach_id = auth.uid());
 
+DROP POLICY IF EXISTS "pq_insert" ON public.physical_qualities;
 CREATE POLICY "pq_insert" ON public.physical_qualities FOR INSERT
   TO authenticated
   WITH CHECK (
@@ -105,11 +111,13 @@ CREATE POLICY "pq_insert" ON public.physical_qualities FOR INSERT
     )
   );
 
+DROP POLICY IF EXISTS "pq_update" ON public.physical_qualities;
 CREATE POLICY "pq_update" ON public.physical_qualities FOR UPDATE
   TO authenticated
   USING (coach_id = auth.uid())
   WITH CHECK (coach_id = auth.uid());
 
+DROP POLICY IF EXISTS "pq_delete" ON public.physical_qualities;
 CREATE POLICY "pq_delete" ON public.physical_qualities FOR DELETE
   TO authenticated
   USING (coach_id = auth.uid());
@@ -181,6 +189,7 @@ CREATE TABLE IF NOT EXISTS public.specific_blocks (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+DROP TRIGGER IF EXISTS trg_specific_blocks_updated_at ON public.specific_blocks;
 CREATE TRIGGER trg_specific_blocks_updated_at
   BEFORE UPDATE ON public.specific_blocks
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
@@ -193,10 +202,12 @@ CREATE INDEX IF NOT EXISTS idx_specific_blocks_sport_quality
 ALTER TABLE public.specific_blocks ENABLE ROW LEVEL SECURITY;
 
 -- Banque privée : le coach ne voit et ne modifie que ses blocs
+DROP POLICY IF EXISTS "sb_select" ON public.specific_blocks;
 CREATE POLICY "sb_select" ON public.specific_blocks FOR SELECT
   TO authenticated
   USING (coach_id = auth.uid());
 
+DROP POLICY IF EXISTS "sb_insert" ON public.specific_blocks;
 CREATE POLICY "sb_insert" ON public.specific_blocks FOR INSERT
   TO authenticated
   WITH CHECK (
@@ -208,11 +219,13 @@ CREATE POLICY "sb_insert" ON public.specific_blocks FOR INSERT
     )
   );
 
+DROP POLICY IF EXISTS "sb_update" ON public.specific_blocks;
 CREATE POLICY "sb_update" ON public.specific_blocks FOR UPDATE
   TO authenticated
   USING (coach_id = auth.uid())
   WITH CHECK (coach_id = auth.uid());
 
+DROP POLICY IF EXISTS "sb_delete" ON public.specific_blocks;
 CREATE POLICY "sb_delete" ON public.specific_blocks FOR DELETE
   TO authenticated
   USING (coach_id = auth.uid());
