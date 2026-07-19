@@ -19,7 +19,7 @@ export const EX_TYPE_LABEL: Record<string, string> = Object.fromEntries(
 );
 
 export const EX_TYPE_COLOR: Record<string, string> = {
-  muscu:         "#7B6FFF",
+  muscu:         "#EF4444",
   halterophilie: "#8b5cf6",
   plio:          "#F5A623",
   mobilite:      "#22C993",
