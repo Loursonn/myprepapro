@@ -28,12 +28,11 @@ import { formValuesToConfig } from "@/features/coach/components/library/MethodPr
 
 // ── Sub-tab types ─────────────────────────────────────────────────────────────
 
-type LibTab = "musculaire" | "energetique" | "methodes" | "specifique";
+type LibTab = "musculaire" | "energetique" | "specifique";
 
 const TABS: { key: LibTab; label: string; icon: string }[] = [
   { key: "musculaire",  label: "Musculaire",  icon: "🏋️" },
   { key: "energetique", label: "Énergétique", icon: "⚡" },
-  { key: "methodes",    label: "Méthodes",    icon: "⚙️" },
   { key: "specifique",  label: "Spécifique",  icon: "🎯" },
 ];
 
@@ -479,7 +478,7 @@ export default function LibraryPage() {
 
   const tabParam = searchParams.get("tab") as LibTab | null;
   const activeTab: LibTab = TABS.some((t) => t.key === tabParam) ? (tabParam as LibTab) : "musculaire";
-  const [muscuTab, setMuscuTab] = useState<"exercices" | "blocs">("exercices");
+  const [muscuTab, setMuscuTab] = useState<"exercices" | "methodes" | "blocs" | "seances">("exercices");
   const [specTab, setSpecTab]   = useState<"seances" | "blocs">("seances");
 
   function setTab(key: LibTab) {
@@ -524,12 +523,17 @@ export default function LibraryPage() {
       <div style={{ paddingTop: 20 }}>
         {activeTab === "musculaire" && (
           <>
-            {/* Sous-onglets Exercices / Blocs */}
+            {/* Sous-onglets Exercices / Méthodes / Blocs / Séances */}
             <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-              {[{ k: "exercices", l: "Exercices" }, { k: "blocs", l: "Blocs" }].map(t => (
+              {[
+                { k: "exercices", l: "Exercices" },
+                { k: "methodes",  l: "Méthodes" },
+                { k: "blocs",     l: "Blocs" },
+                { k: "seances",   l: "Séances" },
+              ].map(t => (
                 <button
                   key={t.k}
-                  onClick={() => setMuscuTab(t.k as "exercices" | "blocs")}
+                  onClick={() => setMuscuTab(t.k as typeof muscuTab)}
                   style={{
                     padding: "6px 14px", borderRadius: 8,
                     border: "1px solid " + (muscuTab === t.k ? C.ac : C.brdL),
@@ -541,11 +545,18 @@ export default function LibraryPage() {
               ))}
             </div>
             {muscuTab === "exercices" && <ExerciseBank coachId={user.id} onAddToExos={undefined} />}
-            {muscuTab === "blocs" && <BlocBankView />}
+            {muscuTab === "methodes"  && <MethodsTab coachId={user.id} />}
+            {muscuTab === "blocs"     && <BlocBankView />}
+            {muscuTab === "seances"   && (
+              <div style={{ textAlign: "center", padding: "60px 20px", color: C.tx3 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🏗️</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: C.tx2, marginBottom: 6 }}>Banque de séances musculaires</div>
+                <div style={{ fontSize: 13 }}>À venir — les séances complètes réutilisables arriveront ici.</div>
+              </div>
+            )}
           </>
         )}
         {activeTab === "energetique" && <EnergyTab />}
-        {activeTab === "methodes"    && <MethodsTab coachId={user.id} />}
         {activeTab === "specifique"  && (
           <>
             {/* Sous-onglets Séances / Blocs */}
