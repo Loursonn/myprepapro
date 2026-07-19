@@ -9,8 +9,7 @@ import { useSearchParams } from "react-router-dom";
 import { C } from "@/lib/theme";
 import ProfilSportifPage from "./ProfilSportifPage";
 import TestPage from "./TestPage";
-import { ProfilTab } from "@/features/coach/components/donnees/ProfilTab";
-import { StrategieTab } from "@/features/coach/components/donnees/StrategieTab";
+import { ProfilGeneralTab } from "@/features/coach/components/donnees/ProfilGeneralTab";
 
 type ProfilView = "sportif" | "general" | "testing";
 
@@ -45,14 +44,7 @@ export default function ProfilAthletePage() {
       </div>
 
       {view === "sportif" && <ProfilSportifPage />}
-      {view === "general" && (
-        <>
-          <ProfilTab />
-          <div style={{ marginTop: 28 }}>
-            <StrategieTab />
-          </div>
-        </>
-      )}
+      {view === "general" && <ProfilGeneralTab />}
       {view === "testing" && <TestPage embedded />}
     </div>
   );
