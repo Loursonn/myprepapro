@@ -1,17 +1,17 @@
 import { useSearchParams } from "react-router-dom";
-import { ProfilTab } from "@/features/coach/components/donnees/ProfilTab";
 import { StrategieTab } from "@/features/coach/components/donnees/StrategieTab";
 import { HistoriqueTab } from "@/features/coach/components/donnees/HistoriqueTab";
 
-type DonneesView = "profil" | "strategie" | "historique";
+type DonneesView = "strategie" | "historique";
 
 export default function DonneesPage() {
   const [searchParams] = useSearchParams();
-  const view = (searchParams.get("view") as DonneesView) ?? "profil";
+  const raw = searchParams.get("view");
+  // Legacy ?view=profil → le profil vit maintenant dans Profil athlète → Profil Général
+  const view: DonneesView = raw === "historique" ? "historique" : "strategie";
 
   return (
     <div style={{ padding: "16px 16px 40px" }}>
-      {view === "profil" && <ProfilTab />}
       {view === "strategie" && <StrategieTab />}
       {view === "historique" && <HistoriqueTab />}
     </div>

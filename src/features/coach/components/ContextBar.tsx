@@ -27,9 +27,8 @@ const TABS = [
   { key: "planning",        label: "Planning"        },
   { key: "programmation",   label: "Programmation"   },
   { key: "retours",         label: "Retours"         },
-  { key: "profil-sportif",  label: "Profil sportif"  },
+  { key: "profil-sportif",  label: "Profil athlète"  },
   { key: "donnees",         label: "Données"         },
-  { key: "tests",           label: "Tests"           },
   { key: "athlete-view",    label: "👁 Vue athlète"  },
 ] as const;
 
@@ -40,8 +39,12 @@ const SUB_TABS: Record<string, { key: string; label: string }[]> = {
     { key: "summary",      label: "Synthèse"      },
     { key: "competitions", label: "Compétitions"  },
   ],
+  "profil-sportif": [
+    { key: "sportif",  label: "Profil Sportif Actuel" },
+    { key: "general",  label: "Profil Général"        },
+    { key: "testing",  label: "Suivi Testing"         },
+  ],
   donnees: [
-    { key: "profil",     label: "Profil"     },
     { key: "strategie",  label: "Stratégie"  },
     { key: "historique", label: "Historique" },
   ],
