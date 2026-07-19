@@ -475,6 +475,16 @@ function PlanningBank({
 }) {
   const [tab, setTab]       = useState<BankTab>("workout");
   const [search, setSearch] = useState("");
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set());
+
+  function toggleCat(cat: string) {
+    setOpenCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
 
   const q = search.toLowerCase();
   const filteredMuscu      = sessions.filter((s) => s.name.toLowerCase().includes(q));
@@ -496,21 +506,22 @@ function PlanningBank({
   return (
     <div
       style={{
-        width: 210, flexShrink: 0,
+        width: 252, flexShrink: 0,
         background: C.s1,
         borderRadius: 14,
         border: "1px solid " + C.brd,
         display: "flex", flexDirection: "column",
         overflow: "hidden",
-        maxHeight: "100%",
+        alignSelf: "stretch",
+        maxHeight: 720,
       }}
     >
       {/* Header : 4 catégories distinctes */}
-      <div style={{ padding: "10px 10px 8px", borderBottom: "1px solid " + C.brd }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+      <div style={{ padding: "12px 12px 10px", borderBottom: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
           Programmer
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
           {BANK_TABS.map(({ key, label, Icon, color }) => {
             const active = tab === key;
             return (
@@ -518,16 +529,16 @@ function PlanningBank({
                 key={key}
                 onClick={() => setTab(key)}
                 style={{
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                  padding: "7px 0", borderRadius: 9,
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                  padding: "10px 0", borderRadius: 10,
                   border: "1px solid " + (active ? color + "70" : C.brd),
                   background: active ? color + "1A" : C.s2,
                   color: active ? color : C.tx3,
-                  fontSize: 9.5, fontWeight: active ? 700 : 500,
+                  fontSize: 10.5, fontWeight: active ? 700 : 500,
                   cursor: "pointer", fontFamily: "inherit", transition: "all 130ms",
                 }}
               >
-                <Icon size={13} />
+                <Icon size={15} />
                 {label}
               </button>
             );
@@ -538,9 +549,9 @@ function PlanningBank({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher…"
           style={{
-            width: "100%", padding: "5px 8px", borderRadius: 7,
+            width: "100%", padding: "6px 9px", borderRadius: 8,
             border: "1px solid " + C.brdL, background: C.s2,
-            color: C.tx, fontSize: 11, fontFamily: "inherit", outline: "none",
+            color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
             boxSizing: "border-box",
           }}
         />
@@ -606,25 +617,45 @@ function PlanningBank({
               L'athlète saisit mensurations &amp; photos
             </div>
 
-            {/* Tests groupés par catégorie */}
+            {/* Tests : catégories repliables (menu déroulant) */}
             {filteredTests.length === 0 ? empty("Aucun test dans la banque") : (
               <>
-                {testGroups.map(({ cat, tests }) => (
-                  <div key={cat} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <BankGroupTitle label={TEST_CATEGORY_LABEL[cat]} color={TEST_CATEGORY_COLOR[cat]} count={tests.length} />
-                    {tests.map((t) => (
-                      <DraggableSession key={t.id} session={{ id: t.id, name: t.name }} sessionType="test" isDragging={activeDragId === t.id} />
-                    ))}
-                  </div>
-                ))}
-                {uncategorized.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <BankGroupTitle label="Autres" color={C.tx3} count={uncategorized.length} />
-                    {uncategorized.map((t) => (
-                      <DraggableSession key={t.id} session={{ id: t.id, name: t.name }} sessionType="test" isDragging={activeDragId === t.id} />
-                    ))}
-                  </div>
-                )}
+                {[...testGroups.map((g) => ({ ...g, label: TEST_CATEGORY_LABEL[g.cat], color: TEST_CATEGORY_COLOR[g.cat] })),
+                  ...(uncategorized.length > 0 ? [{ cat: "__autres__", tests: uncategorized, label: "Autres", color: C.tx3 }] : []),
+                ].map(({ cat, tests, label, color }) => {
+                  const isOpen = openCats.has(cat) || !!search.trim();
+                  return (
+                    <div key={cat} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <button
+                        onClick={() => toggleCat(cat)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "7px 9px", borderRadius: 8,
+                          border: "1px solid " + (isOpen ? color + "50" : C.brd),
+                          background: isOpen ? color + "10" : C.s2,
+                          color, fontSize: 11, fontWeight: 700,
+                          cursor: "pointer", fontFamily: "inherit",
+                          textTransform: "uppercase", letterSpacing: "0.04em",
+                          transition: "all 130ms",
+                        }}
+                      >
+                        <ChevronRight
+                          size={12}
+                          style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 130ms", flexShrink: 0 }}
+                        />
+                        <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
+                        <span style={{ fontWeight: 500, opacity: 0.6, fontSize: 10 }}>{tests.length}</span>
+                      </button>
+                      {isOpen && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 6, marginBottom: 2 }}>
+                          {tests.map((t) => (
+                            <DraggableSession key={t.id} session={{ id: t.id, name: t.name }} sessionType="test" isDragging={activeDragId === t.id} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </>
             )}
           </>
@@ -932,12 +963,9 @@ export function CalendarMonthView({
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
-        {/* ── Calendar ── */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-
-          {/* Month navigation */}
+          {/* Month navigation — pleine largeur */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button
               onClick={() => setMonth((m) => subMonths(m, 1))}
@@ -1064,6 +1092,10 @@ export function CalendarMonthView({
             </div>
           )}
 
+          {/* ── Rangée : calendrier + banque (alignés en haut) ── */}
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+
           {/* Grid */}
           <div
             style={{
@@ -1154,15 +1186,14 @@ export function CalendarMonthView({
           )}
         </div>
 
-        {/* ── Bank sidebar (panneau unifié 4 catégories) ── */}
-        <div style={{ display: "flex", flexDirection: "column", flexShrink: 0, minHeight: 0 }}>
+          {/* ── Bank sidebar (panneau unifié 4 catégories, aligné au calendrier) ── */}
           <PlanningBank
             sessions={progSessions}
             energySessions={energySessions}
             testDefinitions={testDefinitions}
             activeDragId={activeDragId}
           />
-        </div>
+          </div>
       </div>
 
       {/* Drag overlay — ghost of the dragged item */}
