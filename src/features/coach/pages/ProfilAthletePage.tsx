@@ -9,8 +9,9 @@ import { useSearchParams } from "react-router-dom";
 import ProfilSportifPage from "./ProfilSportifPage";
 import TestPage from "./TestPage";
 import { ProfilTab } from "@/features/coach/components/donnees/ProfilTab";
+import { StrategieTab } from "@/features/coach/components/donnees/StrategieTab";
 
-type ProfilView = "sportif" | "general" | "testing";
+type ProfilView = "sportif" | "general" | "testing" | "strategie";
 
 export default function ProfilAthletePage() {
   const [searchParams] = useSearchParams();
@@ -20,6 +21,13 @@ export default function ProfilAthletePage() {
     return (
       <div style={{ padding: "16px 16px 40px" }}>
         <ProfilTab />
+      </div>
+    );
+  }
+  if (view === "strategie") {
+    return (
+      <div style={{ padding: "16px 16px 40px" }}>
+        <StrategieTab />
       </div>
     );
   }

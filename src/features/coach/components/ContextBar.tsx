@@ -23,14 +23,14 @@ import {
 
 // ── Navigation tabs ────────────────────────────────────────────────────────────
 
-const TABS = [
+const TABS: { key: string; label: string; pushRight?: boolean }[] = [
   { key: "planning",        label: "Planning"        },
   { key: "programmation",   label: "Programmation"   },
   { key: "retours",         label: "Retours"         },
   { key: "profil-sportif",  label: "Profil athlète"  },
-  { key: "donnees",         label: "Données"         },
   { key: "athlete-view",    label: "👁 Vue athlète"  },
-] as const;
+  { key: "donnees",         label: "Historique", pushRight: true },
+];
 
 const SUB_TABS: Record<string, { key: string; label: string }[]> = {
   planning: [
@@ -40,13 +40,10 @@ const SUB_TABS: Record<string, { key: string; label: string }[]> = {
     { key: "competitions", label: "Compétitions"  },
   ],
   "profil-sportif": [
-    { key: "sportif",  label: "Profil Sportif Actuel" },
-    { key: "general",  label: "Profil Général"        },
-    { key: "testing",  label: "Suivi Testing"         },
-  ],
-  donnees: [
-    { key: "strategie",  label: "Stratégie"  },
-    { key: "historique", label: "Historique" },
+    { key: "sportif",   label: "Profil Sportif Actuel" },
+    { key: "general",   label: "Profil Général"        },
+    { key: "testing",   label: "Suivi Testing"         },
+    { key: "strategie", label: "Stratégie"             },
   ],
   programmation: [],
 };
@@ -272,6 +269,7 @@ export default function ContextBar() {
               style={{
                 padding: "10px 14px",
                 border: "none",
+                marginLeft: tab.pushRight ? "auto" : undefined,
                 borderBottom: "2px solid " + (active ? C.coach : "transparent"),
                 background: "transparent",
                 color: active ? C.tx : C.tx3,
