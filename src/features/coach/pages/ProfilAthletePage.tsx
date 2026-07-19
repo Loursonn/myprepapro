@@ -11,23 +11,21 @@ import TestPage from "./TestPage";
 import { ProfilTab } from "@/features/coach/components/donnees/ProfilTab";
 import { StrategieTab } from "@/features/coach/components/donnees/StrategieTab";
 
-type ProfilView = "sportif" | "general" | "testing" | "strategie";
+type ProfilView = "sportif" | "general" | "testing";
 
 export default function ProfilAthletePage() {
   const [searchParams] = useSearchParams();
-  const view = (searchParams.get("view") as ProfilView) ?? "sportif";
+  const raw = searchParams.get("view");
+  // Legacy ?view=strategie → fusionné dans Profil Général
+  const view: ProfilView = raw === "general" || raw === "strategie" ? "general" : raw === "testing" ? "testing" : "sportif";
 
   if (view === "general") {
     return (
       <div style={{ padding: "16px 16px 40px" }}>
         <ProfilTab />
-      </div>
-    );
-  }
-  if (view === "strategie") {
-    return (
-      <div style={{ padding: "16px 16px 40px" }}>
-        <StrategieTab />
+        <div style={{ marginTop: 28 }}>
+          <StrategieTab />
+        </div>
       </div>
     );
   }
