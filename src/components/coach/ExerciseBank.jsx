@@ -209,8 +209,9 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
 }
 
 function ExerciseBank({coachId,onAddToExos}){
-  const{user}=useAuth();
+  const{user,profile}=useAuth();
   const myId=user?.id||coachId;
+  const canQuickType=ex=>profile?.is_admin===true||profile?.is_certified_coach===true||!ex.created_by||ex.created_by===myId;
   const PAGE=20;
   const[exList,setExList]=useState([]);const[loading,setLoading]=useState(true);
   const[search,setSearch]=useState('');const[page,setPage]=useState(0);const[total,setTotal]=useState(0);
@@ -218,6 +219,13 @@ function ExerciseBank({coachId,onAddToExos}){
   const[showMusclePanel,setShowMusclePanel]=useState(false);
   const[sel,setSel]=useState(null);const[showCreate,setShowCreate]=useState(false);
   const[showMerge,setShowMerge]=useState(false);const[confirmDel,setConfirmDel]=useState(null);
+  const[typeMenu,setTypeMenu]=useState(null);
+  const quickSetType=async(ex,t)=>{
+    setTypeMenu(null);
+    const{error}=await supabase.from('exercises').update({ex_type:t}).eq('id',ex.id);
+    if(error){alert('Erreur : '+error.message);return;}
+    setExList(prev=>prev.map(e=>e.id===ex.id?{...e,ex_type:t}:e));
+  };
   const TARGETS=['Pecs','Dos-GD','Dos-Trap','Dos-Rhom','Ep-Ant','Ep-Lat','Ep-Post','Quads','Ischios','Fessiers','Adducteurs','Triceps','Biceps','Core','Mollets'];
   const EQUIPS=['Barre','Haltères','Cable','Machine','Poids de corps','Élastique','Kettlebell','Smith'];
   const toggleMuscle=m=>{setFMuscles(prev=>prev.includes(m)?prev.filter(x=>x!==m):[...prev,m]);setPage(0);};
@@ -281,8 +289,8 @@ function ExerciseBank({coachId,onAddToExos}){
       <>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
           {exList.map(ex=>(
-            <div key={ex.id} onClick={()=>setSel(ex)} style={{background:C.s1,borderRadius:12,overflow:'hidden',border:'1px solid '+C.brd,cursor:'pointer'}}>
-              <div style={{width:'100%',height:90,background:C.s2,position:'relative',overflow:'hidden'}}>
+            <div key={ex.id} onClick={()=>{setTypeMenu(null);setSel(ex);}} style={{background:C.s1,borderRadius:12,border:'1px solid '+C.brd,cursor:'pointer',position:'relative'}}>
+              <div style={{width:'100%',height:90,background:C.s2,position:'relative',overflow:'hidden',borderRadius:'12px 12px 0 0'}}>
                 {ex.youtube_id?<img src={`https://img.youtube.com/vi/${ex.youtube_id}/mqdefault.jpg`} style={{width:'100%',height:'100%',objectFit:'cover'}} alt={ex.name}/>:ex.image_url?<img src={ex.image_url} style={{width:'100%',height:'100%',objectFit:'cover'}} alt={ex.name}/>:<div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:C.tx3,fontSize:28}}>💪</div>}
                 {ex.youtube_id&&<div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{width:30,height:30,borderRadius:'50%',background:'rgba(0,0,0,0.65)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff'}}>▶</div></div>}
                 <div style={{position:'absolute',top:4,left:4,padding:'2px 6px',borderRadius:5,background:'rgba(0,0,0,0.72)',fontSize:9,color:ex.is_verified?C.g:C.o,fontWeight:700}}>{ex.is_verified?'✓ Off.':'Comm.'}</div>
@@ -290,11 +298,28 @@ function ExerciseBank({coachId,onAddToExos}){
               <div style={{padding:'8px 10px'}}>
                 <div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:2,lineHeight:1.3,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{ex.name}</div>
                 {ex.youtube_id&&<a href={`https://youtube.com/watch?v=${ex.youtube_id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:'#E5484D',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:3,marginBottom:3}}>▶ Voir la vidéo</a>}
-                <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                <div style={{display:'flex',gap:4,flexWrap:'wrap',paddingRight:70,minHeight:18}}>
                   {ex.target&&<span style={{fontSize:9,padding:'2px 6px',borderRadius:4,background:C.acS,color:C.ac,fontWeight:600}}>{ex.target}</span>}
                   {ex.equipment&&<span style={{fontSize:9,padding:'2px 6px',borderRadius:4,background:C.s2,color:C.tx3}}>{ex.equipment}</span>}
                 </div>
               </div>
+              {/* Ruban type — bas droite, clic = changement rapide */}
+              <span
+                onClick={e=>{e.stopPropagation();if(canQuickType(ex))setTypeMenu(typeMenu===ex.id?null:ex.id);}}
+                title={canQuickType(ex)?'Cliquer pour changer le type':exTypeLabel(ex.ex_type)}
+                style={{position:'absolute',right:0,bottom:8,padding:'3px 8px 3px 10px',borderRadius:'8px 0 0 8px',background:ex.ex_type?exTypeColor(ex.ex_type):C.s2,color:ex.ex_type?'#fff':C.tx3,fontSize:9,fontWeight:800,letterSpacing:'0.02em',cursor:canQuickType(ex)?'pointer':'default',boxShadow:'0 1px 4px rgba(0,0,0,0.35)',whiteSpace:'nowrap'}}
+              >{ex.ex_type?exTypeLabel(ex.ex_type):'Type ?'}</span>
+              {typeMenu===ex.id&&(
+                <div onClick={e=>e.stopPropagation()} style={{position:'absolute',right:6,bottom:30,zIndex:60,background:C.s1,border:'1px solid '+C.brdL,borderRadius:10,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',minWidth:150}}>
+                  {EX_TYPES.map(t=>{const on=ex.ex_type===t.value;return(
+                    <button key={t.value} onClick={()=>quickSetType(ex,t.value)} style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'8px 12px',border:'none',background:on?C.s2:'transparent',color:on?exTypeColor(t.value):C.tx,fontSize:12,fontWeight:on?700:400,cursor:'pointer',fontFamily:'inherit',textAlign:'left'}}
+                      onMouseEnter={e=>(e.currentTarget.style.background=C.s2)} onMouseLeave={e=>(e.currentTarget.style.background=on?C.s2:'transparent')}>
+                      <span style={{width:8,height:8,borderRadius:'50%',background:exTypeColor(t.value),flexShrink:0}}/>
+                      {t.label}
+                    </button>
+                  );})}
+                </div>
+              )}
             </div>
           ))}
         </div>
