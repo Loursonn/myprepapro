@@ -228,7 +228,7 @@ export function ProfilGeneralTab() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 860 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── 1. Identité ── */}
       <Section icon={User} title="Identité" subtitle="Informations personnelles et antécédents" color={COL.identity}>
