@@ -221,8 +221,8 @@ export function ProfilGeneralTab() {
   const SC: Record<string, string> = { maintenance: C.b, seche: C.r, prise_de_masse: C.g };
   const SL: Record<string, string> = { maintenance: "Maintenance", seche: "Sèche", prise_de_masse: "Prise de masse" };
 
-  const editBtn = (label: string) => onEditProfile && (
-    <button onClick={onEditProfile} style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid " + C.coach + "50", background: C.coachS, color: C.coach, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+  const editBtn = (label: string, tab: "profil" | "nutrition") => onEditProfile && (
+    <button onClick={() => onEditProfile(tab)} style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid " + C.coach + "50", background: C.coachS, color: C.coach, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
       {label}
     </button>
   );
@@ -240,7 +240,7 @@ export function ProfilGeneralTab() {
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>{[ap.first_name, ap.last_name].filter(Boolean).join(" ") || ap.full_name}</div>
                 <div style={{ fontSize: 11, color: C.tx3 }}>{ap.gender === "male" ? "Homme" : ap.gender === "female" ? "Femme" : "Genre non renseigné"}</div>
               </div>
-              {editBtn("✎ Modifier")}
+              {editBtn("✎ Modifier l'identité", "profil")}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Tile label="Âge" value={ap.age ? ap.age + " ans" : null} color={COL.identity} />
@@ -250,7 +250,7 @@ export function ProfilGeneralTab() {
         ) : (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontSize: 13, color: C.tx3 }}>Profil non renseigné</div>
-            {editBtn("✎ Créer le profil")}
+            {editBtn("✎ Créer le profil", "profil")}
           </div>
         )}
 
@@ -285,7 +285,7 @@ export function ProfilGeneralTab() {
                 <span style={{ fontSize: 12, fontWeight: 800, color: sc, background: sc + "1A", padding: "3px 10px", borderRadius: 999 }}>{sl}</span>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   {ns.target_weight && <span style={{ fontSize: 12, color: C.tx3 }}>Cible : <span style={{ color: C.tx, fontWeight: 700 }}>{ns.target_weight} kg</span></span>}
-                  {editBtn("Modifier")}
+                  {editBtn("Modifier", "nutrition")}
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
@@ -323,7 +323,7 @@ export function ProfilGeneralTab() {
         })() : (
           <div style={{ borderTop: `1px solid ${C.brd}`, paddingTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontSize: 12, color: C.tx3 }}>Aucune stratégie alimentaire définie</div>
-            {editBtn("Définir")}
+            {editBtn("Définir", "nutrition")}
           </div>
         )}
       </Section>

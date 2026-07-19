@@ -54,14 +54,18 @@ interface Props {
   athlete: Profile;
   onClose: () => void;
   inline?: boolean;
+  /** Onglet ouvert à l'affichage */
+  initialTab?: "profil" | "nutrition";
+  /** Masque le switcher d'onglets : le formulaire ne montre que initialTab */
+  lockTab?: boolean;
 }
 
-export default function AthleteProfileForm({ athlete, onClose, inline = false }: Props) {
+export default function AthleteProfileForm({ athlete, onClose, inline = false, initialTab = "profil", lockTab = false }: Props) {
   const { updateAthleteProfile, user } = useAuth();
   const isOwnProfile = user?.id === athlete.id;
 
   // ── Sub-onglet ─────────────────────────────────────────────────────────────
-  const [dataTab, setDataTab] = useState<"profil" | "nutrition">("profil");
+  const [dataTab, setDataTab] = useState<"profil" | "nutrition">(initialTab);
 
   // ── Identité + MB ─────────────────────────────────────────────────────────
   const [firstName, setFirstName] = useState(athlete.first_name ?? "");
@@ -299,8 +303,8 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
         base_metabolism: metaManual ? parseInt(metaManual) : null,
       });
       toast.success("Profil enregistré !");
-    } catch (e: any) {
-      setErrorProfile(e.message || "Erreur lors de la sauvegarde");
+    } catch (e) {
+      setErrorProfile((e as Error).message || "Erreur lors de la sauvegarde");
     } finally {
       setSavingProfile(false);
     }
@@ -338,8 +342,8 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
         macros_proteines_pct: nutProteinesPct ? parseFloat(nutProteinesPct) : null,
       });
       toast.success("Plan nutritionnel enregistré !");
-    } catch (e: any) {
-      setErrorNut(e.message || "Erreur lors de la sauvegarde");
+    } catch (e) {
+      setErrorNut((e as Error).message || "Erreur lors de la sauvegarde");
     } finally {
       setSavingNut(false);
     }
@@ -369,20 +373,26 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false }:
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>{isOwnProfile ? "Mon profil" : "Profil de l'athlète"}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>
+            {lockTab
+              ? (dataTab === "profil" ? "✎ Modifier l'identité" : "🥗 Plan nutritionnel")
+              : (isOwnProfile ? "Mon profil" : "Profil de l'athlète")}
+          </div>
           <div style={{ fontSize: 12, color: C.tx3, marginTop: 2 }}>{athlete.full_name}</div>
         </div>
         <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 18, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
       </div>
 
-      {/* Onglets Profil / Plan nutri */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, padding: 4, background: C.s2, borderRadius: 10 }}>
-        {([["profil", "👤 Profil"], ["nutrition", "🥗 Plan nutritionnel"]] as ["profil" | "nutrition", string][]).map(([k, l]) => (
-          <button key={k} onClick={() => setDataTab(k)} style={{ flex: 1, padding: "8px 0", borderRadius: 7, border: "none", background: dataTab === k ? C.coach : "transparent", color: dataTab === k ? "#fff" : C.tx3, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
-            {l}
-          </button>
-        ))}
-      </div>
+      {/* Onglets Profil / Plan nutri (masqués en mode verrouillé) */}
+      {!lockTab && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 20, padding: 4, background: C.s2, borderRadius: 10 }}>
+          {([["profil", "👤 Profil"], ["nutrition", "🥗 Plan nutritionnel"]] as ["profil" | "nutrition", string][]).map(([k, l]) => (
+            <button key={k} onClick={() => setDataTab(k)} style={{ flex: 1, padding: "8px 0", borderRadius: 7, border: "none", background: dataTab === k ? C.coach : "transparent", color: dataTab === k ? "#fff" : C.tx3, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ═══════════════════════════════════ TAB PROFIL ═══════════════════════════════════ */}
       {dataTab === "profil" && (<>
