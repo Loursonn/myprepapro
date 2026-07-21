@@ -380,3 +380,16 @@ Points d'attention :
 | Tous les utilisateurs voient tous les retours | 🟡 MODÉRÉ | retours |
 | Backfill workout status impossible sans table dédiée | 🟡 MODÉRÉ | — |
 | Données JSONB non structurées → migration future | 🟡 MODÉRÉ | app_data |
+
+---
+
+## 7. Ajouts 2026-07-18 — Banque Spécifique
+
+| Table | Système | Rôle |
+|---|---|---|
+| `specific_sports` | relationnel | référentiel sports (globaux + customs coach) |
+| `physical_qualities` | relationnel | référentiel qualités physiques (globaux + customs coach) |
+| `specific_blocks` | relationnel | banque de blocs spécifiques, **privée par coach** |
+| `energy_sessions.sport_id/quality_id/format/classique_structure` | relationnel | tri Sport→Qualité + format WOD/Classique des séances spécifiques |
+
+Rappel : les séances spécifiques (WOD) sont **relationnelles** (`energy_sessions`, `session_kind='specifique'`) — aucun legacy `app_data` côté spécifique. La banque de blocs **musculaires** reste en JSONB `app_data` (`asp:bloc-bank`).

@@ -163,6 +163,13 @@ export interface EnergySessionRow {
   session_kind: SessionKind;
   custom_kind?: string | null;
   modality?: string | null;
+  /** Spécifique : référentiels Sport / Qualité physique */
+  sport_id?: string | null;
+  quality_id?: string | null;
+  /** 'wod' = builder intervalles ; 'classique' = builder par blocs (spécifique only) */
+  format?: 'wod' | 'classique';
+  /** Structure du format classique (blocs mix Classique/WOD) — voir @/types/specific */
+  classique_structure?: { blocks: import('./specific').SessionBlock[] } | null;
   structure_type: StructureType;
   /** Tableau sérialisé EnergyStep[] */
   intervals: EnergyStep[];

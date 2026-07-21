@@ -14,7 +14,7 @@ import AthleteProfileForm from "@/components/coach/AthleteProfileForm";
 export default function CoachAthleteArea() {
   const { athleteId } = useParams<{ athleteId: string }>();
   const { user, profile, athletes } = useAuth();
-  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editProfileTab, setEditProfileTab] = useState<"profil" | "nutrition" | null>(null);
 
   if (!athleteId || !user) return null;
 
@@ -30,17 +30,19 @@ export default function CoachAthleteArea() {
         viewOnly={!isOwnView}
         athleteProfile={selectedAthlete}
         userName={profile?.full_name}
-        onEditProfile={() => setShowEditProfile(true)}
+        onEditProfile={(tab) => setEditProfileTab(tab ?? "profil")}
       >
         <ContextBar />
         <div style={{ flex: 1 }}>
           <Outlet />
         </div>
       </AthleteProvider>
-      {showEditProfile && selectedAthlete && (
+      {editProfileTab && selectedAthlete && (
         <AthleteProfileForm
           athlete={selectedAthlete}
-          onClose={() => setShowEditProfile(false)}
+          initialTab={editProfileTab}
+          lockTab
+          onClose={() => setEditProfileTab(null)}
         />
       )}
     </SelectedAthleteProvider>

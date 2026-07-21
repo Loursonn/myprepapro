@@ -291,3 +291,24 @@ Coche [x] au fur et à mesure. Ne coche QUE ce qui est 100% terminé et testé.
 ---
 
 **Dernière mise à jour :** 2026-05-10 — PROMPT 8 terminé (§6.c inline creation + TEST MANUEL restants)
+
+## 🎯 PROMPT 9 - Refonte Banque Spécifique (Sport → Qualité, WOD/Classique, blocs)
+
+- [x] Audit préalable restitué et validé (Option A : extension `energy_sessions`, blocs privés)
+- [x] Migration `20260718000000_specifique_sport_quality.sql` (référentiels seedés + colonnes + backfill + `specific_blocks` + RLS)
+- [ ] ⚠️ Migration **à déployer** (`npx supabase login` + `npx supabase db push`) — pas de token CLI dispo
+- [x] Types `src/types/specific.ts` (+ extension `EnergySessionRow`)
+- [x] `QK.specificSports` / `QK.physicalQualities` / `QK.specificBlocks`
+- [x] Hooks `useSpecificTaxonomy` (sports/qualités + création custom) et `useSpecificBlocks` (CRUD optimiste)
+- [x] Catalogue `SpecificCatalog` : rail sports + compteurs, groupes par qualité, puces, filtres Toutes/Mes/Vérifiées, fix copies athlète exclues
+- [x] `SpecificSessionCard` : badges Sport/Qualité/Format/Officiel, actions Attribuer/Modifier/Dupliquer/Supprimer (confirmation + toasts)
+- [x] Builder : sélecteurs Sport/Qualité (ajout custom inline), toggle WOD | Classique
+- [x] Builder Classique : blocs + exercices/consignes (prescription libre), dnd-kit, aperçu dédié
+- [x] Banque de blocs : drawer picker (filtres Sport/Qualité, multi-sélection, insertion), enregistrement d'un bloc depuis le builder, renommage/suppression
+- [x] Builder WOD inchangé (IntervalBuilder/SessionPreview/SchemaEditor réutilisés tels quels)
+- [x] `npm run build` passe · `npx eslint` 0 erreur sur les fichiers modifiés
+- [ ] ✅ **TEST MANUEL** : après déploiement migration — création WOD + Classique, tri, attribution, banque de blocs
+- [ ] Visuel athlète pour le format Classique (décidé : plus tard)
+
+**Dernière mise à jour :** 2026-07-18 — PROMPT 9 code terminé (migration à déployer + TEST MANUEL restants)
+- [x] Évolution : plus de toggle global WOD/Classique — nouvelle séance spécifique = par blocs, chaque bloc typé Classique ou WOD (mix possible, pastille Mixte), legacy WOD pleine page éditable + bouton « Convertir en blocs »

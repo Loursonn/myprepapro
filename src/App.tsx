@@ -10,6 +10,7 @@ import { AnimatePresence, motion, type Variants } from "framer-motion";
 
 // Pages publiques (chargées immédiatement — nécessaires au démarrage)
 import Login from "./pages/Login.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 import InviteAccept from "./pages/InviteAccept.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -43,10 +44,9 @@ const PlanningPage      = lazy(() => import("./features/coach/pages/PlanningPage
 const ProgrammationPage = lazy(() => import("./features/coach/pages/ProgrammationPage.tsx"));
 const DonneesPage       = lazy(() => import("./features/coach/pages/DonneesPage.tsx"));
 const RetoursPage       = lazy(() => import("./features/coach/pages/RetoursPage.tsx"));
-const CoachTestPage     = lazy(() => import("./features/coach/pages/TestPage.tsx"));
 const AthleteViewPage           = lazy(() => import("./features/coach/pages/AthleteViewPage.tsx"));
 const EnergySessionEditorPage   = lazy(() => import("./features/coach/pages/EnergySessionEditorPage.tsx"));
-const ProfilSportifPage         = lazy(() => import("./features/coach/pages/ProfilSportifPage.tsx"));
+const ProfilAthletePage         = lazy(() => import("./features/coach/pages/ProfilAthletePage.tsx"));
 const EnergyLibraryPage         = lazy(() => import("./features/coach/pages/EnergyLibraryPage.tsx"));
 
 const queryClient = new QueryClient();
@@ -85,6 +85,7 @@ function AnimatedRoutes() {
         <Routes location={location}>
           {/* Pages publiques */}
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/invite/:token" element={<InviteAccept />} />
 
           {/* Redirection selon le rôle */}
@@ -125,10 +126,11 @@ function AnimatedRoutes() {
               <Route index element={<Navigate to="planning" replace />} />
               <Route path="planning"       element={<PlanningPage />} />
               <Route path="programmation"  element={<ProgrammationPage />} />
-              <Route path="profil-sportif" element={<ProfilSportifPage />} />
+              <Route path="profil-sportif" element={<ProfilAthletePage />} />
               <Route path="donnees"       element={<DonneesPage />} />
               <Route path="retours"       element={<RetoursPage />} />
-              <Route path="tests"         element={<CoachTestPage />} />
+              {/* Legacy : Tests vit maintenant dans Profil athlète → Suivi Testing */}
+              <Route path="tests"         element={<Navigate to="../profil-sportif?view=testing" replace />} />
               <Route path="athlete-view"  element={<AthleteViewPage />} />
             </Route>
 

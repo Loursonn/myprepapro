@@ -3,6 +3,7 @@ import { C } from "@/lib/theme"
 import { supabase } from "@/integrations/supabase/client"
 import { toast } from "sonner"
 import { Search, Plus } from "lucide-react"
+import { EX_TYPES, exTypeLabel, exTypeColor } from "@/lib/exerciseTypes"
 
 const VIOLET = "#7B6FFF"
 
@@ -10,6 +11,10 @@ interface ExerciceSearchProps {
   value: string
   onSelect: (exercise: { id: string; name: string; ex_type?: string; youtube_id?: string }) => void
   onClose: () => void
+  /** Si fourni, propose "Consigne libre" dans le dropdown (texte sans lien banque) */
+  onFreeText?: (text: string) => void
+  /** Affiche des puces de filtre par type d'exercice */
+  showTypeFilter?: boolean
 }
 
 interface ExerciseRow {
@@ -19,21 +24,11 @@ interface ExerciseRow {
   youtube_id?: string | null
 }
 
-const TYPE_COLOR: Record<string, string> = {
-  muscu: VIOLET,
-  halterophilie: "#8b5cf6",
-  plio: "#F5A623",
-  mobilite: C.g,
-}
-
-function typeColor(ex_type: string | null | undefined): string {
-  return TYPE_COLOR[ex_type ?? ""] ?? C.tx3
-}
-
-export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps) {
+export function ExerciceSearch({ value, onSelect, onClose, onFreeText, showTypeFilter }: ExerciceSearchProps) {
   const [search, setSearch] = useState(value)
   const [results, setResults] = useState<ExerciseRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [typeFilter, setTypeFilter] = useState<string>("")
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -43,22 +38,25 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
 
   useEffect(() => {
     clearTimeout(timerRef.current)
-    if (!search.trim()) {
+    // Avec un type sélectionné, on liste même sans texte de recherche
+    if (!search.trim() && !typeFilter) {
       setResults([])
       return
     }
     timerRef.current = setTimeout(async () => {
       setLoading(true)
-      const { data } = await supabase
+      let q = supabase
         .from('exercises')
         .select('id, name, ex_type, youtube_id')
-        .ilike('name', `%${search.trim()}%`)
         .limit(10)
+      if (search.trim()) q = q.ilike('name', `%${search.trim()}%`)
+      if (typeFilter) q = q.eq('ex_type', typeFilter)
+      const { data } = await q.order('name')
       setResults((data ?? []) as ExerciseRow[])
       setLoading(false)
     }, 300)
     return () => clearTimeout(timerRef.current)
-  }, [search])
+  }, [search, typeFilter])
 
   async function handleCreate() {
     const name = search.trim()
@@ -87,7 +85,10 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
           ref={inputRef}
           value={search}
           onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Escape') onClose() }}
+          onKeyDown={e => {
+            if (e.key === 'Escape') onClose()
+            if (e.key === 'Enter' && onFreeText && search.trim()) onFreeText(search.trim())
+          }}
           placeholder="Rechercher un exercice…"
           style={{
             flex: 1, background: "transparent", border: "none",
@@ -99,7 +100,32 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
         )}
       </div>
 
-      {(results.length > 0 || showCreate) && (
+      {showTypeFilter && (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+          {EX_TYPES.map((t) => {
+            const on = typeFilter === t.value
+            const color = exTypeColor(t.value)
+            return (
+              <button
+                key={t.value}
+                onClick={() => setTypeFilter(on ? "" : t.value)}
+                style={{
+                  padding: "3px 9px", borderRadius: 20,
+                  border: "1px solid " + (on ? color : C.brdL),
+                  background: on ? color + "18" : "transparent",
+                  color: on ? color : C.tx3,
+                  fontSize: 10, fontWeight: on ? 700 : 500,
+                  cursor: "pointer", fontFamily: "inherit", transition: "all 120ms",
+                }}
+              >
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {(results.length > 0 || showCreate || (onFreeText && search.trim())) && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
           background: C.s1, border: "1px solid " + C.brdL, borderRadius: 10,
@@ -120,13 +146,29 @@ export function ExerciceSearch({ value, onSelect, onClose }: ExerciceSearchProps
               {ex.ex_type && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                  background: typeColor(ex.ex_type) + "20", color: typeColor(ex.ex_type),
+                  background: exTypeColor(ex.ex_type) + "20", color: exTypeColor(ex.ex_type),
                   flexShrink: 0,
-                }}>{ex.ex_type}</span>
+                }}>{exTypeLabel(ex.ex_type)}</span>
               )}
               <span style={{ fontSize: 13, color: C.tx }}>{ex.name}</span>
             </button>
           ))}
+          {onFreeText && search.trim() && (
+            <button
+              onClick={() => onFreeText(search.trim())}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 12px", border: "none", borderBottom: "1px solid " + C.brd,
+                background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = C.s2)}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              <span style={{ fontSize: 13, color: C.tx3 }}>
+                Consigne libre : <span style={{ color: C.tx, fontWeight: 600 }}>"{search.trim()}"</span>
+              </span>
+            </button>
+          )}
           {showCreate && (
             <button
               onClick={handleCreate}

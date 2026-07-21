@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { C } from "@/lib/theme";
 import { MTREE, getMC, mL, ALL_MIDS, normPrimary } from "@/lib/muscles";
 import { normalizeExName, normForMatch, fuzzyExMatch } from "@/lib/exercises";
+import { EX_TYPES, exTypeLabel, exTypeColor } from "@/lib/exerciseTypes";
 const parseYtId=v=>{const m=(v||'').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);return m?m[1]:v.trim();};
 function ExerciseCreateModal({coachId,onSave,onClose}){
   const{profile}=useAuth();
@@ -38,7 +39,7 @@ function ExerciseCreateModal({coachId,onSave,onClose}){
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
             <div><label style={lS}>Difficulté</label><select value={form.difficulty} onChange={e=>upd('difficulty',e.target.value)} style={fS}>{['Débutant','Intermédiaire','Avancé'].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
-            <div><label style={lS}>Type</label><select value={form.ex_type} onChange={e=>upd('ex_type',e.target.value)} style={fS}><option value="muscu">Musculation</option><option value="plio">Pliométrique</option><option value="halterophilie">Haltérophilie</option><option value="mobilite">Mobilité</option></select></div>
+            <div><label style={lS}>Type</label><select value={form.ex_type} onChange={e=>upd('ex_type',e.target.value)} style={fS}>{EX_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
           </div>
           <div style={{display:'flex',gap:16}}>
             <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',fontSize:12,color:C.tx2}}><input type="checkbox" checked={form.is_compound} onChange={e=>upd('is_compound',e.target.checked)} style={{accentColor:C.ac}}/>Polyarticulaire</label>
@@ -78,10 +79,67 @@ function MergeModal({source,onMerge,onClose}){
   </div>);
 }
 
+function ExerciseCharacteristicsPanel({ex,onSaved}){
+  const TARGETS=['Pecs','Dos-GD','Dos-Trap','Dos-Rhom','Ep-Ant','Ep-Lat','Ep-Post','Quads','Ischios','Fessiers','Adducteurs','Triceps','Biceps','Core','Mollets'];
+  const EQUIPS=['Barre','Haltères','Cable','Machine','Poids de corps','Élastique','Kettlebell','Smith'];
+  const[form,setForm]=useState({
+    ex_type:ex.ex_type||'muscu',
+    target:ex.target||'',
+    secondary:ex.secondary||[],
+    equipment:ex.equipment||'',
+    difficulty:ex.difficulty||'',
+    is_compound:ex.is_compound??false,
+    is_unilateral:ex.is_unilateral??false,
+  });
+  const[saving,setSaving]=useState(false);const[msg,setMsg]=useState('');
+  const upd=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const toggleSec=m=>upd('secondary',form.secondary.includes(m)?form.secondary.filter(x=>x!==m):[...form.secondary,m]);
+  const fS={padding:'8px 10px',borderRadius:8,border:'1px solid '+C.brdL,background:C.s2,color:C.tx,fontSize:12,fontFamily:'inherit',width:'100%',boxSizing:'border-box',outline:'none'};
+  const lS={fontSize:10,fontWeight:600,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:4,display:'block'};
+  const save=async()=>{
+    setSaving(true);setMsg('');
+    const{error}=await supabase.from('exercises').update({
+      ex_type:form.ex_type||null,
+      target:form.target||null,
+      secondary:form.secondary,
+      equipment:form.equipment||null,
+      difficulty:form.difficulty||null,
+      is_compound:form.is_compound,
+      is_unilateral:form.is_unilateral,
+    }).eq('id',ex.id);
+    setSaving(false);
+    if(error){setMsg('Erreur : '+error.message);}
+    else{setMsg('Caractéristiques enregistrées');onSaved();setTimeout(()=>setMsg(''),2500);}
+  };
+  return(<div style={{background:C.s2,borderRadius:12,padding:'12px 14px',marginBottom:12,border:'1px solid '+C.brdL}}>
+    <div style={{fontSize:10,fontWeight:700,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:10}}>Caractéristiques de tri</div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+      <div><label style={lS}>Type</label><select value={form.ex_type} onChange={e=>upd('ex_type',e.target.value)} style={fS}>{EX_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+      <div><label style={lS}>Muscle principal</label><select value={form.target} onChange={e=>upd('target',e.target.value)} style={fS}><option value=''>—</option>{TARGETS.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+      <div><label style={lS}>Équipement</label><select value={form.equipment} onChange={e=>upd('equipment',e.target.value)} style={fS}><option value=''>—</option>{EQUIPS.map(e=><option key={e} value={e}>{e}</option>)}</select></div>
+      <div><label style={lS}>Difficulté</label><select value={form.difficulty} onChange={e=>upd('difficulty',e.target.value)} style={fS}><option value=''>—</option>{['Débutant','Intermédiaire','Avancé'].map(d=><option key={d} value={d}>{d}</option>)}</select></div>
+    </div>
+    <div style={{marginBottom:10}}>
+      <label style={lS}>Muscles secondaires</label>
+      <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+        {TARGETS.map(m=>{const on=form.secondary.includes(m);return(<button key={m} onClick={()=>toggleSec(m)} style={{padding:'3px 9px',borderRadius:20,border:'1px solid '+(on?C.ac:C.brdL),background:on?C.ac:'transparent',color:on?'#fff':C.tx2,fontSize:10,fontWeight:on?700:400,cursor:'pointer',fontFamily:'inherit'}}>{m}</button>);})}
+      </div>
+    </div>
+    <div style={{display:'flex',gap:16,marginBottom:12}}>
+      <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',fontSize:12,color:C.tx2}}><input type="checkbox" checked={form.is_compound} onChange={e=>upd('is_compound',e.target.checked)} style={{accentColor:C.ac}}/>Polyarticulaire</label>
+      <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',fontSize:12,color:C.tx2}}><input type="checkbox" checked={form.is_unilateral} onChange={e=>upd('is_unilateral',e.target.checked)} style={{accentColor:C.ac}}/>Unilatéral</label>
+    </div>
+    {msg&&<div style={{fontSize:11,fontWeight:600,color:msg.startsWith('Erreur')?C.r:C.g,marginBottom:8}}>{msg}</div>}
+    <button onClick={save} disabled={saving} style={{width:'100%',padding:'9px 0',borderRadius:10,border:'none',background:C.ac,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:saving?0.7:1}}>{saving?'Enregistrement…':'Enregistrer les caractéristiques'}</button>
+  </div>);
+}
+
 function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onRefresh}){
   const{profile}=useAuth();
   const isAdmin=profile?.is_admin===true;
+  const isCertified=profile?.is_certified_coach===true||isAdmin;
   const isOwner=!ex.created_by||ex.created_by===coachId;
+  const[showEdit,setShowEdit]=useState(false);
   const[promoting,setPromoting]=useState(false);
   const promote=async()=>{setPromoting(true);await supabase.from('exercises').update({is_verified:true}).eq('id',ex.id);setPromoting(false);onRefresh();onClose();};
   const[localYtId,setLocalYtId]=useState(ex.youtube_id||'');
@@ -119,10 +177,13 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
             {(ex.secondary||[]).map(m=><span key={m} style={{fontSize:11,padding:'3px 10px',borderRadius:6,background:C.s2,color:C.tx3}}>{m}</span>)}
           </div>
           <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
+            {ex.ex_type&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:5,background:exTypeColor(ex.ex_type)+'20',color:exTypeColor(ex.ex_type),fontWeight:700}}>{exTypeLabel(ex.ex_type)}</span>}
             {ex.equipment&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:5,background:C.s2,color:C.tx2}}>{ex.equipment}</span>}
             {ex.is_compound!=null&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:5,background:C.s2,color:C.tx2}}>{ex.is_compound?'Polyarticulaire':'Monoarticulaire'}</span>}
             {ex.is_unilateral&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:5,background:C.s2,color:C.tx2}}>Unilatéral</span>}
           </div>
+          {isCertified&&<button onClick={()=>setShowEdit(v=>!v)} style={{width:'100%',padding:'8px 0',borderRadius:10,border:'1px solid '+C.brdL,background:showEdit?C.s2:'transparent',color:C.tx2,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',marginBottom:10}}>{showEdit?'Fermer l\'édition':'✎ Modifier les caractéristiques'}</button>}
+          {isCertified&&showEdit&&<ExerciseCharacteristicsPanel ex={ex} onSaved={onRefresh}/>}
           {ex.instructions&&<div style={{marginBottom:12}}><div style={{fontSize:10,fontWeight:700,color:C.tx3,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:6}}>Instructions</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.7,whiteSpace:'pre-wrap'}}>{ex.instructions}</div></div>}
           {ex.tips&&<div style={{marginBottom:16,padding:'10px 12px',borderRadius:10,background:C.oS,border:'1px solid '+C.o+'30'}}><div style={{fontSize:10,fontWeight:700,color:C.o,marginBottom:4}}>💡 Conseils</div><div style={{fontSize:12,color:C.tx2,lineHeight:1.6}}>{ex.tips}</div></div>}
           <button onClick={onAdd} style={{width:'100%',padding:'12px 0',borderRadius:12,border:'none',background:C.ac,color:'#fff',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginBottom:8}}>+ Ajouter à mes exercices</button>
@@ -148,8 +209,9 @@ function ExerciseDetailModal({ex,coachId,onClose,onAdd,onDelete,onMergeClick,onR
 }
 
 function ExerciseBank({coachId,onAddToExos}){
-  const{user}=useAuth();
+  const{user,profile}=useAuth();
   const myId=user?.id||coachId;
+  const canQuickType=ex=>profile?.is_admin===true||profile?.is_certified_coach===true||!ex.created_by||ex.created_by===myId;
   const PAGE=20;
   const[exList,setExList]=useState([]);const[loading,setLoading]=useState(true);
   const[search,setSearch]=useState('');const[page,setPage]=useState(0);const[total,setTotal]=useState(0);
@@ -157,6 +219,13 @@ function ExerciseBank({coachId,onAddToExos}){
   const[showMusclePanel,setShowMusclePanel]=useState(false);
   const[sel,setSel]=useState(null);const[showCreate,setShowCreate]=useState(false);
   const[showMerge,setShowMerge]=useState(false);const[confirmDel,setConfirmDel]=useState(null);
+  const[typeMenu,setTypeMenu]=useState(null);
+  const quickSetType=async(ex,t)=>{
+    setTypeMenu(null);
+    const{error}=await supabase.from('exercises').update({ex_type:t}).eq('id',ex.id);
+    if(error){alert('Erreur : '+error.message);return;}
+    setExList(prev=>prev.map(e=>e.id===ex.id?{...e,ex_type:t}:e));
+  };
   const TARGETS=['Pecs','Dos-GD','Dos-Trap','Dos-Rhom','Ep-Ant','Ep-Lat','Ep-Post','Quads','Ischios','Fessiers','Adducteurs','Triceps','Biceps','Core','Mollets'];
   const EQUIPS=['Barre','Haltères','Cable','Machine','Poids de corps','Élastique','Kettlebell','Smith'];
   const toggleMuscle=m=>{setFMuscles(prev=>prev.includes(m)?prev.filter(x=>x!==m):[...prev,m]);setPage(0);};
@@ -198,9 +267,9 @@ function ExerciseBank({coachId,onAddToExos}){
       <button onClick={()=>setShowMusclePanel(v=>!v)} style={{flexShrink:0,padding:'5px 10px',borderRadius:8,border:'1px solid '+(fMuscles.length>0?C.ac:C.brdL),background:fMuscles.length>0?C.acS:C.s1,color:fMuscles.length>0?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:5}}>
         Muscles{fMuscles.length>0&&<span style={{background:C.ac,color:'#fff',borderRadius:10,padding:'1px 6px',fontSize:10,fontWeight:700}}>{fMuscles.length}</span>}
       </button>
-      {[{l:'Équip.',v:fEquip,s:setFEquip,o:EQUIPS},{l:'Niveau',v:fDiff,s:setFDiff,o:['Débutant','Intermédiaire','Avancé']},{l:'Type',v:fType,s:setFType,o:['muscu','halterophilie','plio','mobilite']}].map(({l,v,s,o})=>(
+      {[{l:'Équip.',v:fEquip,s:setFEquip,o:EQUIPS.map(e=>({value:e,label:e}))},{l:'Niveau',v:fDiff,s:setFDiff,o:['Débutant','Intermédiaire','Avancé'].map(d=>({value:d,label:d}))},{l:'Type',v:fType,s:setFType,o:EX_TYPES}].map(({l,v,s,o})=>(
         <select key={l} value={v} onChange={e=>{s(e.target.value);setPage(0);}} style={{flexShrink:0,padding:'5px 8px',borderRadius:8,border:'1px solid '+(v?C.ac:C.brdL),background:v?C.acS:C.s1,color:v?C.ac:C.tx3,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',outline:'none'}}>
-          <option value=''>{l}</option>{o.map(x=><option key={x} value={x}>{x}</option>)}
+          <option value=''>{l}</option>{o.map(x=><option key={x.value} value={x.value}>{x.label}</option>)}
         </select>
       ))}
       {hasFilter&&<button onClick={()=>{setFMuscles([]);setFEquip('');setFDiff('');setFType('');}} style={{flexShrink:0,padding:'5px 10px',borderRadius:8,border:'1px solid '+C.r+'50',background:C.rS,color:C.r,fontSize:11,cursor:'pointer',fontFamily:'inherit'}}>✕</button>}
@@ -220,8 +289,8 @@ function ExerciseBank({coachId,onAddToExos}){
       <>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
           {exList.map(ex=>(
-            <div key={ex.id} onClick={()=>setSel(ex)} style={{background:C.s1,borderRadius:12,overflow:'hidden',border:'1px solid '+C.brd,cursor:'pointer'}}>
-              <div style={{width:'100%',height:90,background:C.s2,position:'relative',overflow:'hidden'}}>
+            <div key={ex.id} onClick={()=>{setTypeMenu(null);setSel(ex);}} style={{background:C.s1,borderRadius:12,border:'1px solid '+C.brd,cursor:'pointer',position:'relative'}}>
+              <div style={{width:'100%',height:90,background:C.s2,position:'relative',overflow:'hidden',borderRadius:'12px 12px 0 0'}}>
                 {ex.youtube_id?<img src={`https://img.youtube.com/vi/${ex.youtube_id}/mqdefault.jpg`} style={{width:'100%',height:'100%',objectFit:'cover'}} alt={ex.name}/>:ex.image_url?<img src={ex.image_url} style={{width:'100%',height:'100%',objectFit:'cover'}} alt={ex.name}/>:<div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:C.tx3,fontSize:28}}>💪</div>}
                 {ex.youtube_id&&<div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{width:30,height:30,borderRadius:'50%',background:'rgba(0,0,0,0.65)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff'}}>▶</div></div>}
                 <div style={{position:'absolute',top:4,left:4,padding:'2px 6px',borderRadius:5,background:'rgba(0,0,0,0.72)',fontSize:9,color:ex.is_verified?C.g:C.o,fontWeight:700}}>{ex.is_verified?'✓ Off.':'Comm.'}</div>
@@ -229,11 +298,28 @@ function ExerciseBank({coachId,onAddToExos}){
               <div style={{padding:'8px 10px'}}>
                 <div style={{fontSize:12,fontWeight:700,color:C.tx,marginBottom:2,lineHeight:1.3,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical'}}>{ex.name}</div>
                 {ex.youtube_id&&<a href={`https://youtube.com/watch?v=${ex.youtube_id}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:'#E5484D',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:3,marginBottom:3}}>▶ Voir la vidéo</a>}
-                <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                <div style={{display:'flex',gap:4,flexWrap:'wrap',paddingRight:70,minHeight:18}}>
                   {ex.target&&<span style={{fontSize:9,padding:'2px 6px',borderRadius:4,background:C.acS,color:C.ac,fontWeight:600}}>{ex.target}</span>}
                   {ex.equipment&&<span style={{fontSize:9,padding:'2px 6px',borderRadius:4,background:C.s2,color:C.tx3}}>{ex.equipment}</span>}
                 </div>
               </div>
+              {/* Ruban type — bas droite, clic = changement rapide */}
+              <span
+                onClick={e=>{e.stopPropagation();if(canQuickType(ex))setTypeMenu(typeMenu===ex.id?null:ex.id);}}
+                title={canQuickType(ex)?'Cliquer pour changer le type':exTypeLabel(ex.ex_type)}
+                style={{position:'absolute',right:0,bottom:8,padding:'3px 8px 3px 10px',borderRadius:'8px 0 0 8px',background:ex.ex_type?exTypeColor(ex.ex_type):C.s2,color:ex.ex_type?'#fff':C.tx3,fontSize:9,fontWeight:800,letterSpacing:'0.02em',cursor:canQuickType(ex)?'pointer':'default',boxShadow:'0 1px 4px rgba(0,0,0,0.35)',whiteSpace:'nowrap'}}
+              >{ex.ex_type?exTypeLabel(ex.ex_type):'Type ?'}</span>
+              {typeMenu===ex.id&&(
+                <div onClick={e=>e.stopPropagation()} style={{position:'absolute',right:6,bottom:30,zIndex:60,background:C.s1,border:'1px solid '+C.brdL,borderRadius:10,overflow:'hidden',boxShadow:'0 8px 24px rgba(0,0,0,0.5)',minWidth:150}}>
+                  {EX_TYPES.map(t=>{const on=ex.ex_type===t.value;return(
+                    <button key={t.value} onClick={()=>quickSetType(ex,t.value)} style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'8px 12px',border:'none',background:on?C.s2:'transparent',color:on?exTypeColor(t.value):C.tx,fontSize:12,fontWeight:on?700:400,cursor:'pointer',fontFamily:'inherit',textAlign:'left'}}
+                      onMouseEnter={e=>(e.currentTarget.style.background=C.s2)} onMouseLeave={e=>(e.currentTarget.style.background=on?C.s2:'transparent')}>
+                      <span style={{width:8,height:8,borderRadius:'50%',background:exTypeColor(t.value),flexShrink:0}}/>
+                      {t.label}
+                    </button>
+                  );})}
+                </div>
+              )}
             </div>
           ))}
         </div>

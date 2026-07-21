@@ -9,14 +9,12 @@ import { EmptyState } from "@/features/shared/components/EmptyState";
 import { Users } from "lucide-react";
 
 export default function AthletesListPage() {
-  const { profile, athletes, user, loading, createInviteLink } = useAuth();
+  const { profile, athletes, user, loading } = useAuth();
   const navigate = useNavigate();
   const isCoachAthlete = profile?.role === "coach" || profile?.role === "coach_athlete";
 
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
-  const [inviteLink, setInviteLink] = useState("");
-  const [copyMsg, setCopyMsg] = useState("");
 
   async function handleRemoveAthlete(athleteId: string) {
     if (removing) return;
@@ -30,19 +28,6 @@ export default function AthletesListPage() {
     } finally {
       setRemoving(false);
       setConfirmRemove(null);
-    }
-  }
-
-  async function handleCopyLink() {
-    try {
-      const link = await createInviteLink();
-      setInviteLink(link);
-      await navigator.clipboard.writeText(link);
-      setCopyMsg("Copié !");
-      toast.success("Lien d'invitation copié");
-      setTimeout(() => setCopyMsg(""), 2500);
-    } catch {
-      toast.error("Erreur lors de la génération du lien");
     }
   }
 
@@ -61,17 +46,6 @@ export default function AthletesListPage() {
             {athletes.length} athlète{athletes.length > 1 ? "s" : ""} liés à ton compte
           </div>
         </div>
-        <button
-          onClick={handleCopyLink}
-          style={{
-            padding: "8px 16px", borderRadius: 10,
-            border: "1px solid " + C.ac + "50", background: C.acS,
-            color: C.ac, fontSize: 12, fontWeight: 600,
-            cursor: "pointer", fontFamily: "inherit",
-          }}
-        >
-          🔗 Inviter
-        </button>
       </div>
 
       {/* Code coach */}
@@ -207,43 +181,12 @@ export default function AthletesListPage() {
               <EmptyState
                 icon={Users}
                 title="Aucun athlète pour l'instant"
-                description="Partage ton code coach ou génère un lien d'invitation pour que tes athlètes te rejoignent."
+                description="Partage ton code coach pour que tes athlètes te rejoignent."
               />
             )}
           </>
         )}
       </div>
-
-      {/* Invite link */}
-      {inviteLink && (
-        <div
-          style={{
-            marginTop: 16, padding: "10px 14px", borderRadius: 10,
-            background: C.s1, border: "1px solid " + C.brdL,
-            display: "flex", alignItems: "center", gap: 10,
-          }}
-        >
-          <div style={{ flex: 1, fontSize: 11, color: C.tx3, wordBreak: "break-all" }}>
-            {inviteLink}
-          </div>
-          <button
-            onClick={async () => {
-              await navigator.clipboard.writeText(inviteLink);
-              setCopyMsg("Copié !");
-              setTimeout(() => setCopyMsg(""), 2000);
-            }}
-            style={{
-              flexShrink: 0, padding: "5px 12px", borderRadius: 7,
-              border: "1px solid " + (copyMsg ? C.g : C.brdL),
-              background: copyMsg ? "rgba(34,201,147,0.1)" : "transparent",
-              color: copyMsg ? C.g : C.tx2, fontSize: 11,
-              cursor: "pointer", fontFamily: "inherit",
-            }}
-          >
-            {copyMsg || "Copier"}
-          </button>
-        </div>
-      )}
 
       {/* Confirm remove modal */}
       {confirmRemove && (() => {

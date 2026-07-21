@@ -24,7 +24,7 @@ export interface AthleteContextValue {
   athleteId: string;
   viewOnly: boolean;
   athleteProfile: Profile | null;
-  onEditProfile?: () => void;
+  onEditProfile?: (tab?: "profil" | "nutrition") => void;
   userName?: string;
 
   // Persisted data
@@ -130,7 +130,7 @@ interface AthleteProviderProps {
   athleteId: string;
   viewOnly?: boolean;
   athleteProfile?: Profile | null;
-  onEditProfile?: () => void;
+  onEditProfile?: (tab?: "profil" | "nutrition") => void;
   userName?: string;
   children: React.ReactNode;
 }

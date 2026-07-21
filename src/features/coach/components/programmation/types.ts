@@ -25,20 +25,26 @@ export interface Exercice {
   id: string
   exercise_id: string
   exercise_name: string
-  mode: 'classique' | 'methode'
+  mode: 'classique' | 'methode' | 'libre'
+  libre_text?: string  // mode 'libre': free-text instruction, no structured params
   methode_id?: string
   applied_to_sets?: number[]  // scope='set' methods: which set numbers (1-indexed) the method applies to
   sort_order: number
   multi_semaine?: boolean  // per-exercise override (only used when session multi_semaine is false)
   comment?: string  // Coach note/instruction for this exercise
+  superset_with_next?: boolean  // Linked to the next exercise in the bloc (chain of 2+ = superset; rest after each full round)
   // If multi_semaine active (session OR exercise level): Record<weekNumber, ExerciceParams>; else ExerciceParams
   params: ExerciceParams | Record<string, ExerciceParams>
 }
+
+export const BLOC_CATEGORIES = ['Echauffement', 'Force', 'Hypertrophie', 'Explo/vitesse', 'Mixte', 'Cardio'] as const
+export type BlocCategory = typeof BLOC_CATEGORIES[number]
 
 export interface Bloc {
   id: string
   name: string
   color?: string
+  category?: BlocCategory
   series_mode: 'libre' | 'fixe'
   series_count?: number
   timing_mode: 'libre' | 'depart' | 'repos'

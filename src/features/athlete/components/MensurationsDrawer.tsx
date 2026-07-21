@@ -41,6 +41,8 @@ function clearDraft(athleteId: string) {
 interface Props {
   athleteId: string;
   viewOnly?: boolean;
+  /** Ouvre directement le formulaire "Nouvelle saisie" (saisie planifiée par le coach) */
+  initialNew?: boolean;
   onClose: () => void;
 }
 
@@ -412,10 +414,11 @@ function SectionLabel({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 // ── Drawer ────────────────────────────────────────────────────────────────────
 
-export function MensurationsDrawer({ athleteId, viewOnly, onClose }: Props) {
+export function MensurationsDrawer({ athleteId, viewOnly, initialNew, onClose }: Props) {
   // Auto-resume draft if one exists
   const [mode, setMode] = useState<Mode>(() => {
     if (viewOnly) return { kind: 'list' };
+    if (initialNew) return { kind: 'new' };
     const draft = loadDraft(athleteId);
     if (draft && (draft.weight || Object.keys(draft.values).length > 0)) {
       if (draft.editId) return { kind: 'list' }; // edit draft needs the log object, show list

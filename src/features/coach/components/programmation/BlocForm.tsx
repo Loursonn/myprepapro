@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { C } from "@/lib/theme"
-import type { Bloc } from "./types"
+import type { Bloc, BlocCategory } from "./types"
+import { BLOC_CATEGORIES } from "./types"
 
 const VIOLET = "#7B6FFF"
 const VIOLET_S = "rgba(123,111,255,0.12)"
@@ -44,6 +45,7 @@ function pill(active: boolean): React.CSSProperties {
 
 export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
   const [name, setName] = useState(initial?.name ?? "")
+  const [category, setCategory] = useState<BlocCategory>(initial?.category ?? 'Mixte')
   const [color, setColor] = useState<string>(initial?.color ?? BLOC_PALETTE[0])
   const [seriesMode, setSeriesMode] = useState<'libre' | 'fixe'>(initial?.series_mode ?? 'libre')
   const [seriesCount, setSeriesCount] = useState<number>(initial?.series_count ?? 4)
@@ -56,6 +58,7 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
   function handleSubmit() {
     const data: BlocFormData = {
       name: name.trim() || "Bloc sans nom",
+      category,
       color,
       series_mode: seriesMode,
       series_count: seriesMode === 'fixe' ? seriesCount : undefined,
@@ -84,6 +87,16 @@ export function BlocForm({ initial, onSubmit, onCancel }: BlocFormProps) {
           placeholder="ex. Force, Hypertrophie…"
           style={inputStyle}
         />
+      </div>
+
+      {/* Catégorie */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ fontSize: 11, color: C.tx3, display: "block", marginBottom: 6, fontWeight: 600 }}>Catégorie</label>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {BLOC_CATEGORIES.map(cat => (
+            <button key={cat} onClick={() => setCategory(cat)} style={pill(category === cat)}>{cat}</button>
+          ))}
+        </div>
       </div>
 
       {/* Couleur */}

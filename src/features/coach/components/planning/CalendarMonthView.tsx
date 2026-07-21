@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { BlockConfig, Session, WellnessData } from "@/features/shared/types/athlete";
 import { useProgrammation } from "@/features/coach/components/programmation/hooks/useProgrammation";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, Target, X as XIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Dumbbell, Zap, FlaskConical, Target, Ruler, X as XIcon } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -34,6 +34,7 @@ import { useEnergySessions } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession, useUpdateEnergyAssignment } from "@/features/shared/hooks/useEnergyAssignments";
 import { useDeleteCalendarEvent } from "@/features/shared/hooks/useUnifiedCalendar";
 import { useTestDefinitions } from "@/features/shared/hooks/tests/useTestDefinitions";
+import { TEST_CATEGORY_LABEL, TEST_CATEGORY_COLOR, TEST_CATEGORY_ORDER } from "@/features/shared/types/tests";
 import type { EnergySessionRow } from "@/types/energy";
 import { DayDetailsDrawer } from "./DayDetailsDrawer";
 import { QuickAddDialog } from "./QuickAddDialog";
@@ -56,6 +57,13 @@ const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 const FREE_COLOR    = "#0D9488";
 const TEST_COLOR    = "#C49A6C";
+const BIO_COLOR     = "#22C993";
+const BIO_BANK_ID   = "bio-mensurations";
+const BIO_TITLE     = "Mensurations / Photos";
+
+function isBiometric(event: CalEvent): boolean {
+  return event.type === "test" && event.raw?.type === "biometric";
+}
 
 function energyChipColor(_event: CalEvent): string {
   return C.o;
@@ -97,9 +105,10 @@ function EventChip({
   const isProjected = event.raw?.source === "block_plan";
   const st = event.status;
 
-  // Energy events use session_kind color
-  const baseColor = event.type === "energy" ? energyChipColor(event) : TYPE_COLOR[event.type];
-  const baseBg    = event.type === "energy" ? energyChipColor(event) + "20" : TYPE_BG[event.type];
+  // Energy events use session_kind color; biometric tests get their own color
+  const bio = isBiometric(event);
+  const baseColor = event.type === "energy" ? energyChipColor(event) : bio ? BIO_COLOR : TYPE_COLOR[event.type];
+  const baseBg    = event.type === "energy" ? energyChipColor(event) + "20" : bio ? BIO_COLOR + "20" : TYPE_BG[event.type];
 
   // Status overrides base type color — partial takes priority over completed
   const isPartialEnergy = event.type === "energy" && event.partial;
@@ -139,7 +148,7 @@ function EventChip({
       }}
     >
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-        {event.type === "workout" ? "🏋️ " : event.type === "competition" ? "🏆 " : event.type === "test" ? "🧪 " : event.type === "energy" ? "⚡ " : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ") : ""}
+        {event.type === "workout" ? "🏋️ " : event.type === "competition" ? "🏆 " : event.type === "test" ? (bio ? "📏 " : "🧪 ") : event.type === "energy" ? "⚡ " : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ") : ""}
         {event.title}
         {isPartialEnergy && totalCount > 0 && (
           <span style={{ opacity: 0.45, fontWeight: 500, marginLeft: 3 }}>{doneCount}/{totalCount}</span>
@@ -231,7 +240,7 @@ function DraggableEventChip({
 
 // ── DraggableSession ─────────────────────────────────────────────────────────
 
-type BankItemType = "workout" | "energy" | "specifique" | "test";
+type BankItemType = "workout" | "energy" | "specifique" | "test" | "biometric";
 
 function DraggableSession({
   session,
@@ -242,8 +251,8 @@ function DraggableSession({
   sessionType: BankItemType;
   isDragging: boolean;
 }) {
-  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : C.ac;
-  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : C.acS;
+  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : sessionType === "biometric" ? BIO_COLOR : C.ac;
+  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : sessionType === "biometric" ? BIO_COLOR + "20" : C.acS;
 
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: session.id,
@@ -273,7 +282,7 @@ function DraggableSession({
         display: "flex", alignItems: "center", gap: 6,
       }}
     >
-      {sessionType === "energy" ? <Zap size={11} /> : sessionType === "test" ? <FlaskConical size={11} /> : <Dumbbell size={11} />}
+      {sessionType === "energy" ? <Zap size={11} /> : sessionType === "test" ? <FlaskConical size={11} /> : sessionType === "biometric" ? <Ruler size={11} /> : <Dumbbell size={11} />}
       {name}
     </div>
   );
@@ -428,214 +437,127 @@ const ENERGY_KIND_LABEL: Record<string, string> = {
   footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
 };
 
-function SessionBank({
-  sessions,
-  energySessions,
-  activeDragId,
-}: {
-  sessions: Array<{ id: string; name: string }>;
-  energySessions: EnergySessionRow[];
-  activeDragId: string | null;
-}) {
-  const [tab, setTab]     = useState<BankItemType>("workout");
-  const [search, setSearch] = useState("");
+type BankTab = "workout" | "energy" | "specifique" | "tests";
 
-  const filteredMuscu = sessions.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  );
+const BANK_TABS: { key: BankTab; label: string; Icon: typeof Dumbbell; color: string }[] = [
+  { key: "workout",    label: "Muscu",      Icon: Dumbbell,     color: "#7B6FFF" },
+  { key: "energy",     label: "Énergie",    Icon: Zap,          color: "#A855F7" },
+  { key: "specifique", label: "Spécifique", Icon: Target,       color: "#F5A623" },
+  { key: "tests",      label: "Tests",      Icon: FlaskConical, color: TEST_COLOR },
+];
 
-  const filteredEnergy = energySessions.filter((s) =>
-    s.session_kind !== "specifique" && s.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const filteredSpecifique = energySessions.filter((s) =>
-    s.session_kind === "specifique" && s.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const tabBtn = (t: BankItemType, label: string, icon: React.ReactNode, color: string) => (
-    <button
-      onClick={() => setTab(t)}
-      style={{
-        flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-        padding: "5px 0", borderRadius: 7, border: "none",
-        background: tab === t ? color + "25" : "transparent",
-        color: tab === t ? color : C.tx3,
-        fontSize: 10, fontWeight: tab === t ? 700 : 500,
-        cursor: "pointer", fontFamily: "inherit",
-        outline: tab === t ? "1.5px solid " + color + "50" : "none",
-        transition: "all 120ms",
-      }}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-
+function BankGroupTitle({ label, color, count }: { label: string; color: string; count?: number }) {
   return (
-    <div
-      style={{
-        width: 200, flexShrink: 0,
-        background: C.s1,
-        borderRadius: 14,
-        border: "1px solid " + C.brd,
-        display: "flex", flexDirection: "column",
-        overflow: "hidden",
-        maxHeight: "100%",
-      }}
-    >
-      {/* Header */}
-      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid " + C.brd }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-          Banque de séances
-        </div>
-        {/* Tab switcher */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 8, background: C.s2, borderRadius: 9, padding: 3 }}>
-          {tabBtn("workout", "Muscu", <Dumbbell size={10} />, C.ac)}
-          {tabBtn("energy", "Énergie", <Zap size={10} />, "#A855F7")}
-          {tabBtn("specifique", "Spécif.", <Target size={10} />, "#F5A623")}
-        </div>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filtrer..."
-          style={{
-            width: "100%", padding: "5px 8px", borderRadius: 7,
-            border: "1px solid " + C.brdL, background: C.s2,
-            color: C.tx, fontSize: 11, fontFamily: "inherit", outline: "none",
-            boxSizing: "border-box",
-          }}
-        />
-      </div>
-
-      {/* List */}
-      <div
-        style={{
-          flex: 1, overflowY: "auto", padding: "8px",
-          display: "flex", flexDirection: "column", gap: 5,
-          scrollbarWidth: "none",
-        }}
-      >
-        {tab === "workout" ? (
-          filteredMuscu.length === 0 ? (
-            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>
-              {search ? "Aucun résultat" : "Aucune séance dans la banque"}
-            </div>
-          ) : (
-            filteredMuscu.map((s) => (
-              <DraggableSession
-                key={s.id}
-                session={s}
-                sessionType="workout"
-                isDragging={activeDragId === s.id}
-              />
-            ))
-          )
-        ) : tab === "energy" ? (
-          filteredEnergy.length === 0 ? (
-            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucune séance énergétique</div>
-          ) : (
-            filteredEnergy.map((s) => {
-              const kc = ENERGY_KIND_COLOR[s.session_kind] ?? "#A855F7";
-              return (
-                <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <DraggableSession
-                    session={{ id: s.id, name: s.name }}
-                    sessionType="energy"
-                    isDragging={activeDragId === s.id}
-                  />
-                  {s.total_duration_s != null && (
-                    <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6, display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ color: kc, fontWeight: 700 }}>{ENERGY_KIND_LABEL[s.session_kind] ?? s.session_kind}</span>
-                      <span>{Math.round(s.total_duration_s / 60)} min</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )
-        ) : tab === "specifique" ? (
-          filteredSpecifique.length === 0 ? (
-            <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucune séance spécifique</div>
-          ) : (
-            filteredSpecifique.map((s) => {
-              const kc = "#F5A623";
-              const subLabel = ENERGY_KIND_LABEL[s.custom_kind ?? ""] ?? s.custom_kind ?? "Spécifique";
-              return (
-                <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <DraggableSession
-                    session={{ id: s.id, name: s.name }}
-                    sessionType="specifique"
-                    isDragging={activeDragId === s.id}
-                  />
-                  <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6, display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ color: kc, fontWeight: 700 }}>{subLabel}</span>
-                    {s.total_duration_s != null && (
-                      <span>{Math.round(s.total_duration_s / 60)} min</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )
-        ) : null}
-      </div>
-
-      <div style={{ padding: "8px 10px", borderTop: "1px solid " + C.brd }}>
-        <div style={{ fontSize: 9, color: C.tx3, textAlign: "center" }}>
-          ↕ Glisser sur le calendrier
-        </div>
-      </div>
+    <div style={{
+      fontSize: 9, fontWeight: 800, color,
+      textTransform: "uppercase", letterSpacing: "0.06em",
+      display: "flex", alignItems: "center", gap: 5,
+      margin: "4px 0 2px",
+    }}>
+      <span style={{ width: 10, height: 2, borderRadius: 1, background: color, flexShrink: 0 }} />
+      {label}
+      {count != null && <span style={{ fontWeight: 500, opacity: 0.6 }}>{count}</span>}
+      <span style={{ flex: 1, height: 1, background: C.brd }} />
     </div>
   );
 }
 
-// ── TestBank ──────────────────────────────────────────────────────────────────
-
-function TestBank({
+function PlanningBank({
+  sessions,
+  energySessions,
   testDefinitions,
   activeDragId,
 }: {
-  testDefinitions: Array<{ id: string; name: string; kind?: string }>;
+  sessions: Array<{ id: string; name: string }>;
+  energySessions: EnergySessionRow[];
+  testDefinitions: Array<{ id: string; name: string; kind?: string; category?: string | null }>;
   activeDragId: string | null;
 }) {
+  const [tab, setTab]       = useState<BankTab>("workout");
   const [search, setSearch] = useState("");
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set());
 
-  const filtered = testDefinitions.filter((t) =>
-    t.name.toLowerCase().includes(search.toLowerCase())
+  function toggleCat(cat: string) {
+    setOpenCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
+
+  const q = search.toLowerCase();
+  const filteredMuscu      = sessions.filter((s) => s.name.toLowerCase().includes(q));
+  const filteredEnergy     = energySessions.filter((s) => s.session_kind !== "specifique" && !s.athlete_id && s.name.toLowerCase().includes(q));
+  const filteredSpecifique = energySessions.filter((s) => s.session_kind === "specifique" && !s.athlete_id && s.name.toLowerCase().includes(q));
+  const filteredTests      = testDefinitions.filter((t) => t.name.toLowerCase().includes(q));
+
+  const testGroups = TEST_CATEGORY_ORDER
+    .map((cat) => ({ cat, tests: filteredTests.filter((t) => t.category === cat) }))
+    .filter((g) => g.tests.length > 0);
+  const uncategorized = filteredTests.filter((t) => !t.category);
+
+  const empty = (msg: string) => (
+    <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "14px 0" }}>
+      {search ? "Aucun résultat" : msg}
+    </div>
   );
 
   return (
     <div
       style={{
-        width: 200, flexShrink: 0,
+        width: 252, flexShrink: 0,
         background: C.s1,
         borderRadius: 14,
         border: "1px solid " + C.brd,
         display: "flex", flexDirection: "column",
         overflow: "hidden",
-        maxHeight: 320,
+        alignSelf: "stretch",
+        maxHeight: 720,
       }}
     >
-      {/* Header */}
-      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid " + C.brd }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
-          <FlaskConical size={11} color={TEST_COLOR} />
-          Banque de tests
+      {/* Header : 4 catégories distinctes */}
+      <div style={{ padding: "12px 12px 10px", borderBottom: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+          Programmer
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+          {BANK_TABS.map(({ key, label, Icon, color }) => {
+            const active = tab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                  padding: "10px 0", borderRadius: 10,
+                  border: "1px solid " + (active ? color + "70" : C.brd),
+                  background: active ? color + "1A" : C.s2,
+                  color: active ? color : C.tx3,
+                  fontSize: 10.5, fontWeight: active ? 700 : 500,
+                  cursor: "pointer", fontFamily: "inherit", transition: "all 130ms",
+                }}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            );
+          })}
         </div>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filtrer..."
+          placeholder="Rechercher…"
           style={{
-            width: "100%", padding: "5px 8px", borderRadius: 7,
+            width: "100%", padding: "6px 9px", borderRadius: 8,
             border: "1px solid " + C.brdL, background: C.s2,
-            color: C.tx, fontSize: 11, fontFamily: "inherit", outline: "none",
+            color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
             boxSizing: "border-box",
           }}
         />
       </div>
 
-      {/* List */}
+      {/* Contenu */}
       <div
         style={{
           flex: 1, overflowY: "auto", padding: "8px",
@@ -643,17 +565,100 @@ function TestBank({
           scrollbarWidth: "none",
         }}
       >
-        {filtered.length === 0 ? (
-          <div style={{ fontSize: 11, color: C.tx3, textAlign: "center", padding: "12px 0" }}>Aucun test</div>
-        ) : (
-          filtered.map((t) => (
-            <DraggableSession
-              key={t.id}
-              session={{ id: t.id, name: t.name }}
-              sessionType="test"
-              isDragging={activeDragId === t.id}
-            />
+        {tab === "workout" && (
+          filteredMuscu.length === 0 ? empty("Aucune séance dans la banque") :
+          filteredMuscu.map((s) => (
+            <DraggableSession key={s.id} session={s} sessionType="workout" isDragging={activeDragId === s.id} />
           ))
+        )}
+
+        {tab === "energy" && (
+          filteredEnergy.length === 0 ? empty("Aucune séance énergétique") :
+          filteredEnergy.map((s) => {
+            const kc = ENERGY_KIND_COLOR[s.session_kind] ?? "#A855F7";
+            return (
+              <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <DraggableSession session={{ id: s.id, name: s.name }} sessionType="energy" isDragging={activeDragId === s.id} />
+                <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ color: kc, fontWeight: 700 }}>{ENERGY_KIND_LABEL[s.session_kind] ?? s.session_kind}</span>
+                  {s.total_duration_s != null && <span>{Math.round(s.total_duration_s / 60)} min</span>}
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {tab === "specifique" && (
+          filteredSpecifique.length === 0 ? empty("Aucune séance spécifique") :
+          filteredSpecifique.map((s) => {
+            const isClassique = s.format === "classique";
+            return (
+              <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <DraggableSession session={{ id: s.id, name: s.name }} sessionType="specifique" isDragging={activeDragId === s.id} />
+                <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ color: "#F5A623", fontWeight: 700 }}>{isClassique ? "Blocs" : "WOD"}</span>
+                  {s.total_duration_s != null && s.total_duration_s > 0 && <span>{Math.round(s.total_duration_s / 60)} min</span>}
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {tab === "tests" && (
+          <>
+            {/* Biométrie — épinglée en tête */}
+            <BankGroupTitle label="Biométrie" color={BIO_COLOR} />
+            <DraggableSession
+              session={{ id: BIO_BANK_ID, name: BIO_TITLE }}
+              sessionType="biometric"
+              isDragging={activeDragId === BIO_BANK_ID}
+            />
+            <div style={{ fontSize: 9, color: C.tx3, paddingLeft: 6, marginBottom: 4 }}>
+              L'athlète saisit mensurations &amp; photos
+            </div>
+
+            {/* Tests : catégories repliables (menu déroulant) */}
+            {filteredTests.length === 0 ? empty("Aucun test dans la banque") : (
+              <>
+                {[...testGroups.map((g) => ({ ...g, label: TEST_CATEGORY_LABEL[g.cat], color: TEST_CATEGORY_COLOR[g.cat] })),
+                  ...(uncategorized.length > 0 ? [{ cat: "__autres__", tests: uncategorized, label: "Autres", color: C.tx3 }] : []),
+                ].map(({ cat, tests, label, color }) => {
+                  const isOpen = openCats.has(cat) || !!search.trim();
+                  return (
+                    <div key={cat} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <button
+                        onClick={() => toggleCat(cat)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "7px 9px", borderRadius: 8,
+                          border: "1px solid " + (isOpen ? color + "50" : C.brd),
+                          background: isOpen ? color + "10" : C.s2,
+                          color, fontSize: 11, fontWeight: 700,
+                          cursor: "pointer", fontFamily: "inherit",
+                          textTransform: "uppercase", letterSpacing: "0.04em",
+                          transition: "all 130ms",
+                        }}
+                      >
+                        <ChevronRight
+                          size={12}
+                          style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform 130ms", flexShrink: 0 }}
+                        />
+                        <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
+                        <span style={{ fontWeight: 500, opacity: 0.6, fontSize: 10 }}>{tests.length}</span>
+                      </button>
+                      {isOpen && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 6, marginBottom: 2 }}>
+                          {tests.map((t) => (
+                            <DraggableSession key={t.id} session={{ id: t.id, name: t.name }} sessionType="test" isDragging={activeDragId === t.id} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </>
         )}
       </div>
 
@@ -925,6 +930,14 @@ export function CalendarMonthView({
           type:  "musculation",
           date:  dateStr,
         });
+      } else if (sess.sessionType === "biometric") {
+        createTestSession({
+          athleteId,
+          coachId,
+          title: BIO_TITLE,
+          type:  "biometric",
+          date:  dateStr,
+        });
       } else {
         assignWorkout({
           sessionId: sess.id,
@@ -942,19 +955,17 @@ export function CalendarMonthView({
     ? (progSessions.find((s) => s.id === activeDragId)
         ?? energySessions.find((s) => s.id === activeDragId)
         ?? testDefinitions.find((s) => s.id === activeDragId)
-        ?? null)
+        ?? (activeDragId === BIO_BANK_ID ? { id: BIO_BANK_ID, name: BIO_TITLE } : null))
     : null;
   const activeDragIsEnergy = activeDragId ? energySessions.some((s) => s.id === activeDragId) : false;
   const activeDragIsTest   = activeDragId ? testDefinitions.some((s) => s.id === activeDragId) : false;
+  const activeDragIsBio    = activeDragId === BIO_BANK_ID;
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
-        {/* ── Calendar ── */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-
-          {/* Month navigation */}
+          {/* Month navigation — pleine largeur */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button
               onClick={() => setMonth((m) => subMonths(m, 1))}
@@ -1081,6 +1092,10 @@ export function CalendarMonthView({
             </div>
           )}
 
+          {/* ── Rangée : calendrier + banque (alignés en haut) ── */}
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+
           {/* Grid */}
           <div
             style={{
@@ -1171,11 +1186,14 @@ export function CalendarMonthView({
           )}
         </div>
 
-        {/* ── Banks sidebar ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
-          <SessionBank sessions={progSessions} energySessions={energySessions} activeDragId={activeDragId} />
-          <TestBank testDefinitions={testDefinitions} activeDragId={activeDragId} />
-        </div>
+          {/* ── Bank sidebar (panneau unifié 4 catégories, aligné au calendrier) ── */}
+          <PlanningBank
+            sessions={progSessions}
+            energySessions={energySessions}
+            testDefinitions={testDefinitions}
+            activeDragId={activeDragId}
+          />
+          </div>
       </div>
 
       {/* Drag overlay — ghost of the dragged item */}
@@ -1197,16 +1215,16 @@ export function CalendarMonthView({
           <div
             style={{
               padding: "7px 10px", borderRadius: 8,
-              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : C.ac) + "60",
-              background: activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : C.ac,
+              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac) + "60",
+              background: activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac,
               color: "#fff",
               fontSize: 11, fontWeight: 600,
-              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : activeDragIsTest ? "rgba(196,154,108,0.4)" : "rgba(59,141,240,0.4)"}`,
+              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : activeDragIsTest ? "rgba(196,154,108,0.4)" : activeDragIsBio ? "rgba(34,201,147,0.4)" : "rgba(59,141,240,0.4)"}`,
               pointerEvents: "none",
               display: "flex", alignItems: "center", gap: 6,
             }}
           >
-            {activeDragIsEnergy ? <Zap size={12} /> : activeDragIsTest ? <FlaskConical size={12} /> : <Dumbbell size={12} />}
+            {activeDragIsEnergy ? <Zap size={12} /> : activeDragIsTest ? <FlaskConical size={12} /> : activeDragIsBio ? <Ruler size={12} /> : <Dumbbell size={12} />}
             {activeDragSession.name ?? "Séance"}
           </div>
         ) : null}

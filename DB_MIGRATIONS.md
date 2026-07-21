@@ -239,3 +239,52 @@ DROP TABLE IF EXISTS public.energy_sessions CASCADE;
 - `is_coach_of(athlete_uuid uuid)` prend **un seul argument** (auth.uid() est implicite)
 - `set_updated_at()` existait déjà — utilisé pour les deux nouveaux triggers
 - `is_certified_coach` protégé par trigger `trg_prevent_flag_update` (pas de RLS séparée)
+
+---
+
+## Migration 2026-07-18 — Banque Spécifique (sports / qualités / format / blocs)
+
+**Fichier :** `supabase/migrations/20260718000000_specifique_sport_quality.sql`
+**Statut : ⚠️ NON APPLIQUÉE — à déployer** (`npx supabase login` puis `npx supabase db push`, ou coller le SQL dans le Dashboard → SQL Editor).
+
+### Contenu
+
+1. `specific_sports` — référentiel sports (seed 9 sports globaux `coach_id NULL` + customs coach). RLS : lecture globaux + siens, écriture siens.
+2. `physical_qualities` — référentiel qualités physiques (seed 13 qualités). Même RLS.
+3. `energy_sessions` — nouvelles colonnes :
+   - `sport_id` / `quality_id` (FK référentiels, `ON DELETE SET NULL`)
+   - `format` text `'wod' | 'classique'` (défaut `'wod'`, `'classique'` réservé à `session_kind='specifique'`)
+   - `classique_structure` JSONB (`{ blocks: ClassiqueBlock[] }` — voir `src/types/specific.ts`)
+   - Backfill : `custom_kind` des séances spécifiques → `quality_id` (vo2→vo2max-vma, tempo, seuil, footing→endurance, fartlek)
+4. `specific_blocks` — banque de blocs spécifiques **privée par coach** (RLS `coach_id = auth.uid()` sur tout). `content` JSONB `{ title, items }`.
+
+### Rollback
+
+```sql
+ALTER TABLE public.energy_sessions
+  DROP COLUMN IF EXISTS sport_id,
+  DROP COLUMN IF EXISTS quality_id,
+  DROP COLUMN IF EXISTS format,
+  DROP COLUMN IF EXISTS classique_structure;
+DROP TABLE IF EXISTS public.specific_blocks CASCADE;
+DROP TABLE IF EXISTS public.physical_qualities CASCADE;
+DROP TABLE IF EXISTS public.specific_sports CASCADE;
+```
+
+### Notes
+
+- L'app tolère l'absence des tables (référentiels vides → rails/sélecteurs vides), mais l'enregistrement d'une séance spécifique échouera tant que les colonnes n'existent pas.
+- L'ancien dropdown catégorie (`SPECIFIQUE_CATEGORIES` → `custom_kind`) est remplacé par le sélecteur Qualité ; `custom_kind` est préservé en lecture pour le legacy.
+
+---
+
+## Migration 2026-07-18 (2) — Édition exercices par coach certifié
+
+**Fichier :** `supabase/migrations/20260718100000_exercises_certified_update.sql`
+**Statut : ⚠️ NON APPLIQUÉE** — même déploiement que la précédente.
+
+Policy `exercises_update_certified` : coach certifié (`is_certified_coach`) ou admin peut modifier n''importe quel exercice (caractéristiques de tri : type, muscles, équipement, difficulté…). Indépendante de la migration Banque Spécifique — peut se déployer seule.
+
+Rollback : `DROP POLICY IF EXISTS "exercises_update_certified" ON public.exercises;`
+
+Note taxonomie `ex_type` : valeurs DB `muscu | halterophilie | mobilite | plio | vitesse | gainage` (labels français dans `src/lib/exerciseTypes.ts`). Pas de contrainte CHECK sur la colonne — les deux nouvelles valeurs ne nécessitent pas de migration.

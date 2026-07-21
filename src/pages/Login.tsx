@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [isCoachAthlete, setIsCoachAthlete] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
 
   async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -32,6 +35,19 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleForgot(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const email = new FormData(e.currentTarget).get("email") as string;
+    const { error: resetErr } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setLoading(false);
+    if (resetErr) { setError(resetErr.message); return; }
+    setForgotSent(true);
   }
 
   async function handleRegisterCoach(e: React.FormEvent<HTMLFormElement>) {
@@ -135,7 +151,7 @@ export default function Login() {
         {/* Tab switcher */}
         <div style={{ display: "flex", background: S.s1, borderRadius: 10, padding: 3, marginBottom: 20, border: "1px solid " + S.brd }}>
           {(["login", "register"] as Tab[]).map(t => (
-            <button key={t} onClick={() => { setTab(t); setRegisterRole(null); setError(""); }}
+            <button key={t} onClick={() => { setTab(t); setRegisterRole(null); setForgot(false); setForgotSent(false); setError(""); }}
               style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: tab === t ? S.s2 : "transparent", color: tab === t ? S.tx : S.tx3, fontSize: 13, fontWeight: tab === t ? 700 : 400, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
               {t === "login" ? "Connexion" : "Créer un compte"}
             </button>
@@ -145,7 +161,7 @@ export default function Login() {
         <div style={{ background: S.s1, borderRadius: 16, padding: 24, border: "1px solid " + S.brd }}>
 
           {/* ---- CONNEXION ---- */}
-          {tab === "login" && (
+          {tab === "login" && !forgot && (
             <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={labelStyle}>Email</label>
@@ -159,7 +175,48 @@ export default function Login() {
               <button type="submit" style={btnPrimary()} disabled={loading}>
                 {loading ? "Connexion…" : "Se connecter"}
               </button>
+              <button type="button" onClick={() => { setForgot(true); setForgotSent(false); setError(""); }}
+                style={{ background: "none", border: "none", color: S.tx3, fontSize: 12, cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>
+                Mot de passe oublié ?
+              </button>
             </form>
+          )}
+
+          {/* ---- MOT DE PASSE OUBLIÉ ---- */}
+          {tab === "login" && forgot && (
+            forgotSent ? (
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: S.tx, marginBottom: 8 }}>Email envoyé !</div>
+                <div style={{ fontSize: 13, color: S.tx2, lineHeight: 1.6, marginBottom: 20 }}>
+                  Vérifie ta boîte mail et clique sur le lien pour créer un nouveau mot de passe.
+                  Pense à vérifier tes spams.
+                </div>
+                <button onClick={() => { setForgot(false); setForgotSent(false); }}
+                  style={{ ...btnPrimary(), maxWidth: 220 }}>
+                  Retour à la connexion
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgot} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <button type="button" onClick={() => { setForgot(false); setError(""); }}
+                  style={{ background: "none", border: "none", color: S.tx3, fontSize: 12, cursor: "pointer", fontFamily: "inherit", textAlign: "left", padding: 0 }}>
+                  ← Retour
+                </button>
+                <div style={{ fontSize: 15, fontWeight: 700, color: S.tx }}>Mot de passe oublié</div>
+                <div style={{ fontSize: 12, color: S.tx2, lineHeight: 1.5 }}>
+                  Entre ton email : tu recevras un lien pour créer un nouveau mot de passe.
+                </div>
+                <div>
+                  <label style={labelStyle}>Email</label>
+                  <input name="email" type="email" required placeholder="ton@email.com" style={inputStyle} />
+                </div>
+                {error && <div style={{ fontSize: 13, color: S.r, padding: "8px 10px", borderRadius: 8, background: S.r + "15" }}>{error}</div>}
+                <button type="submit" style={btnPrimary()} disabled={loading}>
+                  {loading ? "Envoi…" : "Envoyer le lien de réinitialisation"}
+                </button>
+              </form>
+            )
           )}
 
           {/* ---- INSCRIPTION — choix du rôle ---- */}

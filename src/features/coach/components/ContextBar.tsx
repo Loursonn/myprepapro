@@ -23,15 +23,14 @@ import {
 
 // ── Navigation tabs ────────────────────────────────────────────────────────────
 
-const TABS = [
+const TABS: { key: string; label: string; pushRight?: boolean }[] = [
   { key: "planning",        label: "Planning"        },
   { key: "programmation",   label: "Programmation"   },
   { key: "retours",         label: "Retours"         },
-  { key: "profil-sportif",  label: "Profil sportif"  },
-  { key: "donnees",         label: "Données"         },
-  { key: "tests",           label: "Tests"           },
-  { key: "athlete-view",    label: "👁 Vue athlète"  },
-] as const;
+  { key: "profil-sportif",  label: "Profil athlète"  },
+  { key: "athlete-view",    label: "👁 Vue athlète", pushRight: true },
+  { key: "donnees",         label: "Historique" },
+];
 
 const SUB_TABS: Record<string, { key: string; label: string }[]> = {
   planning: [
@@ -39,6 +38,11 @@ const SUB_TABS: Record<string, { key: string; label: string }[]> = {
     { key: "timeline",     label: "Frise"         },
     { key: "summary",      label: "Synthèse"      },
     { key: "competitions", label: "Compétitions"  },
+  ],
+  "profil-sportif": [
+    { key: "sportif",  label: "Profil Sportif Actuel" },
+    { key: "general",  label: "Profil Général"        },
+    { key: "testing",  label: "Suivi Testing"         },
   ],
   programmation: [],
 };
@@ -264,6 +268,7 @@ export default function ContextBar() {
               style={{
                 padding: "10px 14px",
                 border: "none",
+                marginLeft: tab.pushRight ? "auto" : undefined,
                 borderBottom: "2px solid " + (active ? C.coach : "transparent"),
                 background: "transparent",
                 color: active ? C.tx : C.tx3,

@@ -31,6 +31,14 @@ import {
 } from "@/features/shared/hooks/useEnergySessions";
 import { useAssignEnergySession } from "@/features/shared/hooks/useEnergyAssignments";
 import type { EnergySessionRow } from "@/types/energy";
+import type { SessionBlock, SessionFormat, WodBlock } from "@/types/specific";
+import { isWodBlock } from "@/types/specific";
+import TaxonomySelect from "../components/specific/TaxonomySelect";
+import ClassiqueBuilder from "../components/specific/ClassiqueBuilder";
+import ClassiquePreview from "../components/specific/ClassiquePreview";
+import BlockBankDrawer from "../components/specific/BlockBankDrawer";
+import { useSpecificSports, usePhysicalQualities, useCreateSport, useCreateQuality } from "@/features/shared/hooks/useSpecificTaxonomy";
+import { useCreateSpecificBlock } from "@/features/shared/hooks/useSpecificBlocks";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -44,14 +52,7 @@ const SESSION_KINDS: { value: SessionKind; label: string }[] = [
   { value: "custom",     label: "Type personnalisé…" },
 ];
 
-const SPECIFIQUE_CATEGORIES: { value: string; label: string }[] = [
-  { value: "vo2",        label: "VO₂max / VMA" },
-  { value: "tempo",      label: "Tempo" },
-  { value: "seuil",      label: "Seuil lactique" },
-  { value: "footing",    label: "Footing / Endurance" },
-  { value: "fartlek",    label: "Fartlek" },
-  { value: "autre",      label: "Autres" },
-];
+const ORANGE = "#F5A623";
 
 
 // ── Assign modal (simple) ─────────────────────────────────────────────────────
@@ -240,6 +241,24 @@ export default function EnergySessionEditorPage() {
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
 
+  // Spécifique : sport / qualité / format
+  // Nouvelle séance spécifique = toujours par blocs (mix Classique/WOD).
+  // 'wod' ne subsiste que pour les séances legacy (intervalles pleine page).
+  const [sportId, setSportId]     = useState<string | null>(null);
+  const [qualityId, setQualityId] = useState<string | null>(null);
+  const [format, setFormat]       = useState<SessionFormat>(kindFromUrl === "specifique" ? "classique" : "wod");
+  const [classiqueBlocks, setClassiqueBlocks] = useState<SessionBlock[]>([]);
+  const [showBlockBank, setShowBlockBank]     = useState(false);
+
+  const isSpecifique = sessionKind === "specifique";
+  const isClassique  = isSpecifique && format === "classique";
+
+  const { data: sports = [] }    = useSpecificSports();
+  const { data: qualities = [] } = usePhysicalQualities();
+  const createSport   = useCreateSport();
+  const createQuality = useCreateQuality();
+  const createBlock   = useCreateSpecificBlock();
+
   // Hydrate from existing session
   useEffect(() => {
     if (existingSession) {
@@ -257,6 +276,10 @@ export default function EnergySessionEditorPage() {
       };
       setRoot(rootG);
       setFieldSchema(existingSession.schema ?? null);
+      setSportId(existingSession.sport_id ?? null);
+      setQualityId(existingSession.quality_id ?? null);
+      setFormat(existingSession.format ?? "wod");
+      setClassiqueBlocks(existingSession.classique_structure?.blocks ?? []);
     }
   }, [existingSession]);
 
@@ -271,7 +294,43 @@ export default function EnergySessionEditorPage() {
       type: "group", id: "__root__", role: "open", repeat: 1,
       children: clonedChildren,
     });
+    setSportId(session.sport_id ?? null);
+    setQualityId(session.quality_id ?? null);
+    setFormat(session.format ?? "wod");
+    setClassiqueBlocks(
+      (session.classique_structure?.blocks ?? []).map((b): SessionBlock =>
+        isWodBlock(b)
+          ? { ...b, id: genId(), steps: deepCloneIntervals(b.steps) }
+          : { ...b, id: genId(), items: b.items.map((i) => ({ ...i, id: genId() })) }
+      )
+    );
     setShowImport(false);
+  }
+
+  function handleSaveBlockToBank(block: SessionBlock) {
+    if (!user?.id) return;
+    createBlock.mutate({
+      coach_id: user.id,
+      name: block.title.trim() || "Bloc sans titre",
+      sport_id: sportId,
+      quality_id: qualityId,
+      content: isWodBlock(block)
+        ? { title: block.title, kind: "wod", steps: block.steps }
+        : { title: block.title, items: block.items.filter((i) => i.name.trim()) },
+    });
+  }
+
+  /** Legacy WOD pleine page → séance par blocs (intervalles encapsulés dans un bloc WOD). */
+  function convertLegacyToBlocks() {
+    const wodBlock: WodBlock = {
+      id: genId(),
+      title: name.trim() || "WOD",
+      kind: "wod",
+      steps: root.children,
+    };
+    setClassiqueBlocks((prev) => [...prev, ...(root.children.length > 0 ? [wodBlock] : [])]);
+    setRoot(makeRootGroup());
+    setFormat("classique");
   }
 
   // Computed preview totals
@@ -283,11 +342,19 @@ export default function EnergySessionEditorPage() {
     const payload = {
       name: name.trim() || "Séance sans titre",
       session_kind: effectiveKind,
-      custom_kind: sessionKind === "specifique" ? customKind : (sessionKind === "custom" ? customKind : null),
+      custom_kind: sessionKind === "specifique"
+        ? (existingSession?.custom_kind ?? null)
+        : (sessionKind === "custom" ? customKind : null),
       modality: null,
       structure_type: structureType,
       intervals: root.children,
       schema: fieldSchema ?? null,
+      sport_id: isSpecifique ? sportId : null,
+      quality_id: isSpecifique ? qualityId : null,
+      format: isSpecifique ? format : "wod",
+      classique_structure: isSpecifique && classiqueBlocks.length > 0
+        ? { blocks: classiqueBlocks }
+        : null,
       created_by: user?.id ?? null,
       ...(athleteId ? { athlete_id: athleteId } : {}),
     };
@@ -363,21 +430,45 @@ export default function EnergySessionEditorPage() {
               {/* Spécifique badge */}
               <span style={{
                 padding: "5px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                background: "#F5A623" + "20", color: "#F5A623",
+                background: ORANGE + "20", color: ORANGE,
               }}>
                 Spécifique
               </span>
-              {/* Category */}
-              <Select value={customKind} onValueChange={setCustomKind}>
-                <SelectTrigger style={{ width: 160, background: C.s2, border: `1px solid ${C.brd}`, color: C.tx, fontSize: 12 }}>
-                  <SelectValue placeholder="Catégorie" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SPECIFIQUE_CATEGORIES.map((k) => (
-                    <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Sport */}
+              <TaxonomySelect
+                placeholder="Sport"
+                options={sports}
+                value={sportId}
+                onChange={setSportId}
+                onCreate={async (n) => user?.id ? await createSport.mutateAsync({ name: n, coachId: user.id }) : undefined}
+                width={140}
+                accent={ORANGE}
+              />
+              {/* Qualité physique */}
+              <TaxonomySelect
+                placeholder="Qualité"
+                options={qualities}
+                value={qualityId}
+                onChange={setQualityId}
+                onCreate={async (n) => user?.id ? await createQuality.mutateAsync({ name: n, coachId: user.id }) : undefined}
+                width={150}
+                accent="#7B6FFF"
+              />
+              {/* Legacy WOD pleine page : proposer la conversion en blocs */}
+              {format === "wod" && (
+                <button
+                  onClick={convertLegacyToBlocks}
+                  title="Encapsule les intervalles actuels dans un bloc WOD"
+                  style={{
+                    padding: "5px 12px", borderRadius: 6,
+                    border: `1px solid ${ORANGE}40`, background: ORANGE + "0D",
+                    color: ORANGE, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Convertir en blocs
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -408,17 +499,19 @@ export default function EnergySessionEditorPage() {
             </>
           )}
 
-          {/* Structure type */}
-          <ToggleGroup
-            type="single"
-            value={structureType}
-            onValueChange={(v) => { if (v) setStructureType(v as StructureType); }}
-            variant="outline"
-            size="sm"
-          >
-            <ToggleGroupItem value="continu" style={{ fontSize: 11 }}>Continu</ToggleGroupItem>
-            <ToggleGroupItem value="fractionne" style={{ fontSize: 11 }}>Fractionné</ToggleGroupItem>
-          </ToggleGroup>
+          {/* Structure type (intervalles uniquement) */}
+          {!isClassique && (
+            <ToggleGroup
+              type="single"
+              value={structureType}
+              onValueChange={(v) => { if (v) setStructureType(v as StructureType); }}
+              variant="outline"
+              size="sm"
+            >
+              <ToggleGroupItem value="continu" style={{ fontSize: 11 }}>Continu</ToggleGroupItem>
+              <ToggleGroupItem value="fractionne" style={{ fontSize: 11 }}>Fractionné</ToggleGroupItem>
+            </ToggleGroup>
+          )}
         </div>
 
         {/* Action buttons */}
@@ -473,7 +566,16 @@ export default function EnergySessionEditorPage() {
           <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
             Structure
           </div>
-          <IntervalBuilder root={root} onChange={setRoot} athleteId={athleteId} sessionKind={sessionKind} />
+          {isClassique ? (
+            <ClassiqueBuilder
+              blocks={classiqueBlocks}
+              onChange={setClassiqueBlocks}
+              onImportFromBank={() => setShowBlockBank(true)}
+              onSaveBlockToBank={handleSaveBlockToBank}
+            />
+          ) : (
+            <IntervalBuilder root={root} onChange={setRoot} athleteId={athleteId} sessionKind={sessionKind} />
+          )}
         </div>
 
         {/* ── Preview col (1/3) ── */}
@@ -490,7 +592,9 @@ export default function EnergySessionEditorPage() {
             Aperçu
           </div>
 
-          {root.children.length === 0 ? (
+          {isClassique ? (
+            <ClassiquePreview blocks={classiqueBlocks} />
+          ) : root.children.length === 0 ? (
             <div style={{ color: C.tx3, fontSize: 12, textAlign: "center", paddingTop: 40 }}>
               Ajoute des intervalles pour voir l'aperçu
             </div>
@@ -563,6 +667,14 @@ export default function EnergySessionEditorPage() {
         <ImportSessionModal
           onImport={handleImportSession}
           onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {/* ── Banque de blocs (format Classique) ── */}
+      {showBlockBank && (
+        <BlockBankDrawer
+          onInsert={(imported) => setClassiqueBlocks((prev) => [...prev, ...imported])}
+          onClose={() => setShowBlockBank(false)}
         />
       )}
 

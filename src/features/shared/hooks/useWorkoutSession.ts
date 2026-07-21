@@ -17,12 +17,15 @@ import type { AthleteModifications, Exercise, WeekConfig } from "../types/athlet
 
 export interface WorkoutExerciceData {
   id: string;
+  exercise_id?: string;
   exercise_name: string;
   muscle?: string;
   params: ExerciceParams;
-  mode: "classique" | "methode";
+  mode: "classique" | "methode" | "libre";
+  libre_text?: string;
   methode_id?: string;
   comment?: string;
+  superset_with_next?: boolean;
 }
 
 export interface WorkoutBlocData {
@@ -117,6 +120,7 @@ function buildLegacyBlocs(
         undefined;
       return {
         id: ex.id,
+        exercise_id: ex.exercise_id,
         exercise_name: ex.name,
         muscle: ex.target,
         params: weekConfigToParams(wc, wc?.sets ?? 3),
@@ -316,12 +320,15 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
 
           return {
             id: ex.id,
+            exercise_id: ex.exercise_id,
             exercise_name: ex.exercise_name,
             muscle: (ex as { muscle?: string }).muscle,
             params: { ...safeParams, nb_series: effectiveNbSeries },
             mode: ex.mode,
+            libre_text: ex.libre_text,
             methode_id: ex.methode_id,
             comment: (ex as { comment?: string }).comment,
+            superset_with_next: ex.superset_with_next,
           };
         }),
       };

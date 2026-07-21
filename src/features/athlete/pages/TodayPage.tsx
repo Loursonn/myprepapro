@@ -18,12 +18,14 @@ import { SessionPreviewModal } from "@/features/coach/components/energy/SessionP
 import type { EnergyStep, EnergyInterval, BlockLogs } from "@/types/energy";
 import { Check } from "lucide-react";
 import { TestFillDrawer } from "@/features/athlete/components/TestFillDrawer";
+import { MensurationsDrawer } from "@/features/athlete/components/MensurationsDrawer";
 import { useCompetitions } from "@/hooks/useCompetitions";
 import { COMPETITION_META } from "@/types/planning";
 import { AthleteCompetitionCard } from "@/features/athlete/components/AthleteCompetitionCard";
 import type { DayProgram } from "@/features/shared/hooks/useWeekProgram";
 import type { WeekSession } from "@/features/shared/hooks/useActivePlan";
 import type { FreeSession } from "@/features/shared/types/athlete";
+import { evaluateNutritionDay, type NutritionStrategy, type NutritionDailyLog } from "@/lib/nutrition";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -488,11 +490,11 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByD
                       cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
                     }}
                   >
-                    <div style={{ fontSize: 24 }}>🧪</div>
+                    <div style={{ fontSize: 24 }}>{t.type === "biometric" ? "📏" : "🧪"}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>{t.title}</div>
                       <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>
-                        {t.type} · {t.completed ? "Réalisé ✓" : "À faire"}
+                        {t.type === "biometric" ? "biométrie" : t.type} · {t.completed ? "Réalisé ✓" : "À faire"}
                       </div>
                     </div>
                     {t.completed
@@ -920,10 +922,12 @@ export default function TodayPage() {
   const [energyPreview, setEnergyPreview] = useState<UnifiedCalendarEvent | null>(null);
   const [showOtherSessions, setShowOtherSessions] = useState(false);
   const [testPreviewId, setTestPreviewId] = useState<string | null>(null);
+  const [mensuOpen, setMensuOpen] = useState(false);
 
   const {
     athleteId, athleteProfile, wellnessHistory,
     setShowWellness, freeSessions, setFreeSessions,
+    nutritionStrategy, nutritionLog,
     athleteProfile: profile,
     viewOnly,
   } = useAthleteContext();
@@ -977,6 +981,13 @@ export default function TodayPage() {
   const todayDay = weekDays.find((d) => d.date === today);
   const workouts = todayDay?.sessions ?? [];
   const todayTests = todayDay?.tests ?? [];
+
+  // Mesure biométrique planifiée → formulaire Mensurations/Photos, sinon TestFillDrawer
+  const openTest = (id: string) => {
+    const t = weekDays.flatMap((d) => d.tests).find((x) => x.id === id);
+    if (t?.type === "biometric") setMensuOpen(true);
+    else setTestPreviewId(id);
+  };
   const nextWorkout = workouts.find((w) => !w.isCompleted) ?? null;
   const allDoneToday = workouts.length > 0 && workouts.every((w) => w.isCompleted);
   const restDay = workouts.length === 0 && todayEnergySessions.length === 0;
@@ -1035,6 +1046,24 @@ export default function TodayPage() {
 
   // ── Form advice from today's wellness ────────────────────────────────────
   const formeAdvice = getFormeAdvice(wellness as Record<string, number> | null);
+
+  // ── Nutrition du jour vs objectif ─────────────────────────────────────────
+  const todayNutrition = (() => {
+    if (!nutritionStrategy) return null;
+    const strat = nutritionStrategy as NutritionStrategy;
+    const l = (nutritionLog?.[today] ?? null) as NutritionDailyLog | null;
+    const consumed = l?.total_calories_consumed || 0;
+    const bmrV = (athleteProfile as { base_metabolism?: number } | null)?.base_metabolism || 0;
+    const calorieMode = strat.calorie_mode ?? (strat.can_track_calories ? "active" : "nap");
+    const activeCal = l?.active_calories || 0;
+    const dynDepense = calorieMode !== "nap" && activeCal > 0 && bmrV ? bmrV + activeCal : null;
+    const ev = consumed > 0 ? evaluateNutritionDay(strat, consumed, dynDepense) : null;
+    const zone = evaluateNutritionDay(strat, 1, dynDepense); // bornes affichage
+    const meta = strat.strategy === "seche" ? { label: "Sèche", color: C.r, icon: "🔥" }
+      : strat.strategy === "prise_de_masse" ? { label: "Prise de masse", color: C.g, icon: "💪" }
+      : { label: "Maintenance", color: C.b, icon: "⚖️" };
+    return { consumed, ev, zone, meta, log: l };
+  })();
 
   // ── Average wellness score (last 7 days with data) ───────────────────────
   const recentScores = wellnessTrend.slice(-7).map((d) => d.score).filter((s): s is number => s !== null);
@@ -1126,6 +1155,108 @@ export default function TodayPage() {
           )}
         </div>
 
+        {/* Section 1b — Nutrition du jour */}
+        {todayNutrition && (() => {
+          const { consumed, ev, zone, meta, log: nl } = todayNutrition;
+          const statusC = ev ? (ev.status === "ok" ? C.g : ev.status === "close" ? C.o : C.r) : null;
+          const zoneLabel = zone
+            ? (zone.targetMin !== zone.targetMax
+              ? `${zone.targetMin.toLocaleString("fr-FR")}–${zone.targetMax.toLocaleString("fr-FR")}`
+              : zone.targetMin.toLocaleString("fr-FR"))
+            : null;
+          return (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+                Nutrition du jour
+              </div>
+              <button
+                onClick={() => { navigate("/athlete/alim"); haptic(); }}
+                style={{
+                  width: "100%", background: C.s1, borderRadius: 16, padding: "13px 16px",
+                  border: "1px solid " + (statusC ? statusC + "40" : C.brd),
+                  cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: consumed > 0 ? 10 : 6 }}>
+                  <span style={{ fontSize: 14 }}>🥗</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.tx2 }}>Alimentation</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: meta.color + "18", border: "1px solid " + meta.color + "40", color: meta.color }}>
+                    {meta.icon} {meta.label}
+                  </span>
+                  <span style={{ marginLeft: "auto", fontSize: 10, color: C.ac }}>Détail →</span>
+                </div>
+
+                {consumed <= 0 ? (
+                  <div style={{ fontSize: 11, color: C.tx3 }}>
+                    Aucune saisie aujourd'hui{zoneLabel ? ` · zone cible ${zoneLabel} kcal` : ""}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div>
+                      <span style={{ fontSize: 20, fontWeight: 900, color: statusC ?? C.tx }}>{consumed.toLocaleString("fr-FR")}</span>
+                      {zoneLabel && <span style={{ fontSize: 10, color: C.tx3 }}> / {zoneLabel} kcal</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+                      {[
+                        { l: "G", v: nl?.glucides_consumed, c: C.b },
+                        { l: "L", v: nl?.lipides_consumed, c: C.o },
+                        { l: "P", v: nl?.proteines_consumed, c: C.g },
+                      ].map(m => (
+                        <div key={m.l} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: m.c }}>{m.v ?? "—"}</div>
+                          <div style={{ fontSize: 8, color: C.tx3 }}>{m.l} (g)</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {ev && (
+                  <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: statusC!, padding: "5px 10px", borderRadius: 7, background: statusC + "12" }}>
+                    {ev.status === "ok"
+                      ? `✅ Dans l'objectif — ${ev.actualPct <= 0 ? "déficit" : "surplus"} réel ${ev.actualPct > 0 ? "+" : ""}${ev.actualPct.toFixed(1)}%`
+                      : ev.status === "close"
+                      ? `🟡 Proche de l'objectif (${ev.diffPct > 0 ? "+" : ""}${ev.diffPct.toFixed(1)}% d'écart)`
+                      : `⚠️ Hors objectif (${ev.diffPct > 0 ? "+" : ""}${ev.diffPct.toFixed(1)}% d'écart)`}
+                  </div>
+                )}
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Section 1b — Test / biométrie du jour (au-dessus de la séance) */}
+        {todayTests.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+              {todayTests.length > 1 ? "Tests du jour" : "Test du jour"}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {todayTests.map((t) => {
+                const bio = t.type === "biometric";
+                const tc = t.completed ? C.g : bio ? "#22C993" : C.ac;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => { openTest(t.id); haptic(); }}
+                    style={{ width: "100%", background: t.completed ? C.gS : tc + "12", borderRadius: 14, padding: "14px 16px", border: "1px solid " + tc + "40", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const }}
+                  >
+                    <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: tc + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{bio ? "📏" : "🧪"}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
+                      <div style={{ fontSize: 10, color: C.tx3, marginTop: 1, textTransform: "capitalize" }}>{bio ? "Biométrie" : t.type + " · Test"}</div>
+                    </div>
+                    {t.completed
+                      ? <span style={{ fontSize: 16, color: C.g, flexShrink: 0 }}>✓</span>
+                      : <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: tc + "20", color: tc, flexShrink: 0 }}>Remplir →</span>
+                    }
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Section 2 — Séance du jour */}
         {(() => {
           const EKC: Record<string, string> = { vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B", footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280" };
@@ -1133,9 +1264,11 @@ export default function TodayPage() {
 
           const pendingWorkouts = workouts.filter(w => !w.isCompleted);
           const pendingEnergy   = todayEnergySessions.filter(ev => ev.status !== "completed");
-          const pendingTests    = todayTests.filter(t => !t.completed);
-          const totalToday      = workouts.length + todayEnergySessions.length + todayTests.length;
-          const hasPending      = pendingWorkouts.length > 0 || pendingEnergy.length > 0 || pendingTests.length > 0;
+          const totalToday      = workouts.length + todayEnergySessions.length;
+          const hasPending      = pendingWorkouts.length > 0 || pendingEnergy.length > 0;
+
+          // Jour avec uniquement test/biométrie : la section test suffit
+          if (totalToday === 0 && todayTests.length > 0) return null;
 
           return (
             <div style={{ marginBottom: 20 }}>
@@ -1209,21 +1342,6 @@ export default function TodayPage() {
                     );
                   })}
 
-                  {/* Tests en attente */}
-                  {pendingTests.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => { setTestPreviewId(t.id); haptic(); }}
-                      style={{ width: "100%", background: C.acS, borderRadius: 14, padding: "14px 16px", border: "1px solid " + C.ac + "40", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const }}
-                    >
-                      <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: C.acS, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🧪</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
-                        <div style={{ fontSize: 10, color: C.tx3, marginTop: 1, textTransform: "capitalize" }}>{t.type} · Test</div>
-                      </div>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: C.ac + "20", color: C.ac, flexShrink: 0 }}>Remplir →</span>
-                    </button>
-                  ))}
                 </div>
               )}
             </div>
@@ -1648,7 +1766,7 @@ export default function TodayPage() {
         viewOnly={viewOnly}
         onAddActivity={(date) => setActivityDate(date)}
         onEditActivity={(f) => setEditActivity(f)}
-        onTestPress={(id) => setTestPreviewId(id)}
+        onTestPress={openTest}
       />
 
       {/* Energy session preview overlay */}
@@ -1682,6 +1800,16 @@ export default function TodayPage() {
         athleteId={athleteId ?? ""}
         onClose={() => setTestPreviewId(null)}
       />
+
+      {/* Mesure biométrique planifiée → saisie mensurations/photos */}
+      {mensuOpen && (
+        <MensurationsDrawer
+          athleteId={athleteId ?? ""}
+          viewOnly={viewOnly}
+          initialNew
+          onClose={() => setMensuOpen(false)}
+        />
+      )}
     </>
   );
 }

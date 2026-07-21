@@ -4,6 +4,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import WeekCalendar from "@/components/coach/WeekCalendar";
 import { HabitDashboard } from "@/components/athlete/HabitTracker";
 import { WELL_ITEMS } from "@/lib/wellness";
+import { evaluateNutritionDay } from "@/lib/nutrition";
 import { ALL_BZ } from "@/lib/muscles";
 
 export default function DashboardPage() {
@@ -114,16 +115,24 @@ export default function DashboardPage() {
         const strat = nutritionStrategy;
         const consumed = todayNL?.total_calories_consumed || null;
         const bmrV = (athleteProfile as { base_metabolism?: number } | null)?.base_metabolism || 0;
-        const targetCal = (strat as { can_track_calories?: boolean; total_calories_coach?: number }).can_track_calories
-          ? (bmrV + (todayNL?.active_calories || 0))
-          : (strat as { total_calories_coach?: number }).total_calories_coach || null;
+        const stratTyped = strat as import("@/lib/nutrition").NutritionStrategy;
+        const calorieMode = stratTyped.calorie_mode ?? (stratTyped.can_track_calories ? "active" : "nap");
+        const activeCal = todayNL?.active_calories || 0;
+        const dynamicTarget = calorieMode !== "nap" && activeCal > 0 ? bmrV + activeCal : null;
+        const dayEval = consumed ? evaluateNutritionDay(stratTyped, consumed, dynamicTarget) : null;
+        const targetCal = dayEval
+          ? (dayEval.isRange ? null : dayEval.target)
+          : (dynamicTarget ?? stratTyped.total_calories_coach ?? null);
+        const targetLabel = dayEval?.isRange
+          ? `${dayEval.targetMin.toLocaleString("fr-FR")}–${dayEval.targetMax.toLocaleString("fr-FR")}`
+          : targetCal ? String(targetCal) : null;
         const stratC = strat.strategy === "seche" ? C.r : strat.strategy === "prise_de_masse" ? C.g : C.b;
         const stratL = strat.strategy === "seche" ? "Sèche" : strat.strategy === "prise_de_masse" ? "Prise" : "Maintenance";
-        const surplusPct = consumed && targetCal && targetCal > 0 ? ((consumed - targetCal) / targetCal) * 100 : null;
-        const sd = strat as { surplus_deficit_min?: number; surplus_deficit_max?: number };
-        const inRange = surplusPct !== null && sd.surplus_deficit_min != null && sd.surplus_deficit_max != null && surplusPct >= sd.surplus_deficit_min && surplusPct <= sd.surplus_deficit_max;
-        const feedbackC = surplusPct === null ? null : inRange ? C.g : C.o;
-        const feedbackMsg = surplusPct === null ? null : inRange ? "✅ Dans la fourchette aujourd'hui" : "⚠️ " + (surplusPct > 0 ? "+" : "") + surplusPct.toFixed(1) + "% — objectif " + sd.surplus_deficit_min + "% à " + sd.surplus_deficit_max + "%";
+        const feedbackC = !dayEval ? null : dayEval.status === "ok" ? C.g : dayEval.status === "close" ? C.o : C.r;
+        const feedbackMsg = !dayEval ? null
+          : dayEval.status === "ok" ? (dayEval.isRange ? "✅ Dans la fourchette aujourd'hui" : "✅ Dans l'objectif aujourd'hui")
+          : (dayEval.status === "close" ? "🟡 Proche de l'objectif " : "⚠️ Hors objectif ")
+            + `(${dayEval.diffPct > 0 ? "+" : ""}${dayEval.diffPct.toFixed(1)}%)`;
         return (
           <div style={{ background: C.s1, borderRadius: 14, padding: "11px 16px", border: "1px solid " + (feedbackC ? feedbackC + "40" : C.brd), marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: consumed ? 8 : 0 }}>
@@ -138,7 +147,7 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: feedbackMsg ? 8 : 0 }}>
-                  <div><span style={{ fontSize: 20, fontWeight: 800, color: feedbackC || stratC }}>{consumed}</span>{targetCal && <span style={{ fontSize: 10, color: C.tx3 }}> / {targetCal} kcal</span>}</div>
+                  <div><span style={{ fontSize: 20, fontWeight: 800, color: feedbackC || stratC }}>{consumed}</span>{targetLabel && <span style={{ fontSize: 10, color: C.tx3 }}> / {targetLabel} kcal</span>}</div>
                   <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
                     {[{ l: "G", v: todayNL?.glucides_consumed, c: C.b }, { l: "L", v: todayNL?.lipides_consumed, c: C.o }, { l: "P", v: todayNL?.proteines_consumed, c: C.g }].map(macro => (
                       <div key={macro.l} style={{ textAlign: "center" }}><div style={{ fontSize: 12, fontWeight: 700, color: macro.c }}>{macro.v ?? "—"}</div><div style={{ fontSize: 9, color: C.tx3 }}>{macro.l} (g)</div></div>

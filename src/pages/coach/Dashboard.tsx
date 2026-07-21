@@ -14,9 +14,8 @@ const C = {
 };
 
 export default function CoachDashboard() {
-  const { user, profile, athletes, createInviteLink } = useAuth();
+  const { user, profile, athletes } = useAuth();
   const navigate = useNavigate();
-  const [inviteLink, setInviteLink] = useState("");
   const [copyMsg, setCopyMsg] = useState("");
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -31,18 +30,6 @@ export default function CoachDashboard() {
   }
 
   const isCoachAthlete = profile?.role === "coach" || profile?.role === "coach_athlete";
-
-  async function handleCopyLink() {
-    try {
-      const link = await createInviteLink();
-      setInviteLink(link);
-      await navigator.clipboard.writeText(link);
-      setCopyMsg("Lien copié !");
-      setTimeout(() => setCopyMsg(""), 2500);
-    } catch {
-      setCopyMsg("Erreur");
-    }
-  }
 
   async function handleCopyCode() {
     if (!profile?.coach_code) return;
@@ -127,25 +114,11 @@ export default function CoachDashboard() {
               )}
             </div>
 
-            {/* Invitation */}
-            <button onClick={handleCopyLink}
-              style={{ width: "100%", padding: "12px", borderRadius: 12, border: "1px solid " + C.brdL, background: C.s1, color: C.tx2, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-              🔗 Générer un lien d'invitation
-            </button>
             {/* Déconnexion */}
             <button onClick={() => setShowLogoutConfirm(true)}
               style={{ width: "100%", marginTop: 8, padding: "12px", borderRadius: 12, border: "1px solid rgba(239,75,75,0.3)", background: "rgba(239,75,75,0.1)", color: "#EF4B4B", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               <span>⏻</span><span>Déconnexion</span>
             </button>
-            {inviteLink && (
-              <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brdL, display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ flex: 1, fontSize: 11, color: C.tx3, wordBreak: "break-all" }}>{inviteLink}</div>
-                <button onClick={async () => { await navigator.clipboard.writeText(inviteLink); setCopyMsg("Lien copié !"); setTimeout(() => setCopyMsg(""), 2500); }}
-                  style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 8, border: "1px solid " + (copyMsg ? C.g : C.brdL), background: copyMsg ? "rgba(34,201,147,0.12)" : C.s1, color: copyMsg ? C.g : C.tx2, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                  {copyMsg ? "✓ Copié !" : "Copier"}
-                </button>
-              </div>
-            )}
           </div>
     </div>
 
