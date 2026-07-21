@@ -723,6 +723,9 @@ export function ExerciceParamsPanel({
           <SyntheseBar params={{ ...params, nb_series: nb }} />
         </div>
       )}
+      <div style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s2 }}>
+        <SyntheseBar params={{ ...params, nb_series: nb }} />
+      </div>
 
       {/* Method picker modal */}
       {showMethodPicker && (
