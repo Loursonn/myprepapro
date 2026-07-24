@@ -82,7 +82,7 @@ export function useUnifiedCalendar(
       const [wRes, tRes, cRes, eRes, fRes] = await Promise.all([
         supabase
           .from("workout_logs")
-          .select("id, session_id, session_name, scheduled_date, status, rpe_score")
+          .select("id, session_id, session_name, scheduled_date, status, rpe_score, athlete_modifications")
           .eq("athlete_id", athleteId)
           .gte("scheduled_date", start)
           .lte("scheduled_date", end)

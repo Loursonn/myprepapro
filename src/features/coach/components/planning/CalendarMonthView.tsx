@@ -157,6 +157,9 @@ function EventChip({
           <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
         )}
       </span>
+      {event.type === "workout" && !!(event.raw?.athlete_modifications as { coachOverride?: unknown } | null)?.coachOverride && (
+        <span title="Séance adaptée pour ce jour" style={{ flexShrink: 0, marginLeft: 2, color: "#F59E0B" }}>✎</span>
+      )}
       {event.rpe != null && (
         <span style={{ flexShrink: 0, opacity: 0.85, fontWeight: 700, marginLeft: 2 }}>RPE {event.rpe}</span>
       )}
