@@ -10,7 +10,7 @@
 -- Ajuste l'heure selon le fuseau horaire de tes utilisateurs.
 
 -- Supprimer le job existant s'il existe (idempotence)
-DO $$
+DO $do$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM cron.job WHERE jobname = 'mark-missed-workouts'
@@ -19,33 +19,38 @@ BEGIN
   END IF;
 EXCEPTION
   -- pg_cron pas activé → on ignore silencieusement
-  WHEN undefined_schema THEN NULL;
-  WHEN undefined_table  THEN NULL;
+  WHEN invalid_schema_name THEN NULL;
+  WHEN undefined_table     THEN NULL;
+  WHEN undefined_function  THEN NULL;
 END;
-$$;
+$do$;
 
 -- Création du job cron (uniquement si pg_cron est disponible)
-DO $$
+-- NB : dollar-quoting distinct ($do$ / $job$). Avec $$ des deux côtés, le $$
+-- interne referme le bloc DO et le fichier entier devient invalide.
+DO $do$
 BEGIN
   PERFORM cron.schedule(
     'mark-missed-workouts',
     '0 3 * * *',  -- 3h UTC chaque jour
-    $$
+    $job$
       UPDATE public.workout_logs
       SET status = 'missed', updated_at = now()
       WHERE status = 'planned'
         AND scheduled_date < CURRENT_DATE
         AND scheduled_date >= CURRENT_DATE - 30;  -- limite aux 30 derniers jours
-    $$
+    $job$
   );
 EXCEPTION
   -- pg_cron pas activé → on log un warning, pas d'erreur fatale
-  WHEN undefined_schema THEN
+  WHEN invalid_schema_name THEN
     RAISE WARNING 'pg_cron non disponible. Activez l''extension dans Supabase Dashboard → Database → Extensions → pg_cron, puis ré-exécutez cette migration.';
   WHEN undefined_function THEN
     RAISE WARNING 'pg_cron non disponible (cron.schedule non trouvé).';
+  WHEN insufficient_privilege THEN
+    RAISE WARNING 'Droits insuffisants pour planifier le job cron.';
 END;
-$$;
+$do$;
 
 COMMENT ON TABLE public.workout_logs IS
   'Logs des séances avec statut. '
