@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
+import { useUnfinishedWorkouts } from "@/features/shared/hooks/useUnfinishedWorkouts";
 import ProfileDrawer from "./components/ProfileDrawer";
 import AppFbForm from "./components/AppFbForm";
 import { WellnessFlow } from "@/components/athlete/WellnessFlow";
@@ -18,6 +19,12 @@ const ATH_TABS = [
   { k: "profil",  l: "Profil",      icon: "👤" },
 ];
 
+/** "3 août" — libellé court pour le bandeau de rappel. */
+function formatPendingDate(iso: string): string {
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+}
+
 interface AthleteLayoutProps {
   onSwitchMode?: () => void;
   userName?: string;
@@ -29,7 +36,10 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  const [dismissedUnfinished, setDismissedUnfinished] = useState<string[]>([]);
+
   const {
+    athleteId,
     viewOnly, saveStatus, activeInjuries,
     showWellness, setShowWellness, showAppFeedback, setShowAppFeedback,
     showBilan, setShowBilan, showNewBlock, setShowNewBlock,
@@ -40,6 +50,10 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
     saveWellness, addInjury, goals, wellness, weightLog, archiveAndNewBlock,
     freeSessions,
   } = useAthleteContext();
+
+  // Séance passée avec des saisies mais jamais clôturée → bandeau de rappel
+  const { data: unfinishedWorkouts = [] } = useUnfinishedWorkouts(viewOnly ? null : athleteId);
+  const pendingFinish = unfinishedWorkouts.find((w) => !dismissedUnfinished.includes(w.id)) ?? null;
 
   // Derive active tab from pathname
   const pathSegments = location.pathname.split("/").filter(Boolean);
@@ -182,6 +196,55 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
           >
             <span style={{ fontSize: 16 }}>▶</span><span>Reprendre — {activeFreeSess.name}</span>
           </button>
+        </div>
+      )}
+
+      {/* ── Rappel "séance non terminée" ── */}
+      {/* Les saisies sont bien enregistrées, mais sans clôture la séance
+          n'entre ni dans l'historique ni dans les stats. */}
+      {!viewOnly && !isOnWorkoutPage && pendingFinish && (
+        <div style={{ position: "fixed", bottom: activeWorkout ? 132 : 72, left: 16, right: 16, zIndex: 141 }}>
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "12px 14px", borderRadius: 14,
+              background: C.s1, border: "1px solid " + C.o + "70",
+              boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
+            }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>🏁</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>
+                Séance non terminée
+              </div>
+              <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>
+                {pendingFinish.sessionName} — {formatPendingDate(pendingFinish.scheduledDate)} ·{" "}
+                {pendingFinish.loggedSets} série{pendingFinish.loggedSets > 1 ? "s" : ""} saisie
+                {pendingFinish.loggedSets > 1 ? "s" : ""}
+              </div>
+            </div>
+            <button
+              onClick={() => navigate(`program/workout/${pendingFinish.id}?finish=1`)}
+              style={{
+                padding: "8px 12px", borderRadius: 10, border: "none",
+                background: C.g, color: "#fff", fontSize: 11, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+              }}
+            >
+              Clôturer
+            </button>
+            <button
+              onClick={() => setDismissedUnfinished((prev) => [...prev, pendingFinish.id])}
+              aria-label="Ignorer"
+              style={{
+                padding: "8px 6px", borderRadius: 10, border: "none",
+                background: "transparent", color: C.tx3, fontSize: 13,
+                cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
