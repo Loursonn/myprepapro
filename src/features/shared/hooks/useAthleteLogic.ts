@@ -100,11 +100,24 @@ export function useAthleteLogic(d: LogicDeps) {
       // Auto-nettoyage : si des cycles existent, on supprime les séances tombées
       // HORS de tout cycle (phantoms laissés par d'anciens backfills, ex. après
       // avoir stoppé/raccourci un cycle). Sinon, repart proprement.
+      //
+      // On ne cible QUE la signature d'un phantom de backfill : un log "completed"
+      // sans aucune saisie de l'athlète. Auparavant ce nettoyage supprimait TOUT
+      // log hors cycle : une séance glissée par le coach sur une date hors cycle
+      // disparaissait au chargement suivant, et une séance en cours d'exécution
+      // était effacée sous les pieds de l'athlète (ses charges/reps n'étaient
+      // alors plus jamais enregistrées).
       if (hasCycles) {
         const { data: allLogs } = await supabase
-          .from("workout_logs").select("id, scheduled_date").eq("athlete_id", athleteId);
+          .from("workout_logs")
+          .select("id, scheduled_date, status, athlete_modifications")
+          .eq("athlete_id", athleteId);
         const orphanIds = (allLogs ?? [])
-          .filter((l) => !inAnyCycle(l.scheduled_date))
+          .filter((l) =>
+            !inAnyCycle(l.scheduled_date) &&
+            l.status === "completed" &&
+            l.athlete_modifications == null
+          )
           .map((l) => l.id);
         if (orphanIds.length > 0) {
           await supabase.from("workout_logs").delete().in("id", orphanIds);
