@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -14,6 +15,7 @@ import { usePlanningMargin } from "@/features/shared/hooks/usePlanningMargin";
 import { useRecentRecords } from "@/features/shared/hooks/useRecentRecords";
 import { useUpcomingCompetitions } from "@/features/shared/hooks/useUpcomingCompetitions";
 import { useRecentActivity } from "@/features/shared/hooks/useRecentActivity";
+import { useUnfinishedWorkouts } from "@/features/shared/hooks/useUnfinishedWorkouts";
 import { useAuth } from "@/hooks/useAuth";
 import { C } from "@/lib/theme";
 import { COMPETITION_META } from "@/types/planning";
@@ -103,6 +105,18 @@ export default function CoachHomePage() {
   const { records, isLoading: loadRecords }             = useRecentRecords(8);
   const { competitions, isLoading: loadCompet }         = useUpcomingCompetitions(30);
   const { activities, isLoading: loadActivity }         = useRecentActivity(8);
+
+  // Séances travaillées mais jamais clôturées par l'athlète : les données sont
+  // là, mais le statut "planned" les exclut de l'historique et des stats.
+  const athleteIds = useMemo(
+    () => [...athletes.map((a) => a.id), ...(isCoachAthlete && user ? [user.id] : [])],
+    [athletes, isCoachAthlete, user],
+  );
+  const { data: unfinished = [] } = useUnfinishedWorkouts(athleteIds);
+  const athleteNameById = useMemo(
+    () => new Map(athletes.map((a) => [a.id, a.full_name ?? "Athlète"])),
+    [athletes],
+  );
 
   const firstName  = profile?.full_name?.split(" ")[0] ?? "Coach";
   const todayLabel = format(new Date(), "EEEE d MMMM", { locale: fr });
@@ -279,6 +293,42 @@ export default function CoachHomePage() {
                     <ChevronRight size={13} style={{ color: C.tx3 }} />
                   </div>
                 ))}
+              </Card>
+            </motion.div>
+          )}
+
+          {/* ── Séances à clôturer ── */}
+          {unfinished.length > 0 && (
+            <motion.div variants={fadeUp}>
+              <SectionTitle emoji="🏁">Séances à clôturer</SectionTitle>
+              <Card>
+                {unfinished.slice(0, 8).map((w, i) => {
+                  const name = athleteNameById.get(w.athleteId)
+                    ?? (w.athleteId === user?.id ? (profile?.full_name ?? "Moi") : "Athlète");
+                  return (
+                    <div
+                      key={w.id}
+                      onClick={() => navigate(`/coach/athletes/${w.athleteId}/planning`)}
+                      className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+                      style={{
+                        borderBottom: i < Math.min(unfinished.length, 8) - 1
+                          ? "1px solid rgba(124,116,128,0.1)"
+                          : undefined,
+                        borderLeft: `3px solid ${C.y}`,
+                      }}
+                    >
+                      <Avatar name={name} color={C.y} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-bold" style={{ color: C.tx }}>{name}</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: C.tx3 }}>
+                          🏁 {w.sessionName} — {format(new Date(w.scheduledDate + "T12:00:00"), "d MMM", { locale: fr })} ·{" "}
+                          {w.loggedSets} série{w.loggedSets > 1 ? "s" : ""} saisie{w.loggedSets > 1 ? "s" : ""}, jamais terminée
+                        </p>
+                      </div>
+                      <ChevronRight size={13} style={{ color: C.tx3 }} />
+                    </div>
+                  );
+                })}
               </Card>
             </motion.div>
           )}

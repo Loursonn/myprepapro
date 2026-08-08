@@ -10,9 +10,10 @@ import { useEnergySession } from "@/features/shared/hooks/useEnergySessions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Competition } from "@/types/planning";
-import type { WellnessData } from "@/features/shared/types/athlete";
+import type { WellnessData, AthleteModifications } from "@/features/shared/types/athlete";
 import type { NutritionDailyLog } from "@/lib/nutrition";
 import { CompetitionFormModal } from "./CompetitionFormModal";
+import { CoachSessionOverrideModal } from "./CoachSessionOverrideModal";
 import { SessionPreviewModal } from "@/features/coach/components/energy/SessionPreviewModal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -62,15 +63,18 @@ function WorkoutDetailView({
   event,
   exos,
   localSets,
+  onAdaptForDay,
 }: {
   event: CalEvent;
   exos?: Record<string, unknown[]>;
   localSets?: Record<string, unknown[]>;
+  onAdaptForDay?: () => void;
 }) {
   const sessionId    = event.raw?.session_id as string | undefined;
   const isProjected  = event.raw?.source === "block_plan";
   const isCompleted  = event.status === "completed";
   const week         = event.raw?.week as number | undefined;
+  const hasOverride  = !!(event.raw?.athlete_modifications as AthleteModifications | null)?.coachOverride;
   // Real DB workout: show set_logs. Projected+completed: use local sets from app_data.
   const workoutLogId = !isProjected && isCompleted ? event.id : null;
 
@@ -131,7 +135,32 @@ function WorkoutDetailView({
             Prévu (programme)
           </span>
         )}
+        {hasOverride && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+            background: "#F59E0B20", color: "#F59E0B",
+            textTransform: "uppercase", letterSpacing: "0.4px",
+          }}>
+            Adaptée ce jour
+          </span>
+        )}
       </div>
+
+      {/* Adapt-for-this-day — real, not-yet-done workouts (projected must be assigned first) */}
+      {!isProjected && !isCompleted && onAdaptForDay && (
+        <button
+          onClick={onAdaptForDay}
+          style={{
+            width: "100%", padding: "10px 14px", borderRadius: 10,
+            border: "1px solid " + C.ac + "40", background: C.acS,
+            color: C.ac, fontSize: 12, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}
+        >
+          ✎ {hasOverride ? "Modifier l'adaptation du jour" : "Adapter pour ce jour"}
+        </button>
+      )}
 
       {/* Completed: show set_logs */}
       {workoutLogId && (
@@ -709,6 +738,7 @@ export function DayDetailsDrawer({
 }: DayDetailsDrawerProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(initialSelectedEvent ?? null);
   const [editingComp,   setEditingComp]   = useState<Competition | null>(null);
+  const [overrideLogId, setOverrideLogId] = useState<string | null>(null);
   const [energyPreview, setEnergyPreview] = useState<CalEvent | null>(null);
   const { user } = useAuth();
   // Track when user wants to open the full energy session modal from detail view
@@ -820,7 +850,12 @@ export function DayDetailsDrawer({
             ) : selectedEvent.type === "free_activity" ? (
               <FreeActivityDetailView event={selectedEvent} />
             ) : (
-              <WorkoutDetailView event={selectedEvent} exos={exos} localSets={sets} />
+              <WorkoutDetailView
+                event={selectedEvent}
+                exos={exos}
+                localSets={sets}
+                onAdaptForDay={() => setOverrideLogId(selectedEvent.id)}
+              />
             )
           ) : (
             <>
@@ -968,6 +1003,15 @@ export function DayDetailsDrawer({
           event={(energyFullPreview ?? energyPreview)!}
           athleteId={athleteId}
           onClose={() => { setEnergyPreview(null); setEnergyFullPreview(null); }}
+        />
+      )}
+
+      {/* Coach per-day session adaptation modal */}
+      {overrideLogId && (
+        <CoachSessionOverrideModal
+          workoutLogId={overrideLogId}
+          athleteId={athleteId}
+          onClose={() => setOverrideLogId(null)}
         />
       )}
     </>

@@ -15,6 +15,9 @@ import {
   DragOverlay,
   useDraggable,
   useDroppable,
+  closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
   PointerSensor,
@@ -68,6 +71,15 @@ function isBiometric(event: CalEvent): boolean {
 function energyChipColor(_event: CalEvent): string {
   return C.o;
 }
+
+// Le curseur décide du jour ciblé, pas le rectangle de la vignette déplacée :
+// une vignette (~230px) est plus large qu'une case jour (~160px), donc la
+// détection par intersection de rectangles (défaut dnd-kit) visait un jour
+// voisin — ou aucun jour près des bords, et le drop était alors ignoré.
+const dayCollisionDetection: CollisionDetection = (args) => {
+  const byPointer = pointerWithin(args);
+  return byPointer.length > 0 ? byPointer : closestCenter(args);
+};
 
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
   workout:       C.ac,
@@ -157,6 +169,9 @@ function EventChip({
           <span style={{ opacity: 0.5, marginLeft: 3, fontSize: 8 }}>prévu</span>
         )}
       </span>
+      {event.type === "workout" && !!(event.raw?.athlete_modifications as { coachOverride?: unknown } | null)?.coachOverride && (
+        <span title="Séance adaptée pour ce jour" style={{ flexShrink: 0, marginLeft: 2, color: "#F59E0B" }}>✎</span>
+      )}
       {event.rpe != null && (
         <span style={{ flexShrink: 0, opacity: 0.85, fontWeight: 700, marginLeft: 2 }}>RPE {event.rpe}</span>
       )}
@@ -179,7 +194,9 @@ function DraggableEventChip({
   const draggable = event.type === "workout" || event.type === "energy";
   const deletable = event.type === "workout" || event.type === "energy" || event.type === "test";
   const { mutate: del } = useDeleteCalendarEvent();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  // Pas de `transform` ici : le fantôme est rendu par <DragOverlay>. Déplacer
+  // aussi la vignette source fausserait le rectangle utilisé au drop.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `cal-event-${event.id}`,
     data: { type: "calendar_event", event },
     disabled: !draggable,
@@ -198,7 +215,6 @@ function DraggableEventChip({
         {...listeners}
         style={{
           opacity: isDragging ? 0.35 : 1,
-          transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
           cursor: draggable ? "grab" : "pointer",
           paddingRight: hovered && deletable ? 14 : 0,
         }}
@@ -254,7 +270,8 @@ function DraggableSession({
   const color  = sessionType === "energy" ? "#A855F7" : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : sessionType === "biometric" ? BIO_COLOR : C.ac;
   const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : sessionType === "biometric" ? BIO_COLOR + "20" : C.acS;
 
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  // Idem : le fantôme est rendu par <DragOverlay>, la vignette source reste en place.
+  const { attributes, listeners, setNodeRef } = useDraggable({
     id: session.id,
     data: { ...session, sessionType },
   });
@@ -276,9 +293,6 @@ function DraggableSession({
         userSelect: "none",
         opacity: isDragging ? 0.5 : 1,
         transition: "opacity 120ms",
-        transform: transform
-          ? `translate(${transform.x}px, ${transform.y}px)`
-          : undefined,
         display: "flex", alignItems: "center", gap: 6,
       }}
     >
@@ -962,7 +976,12 @@ export function CalendarMonthView({
   const activeDragIsBio    = activeDragId === BIO_BANK_ID;
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={dayCollisionDetection}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
           {/* Month navigation — pleine largeur */}

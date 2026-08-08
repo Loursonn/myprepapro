@@ -1,5 +1,5 @@
 import { Fragment, useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { C } from "@/lib/theme";
@@ -1985,6 +1985,7 @@ function RpeSheetForLog({
 export default function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { athleteId } = useAthleteContext();
   const qc = useQueryClient();
 
@@ -2034,6 +2035,7 @@ export default function WorkoutDetailPage() {
     workout.workoutLogId,
     allExIds,
     workout.weekNumber,
+    workout.scheduledDate,
   );
 
   // ── Vidéos banque d'exercices (exercise_id → youtube_id) ─────────────────
@@ -2130,6 +2132,18 @@ export default function WorkoutDetailPage() {
       return changed ? next : prev;
     });
   }, [setsInit, prevSets]);
+
+  // ── Ouverture directe du dialogue de fin (?finish=1) ─────────────────────
+  // Utilisé par le bandeau "séance non terminée" : l'athlète arrive
+  // directement sur la clôture, sans avoir à retrouver le bouton.
+  const finishRequested = searchParams.get("finish") === "1";
+  const finishAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!finishRequested || finishAutoOpenedRef.current) return;
+    if (workout.isLoading || workout.status === "completed") return;
+    finishAutoOpenedRef.current = true;
+    setShowFinish(true);
+  }, [finishRequested, workout.isLoading, workout.status]);
 
   // ── Session timer ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -2501,6 +2515,13 @@ export default function WorkoutDetailPage() {
 
   const isCompleted = workout.status === "completed";
   const canEdit = !isCompleted && !!id;
+
+  // Toutes les séries traitées (validées ou passées) → on met en avant le bouton
+  // "Terminer", moment où l'athlète oublie le plus souvent de clôturer.
+  const allSetsHandled = useMemo(() => {
+    const rows = Object.values(sets).flat();
+    return rows.length > 0 && rows.every((s) => s.done || s.skipped);
+  }, [sets]);
 
   // ── Early returns ────────────────────────────────────────────────────────
   if (workout.isLoading) {
@@ -3043,9 +3064,16 @@ export default function WorkoutDetailPage() {
             padding: "12px 16px",
             background: `linear-gradient(transparent, ${C.bg} 30%)`,
             display: "flex",
-            justifyContent: "center",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 6,
           }}
         >
+          {allSetsHandled && (
+            <div style={{ fontSize: 11, fontWeight: 700, color: GREEN }}>
+              Toutes les séries sont validées — il ne reste qu'à terminer
+            </div>
+          )}
           <button
             onClick={() => setShowFinish(true)}
             style={{
@@ -3054,17 +3082,24 @@ export default function WorkoutDetailPage() {
               padding: "16px 0",
               borderRadius: 16,
               border: "none",
-              background: VIOLET,
+              background: allSetsHandled ? GREEN : VIOLET,
               color: "#fff",
               fontSize: 14,
               fontWeight: 700,
               cursor: "pointer",
               fontFamily: "inherit",
-              boxShadow: `0 4px 20px ${hexToRgba(VIOLET, 0.35)}`,
+              boxShadow: `0 4px 20px ${hexToRgba(allSetsHandled ? GREEN : VIOLET, 0.35)}`,
+              animation: allSetsHandled ? "finishPulse 1.8s ease-in-out infinite" : undefined,
             }}
           >
-            Terminer la séance
+            {allSetsHandled ? "🏁 Terminer la séance" : "Terminer la séance"}
           </button>
+          {allSetsHandled && (
+            <style>{`@keyframes finishPulse {
+              0%, 100% { box-shadow: 0 4px 20px ${hexToRgba(GREEN, 0.35)}; }
+              50%      { box-shadow: 0 4px 28px ${hexToRgba(GREEN, 0.7)}; }
+            }`}</style>
+          )}
         </div>
       )}
 

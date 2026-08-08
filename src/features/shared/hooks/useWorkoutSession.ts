@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProgrammation } from "@/features/coach/components/programmation/hooks/useProgrammation";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { defaultExerciceParams } from "@/features/coach/components/programmation/types";
-import type { ExerciceParams } from "@/features/coach/components/programmation/types";
+import type { Bloc, ExerciceParams } from "@/features/coach/components/programmation/types";
 import type { AthleteModifications, Exercise, WeekConfig } from "../types/athlete";
 
 export interface WorkoutExerciceData {
@@ -130,6 +130,90 @@ function buildLegacyBlocs(
   }));
 }
 
+// ── ProgSession → WorkoutBlocData ──────────────────────────────────────────────
+
+/**
+ * Builds display-ready blocs from a ProgSession's blocs, resolving per-week
+ * params to `weekNumber`. Shared by the normal template path and the coach
+ * per-day override path (override passes flat single-week blocs + week 1).
+ */
+function buildProgBlocs(
+  progBlocs: Bloc[],
+  weekNumber: number,
+  sessionMultiSemaine: boolean,
+): WorkoutBlocData[] {
+  return progBlocs.map((bloc) => {
+    const nbSeriesFixed =
+      bloc.series_mode === "fixe" && bloc.series_count
+        ? bloc.series_count
+        : null;
+
+    return {
+      id: bloc.id,
+      name: bloc.name,
+      color: bloc.color,
+      series_mode: bloc.series_mode,
+      series_count: bloc.series_count,
+      timing_mode: bloc.timing_mode,
+      timing_repos_min: bloc.timing_repos_min,
+      timing_repos_sec: bloc.timing_repos_sec,
+      timing_depart_min: bloc.timing_depart_min,
+      timing_depart_sec: bloc.timing_depart_sec,
+      exercices: bloc.exercices.map((ex) => {
+        let params: ExerciceParams;
+
+        // session.multi_semaine OR ex.multi_semaine → params stored as Record<weekKey, ExerciceParams>
+        const effectiveMulti = sessionMultiSemaine || (ex.multi_semaine ?? false);
+        // Detect Record by presence of at least one numeric string key (week number).
+        const isRecord =
+          typeof ex.params === "object" &&
+          ex.params !== null &&
+          Object.keys(ex.params).some((k) => /^\d+$/.test(k));
+
+        if (effectiveMulti && isRecord) {
+          const paramsMap = ex.params as Record<string, ExerciceParams>;
+          params =
+            paramsMap[String(weekNumber)] ??
+            paramsMap["1"] ??
+            defaultExerciceParams();
+        } else if (isRecord) {
+          const paramsMap = ex.params as Record<string, ExerciceParams>;
+          params = Object.values(paramsMap)[0] ?? defaultExerciceParams();
+        } else {
+          params = ex.params as ExerciceParams;
+        }
+
+        // Guard against incomplete/corrupt stored params
+        const def = defaultExerciceParams(params.nb_series);
+        const safeParams: ExerciceParams = {
+          ...def,
+          ...params,
+          reps: params.reps ?? def.reps,
+          reps_mode: params.reps_mode ?? def.reps_mode,
+          charge: params.charge ?? def.charge,
+          rir: params.rir ?? def.rir,
+          tempo: params.tempo ?? def.tempo,
+        };
+
+        const effectiveNbSeries = nbSeriesFixed ?? safeParams.nb_series;
+
+        return {
+          id: ex.id,
+          exercise_id: ex.exercise_id,
+          exercise_name: ex.exercise_name,
+          muscle: (ex as { muscle?: string }).muscle,
+          params: { ...safeParams, nb_series: effectiveNbSeries },
+          mode: ex.mode,
+          libre_text: ex.libre_text,
+          methode_id: ex.methode_id,
+          comment: (ex as { comment?: string }).comment,
+          superset_with_next: ex.superset_with_next,
+        };
+      }),
+    };
+  });
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSessionResult {
@@ -228,6 +312,32 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
 
     if (!wlog) return empty;
 
+    // ── Coach per-day override — self-contained, wins over template ──────────
+    const earlyMods = (wlog.athlete_modifications as AthleteModifications | null) ?? null;
+    if (earlyMods?.coachOverride?.blocs?.length) {
+      const overrideBlocs = buildProgBlocs(
+        earlyMods.coachOverride.blocs as Bloc[],
+        1,      // override is stored flattened to a single week
+        false,
+      );
+      const progSess = progSessions.find((s) => s.id === wlog.session_id);
+      return {
+        isLoading: false,
+        workoutLogId: wlog.id,
+        sessionId: wlog.session_id,
+        sessionName: progSess?.name ?? wlog.session_name,
+        sessionShort: (progSess?.short ?? wlog.session_name).slice(0, 3).toUpperCase(),
+        blocs: overrideBlocs,
+        status: wlog.status,
+        rpeScore: wlog.rpe_score ?? null,
+        scheduledDate: wlog.scheduled_date,
+        weekNumber,
+        athleteModifications: earlyMods,
+        rescheduledByAthlete: wlog.rescheduled_by_athlete ?? false,
+        originalScheduledDate: wlog.original_scheduled_date ?? null,
+      };
+    }
+
     const progSession = progSessions.find((s) => s.id === wlog.session_id);
 
     if (!progSession) {
@@ -259,80 +369,7 @@ export function useWorkoutSession(workoutLogId: string | undefined): WorkoutSess
     const mods =
       (wlog.athlete_modifications as AthleteModifications | null) ?? null;
 
-    const blocs: WorkoutBlocData[] = progSession.blocs.map((bloc) => {
-      const nbSeriesFixed =
-        bloc.series_mode === "fixe" && bloc.series_count
-          ? bloc.series_count
-          : null;
-
-      return {
-        id: bloc.id,
-        name: bloc.name,
-        color: bloc.color,
-        series_mode: bloc.series_mode,
-        series_count: bloc.series_count,
-        timing_mode: bloc.timing_mode,
-        timing_repos_min: bloc.timing_repos_min,
-        timing_repos_sec: bloc.timing_repos_sec,
-        timing_depart_min: bloc.timing_depart_min,
-        timing_depart_sec: bloc.timing_depart_sec,
-        exercices: bloc.exercices.map((ex) => {
-          let params: ExerciceParams;
-
-          // session.multi_semaine OR ex.multi_semaine → params stored as Record<weekKey, ExerciceParams>
-          const effectiveMulti = progSession.multi_semaine || (ex.multi_semaine ?? false);
-          // Detect Record by presence of at least one numeric string key (week number).
-          // Using numeric key detection is more robust than checking absence of 'nb_series'
-          // because mixed objects (flat params accidentally spread into a Record) would
-          // have both 'nb_series' and numeric keys — we still want to treat them as Records.
-          const isRecord =
-            typeof ex.params === "object" &&
-            ex.params !== null &&
-            Object.keys(ex.params).some((k) => /^\d+$/.test(k));
-
-          if (effectiveMulti && isRecord) {
-            const paramsMap = ex.params as Record<string, ExerciceParams>;
-            params =
-              paramsMap[String(weekNumber)] ??
-              paramsMap["1"] ??
-              defaultExerciceParams();
-          } else if (isRecord) {
-            // has record structure but multi_semaine not flagged — take first week
-            const paramsMap = ex.params as Record<string, ExerciceParams>;
-            params = Object.values(paramsMap)[0] ?? defaultExerciceParams();
-          } else {
-            params = ex.params as ExerciceParams;
-          }
-
-          // Guard against incomplete/corrupt stored params
-          const def = defaultExerciceParams(params.nb_series);
-          const safeParams: ExerciceParams = {
-            ...def,
-            ...params,
-            reps: params.reps ?? def.reps,
-            reps_mode: params.reps_mode ?? def.reps_mode,
-            charge: params.charge ?? def.charge,
-            rir: params.rir ?? def.rir,
-            tempo: params.tempo ?? def.tempo,
-          };
-
-          const effectiveNbSeries = nbSeriesFixed ?? safeParams.nb_series;
-
-          return {
-            id: ex.id,
-            exercise_id: ex.exercise_id,
-            exercise_name: ex.exercise_name,
-            muscle: (ex as { muscle?: string }).muscle,
-            params: { ...safeParams, nb_series: effectiveNbSeries },
-            mode: ex.mode,
-            libre_text: ex.libre_text,
-            methode_id: ex.methode_id,
-            comment: (ex as { comment?: string }).comment,
-            superset_with_next: ex.superset_with_next,
-          };
-        }),
-      };
-    });
+    const blocs = buildProgBlocs(progSession.blocs, weekNumber, progSession.multi_semaine);
 
     return {
       isLoading: false,

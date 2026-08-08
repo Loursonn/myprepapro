@@ -81,27 +81,30 @@ CREATE POLICY "workout_logs_self_update" ON public.workout_logs
 -- NOTE : Si rescheduled_by_athlete = true ET scheduled_date < CURRENT_DATE → marquer missed quand même
 --        (l'athlète a décalé mais n'a quand même pas fait la séance).
 
-DO $$
+-- NB : dollar-quoting distinct ($do$ / $job$) — voir 20260427120400.
+DO $do$
 BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'mark-missed-workouts') THEN
     PERFORM cron.unschedule('mark-missed-workouts');
     PERFORM cron.schedule(
       'mark-missed-workouts',
       '0 3 * * *',
-      $$
+      $job$
         UPDATE public.workout_logs
         SET status = 'missed', updated_at = now()
         WHERE status = 'planned'
           AND scheduled_date < CURRENT_DATE
           AND scheduled_date >= CURRENT_DATE - 30;
-      $$
+      $job$
     );
   END IF;
 EXCEPTION
-  WHEN undefined_schema THEN NULL;
-  WHEN undefined_table  THEN NULL;
+  WHEN invalid_schema_name THEN NULL;
+  WHEN undefined_table     THEN NULL;
+  WHEN undefined_function  THEN NULL;
+  WHEN insufficient_privilege THEN NULL;
 END;
-$$;
+$do$;
 
 -- Même mise à jour pour la fonction mark_missed_workouts (Edge Function fallback)
 CREATE OR REPLACE FUNCTION public.mark_missed_workouts()

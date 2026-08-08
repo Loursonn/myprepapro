@@ -13,6 +13,9 @@ import {
   DragOverlay,
   useDraggable,
   useDroppable,
+  closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
   PointerSensor,
   useSensor,
@@ -28,6 +31,13 @@ import { SessionPickerDialog } from "./SessionPickerDialog";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+// Le curseur décide du jour ciblé (cf. CalendarMonthView) : la détection par
+// intersection de rectangles visait un jour voisin, ou aucun près des bords.
+const dayCollisionDetection: CollisionDetection = (args) => {
+  const byPointer = pointerWithin(args);
+  return byPointer.length > 0 ? byPointer : closestCenter(args);
+};
 
 const KIND_COLORS: Record<string, string> = {
   vo2:        "#A855F7",
@@ -498,6 +508,7 @@ export function EnergyCalendarView({ athleteId, sessionKindFilter }: Props) {
       {/* Calendar grid with DnD */}
       <DndContext
         sensors={sensors}
+        collisionDetection={dayCollisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >

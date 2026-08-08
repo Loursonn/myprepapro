@@ -185,6 +185,20 @@ export interface SessionSetLog {
   note?: string;
 }
 
+/**
+ * Coach adaptation of a session for ONE specific day (one workout_log).
+ * When present, the athlete sees these blocs instead of the shared template,
+ * without affecting any other occurrence of the same session.
+ * `blocs` holds a flattened single-week ProgSession.blocs snapshot
+ * (typed `unknown[]` here to keep this shared types file decoupled from the
+ * coach programmation layer; cast to `Bloc[]` at use sites).
+ */
+export interface CoachSessionOverride {
+  blocs: unknown[];          // Bloc[] — flattened to a single week
+  note?: string;             // optional coach note for the day
+  createdAt: string;         // ISO timestamp
+}
+
 export interface AthleteModifications {
   bonusSets?: BonusSet[];
   customExercises?: CustomExercise[];
@@ -193,6 +207,8 @@ export interface AthleteModifications {
   exerciceComments?: Record<string, string>;         // key = Exercice.id
   sessionComment?: string;
   sessionForme?: number;                             // 1-5 état de forme
+  /** Coach's per-day adaptation of the session (see CoachSessionOverride). */
+  coachOverride?: CoachSessionOverride;
 }
 
 // ─── Session Logs ────────────────────────────────────────────────────────────
