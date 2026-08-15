@@ -1,4 +1,5 @@
 import type { EnergyTarget } from "@/types/energy";
+import { paceBounds } from "./paceCompat";
 
 /** Formate un EnergyTarget en string lisible en français. Retourne "" si les valeurs sont vides/invalides. */
 export function formatTarget(target: EnergyTarget): string {
@@ -28,17 +29,18 @@ export function formatTarget(target: EnergyTarget): string {
     }
 
     case "pace": {
-      const minOk = ok(target.min_s_per_unit) && target.min_s_per_unit > 0;
-      const maxOk = ok(target.max_s_per_unit) && target.max_s_per_unit > 0;
+      const { min: pMin, max: pMax } = paceBounds(target);
+      const minOk = ok(pMin) && pMin > 0;
+      const maxOk = ok(pMax) && pMax > 0;
       if (!minOk && !maxOk) return "";
       if (target.unit === "min_per_km") {
-        if (minOk && maxOk) return `${_fmtPace(target.min_s_per_unit)}–${_fmtPace(target.max_s_per_unit)}/km`;
-        return `${_fmtPace(minOk ? target.min_s_per_unit : target.max_s_per_unit)}/km`;
+        if (minOk && maxOk) return `${_fmtPace(pMin)}–${_fmtPace(pMax)}/km`;
+        return `${_fmtPace(minOk ? pMin : pMax)}/km`;
       }
       // kmh: stored as s/km, display as km/h
       if (minOk && maxOk)
-        return `${(3600 / target.min_s_per_unit).toFixed(1)}–${(3600 / target.max_s_per_unit).toFixed(1)} km/h`;
-      const v = minOk ? target.min_s_per_unit : target.max_s_per_unit;
+        return `${(3600 / pMin).toFixed(1)}–${(3600 / pMax).toFixed(1)} km/h`;
+      const v = minOk ? pMin : pMax;
       return `${(3600 / v).toFixed(1)} km/h`;
     }
 

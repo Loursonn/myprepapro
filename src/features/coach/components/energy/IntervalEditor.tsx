@@ -11,6 +11,7 @@ import {
 import { C } from "@/lib/theme";
 import type { EnergyInterval, IntervalRole, EnergyDuration, EnergyTarget } from "@/types/energy";
 import { genId } from "@/lib/energy/treeUtils";
+import { paceBounds } from "@/lib/energy/paceCompat";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -166,7 +167,8 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
       setRangeMin(t.min); setRangeMax(t.max);
     }
     if (t.kind === "pace") {
-      setRangeMin(t.min); setRangeMax(t.max); setPaceUnit(t.unit);
+      const { min, max } = paceBounds(t);
+      setRangeMin(min); setRangeMax(max); setPaceUnit(t.unit);
     }
     if (t.kind === "pace_test_pct" || t.kind === "power_test_pct") {
       setRangeMin(t.min); setRangeMax(t.max); setTestMetric(t.test_metric);
@@ -188,7 +190,7 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
       case "hr_zone": return { kind: "hr_zone", zone: hrZone };
       case "hr_pct":  return { kind: "hr_pct", min: rangeMin, max: rangeMax };
       case "hr_bpm":  return { kind: "hr_bpm", min: rangeMin, max: rangeMax };
-      case "pace":    return { kind: "pace", min: rangeMin, max: rangeMax, unit: paceUnit };
+      case "pace":    return { kind: "pace", min_s_per_unit: rangeMin, max_s_per_unit: rangeMax, unit: paceUnit };
       case "pace_test_pct":  return { kind: "pace_test_pct", test_metric: testMetric, min: rangeMin, max: rangeMax };
       case "power":          return { kind: "power", min: rangeMin, max: rangeMax };
       case "power_test_pct": return { kind: "power_test_pct", test_metric: testMetric, min: rangeMin, max: rangeMax };

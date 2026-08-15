@@ -48,7 +48,7 @@ export interface AthleteContextValue {
   sessionLogs: Record<string, SessionLog>; setSessionLogs: (v: Record<string, SessionLog>) => void;
   freeSessions: FreeSession[]; setFreeSessions: (v: FreeSession[] | ((prev: FreeSession[]) => FreeSession[])) => void;
   nutritionStrategy: NutritionStrategy | null; setNutritionStrategy: (v: NutritionStrategy | null) => void;
-  nutritionLog: Record<string, unknown>; setNutritionLog: (v: Record<string, unknown>) => void;
+  nutritionLog: Record<string, unknown>; setNutritionLog: (v: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => void;
   visibilitySettings: VisibilitySettings; setVisibilitySettings: (v: VisibilitySettings) => Promise<void>;
   testSessions: unknown[]; setTestSessions: (v: unknown[]) => void;
   loaded: boolean; saveStatus: "saved" | "error" | null;

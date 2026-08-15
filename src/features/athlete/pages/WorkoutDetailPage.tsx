@@ -6,7 +6,7 @@ import { C } from "@/lib/theme";
 import { supabase } from "@/integrations/supabase/client";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useWorkoutSession } from "@/features/shared/hooks/useWorkoutSession";
-import type { WorkoutBlocData } from "@/features/shared/hooks/useWorkoutSession";
+import type { WorkoutBlocData, WorkoutExerciceData } from "@/features/shared/hooks/useWorkoutSession";
 import { useSaveWorkoutSets } from "@/features/shared/hooks/useSaveWorkoutSets";
 import { useExerciseVideos } from "@/features/shared/hooks/useExerciseVideos";
 import { usePrevWorkoutSets } from "@/features/shared/hooks/usePrevWorkoutSets";
@@ -111,23 +111,107 @@ function initSetState(
   };
 }
 
-function setStateToLog(s: SetState): SessionSetLog {
-  const kgStr = s.kg.replace(",", ".");
+const BLANK_SET: SetState = { kg: "", reps: "", rir: "", done: false, skipped: false };
+
+/**
+ * Ramène n'importe quelle valeur à un SetState complet.
+ * Indispensable : une ligne absente (exercice apparu après l'init, index hors
+ * bornes) donnait `{...undefined}` = objet vide → `s.kg` undefined → crash à la
+ * sauvegarde ("Cannot read properties of undefined (reading 'replace')").
+ */
+function normalizeSet(s: Partial<SetState> | undefined | null): SetState {
+  if (!s) return { ...BLANK_SET };
   return {
-    done: s.done,
-    skipped: s.skipped,
+    kg: s.kg ?? "",
+    reps: s.reps ?? "",
+    rir: s.rir ?? "",
+    done: s.done ?? false,
+    skipped: s.skipped ?? false,
+  };
+}
+
+function setStateToLog(s: SetState | undefined): SessionSetLog {
+  const n = normalizeSet(s);
+  const kgStr = n.kg.replace(",", ".");
+  return {
+    done: n.done,
+    skipped: n.skipped,
     kg: kgStr ? parseFloat(kgStr) : undefined,
-    reps: s.reps ? parseInt(s.reps) : undefined,
-    rir: s.rir === "5+" ? 5 : s.rir !== "" ? parseFloat(s.rir) : undefined,
+    reps: n.reps ? parseInt(n.reps) : undefined,
+    rir: n.rir === "5+" ? 5 : n.rir !== "" ? parseFloat(n.rir) : undefined,
   };
 }
 
 function allSetsToMods(allSets: AllSets, base: AthleteModifications): AthleteModifications {
   const sessionSets: Record<string, SessionSetLog[]> = {};
   for (const [exId, exSets] of Object.entries(allSets)) {
-    sessionSets[exId] = exSets.map(setStateToLog);
+    sessionSets[exId] = Array.isArray(exSets) ? exSets.map(setStateToLog) : [];
   }
   return { ...base, sessionSets };
+}
+
+/**
+ * Lignes de séries attendues pour un exercice, à partir de la prescription
+ * courante, des séries déjà enregistrées et de la saisie en cours.
+ * La saisie en cours (`prev`) gagne toujours, et on ne supprime jamais de ligne
+ * (séries bonus, prescription réduite par le coach en cours de séance).
+ */
+function buildExSets(
+  ex: WorkoutExerciceData,
+  saved: SessionSetLog[] | undefined,
+  prev: SetState[] | undefined,
+): SetState[] {
+  if (ex.mode === "libre") {
+    // Libre : une seule "série" virtuelle = case à cocher de validation
+    const existing = prev?.[0];
+    if (existing) return [normalizeSet(existing)];
+    const savedItem = saved?.[0];
+    return [normalizeSet({ done: savedItem?.done, skipped: savedItem?.skipped })];
+  }
+
+  const c = ex.params.cluster;
+  const prescribed = c ? ex.params.nb_series * c.nb_clusters : ex.params.nb_series;
+  const count = Math.max(prescribed || 0, saved?.length ?? 0, prev?.length ?? 0);
+
+  const safeReps = c ? (Array.isArray(c.reps) ? c.reps : Array(c.nb_clusters).fill(5)) : null;
+  const globalKg =
+    c && ex.params.charge.mode === "global" && ex.params.charge.value != null
+      ? String(ex.params.charge.value).replace(".", ",")
+      : "";
+
+  return Array.from({ length: count }, (_, i) => {
+    const existing = prev?.[i];
+    if (existing) return normalizeSet(existing);
+    const savedItem = saved?.[i];
+
+    if (c && safeReps) {
+      const prescribedReps = safeReps[i % c.nb_clusters] ?? 5;
+      if (savedItem) {
+        return normalizeSet({
+          kg: savedItem.kg != null ? String(savedItem.kg).replace(".", ",") : "",
+          reps: savedItem.reps != null ? String(savedItem.reps) : String(prescribedReps),
+          rir: savedItem.rir != null ? String(savedItem.rir) : "",
+          done: savedItem.done,
+          skipped: savedItem.skipped,
+        });
+      }
+      return { kg: globalKg, reps: String(prescribedReps), rir: "", done: false, skipped: false };
+    }
+
+    return normalizeSet(initSetState(ex.params, i, savedItem ?? undefined));
+  });
+}
+
+function sameSets(a: SetState[], b: SetState[] | undefined): boolean {
+  if (!b || a.length !== b.length) return false;
+  return a.every((s, i) => {
+    const o = b[i];
+    return (
+      !!o &&
+      s.kg === o.kg && s.reps === o.reps && s.rir === o.rir &&
+      s.done === o.done && s.skipped === o.skipped
+    );
+  });
 }
 
 function formatPrescription(params: ExerciceParams): string {
@@ -752,7 +836,7 @@ function SupersetCard({
       <div style={{ padding: "0 14px 10px" }}>
         {Array.from({ length: rounds }, (_, r) => {
           const roundMembers = members.filter((m) => m.sets[r]);
-          const roundDone = roundMembers.length > 0 && roundMembers.every((m) => m.sets[r].done || m.sets[r].skipped);
+          const roundDone = roundMembers.length > 0 && roundMembers.every((m) => m.sets[r]?.done || m.sets[r]?.skipped);
           return (
             <div key={r}>
               {/* Label tour */}
@@ -1035,7 +1119,7 @@ function ExerciceCard({
           const safeReps = Array.isArray(c.reps) ? c.reps : Array(nb).fill(5);
           return Array.from({ length: mainSetsCount }, (_, si) => {
             const clusterSets = sets.slice(si * nb, (si + 1) * nb);
-            const allClusterDone = clusterSets.every((s) => s.done || s.skipped);
+            const allClusterDone = clusterSets.length > 0 && clusterSets.every((s) => s?.done || s?.skipped);
             const setStripKey = `${exId}:set${si}`;
             return (
               <div key={si} style={{ marginBottom: si < mainSetsCount - 1 ? 6 : 0 }}>
@@ -1617,8 +1701,8 @@ function FinishDialog({
     for (const ex of bloc.exercices) {
       const exSets = allSets[ex.id] ?? [];
       totalSets += exSets.length;
-      doneSets += exSets.filter((s) => s.done).length;
-      skippedSets += exSets.filter((s) => s.skipped).length;
+      doneSets += exSets.filter((s) => s?.done).length;
+      skippedSets += exSets.filter((s) => s?.skipped).length;
     }
   }
 
@@ -2045,58 +2129,40 @@ export default function WorkoutDetailPage() {
   );
   const { data: videoMap = {} } = useExerciseVideos(bankExerciseIds);
 
-  // ── Init sets once workout loaded ────────────────────────────────────────
+  // ── Init + resync des séries dès que la séance change ────────────────────
+  // Cet effet ne s'exécute pas qu'une fois : les blocs peuvent changer APRÈS le
+  // premier rendu (semaine résolue par une requête plus lente, programme modifié
+  // par le coach et refetch au retour sur l'onglet…). Avec l'ancienne init
+  // "une seule fois", un exercice apparu ensuite n'avait aucune ligne dans
+  // `sets` → le clic renvoyait un SetState vide → crash à la sauvegarde.
+  // La saisie en cours n'est jamais écrasée et aucune ligne n'est supprimée.
   useEffect(() => {
-    if (workout.isLoading || setsInit) return;
+    if (workout.isLoading) return;
 
     const base = workout.athleteModifications ?? {};
     const savedSets = base.sessionSets ?? {};
-    const newSets: AllSets = {};
 
-    for (const bloc of workout.blocs) {
-      for (const ex of bloc.exercices) {
-        const saved = savedSets[ex.id];
-        if (ex.mode === "libre") {
-          // Libre: un seul "set" virtuel = case à cocher de validation
-          const savedItem = saved?.[0];
-          newSets[ex.id] = [{
-            kg: "", reps: "", rir: "",
-            done: savedItem?.done ?? false,
-            skipped: savedItem?.skipped ?? false,
-          }];
-        } else if (ex.params.cluster) {
-          const c = ex.params.cluster;
-          const safeReps = Array.isArray(c.reps) ? c.reps : Array(c.nb_clusters).fill(5);
-          const nbRows = ex.params.nb_series * c.nb_clusters;
-          const globalKg = ex.params.charge.mode === "global" && ex.params.charge.value != null
-            ? String(ex.params.charge.value).replace(".", ",")
-            : "";
-          newSets[ex.id] = Array.from({ length: nbRows }, (_, i) => {
-            const savedItem = saved?.[i];
-            const clusterIdx = i % c.nb_clusters;
-            const prescribed = safeReps[clusterIdx] ?? 5;
-            if (savedItem) {
-              return {
-                kg: savedItem.kg != null ? String(savedItem.kg).replace(".", ",") : "",
-                reps: savedItem.reps != null ? String(savedItem.reps) : String(prescribed),
-                rir: savedItem.rir != null ? String(savedItem.rir) : "",
-                done: savedItem.done,
-                skipped: savedItem.skipped ?? false,
-              };
-            }
-            return { kg: globalKg, reps: String(prescribed), rir: "", done: false, skipped: false };
-          });
-        } else {
-          newSets[ex.id] = Array.from({ length: ex.params.nb_series }, (_, i) =>
-            initSetState(ex.params, i, saved?.[i]),
-          );
+    setSets((prev) => {
+      const next: AllSets = { ...prev };
+      let changed = false;
+
+      for (const bloc of workout.blocs) {
+        for (const ex of bloc.exercices) {
+          const rows = buildExSets(ex, savedSets[ex.id], prev[ex.id]);
+          if (!sameSets(rows, prev[ex.id])) {
+            next[ex.id] = rows;
+            changed = true;
+          }
         }
       }
-    }
 
-    setSets(newSets);
-    setLocalMods(base);
-    setSetsInit(true);
+      return changed ? next : prev;
+    });
+
+    if (!setsInit) {
+      setLocalMods(base);
+      setSetsInit(true);
+    }
   }, [workout.isLoading, workout.blocs, workout.athleteModifications, setsInit]);
 
   // ── Backfill empty cells from prevSets once they load ───────────────────
@@ -2108,7 +2174,8 @@ export default function WorkoutDetailPage() {
       for (const [exId, exSets] of Object.entries(next)) {
         const prevEx = prevSets[exId];
         if (!prevEx) continue;
-        const updated = exSets.map((s, i) => {
+        const updated = exSets.map((raw, i) => {
+          const s = raw ?? normalizeSet(raw);
           if (s.done || s.skipped) return s;
           const prevStr = prevEx[i] ?? "";
           if (!prevStr) return s;
@@ -2264,7 +2331,9 @@ export default function WorkoutDetailPage() {
 
       setSets((prev) => {
         const exSets = [...(prev[exId] ?? [])];
-        const s = { ...exSets[setIdx] };
+        // La ligne peut manquer si la structure a bougé entre le rendu et le clic
+        while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
+        const s = normalizeSet(exSets[setIdx]);
 
         if (!s.done && !s.skipped) {
           const prevStr = prevSets[exId]?.[setIdx] ?? "";
@@ -2277,8 +2346,9 @@ export default function WorkoutDetailPage() {
           // Auto-fill ALL empty cluster sub-rows with the same charge
           if (clusterNb && s.kg) {
             for (let j = 0; j < exSets.length; j++) {
-              if (j !== setIdx && !exSets[j].done && !exSets[j].kg) {
-                exSets[j] = { ...exSets[j], kg: s.kg };
+              const other = exSets[j];
+              if (j !== setIdx && !other?.done && !other?.kg) {
+                exSets[j] = { ...normalizeSet(other), kg: s.kg };
               }
             }
           }
@@ -2348,7 +2418,8 @@ export default function WorkoutDetailPage() {
 
       setSets((prev) => {
         const exSets = [...(prev[exId] ?? [])];
-        const s = { ...exSets[setIdx], [field]: value };
+        while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
+        const s = { ...normalizeSet(exSets[setIdx]), [field]: value };
 
         // Auto-validate: if not done/skipped, mark done
         if (!s.done && !s.skipped) {
@@ -2363,8 +2434,9 @@ export default function WorkoutDetailPage() {
           // Auto-fill ALL empty cluster sub-rows with the same charge
           if (field === "kg" && padTarget.clusterNb && value) {
             for (let j = 0; j < exSets.length; j++) {
-              if (j !== setIdx && !exSets[j].done && !exSets[j].kg) {
-                exSets[j] = { ...exSets[j], kg: value };
+              const other = exSets[j];
+              if (j !== setIdx && !other?.done && !other?.kg) {
+                exSets[j] = { ...normalizeSet(other), kg: value };
               }
             }
           }
@@ -2507,7 +2579,7 @@ export default function WorkoutDetailPage() {
       for (const ex of bloc.exercices) {
         const exSets = sets[ex.id] ?? [];
         total += exSets.length;
-        done += exSets.filter((s) => s.done || s.skipped).length;
+        done += exSets.filter((s) => s?.done || s?.skipped).length;
       }
     }
     return { progTotal: total, progDone: done };
@@ -2520,7 +2592,7 @@ export default function WorkoutDetailPage() {
   // "Terminer", moment où l'athlète oublie le plus souvent de clôturer.
   const allSetsHandled = useMemo(() => {
     const rows = Object.values(sets).flat();
-    return rows.length > 0 && rows.every((s) => s.done || s.skipped);
+    return rows.length > 0 && rows.every((s) => s?.done || s?.skipped);
   }, [sets]);
 
   // ── Early returns ────────────────────────────────────────────────────────

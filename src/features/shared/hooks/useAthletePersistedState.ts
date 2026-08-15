@@ -252,9 +252,19 @@ export function useAthletePersistedState(athleteId: string) {
     });
   }, [save]);
 
-  const setNutritionLog = useCallback((v: Record<string, unknown>) => {
-    setNutritionLogRaw(v); save("asp:nutrition_log", v).catch(() => {});
-  }, [save]);
+  // Accepte aussi la forme updater : AlimPage appelle setNutritionLog(prev => …).
+  // Avant, la fonction elle-même partait dans sSave → `value` disparaissait du
+  // JSON envoyé à Supabase → le journal nutrition du jour n'était jamais persisté.
+  const setNutritionLog = useCallback(
+    (v: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => {
+      setNutritionLogRaw(prev => {
+        const next = typeof v === "function" ? v(prev) : v;
+        save("asp:nutrition_log", next).catch(() => {});
+        return next;
+      });
+    },
+    [save],
+  );
 
   const setVisibilitySettings = useCallback(async (settings: VisibilitySettings) => {
     setVisibilityRaw(settings);
