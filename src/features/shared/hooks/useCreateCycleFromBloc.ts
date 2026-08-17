@@ -2,10 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { BlockConfig, Session } from "@/features/shared/types/athlete";
-
-function localISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { localISO } from "@/lib/date";
 
 function addDays(d: Date, n: number): Date {
   const r = new Date(d);

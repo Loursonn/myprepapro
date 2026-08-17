@@ -8,6 +8,7 @@ import type {
 } from "@/features/shared/types/retours.types";
 import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
 import { startOfWeek, endOfWeek, subWeeks, format, eachDayOfInterval, addDays } from "date-fns";
+import { normalizeDayMap as normalizeWH } from "@/lib/date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -46,23 +47,6 @@ export function useWeeklyRetours(athleteId: string, weekStartDate: Date) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * todayKey() stores as "YYYYMMDD"; date-fns formats as "yyyy-MM-dd".
- * Normalize any 8-digit compact key to ISO dash format.
- */
-function normalizeWHKey(key: string): string {
-  if (/^\d{8}$/.test(key)) return `${key.slice(0, 4)}-${key.slice(4, 6)}-${key.slice(6, 8)}`;
-  return key;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizeWH(wh: Record<string, any>): Record<string, any> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const out: Record<string, any> = {};
-  for (const [k, v] of Object.entries(wh ?? {})) out[normalizeWHKey(k)] = v;
-  return out;
-}
 
 /** Week number relative to a block's start (1-based). Fallback = 1. */
 function calcWeekNum(dateStr: string, blockStartDate: string | null | undefined): number {

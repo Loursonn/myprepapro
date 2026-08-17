@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
 import { SessionWeekDrawer } from "@/features/coach/components/SessionWeekDrawer";
+import { localISO } from "@/lib/date";
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -39,7 +40,7 @@ export default function ProgPage() {
     enabled: !!athleteId,
     staleTime: 30_000,
     queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = localISO();
       const { data } = await supabase
         .from("cycles")
         .select("id, name, start_date, end_date")

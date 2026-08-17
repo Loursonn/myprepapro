@@ -9,7 +9,40 @@ export const todayKey = () => {
   );
 };
 
-export const hISO = (d?: Date) => (d || new Date()).toISOString().slice(0, 10);
+/**
+ * Jour calendaire LOCAL au format "YYYY-MM-DD".
+ *
+ * Ne jamais utiliser `toISOString().slice(0,10)` pour ça : `toISOString()`
+ * convertit en UTC. En France (UTC+1/+2), tout ce qui est saisi entre minuit
+ * et 1h/2h du matin retombe sur la veille — l'athlète coche la case du 17 et
+ * ça enregistre le 16.
+ */
+export const localISO = (d?: Date) => {
+  const x = d || new Date();
+  return (
+    String(x.getFullYear()) +
+    "-" +
+    String(x.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(x.getDate()).padStart(2, "0")
+  );
+};
+
+export const hISO = localISO;
+
+/**
+ * `todayKey()` stocke en "YYYYMMDD", le reste de l'app manipule "YYYY-MM-DD".
+ * Convertit toute clé compacte à 8 chiffres vers la forme ISO à tirets.
+ */
+export const normalizeDayKey = (key: string): string =>
+  /^\d{8}$/.test(key) ? `${key.slice(0, 4)}-${key.slice(4, 6)}-${key.slice(6, 8)}` : key;
+
+/** Réindexe un dictionnaire daté (wellnessHistory, weightLog…) en clés ISO. */
+export const normalizeDayMap = <T>(m: Record<string, T> | null | undefined): Record<string, T> => {
+  const out: Record<string, T> = {};
+  for (const [k, v] of Object.entries(m ?? {})) out[normalizeDayKey(k)] = v;
+  return out;
+};
 
 export const hAddDays = (d: Date, n: number) => {
   const r = new Date(d);

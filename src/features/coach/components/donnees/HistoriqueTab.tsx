@@ -7,6 +7,7 @@ import { calcScore, getReco } from "@/lib/wellness";
 import type { WellnessData } from "@/features/shared/types/athlete";
 import { useHistorique, useDeleteWorkoutLog, useCopySessionAsType, type HistoLog } from "./useHistorique";
 import type { Cycle, Mesocycle, Macrocycle } from "@/features/coach/components/planning/hooks/useTimelineData";
+import { localISO } from "@/lib/date";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,6 @@ function fmtRange(a: string, b: string): string {
 
 /** Semaines (lundi → dimanche) couvrant [start, end] */
 function weeksBetween(start: string, end: string): { start: string; end: string }[] {
-  const localISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const s = new Date(start + "T12:00:00");
   s.setDate(s.getDate() - ((s.getDay() + 6) % 7)); // lundi
   const weeks: { start: string; end: string }[] = [];

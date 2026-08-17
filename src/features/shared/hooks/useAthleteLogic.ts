@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { todayKey } from "@/lib/date";
+import { todayKey, localISO } from "@/lib/date";
 import { checkMilestone } from "@/lib/date";
 import { SKEYS } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
@@ -95,7 +95,7 @@ export function useAthleteLogic(d: LogicDeps) {
       const hasCycles = cycles.length > 0;
       const inAnyCycle = (dateStr: string) =>
         cycles.some((c) => dateStr >= c.start_date && dateStr <= c.end_date);
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = localISO();
 
       // Auto-nettoyage : si des cycles existent, on supprime les séances tombées
       // HORS de tout cycle (phantoms laissés par d'anciens backfills, ex. après
@@ -143,8 +143,8 @@ export function useAthleteLogic(d: LogicDeps) {
         monday.setDate(blockMonday.getDate() + (week - 1) * 7);
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
-        const weekStart = monday.toISOString().split("T")[0];
-        const weekEnd   = sunday.toISOString().split("T")[0];
+        const weekStart = localISO(monday);
+        const weekEnd   = localISO(sunday);
 
         for (const sessId of sessIds) {
           const sess = sessions.find(s => s.id === sessId);
@@ -152,7 +152,7 @@ export function useAthleteLogic(d: LogicDeps) {
           // Date planifiée de la séance dans cette semaine
           const dow = (sess?.weekDays?.[weekStr] ?? sess?.day_of_week) as number | undefined;
           const scheduledDate = dow != null
-            ? (() => { const d = new Date(monday); d.setDate(monday.getDate() + dow); return d.toISOString().split("T")[0]; })()
+            ? (() => { const d = new Date(monday); d.setDate(monday.getDate() + dow); return localISO(d); })()
             : weekStart;
 
           // Hors de tout cycle réel → on ne matérialise pas la complétion
@@ -199,7 +199,7 @@ export function useAthleteLogic(d: LogicDeps) {
     const weekDow = d0.getDay();
     // Snap to Monday of block start week, then add (week-1)*7 + dow
     d0.setDate(d0.getDate() + (weekDow === 0 ? -6 : 1 - weekDow) + (week - 1) * 7 + dow);
-    return d0.toISOString().split("T")[0];
+    return localISO(d0);
   }, [blockConfig?.startDate, sessions]);
 
   const syncWorkoutLogStatus = useCallback((sessId: string, week: number, status: "completed" | "planned", note?: string) => {
@@ -213,8 +213,8 @@ export function useAthleteLogic(d: LogicDeps) {
     monday.setDate(blockStart.getDate() + (dow0 === 0 ? -6 : 1 - dow0) + (week - 1) * 7);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
-    const weekStart = monday.toISOString().split("T")[0];
-    const weekEnd   = sunday.toISOString().split("T")[0];
+    const weekStart = localISO(monday);
+    const weekEnd   = localISO(sunday);
 
     // Fallback scheduled_date (used only when inserting a new log)
     const scheduledDate = sessionScheduledDate(sessId, week) ?? weekStart;

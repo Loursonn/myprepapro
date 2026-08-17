@@ -3,13 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { calBaseKey } from "./useUnifiedCalendar";
 import { QK } from "@/lib/queryKeys";
+import { localISO } from "@/lib/date";
 
 export function useUpsertWorkoutRpe(athleteId: string, sessionId: string, scheduledDate?: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (rpeScore: number) => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = localISO();
 
       // Find the workout_log for this session+athlete.
       // When scheduledDate is known, target it exactly; otherwise fall back to most recent.

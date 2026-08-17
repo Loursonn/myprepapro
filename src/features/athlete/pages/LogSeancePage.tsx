@@ -14,6 +14,7 @@ import {
 } from "@/features/shared/hooks/useEnergyAssignments";
 import { RpeSheet } from "@/features/athlete/components/RpeSheet";
 import type { EnergySessionAssignmentRow, EnergyStep, EnergyInterval, BlockLogs } from "@/types/energy";
+import { localISO } from "@/lib/date";
 
 const KIND_COLOR: Record<string, string> = {
   vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
@@ -308,10 +309,10 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
 
 function EnergyAthleteView({ athleteId }: { athleteId: string }) {
   const { data: assignments = [], isLoading } = useEnergyAssignments(athleteId);
-  const today = new Date().toISOString().split("T")[0];
+  const today = localISO();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 7);
-  const cutoffStr = cutoff.toISOString().split("T")[0];
+  const cutoffStr = localISO(cutoff);
 
   const [rpeAssignmentId, setRpeAssignmentId] = useState<string | null>(null);
   const upsertRpe = useUpsertEnergyRpe();
@@ -447,11 +448,11 @@ export default function LogSeancePage() {
     const sess = sessions.find(s => s.id === sessId);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dow = (sess as any)?.weekDays?.[String(week)] ?? (sess as any)?.day_of_week;
-    if (dow == null || !blockConfig?.startDate) return new Date().toISOString().split("T")[0];
+    if (dow == null || !blockConfig?.startDate) return localISO();
     const d0 = new Date(blockConfig.startDate + "T12:00:00");
     const weekDow = d0.getDay();
     d0.setDate(d0.getDate() + (weekDow === 0 ? -6 : 1 - weekDow) + (week - 1) * 7 + (dow as number));
-    return d0.toISOString().split("T")[0];
+    return localISO(d0);
   }
 
   return (

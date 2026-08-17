@@ -63,6 +63,12 @@ function InjuryForm({onSave,onCancel,existing}){
   </div>);
 }
 
+const bSm={width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,fontSize:16,cursor:"pointer",fontFamily:"inherit"};
+
+function TimePick({label,time,setTime}){
+  return(<div style={{background:C.s1,borderRadius:12,padding:"12px 14px",flex:1,textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{label}</div><div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><div><button onClick={()=>setTime(t=>({...t,h:(t.h+1)%24}))} style={bSm}>+</button><div style={{fontSize:22,fontWeight:800,color:C.tx,fontFamily:"monospace",margin:"4px 0"}}>{String(time.h).padStart(2,"0")}</div><button onClick={()=>setTime(t=>({...t,h:(t.h-1+24)%24}))} style={bSm}>-</button></div><div style={{fontSize:18,color:C.tx3}}>:</div><div><button onClick={()=>setTime(t=>({...t,m:(t.m+15)%60}))} style={bSm}>+</button><div style={{fontSize:22,fontWeight:800,color:C.tx,fontFamily:"monospace",margin:"4px 0"}}>{String(time.m).padStart(2,"0")}</div><button onClick={()=>setTime(t=>({...t,m:(t.m-15+60)%60}))} style={bSm}>-</button></div></div></div>);
+}
+
 function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   const tgt=sleepTarget||8;
   const S_DOMS_ZONES=WELL_ITEMS.length; // 5 - shown if doms <= 3 (DOMS significant)
@@ -83,7 +89,6 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   const dur=sleepDur();const diff=Math.round((dur-tgt)*10)/10;const sleepC=Math.abs(diff)<=0.5?C.g:Math.abs(diff)<=1.5?C.o:C.r;
   const togDoms=id=>setDomsZones(p=>p.includes(id)?p.filter(z=>z!==id):[...p,id]);
   const progPct=Math.round((Math.min(step,S_BILAN)/S_BILAN)*100);
-  const bSm={width:32,height:32,borderRadius:8,border:"1px solid "+C.brdL,background:C.s2,color:C.tx2,fontSize:16,cursor:"pointer",fontFamily:"inherit"};
   const goBack=()=>{
     if(step===0)return;
     if(step<WELL_ITEMS.length){setStep(step-1);return;}
@@ -97,7 +102,6 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
     {step>0&&<button onClick={goBack} style={{background:'none',border:'none',color:C.tx3,fontSize:20,cursor:'pointer',fontFamily:'inherit',padding:'0 0 10px',display:'flex',alignItems:'center',gap:4,lineHeight:1}}>← <span style={{fontSize:11,color:C.tx3}}>Retour</span></button>}
     <div style={{height:3,background:C.s2,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:progPct+"%",background:C.ac,borderRadius:2,transition:"width 0.3s"}}/></div>
   </div>);
-  const TimePick=({label,time,setTime})=>(<div style={{background:C.s1,borderRadius:12,padding:"12px 14px",flex:1,textAlign:"center"}}><div style={{fontSize:9,color:C.tx3,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{label}</div><div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><div><button onClick={()=>setTime(t=>({...t,h:(t.h+1)%24}))} style={bSm}>+</button><div style={{fontSize:22,fontWeight:800,color:C.tx,fontFamily:"monospace",margin:"4px 0"}}>{String(time.h).padStart(2,"0")}</div><button onClick={()=>setTime(t=>({...t,h:(t.h-1+24)%24}))} style={bSm}>-</button></div><div style={{fontSize:18,color:C.tx3}}>:</div><div><button onClick={()=>setTime(t=>({...t,m:(t.m+15)%60}))} style={bSm}>+</button><div style={{fontSize:22,fontWeight:800,color:C.tx,fontFamily:"monospace",margin:"4px 0"}}>{String(time.m).padStart(2,"0")}</div><button onClick={()=>setTime(t=>({...t,m:(t.m-15+60)%60}))} style={bSm}>-</button></div></div></div>);
 
   // 5 wellness questions
   if(step<WELL_ITEMS.length){

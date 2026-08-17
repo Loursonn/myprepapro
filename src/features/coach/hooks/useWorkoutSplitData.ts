@@ -2,14 +2,11 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { BlockConfig, WellnessData } from "@/features/shared/types/athlete";
+import { localISO } from "@/lib/date";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-function localISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 const MONTHS_FR = ["jan","fév","mar","avr","mai","jui","jul","aoû","sep","oct","nov","déc"];
 

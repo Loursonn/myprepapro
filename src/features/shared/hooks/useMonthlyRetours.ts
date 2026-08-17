@@ -9,6 +9,7 @@ import type {
 } from "@/features/shared/types/retours.types";
 import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
 import { startOfMonth, endOfMonth, format, eachDayOfInterval, addDays } from "date-fns";
+import { normalizeDayMap as normalizeWH } from "@/lib/date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -24,19 +25,6 @@ export function useMonthlyRetours(athleteId: string, monthStart: Date) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function normalizeWHKey(key: string): string {
-  if (/^\d{8}$/.test(key)) return `${key.slice(0, 4)}-${key.slice(4, 6)}-${key.slice(6, 8)}`;
-  return key;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizeWH(wh: Record<string, any>): Record<string, any> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const out: Record<string, any> = {};
-  for (const [k, v] of Object.entries(wh ?? {})) out[normalizeWHKey(k)] = v;
-  return out;
-}
 
 function calcWeekNum(dateStr: string, blockStartDate: string | null | undefined): number {
   if (!blockStartDate) return 1;

@@ -93,26 +93,28 @@ function PRsView({prs,exos,tw}){
   </div>);
 }
 
-function InjuriesView({injuries,addInjury,updateInjury,deleteInjury}){
-  const[showForm,setShowForm]=useState(false);const[editing,setEditing]=useState(null);
-  const active=injuries.filter(i=>i.status!=="Guerie");const healed=injuries.filter(i=>i.status==="Guerie");
-  const Card=({inj})=>{const sc=stC(inj.status);const zoneNames=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non precisee";const intC=inj.intensity<=3?C.g:inj.intensity<=6?C.o:C.r;
+function InjuryCard({inj,onEdit,onDelete,onUpdate}){const sc=stC(inj.status);const zoneNames=ALL_BZ.filter(z=>inj.zones.includes(z.id)).map(z=>z.label).join(", ")||"Zone non precisee";const intC=inj.intensity<=3?C.g:inj.intensity<=6?C.o:C.r;
     return(<div style={{background:C.s1,borderRadius:12,padding:"12px 14px",marginBottom:8,border:"1px solid "+sc+"30"}}>
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:8}}>
         <div style={{flex:1}}><div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:4}}><span style={{fontSize:12,fontWeight:700,color:C.tx}}>{zoneNames}</span>{inj.type&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.s2,color:C.tx3}}>{inj.type}</span>}</div><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,fontWeight:700,color:sc,padding:"2px 8px",borderRadius:6,background:sc+"20"}}>{inj.status}</span><span style={{fontSize:10,color:C.tx3}}>{inj.date?inj.date.slice(6)+"/"+inj.date.slice(4,6)+"/"+inj.date.slice(0,4):""}</span></div></div>
-        <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}><div style={{textAlign:"center"}}><span style={{fontSize:18,fontWeight:800,color:intC}}>{inj.intensity}</span><span style={{fontSize:9,color:C.tx3}}>/10</span></div><button onClick={()=>{setEditing(inj);setShowForm(true);}} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Edit</button><button onClick={()=>deleteInjury(inj.id)} style={{width:22,height:22,borderRadius:5,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>x</button></div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}><div style={{textAlign:"center"}}><span style={{fontSize:18,fontWeight:800,color:intC}}>{inj.intensity}</span><span style={{fontSize:9,color:C.tx3}}>/10</span></div><button onClick={()=>onEdit(inj)} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+C.brdL,background:"transparent",color:C.tx3,fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>Edit</button><button onClick={()=>onDelete(inj.id)} style={{width:22,height:22,borderRadius:5,border:"1px solid "+C.r+"40",background:C.rS,color:C.r,fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>x</button></div>
       </div>
       {inj.notes&&<div style={{fontSize:11,color:C.tx3,fontStyle:"italic",lineHeight:1.5}}>{inj.notes}</div>}
       <div style={{marginTop:8,display:"flex",gap:4,flexWrap:"wrap"}}>
-        {INJ_STATUS.filter(s=>s!==inj.status).map(s=>{const sc2=stC(s);return(<button key={s} onClick={()=>updateInjury({...inj,status:s})} style={{fontSize:9,padding:"3px 8px",borderRadius:5,border:"1px solid "+sc2+"40",background:"transparent",color:sc2,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>);})}
+        {INJ_STATUS.filter(s=>s!==inj.status).map(s=>{const sc2=stC(s);return(<button key={s} onClick={()=>onUpdate({...inj,status:s})} style={{fontSize:9,padding:"3px 8px",borderRadius:5,border:"1px solid "+sc2+"40",background:"transparent",color:sc2,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>);})}
       </div>
     </div>);
-  };
+}
+
+function InjuriesView({injuries,addInjury,updateInjury,deleteInjury}){
+  const[showForm,setShowForm]=useState(false);const[editing,setEditing]=useState(null);
+  const active=injuries.filter(i=>i.status!=="Guerie");const healed=injuries.filter(i=>i.status==="Guerie");
+  const openEdit=inj=>{setEditing(inj);setShowForm(true);};
   return(<div>
     <button onClick={()=>{setEditing(null);setShowForm(true);}} style={{width:"100%",padding:"12px 0",borderRadius:12,border:"1.5px solid "+C.r+"50",background:C.rS,color:C.r,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>+ Nouvelle blessure / douleur</button>
     {showForm&&<div style={{marginBottom:16}}><InjuryForm onSave={inj=>{editing?updateInjury(inj):addInjury(inj);setShowForm(false);setEditing(null);}} onCancel={()=>{setShowForm(false);setEditing(null);}} existing={editing}/></div>}
-    {active.length>0&&(<div><div style={{fontSize:11,fontWeight:600,color:C.r,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{active.length} active(s)</div>{active.map(i=><Card key={i.id} inj={i}/>)}</div>)}
-    {healed.length>0&&(<div style={{marginTop:12}}><div style={{fontSize:11,fontWeight:600,color:C.g,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{healed.length} guerie(s)</div>{healed.map(i=><Card key={i.id} inj={i}/>)}</div>)}
+    {active.length>0&&(<div><div style={{fontSize:11,fontWeight:600,color:C.r,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{active.length} active(s)</div>{active.map(i=><InjuryCard key={i.id} inj={i} onEdit={openEdit} onDelete={deleteInjury} onUpdate={updateInjury}/>)}</div>)}
+    {healed.length>0&&(<div style={{marginTop:12}}><div style={{fontSize:11,fontWeight:600,color:C.g,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>{healed.length} guerie(s)</div>{healed.map(i=><InjuryCard key={i.id} inj={i} onEdit={openEdit} onDelete={deleteInjury} onUpdate={updateInjury}/>)}</div>)}
     {injuries.length===0&&!showForm&&<div style={{textAlign:"center",color:C.tx3,fontSize:12,padding:"20px 0"}}>Aucune blessure enregistree</div>}
   </div>);
 }

@@ -5,6 +5,7 @@ import { useExerciceRM } from "./hooks/useExerciceRM"
 import { useAddPRLog, epley1RM } from "@/features/shared/hooks/usePRLogs"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
+import { localISO } from "@/lib/date";
 
 const VIOLET = "#7B6FFF"
 
@@ -31,7 +32,7 @@ export function RmDrawer({ open, onClose, exerciseName, athleteId }: RmDrawerPro
       athleteId,
       exercise_ref: exerciseName,
       kg: reps === 1 ? kg : epley1RM(kg, reps),
-      date: new Date().toISOString().split("T")[0],
+      date: localISO(),
       source: "manual",
       source_reps: reps,
       source_kg: kg,

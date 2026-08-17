@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { C, HABIT_COLORS, HABIT_EMOJIS } from "@/lib/theme";
 import { calcHabitStreak, streakMsg, getHabitWeekDays, hISO, hAddDays } from "@/lib/date";
@@ -34,29 +35,37 @@ function HabitDashboard({habits,setHabits,habitLogs,onToggle,viewOnly,athleteId}
   const dayLabel=d=>{const n=d.getDay();return DAY_LABELS[n];};
   const handleCreate=async d=>{
     const{data:h,error}=await supabase.from('habits').insert({...d,athlete_id:athleteId,sort_order:habits.length}).select().single();
-    if(!error&&h)setHabits(p=>[...p,h]);
+    if(error||!h){toast.error("Habitude non créée — vérifie ta connexion");return;}
+    setHabits(p=>[...p,h]);
     setShowCreate(false);
   };
   const handleEdit=async(id,d)=>{
     const{error}=await supabase.from('habits').update({name:d.name,emoji:d.emoji,color:d.color}).eq('id',id);
-    if(!error)setHabits(p=>p.map(h=>h.id===id?{...h,...d}:h));
+    if(error){toast.error("Modification non enregistrée — vérifie ta connexion");return;}
+    setHabits(p=>p.map(h=>h.id===id?{...h,...d}:h));
     setEditHabit(null);
   };
   const handleDelete=async id=>{
-    await supabase.from('habits').update({is_active:false}).eq('id',id);
+    // L'habitude disparaissait de l'écran même quand l'update échouait : elle
+    // revenait au rechargement suivant.
+    const{error}=await supabase.from('habits').update({is_active:false}).eq('id',id);
+    if(error){toast.error("Suppression échouée — vérifie ta connexion");return;}
     setHabits(p=>p.filter(h=>h.id!==id));
     setMenuId(null);
   };
   const handleMove=async(idx,dir)=>{
     const ni=idx+dir;
     if(ni<0||ni>=habits.length)return;
+    const prev=habits;
     const next=[...habits];[next[idx],next[ni]]=[next[ni],next[idx]];
     setHabits(next);
     setMenuId(null);
-    await Promise.all([
+    const res=await Promise.all([
       supabase.from('habits').update({sort_order:idx}).eq('id',next[idx].id),
       supabase.from('habits').update({sort_order:ni}).eq('id',next[ni].id),
     ]);
+    // Réordonnancement non persisté → on remet l'ordre affiché en cohérence.
+    if(res.some(r=>r.error)){setHabits(prev);toast.error("Ordre non enregistré — vérifie ta connexion");}
   };
   return(<div style={{background:C.s1,borderRadius:16,padding:'14px 16px',border:`1px solid ${C.brd}`,marginBottom:12}}>
     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>

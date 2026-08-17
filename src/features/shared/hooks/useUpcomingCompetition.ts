@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Competition } from "@/types/planning";
+import { localISO } from "@/lib/date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -17,7 +18,7 @@ export function useUpcomingCompetition(athleteId: string) {
   return useQuery({
     queryKey: ["athlete_next_competition", athleteId],
     queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
+      const today = localISO();
       const { data, error } = await db
         .from("competitions")
         .select("*")

@@ -1,47 +1,88 @@
-import { useRef, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef, useCallback, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { AthleteModifications } from "../types/athlete";
 
 const DEBOUNCE_MS = 600;
 
-export function useSaveWorkoutSets(workoutLogId: string | undefined) {
+export interface SaveWorkoutSets {
+  /** Écriture différée (600 ms) — pour la frappe et les clics en rafale. */
+  save: (modifications: AthleteModifications) => void;
+  /**
+   * Écriture immédiate, sans debounce.
+   *
+   * À utiliser dès que la page peut disparaître (passage en arrière-plan,
+   * démontage). Le debounce s'appuie sur setTimeout, or les navigateurs
+   * mobiles gèlent les timers d'un onglet caché : un `save()` déclenché sur
+   * `visibilitychange` n'était jamais exécuté si le système tuait l'onglet
+   * ensuite, et la séance était perdue.
+   */
+  flushNow: (modifications?: AthleteModifications) => void;
+}
+
+export function useSaveWorkoutSets(workoutLogId: string | undefined): SaveWorkoutSets {
   const qc = useQueryClient();
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const pendingRef = useRef<AthleteModifications | null>(null);
+  // Id figée dans un ref : au démontage (ou au changement de séance) la purge
+  // doit viser la séance d'origine. Sans ça, naviguer d'une séance à l'autre
+  // en moins de 600 ms faisait atterrir les séries de la séance A sur l'id B.
+  const idRef = useRef(workoutLogId);
 
-  const { mutate } = useMutation({
-    mutationFn: async (modifications: AthleteModifications) => {
-      if (!workoutLogId) return;
+  // Écriture volontairement hors `useMutation` : `flushNow` est appelé pendant
+  // le démontage, moment où l'observateur React Query est déjà détaché et où
+  // `mutate` peut ne rien déclencher. Ici l'appel réseau part quoi qu'il
+  // arrive — c'est précisément le filet de sécurité de fin de séance.
+  const write = useCallback(
+    async (id: string, modifications: AthleteModifications) => {
       // `.select()` permet de détecter le cas "0 ligne mise à jour" : sans lui,
       // un UPDATE sur une séance disparue (supprimée entre-temps) réussit
       // silencieusement et la saisie de l'athlète est perdue sans aucun signal.
       const { data, error } = await supabase
         .from("workout_logs")
-        .update({
-          athlete_modifications: modifications,
-        })
-        .eq("id", workoutLogId)
+        .update({ athlete_modifications: modifications })
+        .eq("id", id)
         .select("id");
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error("Séance introuvable — saisie non enregistrée");
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["workout-log-detail", workoutLogId] });
-    },
-    onError: () => {
-      toast.error("Saisie non enregistrée — vérifie ta connexion");
-    },
-  });
 
-  return useCallback(
+      if (error || !data || data.length === 0) {
+        toast.error("Saisie non enregistrée — vérifie ta connexion");
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["workout-log-detail", id] });
+    },
+    [qc],
+  );
+
+  const flushNow = useCallback(
+    (modifications?: AthleteModifications) => {
+      clearTimeout(timerRef.current);
+      const payload = modifications ?? pendingRef.current;
+      pendingRef.current = null;
+      const id = idRef.current;
+      if (!payload || !id) return;
+      void write(id, payload);
+    },
+    [write],
+  );
+
+  const save = useCallback(
     (modifications: AthleteModifications) => {
       if (!workoutLogId) return;
+      pendingRef.current = modifications;
       clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => mutate(modifications), DEBOUNCE_MS);
+      timerRef.current = setTimeout(() => flushNow(), DEBOUNCE_MS);
     },
-    [workoutLogId, mutate]
+    [workoutLogId, flushNow],
   );
+
+  // Au changement de séance et au démontage : on écrit ce qui reste en attente
+  // pour la séance qu'on quitte, puis on repart propre. Le cleanup s'exécute
+  // avant la mise à jour de idRef, donc il vise bien l'ancienne id.
+  useEffect(() => {
+    idRef.current = workoutLogId;
+    return () => { flushNow(); };
+  }, [workoutLogId, flushNow]);
+
+  return { save, flushNow };
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
@@ -98,12 +99,15 @@ export default function PerformanceProfile({ athleteId, viewOnly, isCoach, C }: 
 
   const loadLogs = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("performance_logs")
       .select("*")
       .eq("athlete_id", athleteId)
       .order("date", { ascending: false });
-    setLogs((data as PerformanceLog[]) || []);
+    // Un chargement en échec affichait "aucune donnée", indistinguable d'un
+    // historique réellement vide.
+    if (error) toast.error("Performances non chargées — vérifie ta connexion");
+    else setLogs((data as PerformanceLog[]) || []);
     setLoading(false);
   };
 
@@ -138,12 +142,20 @@ export default function PerformanceProfile({ athleteId, viewOnly, isCoach, C }: 
       created_by: athleteId,
     };
 
-    const { data: inserted } = await supabase.from("performance_logs").insert(payload).select().single();
+    const { data: inserted, error } = await supabase.from("performance_logs").insert(payload).select().single();
+    // Sans ce garde, un insert refusé fermait quand même le formulaire : la
+    // performance saisie disparaissait sans le moindre message.
+    if (error || !inserted) {
+      toast.error("Performance non enregistrée — vérifie ta connexion");
+      return;
+    }
 
     // Notifier le coach si athlète
-    if (!isCoach && inserted) {
+    if (!isCoach) {
       const { data: profile } = await supabase.from("profiles").select("coach_id").eq("id", athleteId).single();
       if (profile?.coach_id) {
+        // La notification est secondaire : son échec ne doit pas faire croire
+        // que la performance n'a pas été enregistrée.
         await supabase.from("performance_notifications").insert({
           coach_id: profile.coach_id,
           athlete_id: athleteId,
@@ -160,11 +172,15 @@ export default function PerformanceProfile({ athleteId, viewOnly, isCoach, C }: 
   const handleSetActiveRef = async (logId: string, metricName: string) => {
     setSettingRef(logId);
     try {
-      await supabase.rpc("set_active_performance_reference", {
+      const { error } = await supabase.rpc("set_active_performance_reference", {
         p_performance_log_id: logId,
         p_athlete_id: athleteId,
         p_metric_name: metricName,
       });
+      if (error) {
+        toast.error("Référence non mise à jour — vérifie ta connexion");
+        return;
+      }
       loadLogs();
     } finally {
       setSettingRef(null);
@@ -172,7 +188,11 @@ export default function PerformanceProfile({ athleteId, viewOnly, isCoach, C }: 
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("performance_logs").delete().eq("id", id);
+    const { error } = await supabase.from("performance_logs").delete().eq("id", id);
+    if (error) {
+      toast.error("Suppression échouée — vérifie ta connexion");
+      return;
+    }
     setConfirmDelete(null);
     loadLogs();
   };

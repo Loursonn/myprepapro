@@ -1911,19 +1911,26 @@ function RpeSheetForLog({
 
   const { mutate: saveRpe, isPending } = useMutation({
     mutationFn: async (rpeScore: number) => {
-      await supabase
+      // supabase-js ne lève pas : sans lire `error`, un RPE refusé fermait la
+      // feuille comme si tout s'était bien passé et la note était perdue.
+      const { error: logErr } = await supabase
         .from("workout_logs")
         .update({ rpe_score: rpeScore })
         .eq("id", workoutLogId);
-      await supabase.from("workout_rpe").upsert({
+      if (logErr) throw logErr;
+      const { error: rpeErr } = await supabase.from("workout_rpe").upsert({
         workout_log_id: workoutLogId,
         athlete_id: athleteId ?? "",
         rpe_score: rpeScore,
       });
+      if (rpeErr) throw rpeErr;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workout-log-detail", workoutLogId] });
       onClose();
+    },
+    onError: () => {
+      toast.error("RPE non enregistré — vérifie ta connexion");
     },
   });
 
@@ -2074,7 +2081,7 @@ export default function WorkoutDetailPage() {
   const qc = useQueryClient();
 
   const workout = useWorkoutSession(id);
-  const saveWorkoutSets = useSaveWorkoutSets(id);
+  const { save: saveWorkoutSets, flushNow: flushWorkoutSets } = useSaveWorkoutSets(id);
 
   // ── State ────────────────────────────────────────────────────────────────
   const [sets, setSets] = useState<AllSets>({});
@@ -2248,18 +2255,25 @@ export default function WorkoutDetailPage() {
   localModsRef.current = localMods;
 
   useEffect(() => {
+    // Écriture IMMÉDIATE : sur `visibilitychange` l'onglet part en arrière-plan
+    // et le navigateur mobile gèle ses timers. Un enregistrement débouncé ne
+    // partirait jamais si le système tuait l'onglet dans la foulée.
     const flush = () => {
       if (!id || workout.status === "completed") return;
       const mods = allSetsToMods(setsRef.current, localModsRef.current);
-      saveWorkoutSets(mods);
+      flushWorkoutSets(mods);
     };
     const onVisChange = () => { if (document.hidden) flush(); };
     document.addEventListener("visibilitychange", onVisChange);
+    // `pagehide` couvre la fermeture d'onglet et le retour arrière iOS, cas où
+    // `visibilitychange` n'est pas garanti.
+    window.addEventListener("pagehide", flush);
     return () => {
       document.removeEventListener("visibilitychange", onVisChange);
+      window.removeEventListener("pagehide", flush);
       flush(); // flush on unmount
     };
-  }, [id, workout.status, saveWorkoutSets]);
+  }, [id, workout.status, flushWorkoutSets]);
 
   // ── Inactivity reminder (10 min without interaction) ───────────────────
   const lastActivityRef = useRef(Date.now());
@@ -2325,79 +2339,85 @@ export default function WorkoutDetailPage() {
   // ── Toggle 3-state checkmark ─────────────────────────────────────────────
   const toggleAndPersist = useCallback(
     (exId: string, setIdx: number, restSec: number, nextInfo: string | null, timingMode = "repos", blocId = "", blocExIds: string[] = [], clusterNb?: number, supersetExIds: string[] = []) => {
-      let shouldStop = false;
+      // Un updater passé à setState doit rester pur : React peut le rejouer si
+      // un rendu est abandonné. Démarrer un timer ou déclencher une écriture
+      // réseau dedans expose à des doubles envois. On calcule donc l'état
+      // suivant à partir du ref (déjà synchronisé à chaque rendu), puis on
+      // applique les effets une seule fois, après.
+      const prev = setsRef.current;
       const inSuperset = supersetExIds.length > 1;
       let justDone = false;
+      let shouldStop = false;
+      let restToStart: { seconds: number; info: string | null; key: string; loop: boolean } | null = null;
 
-      setSets((prev) => {
-        const exSets = [...(prev[exId] ?? [])];
-        // La ligne peut manquer si la structure a bougé entre le rendu et le clic
-        while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
-        const s = normalizeSet(exSets[setIdx]);
+      const exSets = [...(prev[exId] ?? [])];
+      // La ligne peut manquer si la structure a bougé entre le rendu et le clic
+      while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
+      const s = normalizeSet(exSets[setIdx]);
 
-        if (!s.done && !s.skipped) {
-          const prevStr = prevSets[exId]?.[setIdx] ?? "";
-          if (!s.kg && prevStr) s.kg = parsePrevVal(prevStr, "kg");
-          if (!s.reps && prevStr) s.reps = parsePrevVal(prevStr, "reps");
-          s.done = true;
-          s.skipped = false;
-          justDone = true;
+      if (!s.done && !s.skipped) {
+        const prevStr = prevSets[exId]?.[setIdx] ?? "";
+        if (!s.kg && prevStr) s.kg = parsePrevVal(prevStr, "kg");
+        if (!s.reps && prevStr) s.reps = parsePrevVal(prevStr, "reps");
+        s.done = true;
+        s.skipped = false;
+        justDone = true;
 
-          // Auto-fill ALL empty cluster sub-rows with the same charge
-          if (clusterNb && s.kg) {
-            for (let j = 0; j < exSets.length; j++) {
-              const other = exSets[j];
-              if (j !== setIdx && !other?.done && !other?.kg) {
-                exSets[j] = { ...normalizeSet(other), kg: s.kg };
-              }
+        // Auto-fill ALL empty cluster sub-rows with the same charge
+        if (clusterNb && s.kg) {
+          for (let j = 0; j < exSets.length; j++) {
+            const other = exSets[j];
+            if (j !== setIdx && !other?.done && !other?.kg) {
+              exSets[j] = { ...normalizeSet(other), kg: s.kg };
             }
           }
-
-          if (timingMode === "depart" && restSec > 0) {
-            startRest(restSec, null, `depart:${blocId}`, true /* loop */);
-          } else if (restSec > 0 && !inSuperset) {
-            startRest(restSec, nextInfo, `${exId}:${setIdx}`);
-          }
-        } else if (s.done) {
-          s.done = false;
-          s.skipped = true;
-          if (timingMode !== "depart") stopRest();
-        } else {
-          s.done = false;
-          s.skipped = false;
         }
 
-        exSets[setIdx] = s;
-        const next = { ...prev, [exId]: exSets };
-
-        // Superset: rest only at the end of a full round (one set of each linked
-        // exercise done) — otherwise the athlete chains directly to the next exo.
-        if (justDone && inSuperset && timingMode !== "depart" && restSec > 0) {
-          const doneCount = (eid: string) =>
-            (next[eid] ?? []).filter((ss) => ss.done || ss.skipped).length;
-          const myCount = doneCount(exId);
-          const roundDone = supersetExIds.every((eid) => doneCount(eid) >= myCount);
-          if (roundDone) startRest(restSec, nextInfo, `${exId}:${setIdx}`);
+        if (timingMode === "depart" && restSec > 0) {
+          restToStart = { seconds: restSec, info: null, key: `depart:${blocId}`, loop: true };
+        } else if (restSec > 0 && !inSuperset) {
+          restToStart = { seconds: restSec, info: nextInfo, key: `${exId}:${setIdx}`, loop: false };
         }
+      } else if (s.done) {
+        s.done = false;
+        s.skipped = true;
+        if (timingMode !== "depart") shouldStop = true;
+      } else {
+        s.done = false;
+        s.skipped = false;
+      }
 
-        // Départ mode: stop looping timer when all bloc sets are done/skipped
-        if (timingMode === "depart" && blocExIds.length > 0) {
-          const allDone = blocExIds.every((eid) => {
-            const eSets = next[eid] ?? [];
-            return eSets.length > 0 && eSets.every((ss) => ss.done || ss.skipped);
-          });
-          if (allDone) shouldStop = true;
-        }
+      exSets[setIdx] = s;
+      const next = { ...prev, [exId]: exSets };
 
-        const mods = allSetsToMods(next, localMods);
-        setLocalMods(mods);
-        saveWorkoutSets(mods);
-        return next;
-      });
+      // Superset: rest only at the end of a full round (one set of each linked
+      // exercise done) — otherwise the athlete chains directly to the next exo.
+      if (justDone && inSuperset && timingMode !== "depart" && restSec > 0) {
+        const doneCount = (eid: string) =>
+          (next[eid] ?? []).filter((ss) => ss.done || ss.skipped).length;
+        const myCount = doneCount(exId);
+        const roundDone = supersetExIds.every((eid) => doneCount(eid) >= myCount);
+        if (roundDone) restToStart = { seconds: restSec, info: nextInfo, key: `${exId}:${setIdx}`, loop: false };
+      }
 
+      // Départ mode: stop looping timer when all bloc sets are done/skipped
+      if (timingMode === "depart" && blocExIds.length > 0) {
+        const allDone = blocExIds.every((eid) => {
+          const eSets = next[eid] ?? [];
+          return eSets.length > 0 && eSets.every((ss) => ss.done || ss.skipped);
+        });
+        if (allDone) shouldStop = true;
+      }
+
+      const mods = allSetsToMods(next, localModsRef.current);
+      setSets(next);
+      setLocalMods(mods);
+      saveWorkoutSets(mods);
+
+      if (restToStart) startRest(restToStart.seconds, restToStart.info, restToStart.key, restToStart.loop);
       if (shouldStop) stopRest();
     },
-    [prevSets, startRest, stopRest, localMods, saveWorkoutSets],
+    [prevSets, startRest, stopRest, saveWorkoutSets],
   );
 
   // ── Open NumPad ──────────────────────────────────────────────────────────
@@ -2416,110 +2436,103 @@ export default function WorkoutDetailPage() {
       if (!padTarget) return;
       const { exId, setIdx, field } = padTarget;
 
-      setSets((prev) => {
-        const exSets = [...(prev[exId] ?? [])];
-        while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
-        const s = { ...normalizeSet(exSets[setIdx]), [field]: value };
+      const prev = setsRef.current;
+      const exSets = [...(prev[exId] ?? [])];
+      while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
+      const s = { ...normalizeSet(exSets[setIdx]), [field]: value };
 
-        // Auto-validate: if not done/skipped, mark done
-        if (!s.done && !s.skipped) {
-          // If entering kg and reps still empty, autofill from prev
-          if (field === "kg" && !s.reps && !padTarget.clusterNb) {
-            const prevStr = prevSets[exId]?.[setIdx] ?? "";
-            const prevReps = parsePrevVal(prevStr, "reps");
-            if (prevReps) s.reps = prevReps;
-          }
-          s.done = true;
+      // Auto-validate: if not done/skipped, mark done
+      if (!s.done && !s.skipped) {
+        // If entering kg and reps still empty, autofill from prev
+        if (field === "kg" && !s.reps && !padTarget.clusterNb) {
+          const prevStr = prevSets[exId]?.[setIdx] ?? "";
+          const prevReps = parsePrevVal(prevStr, "reps");
+          if (prevReps) s.reps = prevReps;
+        }
+        s.done = true;
 
-          // Auto-fill ALL empty cluster sub-rows with the same charge
-          if (field === "kg" && padTarget.clusterNb && value) {
-            for (let j = 0; j < exSets.length; j++) {
-              const other = exSets[j];
-              if (j !== setIdx && !other?.done && !other?.kg) {
-                exSets[j] = { ...normalizeSet(other), kg: value };
-              }
+        // Auto-fill ALL empty cluster sub-rows with the same charge
+        if (field === "kg" && padTarget.clusterNb && value) {
+          for (let j = 0; j < exSets.length; j++) {
+            const other = exSets[j];
+            if (j !== setIdx && !other?.done && !other?.kg) {
+              exSets[j] = { ...normalizeSet(other), kg: value };
             }
           }
         }
+      }
 
-        exSets[setIdx] = s;
-        const next = { ...prev, [exId]: exSets };
-        const mods = allSetsToMods(next, localMods);
-        setLocalMods(mods);
-        saveWorkoutSets(mods);
-        return next;
-      });
+      exSets[setIdx] = s;
+      const next = { ...prev, [exId]: exSets };
+      const mods = allSetsToMods(next, localModsRef.current);
+      setSets(next);
+      setLocalMods(mods);
+      saveWorkoutSets(mods);
 
       setPadTarget(null);
       setPadVal("");
     },
-    [padTarget, prevSets, localMods, saveWorkoutSets],
+    [padTarget, prevSets, saveWorkoutSets],
   );
 
   // ── Add bonus set ────────────────────────────────────────────────────────
   const addBonusSet = useCallback(
     (exId: string) => {
-      setSets((prev) => {
-        const exSets = [...(prev[exId] ?? [])];
-        exSets.push({ kg: "", reps: "", rir: "", done: false, skipped: false });
-        const next = { ...prev, [exId]: exSets };
-        const mods = allSetsToMods(next, localMods);
-        setLocalMods(mods);
-        saveWorkoutSets(mods);
-        return next;
-      });
+      const prev = setsRef.current;
+      const exSets = [...(prev[exId] ?? []), { kg: "", reps: "", rir: "", done: false, skipped: false }];
+      const next = { ...prev, [exId]: exSets };
+      const mods = allSetsToMods(next, localModsRef.current);
+      setSets(next);
+      setLocalMods(mods);
+      saveWorkoutSets(mods);
       haptic();
     },
-    [localMods, saveWorkoutSets],
+    [saveWorkoutSets],
   );
 
   // ── Remove bonus set ─────────────────────────────────────────────────────
   const removeBonusSet = useCallback(
     (exId: string, setIdx: number) => {
-      setSets((prev) => {
-        const exSets = [...(prev[exId] ?? [])];
-        exSets.splice(setIdx, 1);
-        const next = { ...prev, [exId]: exSets };
-        const mods = allSetsToMods(next, localMods);
-        setLocalMods(mods);
-        saveWorkoutSets(mods);
-        return next;
-      });
+      const prev = setsRef.current;
+      const exSets = [...(prev[exId] ?? [])];
+      exSets.splice(setIdx, 1);
+      const next = { ...prev, [exId]: exSets };
+      const mods = allSetsToMods(next, localModsRef.current);
+      setSets(next);
+      setLocalMods(mods);
+      saveWorkoutSets(mods);
     },
-    [localMods, saveWorkoutSets],
+    [saveWorkoutSets],
   );
 
   // ── Update comment / forme ───────────────────────────────────────────────
   const updateExComment = useCallback(
     (exId: string, comment: string) => {
+      const prev = localModsRef.current;
       const next = {
-        ...localMods,
-        exerciceComments: { ...(localMods.exerciceComments ?? {}), [exId]: comment },
+        ...prev,
+        exerciceComments: { ...(prev.exerciceComments ?? {}), [exId]: comment },
       };
       setLocalMods(next);
       saveWorkoutSets(next);
     },
-    [localMods, saveWorkoutSets],
+    [saveWorkoutSets],
   );
 
   const updateSessionComment = useCallback(
     (comment: string) => {
-      setLocalMods((prev) => {
-        const next = { ...prev, sessionComment: comment };
-        saveWorkoutSets(next);
-        return next;
-      });
+      const next = { ...localModsRef.current, sessionComment: comment };
+      setLocalMods(next);
+      saveWorkoutSets(next);
     },
     [saveWorkoutSets],
   );
 
   const updateForme = useCallback(
     (forme: number) => {
-      setLocalMods((prev) => {
-        const next = { ...prev, sessionForme: forme };
-        saveWorkoutSets(next);
-        return next;
-      });
+      const next = { ...localModsRef.current, sessionForme: forme };
+      setLocalMods(next);
+      saveWorkoutSets(next);
     },
     [saveWorkoutSets],
   );
