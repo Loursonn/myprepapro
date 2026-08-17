@@ -2593,6 +2593,7 @@ export default function WorkoutDetailPage() {
   const allSetsHandled = useMemo(() => {
     const rows = Object.values(sets).flat();
     return rows.length > 0 && rows.every((s) => s?.done || s?.skipped);
+    return rows.length > 0 && rows.every((s) => s.done || s.skipped);
   }, [sets]);
 
   // ── Early returns ────────────────────────────────────────────────────────
