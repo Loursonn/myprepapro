@@ -138,7 +138,8 @@ describe('estimateIntervalDuration', () => {
     // 1000 m @ 4 min/km = 4*60 = 240 s
     const iv = makeInterval('x', {
       kind: 'distance', value: 1000,
-      target: { kind: 'pace', min: 4, max: 4, unit: 'min_per_km' },
+      // Stocké en secondes par km : 4 min/km = 240 s/km
+      target: { kind: 'pace', min_s_per_unit: 240, max_s_per_unit: 240, unit: 'min_per_km' },
     });
     expect(estimateIntervalDuration(iv)).toBe(240);
   });
@@ -147,7 +148,8 @@ describe('estimateIntervalDuration', () => {
     // 1000 m @ 12 km/h = 1000/(12/3.6) = 1000/3.333 ≈ 300 s
     const iv = makeInterval('x', {
       kind: 'distance', value: 1000,
-      target: { kind: 'pace', min: 12, max: 12, unit: 'kmh' },
+      // 12 km/h = 300 s/km (toujours stocké en s/km, l'unité ne change que l'affichage)
+      target: { kind: 'pace', min_s_per_unit: 300, max_s_per_unit: 300, unit: 'kmh' },
     });
     expect(estimateIntervalDuration(iv)).toBe(300);
   });
@@ -213,7 +215,10 @@ describe('targetToIntensityPct', () => {
   it('none → null', () => expect(targetToIntensityPct({ kind: 'none' })).toBeNull());
   it('text → null', () => expect(targetToIntensityPct({ kind: 'text', value: 'facile' })).toBeNull());
   it('hr_bpm → null', () => expect(targetToIntensityPct({ kind: 'hr_bpm', min: 140, max: 160 })).toBeNull());
-  it('pace → null', () => expect(targetToIntensityPct({ kind: 'pace', min: 4, max: 5, unit: 'min_per_km' })).toBeNull());
+  // Sans VMA de référence, l'allure est estimée sur la plage 2:30–8:00 /km.
+  // 5:00/km = 300 s/km → 30 + ((480-300)/(480-150)) * 70 ≈ 68 %
+  it('pace sans VMA → estimation sur la plage typique', () =>
+    expect(targetToIntensityPct({ kind: 'pace', min_s_per_unit: 300, max_s_per_unit: 300, unit: 'min_per_km' })).toBe(68));
   it('power → null', () => expect(targetToIntensityPct({ kind: 'power', min: 200, max: 250 })).toBeNull());
   it('cadence → null', () => expect(targetToIntensityPct({ kind: 'cadence', min: 170, max: 180, unit: 'spm' })).toBeNull());
   it('x_per_y → null', () => expect(targetToIntensityPct({ kind: 'x_per_y', x_kind: 'cal', y_kind: 'distance', x_value: 1, y_value: 100 })).toBeNull());

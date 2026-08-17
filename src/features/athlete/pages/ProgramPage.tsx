@@ -146,8 +146,39 @@ function StepCheckRow({
         </div>
       </>
     );
+  } else if (step.type === "exercise") {
+    // Step exercice (séance spécifique / MetCon) : pas de `children` ni de `repeat`.
+    // Sans cette branche, on tombait dans le cas "groupe" → step.children undefined → crash.
+    const rc = ROLE_COLOR[step.role] ?? "#6B7280";
+    const reps = step.reps_min != null
+      ? (step.reps_max != null && step.reps_max !== step.reps_min
+          ? `${step.reps_min}-${step.reps_max} reps`
+          : `${step.reps_min} reps`)
+      : step.duration?.kind === "time"
+      ? formatS(step.duration.value ?? 0)
+      : null;
+    const load = step.weight_kg != null
+      ? step.weight_unit === "pct_rm" ? `${step.weight_kg}% RM`
+      : step.weight_unit === "bw" ? "PDC"
+      : `${step.weight_kg} kg`
+      : null;
+    const detail = [reps, load].filter(Boolean).join(" · ");
+    infoNode = (
+      <>
+        <div style={{ width: 3, height: 34, borderRadius: 2, background: rc, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {step.exercise_name}
+          </div>
+          {detail && <div style={{ fontSize: 10, color: C.tx3, marginTop: 1 }}>{detail}</div>}
+          {step.notes && (
+            <div style={{ fontSize: 9, color: C.tx3, fontStyle: "italic", marginTop: 1 }}>{step.notes}</div>
+          )}
+        </div>
+      </>
+    );
   } else {
-    const previewChildren = step.children
+    const previewChildren = (step.children ?? [])
       .filter((c): c is Extract<EnergyStep, { type: "interval" }> => c.type === "interval")
       .slice(0, 3);
     const childSummary = previewChildren.map(c =>
@@ -161,7 +192,7 @@ function StepCheckRow({
         </div>
         {childSummary && (
           <div style={{ fontSize: 10, color: C.tx2, marginTop: 1 }}>
-            {childSummary}{step.children.length > 3 ? " …" : ""}
+            {childSummary}{(step.children?.length ?? 0) > 3 ? " …" : ""}
           </div>
         )}
       </div>

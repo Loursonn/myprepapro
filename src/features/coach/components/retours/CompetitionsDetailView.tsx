@@ -21,7 +21,7 @@ function CompCard({ comp }: { comp: CompetitionDetail }) {
 
   const save = () => {
     update.mutate(
-      { competitionId: comp.id, comment: text },
+      { competitionId: comp.id, athleteComment: text },
       { onSuccess: () => setEditing(false) }
     );
   };

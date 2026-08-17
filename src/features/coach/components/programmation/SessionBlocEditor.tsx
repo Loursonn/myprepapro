@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   type DragEndEvent,
@@ -24,6 +24,8 @@ interface SessionBlocEditorProps {
   cycleId: string | undefined
   athleteId: string | undefined
   onChange: (updated: ProgSession) => void
+  /** Semaine affichée à l'ouverture (colonne S+1 du drawer). Défaut : 1. */
+  initialWeek?: number
 }
 
 interface SortableBlocProps {
@@ -62,10 +64,13 @@ function SortableBloc({ bloc, index, athleteId, activeWeek, sessionMultiSemaine,
   )
 }
 
-export function SessionBlocEditor({ session, cycleId, athleteId, onChange }: SessionBlocEditorProps) {
+export function SessionBlocEditor({ session, cycleId, athleteId, onChange, initialWeek = 1 }: SessionBlocEditorProps) {
   const [isAddingBloc, setIsAddingBloc] = useState(false)
   const [showBankPicker, setShowBankPicker] = useState(false)
-  const [activeWeek, setActiveWeek] = useState(1)
+  // La colonne "S+1" du drawer passe la semaine à afficher. Sans cette prop
+  // (ignorée jusqu'ici), elle affichait et éditait toujours la semaine 1.
+  const [activeWeek, setActiveWeek] = useState(initialWeek)
+  useEffect(() => { setActiveWeek(initialWeek) }, [initialWeek])
   const { user } = useAuth()
   const { data: bankBlocs = [] } = useBlocBank(user?.id)
 

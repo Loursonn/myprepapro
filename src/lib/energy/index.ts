@@ -7,6 +7,7 @@
  */
 
 import type { EnergyDuration, EnergyGroup, EnergyInterval, ExerciseInterval, EnergyStep, EnergyTarget } from '@/types/energy';
+import { paceBounds } from './paceCompat';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types internes
@@ -158,7 +159,8 @@ function _targetToMetersPerSecond(
 
   if (target.kind === 'pace') {
     // Stocké en s/km — m/s = 1000 / sPerKm
-    const avgSPerKm = (target.min_s_per_unit + target.max_s_per_unit) / 2;
+    const { min, max } = paceBounds(target);
+    const avgSPerKm = (min + max) / 2;
     if (avgSPerKm > 0) return 1000 / avgSPerKm;
   }
 
@@ -253,15 +255,16 @@ export function targetToIntensityPct(
       return (target.min + target.max) / 2;
 
     case 'pace': {
+      const paceRange = paceBounds(target);
       if (refs?.VMA && refs.VMA > 0) {
-        const avgSPerKm = (target.min_s_per_unit + target.max_s_per_unit) / 2;
+        const avgSPerKm = (paceRange.min + paceRange.max) / 2;
         if (avgSPerKm <= 0) return null;
         const speedKmh = 3600 / avgSPerKm;
         return Math.min(120, (speedKmh / refs.VMA) * 100);
       }
       // Sans VMA : estimation depuis la plage d'allure typique (2:30–8:00 /km)
       // 2:30 = 150 s/km (sprint élite) → 100%, 8:00 = 480 s/km (footing doux) → 30%
-      const avgSPerKm = (target.min_s_per_unit + target.max_s_per_unit) / 2;
+      const avgSPerKm = (paceRange.min + paceRange.max) / 2;
       if (avgSPerKm > 0) {
         const normalized = Math.max(0, Math.min(1, (480 - avgSPerKm) / (480 - 150)));
         return Math.round(30 + normalized * 70); // 30% → 100%
