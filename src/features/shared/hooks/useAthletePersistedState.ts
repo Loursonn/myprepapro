@@ -288,6 +288,11 @@ export function useAthletePersistedState(athleteId: string) {
       });
     },
     [save, persist],
+        save("asp:nutrition_log", next).catch(() => {});
+        return next;
+      });
+    },
+    [save],
   );
 
   const setVisibilitySettings = useCallback(async (settings: VisibilitySettings) => {
