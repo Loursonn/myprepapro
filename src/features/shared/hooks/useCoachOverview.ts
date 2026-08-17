@@ -6,6 +6,7 @@ import { DEF_BLOCK_CONFIG } from "@/lib/exercises";
 import type { WellnessData, BlockConfig, Session } from "../types/athlete";
 import type { CoachOverview, CoachOverviewRaw } from "../types/coach-overview";
 import { asBlockConfig, asSessions, asCompletedMap, asWellnessData } from "../types/coach-overview";
+import { localISO } from "@/lib/date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -66,9 +67,9 @@ export function useCoachOverview(): CoachOverview {
   const { athletes, user } = useAuth();
   const athleteIds = useMemo(() => athletes.map((a) => a.id), [athletes]);
 
-  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const today = useMemo(() => localISO(), []);
   const in30  = useMemo(
-    () => new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+    () => localISO(new Date(Date.now() + 30 * 86400000)),
     [],
   );
 

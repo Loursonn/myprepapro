@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { calcScore } from "@/lib/wellness";
 import { QK } from "@/lib/queryKeys";
+import { localISO } from "@/lib/date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -41,10 +42,10 @@ export function useCoachDashboard() {
   const { athletes, user } = useAuth();
   const athleteIds = useMemo(() => athletes.map((a) => a.id), [athletes]);
 
-  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const today = useMemo(() => localISO(), []);
   const yesterday = useMemo(() => {
     const d = new Date(Date.now() - 86400000);
-    return d.toISOString().split("T")[0];
+    return localISO(d);
   }, []);
 
   // ── 1. Today's workout_logs ─────────────────────────────────────────────────

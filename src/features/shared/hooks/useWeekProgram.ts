@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, Exercise } from "../types/athlete";
+import { localISO } from "@/lib/date";
 
 export interface TestSess {
   id: string;
@@ -27,10 +28,6 @@ export interface DayProgram {
 }
 
 /** Format local date as YYYY-MM-DD without UTC conversion. */
-function localISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 /**
  * Returns the 7-day programme for a given ISO week start (Monday).
  * Falls back to current week if weekStart is null.

@@ -8,6 +8,7 @@ import {
   CalorieMode,
   DeficitMode,
 } from "@/lib/nutrition";
+import { localISO } from "@/lib/date";
 
 const C = {
   bg: "#08090C", s1: "#111318", s2: "#181B24",
@@ -425,7 +426,7 @@ export default function AthleteProfileForm({ athlete, onClose, inline = false, i
               type="date"
               value={birthDate}
               onChange={e => setBirthDate(e.target.value)}
-              max={new Date().toISOString().split("T")[0]}
+              max={localISO()}
             />
             {derivedAge !== null && (
               <div style={{ padding: "8px 14px", borderRadius: 8, background: C.coach + "18", border: "1px solid " + C.coach + "40", textAlign: "center", flexShrink: 0 }}>

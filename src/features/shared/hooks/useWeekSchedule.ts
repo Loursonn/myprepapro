@@ -3,10 +3,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useUnifiedCalendar } from "./useUnifiedCalendar";
 import type { Session } from "../types/athlete";
 import type { TestSess, DayProgram } from "./useWeekProgram";
-
-function localISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { localISO } from "@/lib/date";
 
 function weekBounds(weekStart: string | null): { start: string; end: string } {
   const monday = weekStart ? new Date(weekStart + "T12:00:00") : new Date();

@@ -5,7 +5,7 @@
  * Flattens EnergyStep tree into linear step list, handles timer countdown,
  * lap_button, round tracking within groups.
  */
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import type { EnergyStep, EnergyGroup, EnergyInterval, ExerciseInterval } from "@/types/energy";
 import { estimateIntervalDuration } from "@/lib/energy";
 
@@ -60,8 +60,16 @@ export interface SpecificExecutionState {
   elapsedTotal: number;
 }
 
+/** Durée d'un pas, 0 = pas de décompte (lap_button, exercice sans durée). */
+function stepDuration(fs: FlatExecStep | undefined): number {
+  if (!fs) return 0;
+  const s = fs.step;
+  if (s.type === "exercise") return s.duration ? estimateIntervalDuration(s) : 0;
+  return estimateIntervalDuration(s);
+}
+
 export function useSpecificExecution(intervals: EnergyStep[]) {
-  const flatSteps = flattenSteps(intervals);
+  const flatSteps = useMemo(() => flattenSteps(intervals), [intervals]);
 
   const [phase, setPhase] = useState<ExecutionPhase>("preview");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -70,6 +78,9 @@ export function useSpecificExecution(intervals: EnergyStep[]) {
   const [elapsedTotal, setElapsedTotal] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(null);
+  // Index du pas dont le décompte est en cours. null = pas chronométré
+  // (lap_button) : celui-là attend une action manuelle de l'athlète.
+  const armedIndexRef = useRef<number | null>(null);
 
   const currentFlatStep = flatSteps[currentIndex] ?? null;
   const nextFlatStep = flatSteps[currentIndex + 1] ?? null;
@@ -86,17 +97,17 @@ export function useSpecificExecution(intervals: EnergyStep[]) {
     clearTimer();
     const fs = flatSteps[stepIndex];
     if (!fs) return;
-    const s = fs.step;
-    const dur = s.type === "exercise"
-      ? (s.duration ? estimateIntervalDuration(s) : 0)
-      : estimateIntervalDuration(s);
+    const dur = stepDuration(fs);
 
     if (dur <= 0) {
       // lap_button or no-duration exercise — no countdown, wait for manual advance
+      armedIndexRef.current = null;
       setSecondsLeft(0);
       return;
     }
 
+    // Ce pas est chronométré : il devra s'enchaîner tout seul à l'arrivée à 0.
+    armedIndexRef.current = stepIndex;
     setSecondsLeft(dur);
     timerRef.current = setInterval(() => {
       setSecondsLeft((prev) => {
@@ -132,6 +143,7 @@ export function useSpecificExecution(intervals: EnergyStep[]) {
     if (index >= flatSteps.length) {
       // Session complete
       clearTimer();
+      armedIndexRef.current = null;
       setPhase("completed");
       return;
     }
@@ -142,6 +154,19 @@ export function useSpecificExecution(intervals: EnergyStep[]) {
   const next = useCallback(() => {
     goToStep(currentIndex + 1);
   }, [currentIndex, goToStep]);
+
+  // Enchaînement automatique en fin d'intervalle chronométré.
+  // Avant, le décompte tombait à 0, le timer s'arrêtait et plus rien ne se
+  // passait : sur un 10×30/30 l'athlète devait taper "Suivant" à chaque
+  // intervalle. `armedIndexRef` garantit qu'on n'enchaîne que sur un pas dont
+  // le décompte a réellement été armé — un lap_button (durée 0) reste manuel.
+  useEffect(() => {
+    if (phase !== "executing") return;
+    if (secondsLeft !== 0) return;
+    if (armedIndexRef.current !== currentIndex) return;
+    armedIndexRef.current = null;
+    goToStep(currentIndex + 1);
+  }, [phase, secondsLeft, currentIndex, goToStep]);
 
   const skip = useCallback(() => {
     goToStep(currentIndex + 1);

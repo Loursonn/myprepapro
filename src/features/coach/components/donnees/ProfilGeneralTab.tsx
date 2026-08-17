@@ -16,6 +16,7 @@ import type { Profile } from "@/hooks/useAuth";
 import type { Goals, Habit } from "@/features/shared/types/athlete";
 import { useMedicalHistory } from "@/features/shared/hooks/useMedicalHistory";
 import { MedicalReadOnly } from "@/features/athlete/pages/ProfilPage";
+import { localISO } from "@/lib/date";
 
 // ── Palette des blocs ─────────────────────────────────────────────────────────
 
@@ -75,10 +76,6 @@ function Tile({ label, value, color }: { label: string; value: string | null; co
 }
 
 // ── Habitudes ─────────────────────────────────────────────────────────────────
-
-function localISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function HabitRow({ habit, dates }: { habit: Habit; dates: string[] }) {
   const done = new Set(dates);

@@ -12,6 +12,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { QK } from "@/lib/queryKeys";
+import { localISO } from "@/lib/date";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,10 +99,6 @@ export interface ActivePlanResult {
 
 export function localToday(): string {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function localISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

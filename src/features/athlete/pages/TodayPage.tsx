@@ -26,6 +26,7 @@ import type { DayProgram } from "@/features/shared/hooks/useWeekProgram";
 import type { WeekSession } from "@/features/shared/hooks/useActivePlan";
 import type { FreeSession } from "@/features/shared/types/athlete";
 import { evaluateNutritionDay, type NutritionStrategy, type NutritionDailyLog } from "@/lib/nutrition";
+import { localISO, normalizeDayMap } from "@/lib/date";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -333,9 +334,10 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByD
   if (!day) return null;
   const date = new Date(day.date + "T12:00:00");
   const dateLabel = `${DAYS_FULL_FR[day.dow]} ${date.getDate()} ${MONTHS_FR[date.getMonth()]}`;
-  const isToday = day.date === new Date().toISOString().split("T")[0];
-  const isPast  = day.date < new Date().toISOString().split("T")[0];
-  const isFuture = day.date > new Date().toISOString().split("T")[0];
+  const todayISO = localISO();
+  const isToday = day.date === todayISO;
+  const isPast  = day.date < todayISO;
+  const isFuture = day.date > todayISO;
   const dayEnergySessions = energyByDate.get(day.date) ?? [];
   const empty   = day.sessions.length === 0 && day.tests.length === 0 && dayEnergySessions.length === 0;
   const dayFreeActivities = freeSessions.filter((f) => f.date === day.date && f.sport);
@@ -942,7 +944,16 @@ export default function TodayPage() {
   const { data: activePlanData } = useActivePlan(athleteId ?? "");
   const { mutate: startUnplanned, isPending: startingUnplanned } = useStartUnplannedSession();
   const weekMondayISO = useMemo(localMonday, []);
-  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+  const today = localISO();
+
+  // `wellnessHistory` est écrit par saveWellness() avec la clé compacte de
+  // todayKey() ("20260817"), alors que tout TodayPage raisonne en ISO à tirets.
+  // Sans cette normalisation aucune clé ne matchait : le récap d'hier et la
+  // courbe 14 jours ne trouvaient jamais de données et restaient masqués.
+  const wellnessByISO = useMemo(
+    () => normalizeDayMap(wellnessHistory as Record<string, unknown>),
+    [wellnessHistory],
+  );
 
   // Week ISO range for current week (same logic as useWeekProgram)
   const { mondayISO, sundayISO } = useMemo(() => {
@@ -1019,14 +1030,14 @@ export default function TodayPage() {
     ?.id ? null : null; // No coach_id available in WeekSession — use null
 
   // ── Compétitions passées sans commentaire (7 derniers jours) ─────────────
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+  const sevenDaysAgo = localISO(new Date(Date.now() - 7 * 86400000));
   const uncommentedComps = allCompetitions.filter(
     (c) => c.date < today && c.date >= sevenDaysAgo && !c.athlete_comment
   );
 
   // ── Yesterday's recap ─────────────────────────────────────────────────────
-  const yesterdayISO = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-  const yesterdayWellness = wellnessHistory?.[yesterdayISO] ?? null;
+  const yesterdayISO = localISO(new Date(Date.now() - 86400000));
+  const yesterdayWellness = wellnessByISO?.[yesterdayISO] as { score?: number } | undefined ?? null;
   const yesterdayDay = weekDays.find((d) => d.date === yesterdayISO);
   const yesterdaySessName = yesterdayDay?.sessions.find((s) => s.isCompleted)?.session.name
     ?? yesterdayDay?.sessions[0]?.session.name
@@ -1034,9 +1045,8 @@ export default function TodayPage() {
 
   // ── Wellness trend (last 14 days) ────────────────────────────────────────
   const wellnessTrend = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(Date.now() - (13 - i) * 86400000);
-    const iso = d.toISOString().split("T")[0];
-    const w = wellnessHistory?.[iso] as Record<string, number> | null | undefined;
+    const iso = localISO(new Date(Date.now() - (13 - i) * 86400000));
+    const w = wellnessByISO?.[iso] as Record<string, number> | null | undefined;
     const score = w ? Math.round(
       ((w.fatigue ?? 3) + (w.sommeil ?? 3) + (w.stress ?? 3) + (w.energie ?? 3) + (w.doms ?? 3)) / 25 * 100
     ) : null;

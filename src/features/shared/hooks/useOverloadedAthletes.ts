@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { WellnessData } from "../types/athlete";
+import { localISO } from "@/lib/date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -22,7 +23,7 @@ export interface OverloadedAthlete {
 function lastNDays(n: number): string[] {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date(Date.now() - (i + 1) * 86400000);
-    return d.toISOString().split("T")[0];
+    return localISO(d);
   });
 }
 

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { Competition } from "@/types/planning";
+import { localISO } from "@/lib/date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -20,9 +21,9 @@ export function useUpcomingCompetitions(daysAhead = 30) {
   const { athletes, user } = useAuth();
   const athleteIds = useMemo(() => athletes.map((a) => a.id), [athletes]);
 
-  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const today = useMemo(() => localISO(), []);
   const limit = useMemo(
-    () => new Date(Date.now() + daysAhead * 86400000).toISOString().split("T")[0],
+    () => localISO(new Date(Date.now() + daysAhead * 86400000)),
     [daysAhead],
   );
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { SKEYS, sLoad, sSave, cycleKey, sSaveCycle } from "@/lib/storage";
 import { DEF_SESSIONS, DEF_BLOCK_CONFIG } from "@/lib/exercises";
 import { getNutritionStrategy } from "@/lib/nutrition";
@@ -117,23 +118,33 @@ export function useAthletePersistedState(athleteId: string) {
       const activeCycleId = await determineActiveCycleId(athleteId);
       const migrated = await load<boolean>("asp:percycle_migrated", false);
       if (!migrated) {
+        // Le drapeau "migré" ne doit être posé QUE si les recopies ont réussi.
+        // Sinon une écriture ratée (réseau) marquait la migration faite alors
+        // que le cycle restait vide : programme et séances perdus définitivement.
+        let copiesOk = true;
         if (activeCycleId) {
           // Garde-fou : ne recopier le legacy QUE si le cycle actif n'a pas déjà
           // ses propres données scopées (sinon on écraserait un cycle créé via
           // le nouvel assistant). Le blob legacy appartenait au cycle actif.
           const alreadyScoped = await sLoad<ExosMap | null>(cycleKey(SKEYS.exos, activeCycleId), null, athleteId);
           if (alreadyScoped === null) {
-            const [le, lsess, lcs] = await Promise.all([
-              load<ExosMap | null>(SKEYS.exos, null),
-              load<Session[] | null>(SKEYS.sessions, null),
-              load<Record<number, string[]> | null>(SKEYS.completed, null),
-            ]);
-            if (le)    await sSaveCycle(SKEYS.exos, activeCycleId, le, athleteId).catch(() => {});
-            if (lsess) await sSaveCycle(SKEYS.sessions, activeCycleId, lsess, athleteId).catch(() => {});
-            if (lcs)   await sSaveCycle(SKEYS.completed, activeCycleId, lcs, athleteId).catch(() => {});
+            try {
+              const [le, lsess, lcs] = await Promise.all([
+                load<ExosMap | null>(SKEYS.exos, null),
+                load<Session[] | null>(SKEYS.sessions, null),
+                load<Record<number, string[]> | null>(SKEYS.completed, null),
+              ]);
+              if (le)    await sSaveCycle(SKEYS.exos, activeCycleId, le, athleteId);
+              if (lsess) await sSaveCycle(SKEYS.sessions, activeCycleId, lsess, athleteId);
+              if (lcs)   await sSaveCycle(SKEYS.completed, activeCycleId, lcs, athleteId);
+            } catch {
+              copiesOk = false;
+            }
           }
         }
-        await save("asp:percycle_migrated", true).catch(() => {});
+        // Échec → on ne pose pas le drapeau : la migration sera retentée au
+        // prochain chargement, quand la connexion sera revenue.
+        if (copiesOk) await save("asp:percycle_migrated", true).catch(() => {});
       }
       openCycleRef.current = activeCycleId;
       setOpenCycleIdState(activeCycleId);
@@ -201,10 +212,23 @@ export function useAthletePersistedState(athleteId: string) {
     setTimeout(() => setSaveStatus(null), 2000);
   }, []);
 
+  // Toute écriture d'une saisie athlète passe par ici. Avant, la plupart des
+  // setters faisaient `.catch(() => {})` : l'UI se mettait à jour de façon
+  // optimiste, l'écriture échouait (réseau coupé en salle) et la saisie
+  // disparaissait au rechargement suivant, sans aucun signal. On flashe l'état
+  // ET on remonte un toast. `id` fixe : sonner remplace le toast au lieu d'en
+  // empiler un par écriture ratée.
+  const persist = useCallback((p: Promise<unknown>): void => {
+    p.then(() => flash(true)).catch(() => {
+      flash(false);
+      toast.error("Sauvegarde échouée — vérifie ta connexion", { id: "asp-persist-error" });
+    });
+  }, [flash]);
+
   // ── Wrapped setters (persist on write) ────────────────────────────────────
   const setExos = useCallback((v: ExosMap | ((p: ExosMap) => ExosMap)) => {
-    setExosRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; saveBoth(SKEYS.exos, val).then(() => flash(true)).catch(() => flash(false)); return val; });
-  }, [saveBoth, flash]);
+    setExosRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; persist(saveBoth(SKEYS.exos, val)); return val; });
+  }, [saveBoth, persist]);
 
   // Ouvre un autre cycle : maj du ref (synchrone) + état → recharge exos/séances.
   const setOpenCycleId = useCallback((id: string | null) => {
@@ -213,44 +237,44 @@ export function useAthletePersistedState(athleteId: string) {
   }, []);
 
   const setExMeta = useCallback((v: Record<string, unknown> | ((p: Record<string, unknown>) => Record<string, unknown>)) => {
-    setExMetaRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.exMeta, val).then(() => flash(true)).catch(() => flash(false)); return val; });
-  }, [save, flash]);
+    setExMetaRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; persist(save(SKEYS.exMeta, val)); return val; });
+  }, [save, persist]);
 
-  const setSets = useCallback((v: SetsMap) => { setSetsRaw(v); save(SKEYS.sets, v).catch(() => {}); }, [save]);
-  const setBodyWeight = useCallback((v: BodyWeight) => { setBodyWeightRaw(v); save(SKEYS.bw, v).catch(() => {}); }, [save]);
+  const setSets = useCallback((v: SetsMap) => { setSetsRaw(v); persist(save(SKEYS.sets, v)); }, [save, persist]);
+  const setBodyWeight = useCallback((v: BodyWeight) => { setBodyWeightRaw(v); persist(save(SKEYS.bw, v)); }, [save, persist]);
 
   const setGoals = useCallback((v: Goals | ((p: Goals) => Goals)) => {
-    setGoalsRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.goals, val).then(() => flash(true)).catch(() => flash(false)); return val; });
-  }, [save, flash]);
+    setGoalsRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; persist(save(SKEYS.goals, val)); return val; });
+  }, [save, persist]);
 
-  const setCompletedSessions = useCallback((v: Record<number, string[]>) => { setCompletedSessionsRaw(v); saveBoth(SKEYS.completed, v).catch(() => {}); }, [saveBoth]);
-  const setAthleteNotes = useCallback((v: Record<string, string>) => { setAthleteNotesRaw(v); save(SKEYS.anotes, v).catch(() => {}); }, [save]);
+  const setCompletedSessions = useCallback((v: Record<number, string[]>) => { setCompletedSessionsRaw(v); persist(saveBoth(SKEYS.completed, v)); }, [saveBoth, persist]);
+  const setAthleteNotes = useCallback((v: Record<string, string>) => { setAthleteNotesRaw(v); persist(save(SKEYS.anotes, v)); }, [save, persist]);
 
   const setCustomMethods = useCallback((v: unknown[]) => {
-    setCustomMethodsRaw(v); save(SKEYS.custMethods, v).then(() => flash(true)).catch(() => flash(false));
-  }, [save, flash]);
+    setCustomMethodsRaw(v); persist(save(SKEYS.custMethods, v));
+  }, [save, persist]);
 
   const setSessions = useCallback((v: Session[] | ((p: Session[]) => Session[])) => {
-    setSessionsRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; saveBoth(SKEYS.sessions, val).then(() => flash(true)).catch(() => flash(false)); return val; });
-  }, [saveBoth, flash]);
+    setSessionsRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; persist(saveBoth(SKEYS.sessions, val)); return val; });
+  }, [saveBoth, persist]);
 
   const setBlockConfig = useCallback((v: BlockConfig | ((p: BlockConfig) => BlockConfig)) => {
-    setBlockConfigRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; save(SKEYS.blockConfig, val).then(() => flash(true)).catch(() => flash(false)); return val; });
-  }, [save, flash]);
+    setBlockConfigRaw(prev => { const val = typeof v === 'function' ? v(prev) : v; persist(save(SKEYS.blockConfig, val)); return val; });
+  }, [save, persist]);
 
   const setBlockHistory = useCallback((v: ArchivedBlock[]) => {
-    setBlockHistoryRaw(v); save(SKEYS.blockHistory, v).then(() => flash(true)).catch(() => flash(false));
-  }, [save, flash]);
+    setBlockHistoryRaw(v); persist(save(SKEYS.blockHistory, v));
+  }, [save, persist]);
 
-  const setWeekSchedule = useCallback((v: Record<string, unknown>) => { setWeekScheduleRaw(v); save(SKEYS.weekSchedule, v).catch(() => {}); }, [save]);
-  const setSessionLogs = useCallback((v: Record<string, SessionLog>) => { setSessionLogsRaw(v); save(SKEYS.sessionLogs, v).catch(() => {}); }, [save]);
+  const setWeekSchedule = useCallback((v: Record<string, unknown>) => { setWeekScheduleRaw(v); persist(save(SKEYS.weekSchedule, v)); }, [save, persist]);
+  const setSessionLogs = useCallback((v: Record<string, SessionLog>) => { setSessionLogsRaw(v); persist(save(SKEYS.sessionLogs, v)); }, [save, persist]);
   const setFreeSessions = useCallback((v: FreeSession[] | ((prev: FreeSession[]) => FreeSession[])) => {
     setFreeSessionsRaw(prev => {
       const next = typeof v === "function" ? v(prev) : v;
-      save(SKEYS.freeSessions, next).catch(() => {});
+      persist(save(SKEYS.freeSessions, next));
       return next;
     });
-  }, [save]);
+  }, [save, persist]);
 
   // Accepte aussi la forme updater : AlimPage appelle setNutritionLog(prev => …).
   // Avant, la fonction elle-même partait dans sSave → `value` disparaissait du
@@ -259,6 +283,11 @@ export function useAthletePersistedState(athleteId: string) {
     (v: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => {
       setNutritionLogRaw(prev => {
         const next = typeof v === "function" ? v(prev) : v;
+        persist(save("asp:nutrition_log", next));
+        return next;
+      });
+    },
+    [save, persist],
         save("asp:nutrition_log", next).catch(() => {});
         return next;
       });
@@ -268,29 +297,35 @@ export function useAthletePersistedState(athleteId: string) {
 
   const setVisibilitySettings = useCallback(async (settings: VisibilitySettings) => {
     setVisibilityRaw(settings);
-    await supabase.from('app_data').upsert(
+    const { error } = await supabase.from('app_data').upsert(
       { athlete_id: athleteId, key: 'asp:visibility', value: settings, updated_at: new Date().toISOString() },
       { onConflict: 'athlete_id,key' },
     );
-  }, [athleteId]);
+    if (error) {
+      flash(false);
+      toast.error("Sauvegarde échouée — vérifie ta connexion", { id: "asp-persist-error" });
+    } else {
+      flash(true);
+    }
+  }, [athleteId, flash]);
 
   const setWellness = useCallback((v: WellnessData | null) => {
-    setWellnessRaw(v); save(SKEYS.wellness, v).catch(() => {});
-  }, [save]);
+    setWellnessRaw(v); persist(save(SKEYS.wellness, v));
+  }, [save, persist]);
 
   const setWellnessHistory = useCallback((v: Record<string, WellnessData>) => {
-    setWellnessHistoryRaw(v); save(SKEYS.wellnessHistory, v).catch(() => {});
-  }, [save]);
+    setWellnessHistoryRaw(v); persist(save(SKEYS.wellnessHistory, v));
+  }, [save, persist]);
 
   const setWeightLog = useCallback((v: Record<string, number>) => {
-    setWeightLogRaw(v); save(SKEYS.weightLog, v).catch(() => {});
-  }, [save]);
+    setWeightLogRaw(v); persist(save(SKEYS.weightLog, v));
+  }, [save, persist]);
 
   const setWeightMilestones = useCallback((v: Array<{ date: string; kg: number }>) => {
-    setWeightMilestonesRaw(v); save(SKEYS.weightMilestones, v).catch(() => {});
-  }, [save]);
+    setWeightMilestonesRaw(v); persist(save(SKEYS.weightMilestones, v));
+  }, [save, persist]);
 
-  const setInjuries = useCallback((v: Injury[]) => { setInjuriesRaw(v); save(SKEYS.injuries, v).catch(() => {}); }, [save]);
+  const setInjuries = useCallback((v: Injury[]) => { setInjuriesRaw(v); persist(save(SKEYS.injuries, v)); }, [save, persist]);
 
   return {
     // Raw state (read)

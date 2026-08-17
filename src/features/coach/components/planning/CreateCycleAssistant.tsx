@@ -10,6 +10,7 @@ import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { snapMonday, snapSunday, buildMicrocycles } from "./utils/planningHelpers";
 import { SKEYS, sLoadCycle, sSaveCycle } from "@/lib/storage";
 import type { Session, ExosMap } from "@/features/shared/types/athlete";
+import { localISO } from "@/lib/date";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -41,10 +42,6 @@ interface CandidateSession {
 interface Selection {
   take:     boolean;
   withExos: boolean;
-}
-
-function localISO(d: Date): string {
-  return format(d, "yyyy-MM-dd");
 }
 
 // ── Hook: contenu (séances + exos) du dernier cycle de l'athlète ──────────────

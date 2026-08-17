@@ -19,6 +19,7 @@ import { SessionPreviewModal, KIND_COLOR, KIND_LABEL } from "@/features/coach/co
 import BlockHistoryViewer from "@/features/coach/components/BlockHistoryViewer";
 import { useCreateCycleFromBloc } from "@/features/shared/hooks/useCreateCycleFromBloc";
 import { ProgrammationView } from "@/features/coach/components/programmation/ProgrammationView";
+import { localISO } from "@/lib/date";
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -810,7 +811,7 @@ export default function ProgrammationPage() {
   const sortedSessions = [...sessions].sort((a, b) => (a.day_of_week ?? 7) - (b.day_of_week ?? 7));
 
   async function rescheduleWorkoutLogs(sessId: string, newDay: number) {
-    const today = new Date().toISOString().split("T")[0];
+    const today = localISO();
     const { data: logs } = await supabase
       .from("workout_logs")
       .select("id, microcycle_id, microcycles(start_date)")
@@ -824,7 +825,7 @@ export default function ProgrammationPage() {
       .map(l => {
         const monday = new Date(l.microcycles!.start_date + "T12:00:00");
         monday.setDate(monday.getDate() + newDay);
-        return { id: l.id, scheduled_date: monday.toISOString().split("T")[0] };
+        return { id: l.id, scheduled_date: localISO(monday) };
       });
 
     await Promise.all(updates.map(u =>

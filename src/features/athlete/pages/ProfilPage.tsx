@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMedicalHistory, useUpsertMedicalHistory } from "@/features/shared/hooks/useMedicalHistory";
 import type { SurgeryEntry, PastInjuryEntry } from "@/features/shared/types/medical";
 import { toast } from "sonner";
+import { localISO } from "@/lib/date";
 
 const MONTHS_FR = ["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
 
@@ -462,7 +463,7 @@ function StatsSection({ combinedData, wellnessHistory, weightLog, bodyWeight, pr
 
   const wellnessTrend30 = Array.from({ length: 30 }, (_, i) => {
     const d = new Date(Date.now() - (29 - i) * 86400000);
-    const iso = d.toISOString().split("T")[0];
+    const iso = localISO(d);
     const w = (wellnessHistory as Record<string, { score?: number }>)?.[iso];
     return { d: `${d.getDate()}/${d.getMonth() + 1}`, score: w?.score ?? null };
   });

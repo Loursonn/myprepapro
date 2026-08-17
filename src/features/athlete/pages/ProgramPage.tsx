@@ -581,6 +581,55 @@ function isoFromDate(d: Date): string {
 
 // ── Reschedule drawer ─────────────────────────────────────────────────────────
 
+type RescheduleDay = { iso: string; dow: number; num: number };
+
+function WeekRow({
+  days,
+  nextWeek,
+  selected,
+  scheduledDate,
+  onSelect,
+}: {
+  days: RescheduleDay[];
+  nextWeek?: boolean;
+  selected: string;
+  scheduledDate: string;
+  onSelect: (iso: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {days.map(d => {
+        const isSel = d.iso === selected;
+        const isCur = d.iso === scheduledDate;
+        return (
+          <button
+            key={d.iso}
+            onClick={() => onSelect(d.iso)}
+            style={{
+              flex: 1, display: "flex", flexDirection: "column",
+              alignItems: "center", padding: "7px 2px", borderRadius: 10,
+              cursor: "pointer", fontFamily: "inherit",
+              border: "1px solid " + (isSel ? C.ac : nextWeek ? "#F59E0B30" : C.brd),
+              background: isSel ? C.acS : nextWeek ? "rgba(245,158,11,0.04)" : C.s2,
+              position: "relative",
+            }}
+          >
+            <span style={{ fontSize: 9, fontWeight: 600, color: isSel ? C.ac : C.tx3, textTransform: "uppercase" }}>
+              {DOW_SHORT_FR[d.dow]}
+            </span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: isSel ? C.ac : C.tx, lineHeight: 1.2 }}>
+              {d.num}
+            </span>
+            {isCur && (
+              <span style={{ position: "absolute", bottom: 3, width: 4, height: 4, borderRadius: "50%", background: C.ac }} />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function RescheduleDrawer({
   sessionName,
   scheduledDate,
@@ -614,41 +663,6 @@ function RescheduleDrawer({
   const isNextWeek  = week2.some(d => d.iso === selected);
   const canConfirm  = selected !== scheduledDate && !isPending;
 
-  function WeekRow({ days, nextWeek }: { days: typeof week1; nextWeek?: boolean }) {
-    return (
-      <div style={{ display: "flex", gap: 4 }}>
-        {days.map(d => {
-          const isSel = d.iso === selected;
-          const isCur = d.iso === scheduledDate;
-          return (
-            <button
-              key={d.iso}
-              onClick={() => setSelected(d.iso)}
-              style={{
-                flex: 1, display: "flex", flexDirection: "column",
-                alignItems: "center", padding: "7px 2px", borderRadius: 10,
-                cursor: "pointer", fontFamily: "inherit",
-                border: "1px solid " + (isSel ? C.ac : nextWeek ? "#F59E0B30" : C.brd),
-                background: isSel ? C.acS : nextWeek ? "rgba(245,158,11,0.04)" : C.s2,
-                position: "relative",
-              }}
-            >
-              <span style={{ fontSize: 9, fontWeight: 600, color: isSel ? C.ac : C.tx3, textTransform: "uppercase" }}>
-                {DOW_SHORT_FR[d.dow]}
-              </span>
-              <span style={{ fontSize: 15, fontWeight: 800, color: isSel ? C.ac : C.tx, lineHeight: 1.2 }}>
-                {d.num}
-              </span>
-              {isCur && (
-                <span style={{ position: "absolute", bottom: 3, width: 4, height: 4, borderRadius: "50%", background: C.ac }} />
-              )}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <Drawer open onOpenChange={(v) => !v && onClose()}>
       <DrawerContent style={{ background: C.s1, borderTop: "1px solid " + C.brd, padding: "0 0 32px" }}>
@@ -665,7 +679,7 @@ function RescheduleDrawer({
             <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
               Cette semaine
             </div>
-            <WeekRow days={week1} />
+            <WeekRow days={week1} selected={selected} scheduledDate={scheduledDate} onSelect={setSelected} />
           </div>
 
           {/* Week 2 */}
@@ -673,7 +687,7 @@ function RescheduleDrawer({
             <div style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
               Semaine suivante <span style={{ fontSize: 9 }}>⚠ notifie le coach</span>
             </div>
-            <WeekRow days={week2} nextWeek />
+            <WeekRow days={week2} nextWeek selected={selected} scheduledDate={scheduledDate} onSelect={setSelected} />
           </div>
 
           {/* Raison */}
