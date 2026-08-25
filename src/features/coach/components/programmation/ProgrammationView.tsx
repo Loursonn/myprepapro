@@ -342,7 +342,10 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
   // Sync from server only when no local pending changes
   useEffect(() => {
     if (!hasPendingSave.current) {
-      setSessions(serverSessions)
+      setSessions(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(serverSessions)) return prev;
+        return serverSessions;
+      });
     }
   }, [serverSessions])
 

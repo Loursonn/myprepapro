@@ -72,6 +72,7 @@ export interface WellnessDay {
   energie:    number;
   doms?:      number;
   domsZones?: string[];
+  domsPoints?: Array<{ id: string; x: number; y: number; side: "front" | "back"; intensity?: number }>;
   coucher?:   { h: number; m: number };
   reveil?:    { h: number; m: number };
   sleepDur?:  number;  // heures

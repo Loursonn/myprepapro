@@ -242,6 +242,7 @@ export default function EnergySessionEditorPage() {
   const [images, setImages] = useState<SessionImage[]>([]);
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -281,7 +282,7 @@ export default function EnergySessionEditorPage() {
       };
       setRoot(rootG);
       setFieldSchema(existingSession.schema ?? null);
-      setImages((existingSession as any).images ?? []);
+      setImages(((existingSession as any).images ?? []).filter((img: SessionImage) => !img.url.startsWith("blob:")));
       setSportId(existingSession.sport_id ?? null);
       setQualityId(existingSession.quality_id ?? null);
       setFormat(existingSession.format ?? "wod");
@@ -302,7 +303,7 @@ export default function EnergySessionEditorPage() {
     });
     setSportId(session.sport_id ?? null);
     setQualityId(session.quality_id ?? null);
-    setImages((session as any).images ?? []);
+    setImages(((session as any).images ?? []).filter((img: SessionImage) => !img.url.startsWith("blob:")));
     setFormat(session.format ?? "wod");
     setClassiqueBlocks(
       (session.classique_structure?.blocks ?? []).map((b): SessionBlock =>
@@ -353,19 +354,27 @@ export default function EnergySessionEditorPage() {
 
   async function handleUploadImage(file: File) {
     if (!user?.id) return;
+    // Show local preview immediately
+    const localUrl = URL.createObjectURL(file);
+    const tempId = `__uploading_${Date.now()}`;
+    setImages(prev => [...prev, { url: localUrl, caption: tempId }]);
+
     setIsUploading(true);
     try {
       const compressed = await compressImage(file);
       const ext = (compressed.name.split(".").pop() || "jpg").toLowerCase();
-      const path = `sessions/${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const path = `${user.id}/sessions/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error } = await supabase.storage
         .from("test-media")
         .upload(path, compressed, { contentType: compressed.type });
       if (error) throw error;
       const { data: urlData } = supabase.storage.from("test-media").getPublicUrl(path);
-      setImages(prev => [...prev, { url: urlData.publicUrl }]);
+      // Replace local preview with remote URL
+      setImages(prev => prev.map(img => img.caption === tempId ? { url: urlData.publicUrl } : img));
+      URL.revokeObjectURL(localUrl);
     } catch (err) {
       console.error("[image upload]", err);
+      // Keep local preview even if upload fails — user can still see what they picked
     } finally {
       setIsUploading(false);
     }
@@ -689,10 +698,11 @@ export default function EnergySessionEditorPage() {
             {images.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
                 {images.map((img, i) => (
-                  <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.brd}` }}>
+                  <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.brd}`, cursor: "pointer" }}
+                    onClick={() => setPreviewImage(img.url)}>
                     <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     <button
-                      onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                      onClick={(e) => { e.stopPropagation(); setImages(prev => prev.filter((_, j) => j !== i)); }}
                       style={{
                         position: "absolute", top: 2, right: 2,
                         width: 20, height: 20, borderRadius: "50%",
@@ -802,6 +812,25 @@ export default function EnergySessionEditorPage() {
           athleteId={athleteId}
           onClose={() => { setShowAssignModal(false); navigateBack(); }}
         />
+      )}
+
+      {/* ── Image lightbox ── */}
+      {previewImage && (
+        <div
+          onClick={() => setPreviewImage(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "zoom-out",
+          }}
+        >
+          <img
+            src={previewImage}
+            alt=""
+            style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8 }}
+          />
+        </div>
       )}
     </div>
   );

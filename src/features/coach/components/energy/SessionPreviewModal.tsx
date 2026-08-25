@@ -248,6 +248,7 @@ interface SessionPreviewModalProps {
 }
 
 export function SessionPreviewModal({ session, athleteId, onEdit, onStart, startLabel, onCancel, onValidate, onUnvalidate, onClose }: SessionPreviewModalProps) {
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const kc = KIND_COLOR[session.session_kind] ?? "#6B7280";
   const rootGroup = buildRootGroup(session);
   const isClassique = session.format === "classique";
@@ -329,10 +330,11 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {((session as any).images as SessionImage[]).map((img: SessionImage, i: number) => (
-                  <a key={i} href={img.url} target="_blank" rel="noopener noreferrer"
-                    style={{ display: "block", width: 100, height: 100, borderRadius: 8, overflow: "hidden", border: "1px solid " + C.brd }}>
+                  <div key={i}
+                    onClick={() => setLightboxUrl(img.url)}
+                    style={{ width: 100, height: 100, borderRadius: 8, overflow: "hidden", border: "1px solid " + C.brd, cursor: "pointer" }}>
                     <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </a>
+                  </div>
                 ))}
               </div>
             </div>
@@ -385,6 +387,19 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
           )}
         </div>
       </div>
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "zoom-out",
+          }}
+        >
+          <img src={lightboxUrl} alt="" style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8 }} />
+        </div>
+      )}
     </>
   );
 }

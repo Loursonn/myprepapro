@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { X, Trash2, Plus, ChevronLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { X, Trash2, Plus, ChevronLeft, Pencil } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { C } from "@/lib/theme";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
@@ -64,12 +65,15 @@ function WorkoutDetailView({
   exos,
   localSets,
   onAdaptForDay,
+  athleteId,
 }: {
   event: CalEvent;
   exos?: Record<string, unknown[]>;
   localSets?: Record<string, unknown[]>;
   onAdaptForDay?: () => void;
+  athleteId?: string;
 }) {
+  const navigate     = useNavigate();
   const sessionId    = event.raw?.session_id as string | undefined;
   const isProjected  = event.raw?.source === "block_plan";
   const isCompleted  = event.status === "completed";
@@ -145,6 +149,22 @@ function WorkoutDetailView({
           </span>
         )}
       </div>
+
+      {/* Edit session programme */}
+      {sessionId && athleteId && (
+        <button
+          onClick={() => navigate(`/coach/athletes/${athleteId}/programmation`)}
+          style={{
+            width: "100%", padding: "10px 14px", borderRadius: 10,
+            border: "1px solid " + C.coach + "40", background: C.coachS,
+            color: C.coach, fontSize: 12, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}
+        >
+          <Pencil size={13} /> Modifier la séance
+        </button>
+      )}
 
       {/* Adapt-for-this-day — real, not-yet-done workouts (projected must be assigned first) */}
       {!isProjected && !isCompleted && onAdaptForDay && (
@@ -566,7 +586,8 @@ function NutritionDayView({ nutrition }: { nutrition: NutritionDailyLog }) {
 
 // ── EnergyDetailView (inline in drawer) ──────────────────────────────────────
 
-function EnergyDetailView({ event, onOpenPreview }: { event: CalEvent; onOpenPreview: () => void }) {
+function EnergyDetailView({ event, onOpenPreview, athleteId }: { event: CalEvent; onOpenPreview: () => void; athleteId?: string }) {
+  const navigate = useNavigate();
   const blockLogs = event.raw?.block_logs as Record<string, { done: boolean; note?: string }> | null | undefined;
   const blEntries = blockLogs ? Object.entries(blockLogs) : [];
   const doneCount  = blEntries.filter(([, b]) => b.done).length;
@@ -651,6 +672,26 @@ function EnergyDetailView({ event, onOpenPreview }: { event: CalEvent; onOpenPre
       >
         Voir le programme de la séance →
       </button>
+
+      {/* Edit energy session */}
+      {event.energySessionId && (
+        <button
+          onClick={() => {
+            const base = athleteId
+              ? `/coach/athletes/${athleteId}/energy/${event.energySessionId}/edit`
+              : `/coach/energy-library/${event.energySessionId}/edit`;
+            navigate(base);
+          }}
+          style={{
+            padding: "10px 14px", borderRadius: 10, border: "1px solid " + C.coach + "40",
+            background: C.coachS, color: C.coach, fontSize: 12, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}
+        >
+          <Pencil size={13} /> Modifier la séance
+        </button>
+      )}
     </div>
   );
 }
@@ -846,7 +887,7 @@ export function DayDetailsDrawer({
         }}>
           {selectedEvent ? (
             selectedEvent.type === "energy" ? (
-              <EnergyDetailView event={selectedEvent} onOpenPreview={() => setEnergyFullPreview(selectedEvent)} />
+              <EnergyDetailView event={selectedEvent} onOpenPreview={() => setEnergyFullPreview(selectedEvent)} athleteId={athleteId} />
             ) : selectedEvent.type === "free_activity" ? (
               <FreeActivityDetailView event={selectedEvent} />
             ) : (
@@ -855,6 +896,7 @@ export function DayDetailsDrawer({
                 exos={exos}
                 localSets={sets}
                 onAdaptForDay={() => setOverrideLogId(selectedEvent.id)}
+                athleteId={athleteId}
               />
             )
           ) : (

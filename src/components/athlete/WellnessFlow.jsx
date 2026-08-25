@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { C } from "@/lib/theme";
 import { BZFRONT, BZBACK, ALL_BZ, INJ_TYPES, INJ_STATUS, stC } from "@/lib/muscles";
 import { todayKey } from "@/lib/date";
 import { WELL_ITEMS, calcScore, getReco, getAlerts } from "@/lib/wellness";
+
+// ── Legacy zone-based BodyMap (used by InjuryForm) ──────────────────────────
 function BodyMap({selected,onToggle,color}){
   const[view,setView]=useState("front");
   const c=color||C.r;
@@ -32,6 +34,204 @@ function BodyMap({selected,onToggle,color}){
       </div>
     </div>
   </div>);
+}
+
+// ── Free-point DOMS BodyMap ─────────────────────────────────────────────────
+const DOMS_COLORS = ["#F5A623", "#F07030", "#EF4B4B"];
+function domsColor(intensity) {
+  if (!intensity || intensity <= 3) return DOMS_COLORS[0];
+  if (intensity <= 6) return DOMS_COLORS[1];
+  return DOMS_COLORS[2];
+}
+
+const BODY_OUTLINE = (bp) => (
+  <>
+    <ellipse cx="50" cy="12" rx="10" ry="11" fill="none" stroke={bp} strokeWidth="1.5"/>
+    <path d="M34,24 L28,28 L24,74 L76,74 L72,28 L66,24 Q60,21 50,21 Q40,21 34,24 Z" fill="none" stroke={bp} strokeWidth="1.5"/>
+    <path d="M28,28 L20,32 L12,56 L9,74 L14,74 L17,56 L23,33" fill="none" stroke={bp} strokeWidth="1.5"/>
+    <path d="M72,28 L80,32 L88,56 L91,74 L86,74 L83,56 L77,33" fill="none" stroke={bp} strokeWidth="1.5"/>
+    <path d="M40,74 L36,110 L34,148 L41,148 L43,112 L46,74" fill="none" stroke={bp} strokeWidth="1.5"/>
+    <path d="M60,74 L64,110 L66,148 L59,148 L57,112 L54,74" fill="none" stroke={bp} strokeWidth="1.5"/>
+  </>
+);
+
+function DomsBodyMap({ points, onChange }) {
+  const [view, setView] = useState("front");
+  const [selected, setSelected] = useState(null); // selected point id for intensity edit
+  const [dragging, setDragging] = useState(null);
+  const svgRef = useRef(null);
+  const bp = C.brdL;
+
+  const getSvgCoords = useCallback((e) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 160;
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+  }, []);
+
+  const handleSvgClick = useCallback((e) => {
+    if (dragging) return;
+    const coords = getSvgCoords(e);
+    if (!coords) return;
+    // Check if clicking near an existing point (within ~5 SVG units)
+    const near = points.find(p => p.side === view && Math.hypot(p.x - coords.x, p.y - coords.y) < 5);
+    if (near) {
+      setSelected(selected === near.id ? null : near.id);
+      return;
+    }
+    // Add new point
+    const np = { id: String(Date.now()), x: coords.x, y: coords.y, side: view };
+    onChange([...points, np]);
+    setSelected(null);
+  }, [points, view, onChange, getSvgCoords, dragging, selected]);
+
+  const handlePointerDown = useCallback((e, id) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDragging(id);
+    e.target.setPointerCapture(e.pointerId);
+  }, []);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!dragging) return;
+    const coords = getSvgCoords(e);
+    if (!coords) return;
+    onChange(points.map(p => p.id === dragging ? { ...p, x: coords.x, y: coords.y } : p));
+  }, [dragging, points, onChange, getSvgCoords]);
+
+  const handlePointerUp = useCallback(() => {
+    setDragging(null);
+  }, []);
+
+  const removePoint = useCallback((id) => {
+    onChange(points.filter(p => p.id !== id));
+    if (selected === id) setSelected(null);
+  }, [points, onChange, selected]);
+
+  const setIntensity = useCallback((id, val) => {
+    onChange(points.map(p => p.id === id ? { ...p, intensity: val } : p));
+  }, [points, onChange]);
+
+  const viewPoints = points.filter(p => p.side === view);
+  const selectedPt = selected ? points.find(p => p.id === selected) : null;
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        {["front", "back"].map(v => (
+          <button key={v} onClick={() => { setView(v); setSelected(null); }} style={{
+            flex: 1, padding: "6px 0", borderRadius: 7,
+            border: "1px solid " + (view === v ? C.o : C.brdL),
+            background: view === v ? C.o + "20" : "transparent",
+            color: view === v ? C.o : C.tx3,
+            fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+          }}>
+            {v === "front" ? "Vue avant" : "Vue arrière"}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <svg
+          ref={svgRef}
+          viewBox="0 0 100 160"
+          style={{ width: "55%", height: "auto", flexShrink: 0, touchAction: "none" }}
+          onClick={handleSvgClick}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+        >
+          {/* Clickable background */}
+          <rect x="0" y="0" width="100" height="160" fill="transparent" />
+          {BODY_OUTLINE(bp)}
+
+          {/* DOMS points */}
+          {viewPoints.map(p => {
+            const col = domsColor(p.intensity);
+            const isSel = selected === p.id;
+            return (
+              <g key={p.id} style={{ cursor: dragging === p.id ? "grabbing" : "grab" }}>
+                {/* Outer glow */}
+                <circle cx={p.x} cy={p.y} r={isSel ? 6 : 4.5} fill={col + "30"} stroke={col} strokeWidth={isSel ? 1.5 : 1} />
+                {/* Inner dot */}
+                <circle cx={p.x} cy={p.y} r={2} fill={col} />
+                {/* Drag handle (invisible larger area) */}
+                <circle
+                  cx={p.x} cy={p.y} r={7} fill="transparent"
+                  onPointerDown={(e) => handlePointerDown(e, p.id)}
+                  style={{ cursor: "grab" }}
+                />
+                {/* Intensity label */}
+                {p.intensity && (
+                  <text x={p.x} y={p.y + 1} textAnchor="middle" dominantBaseline="central"
+                    style={{ fontSize: 3.5, fontWeight: 800, fill: "#fff", pointerEvents: "none" }}>
+                    {p.intensity}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 9, color: C.tx3, marginBottom: 6 }}>
+            {points.length === 0 ? "Touche le corps pour ajouter un point" : `${points.length} point${points.length > 1 ? "s" : ""}`}
+          </div>
+
+          {/* Point list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {points.map(p => {
+              const col = domsColor(p.intensity);
+              return (
+                <div key={p.id} style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "3px 6px", borderRadius: 6,
+                  background: selected === p.id ? col + "15" : "transparent",
+                  border: "1px solid " + (selected === p.id ? col + "40" : "transparent"),
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0 }} />
+                  <span style={{ fontSize: 9, color: C.tx2, flex: 1 }}>
+                    {p.side === "front" ? "Av." : "Ar."}{p.intensity ? ` — ${p.intensity}/10` : ""}
+                  </span>
+                  <button onClick={() => { setSelected(selected === p.id ? null : p.id); setView(p.side); }} style={{
+                    border: "none", background: "none", color: C.tx3, fontSize: 9, cursor: "pointer", padding: 0, fontFamily: "inherit",
+                  }}>✎</button>
+                  <button onClick={() => removePoint(p.id)} style={{
+                    border: "none", background: "none", color: C.r, fontSize: 9, cursor: "pointer", padding: 0, fontFamily: "inherit",
+                  }}>✕</button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Intensity editor for selected point */}
+          {selectedPt && (
+            <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: C.s1, border: "1px solid " + C.brd }}>
+              <div style={{ fontSize: 9, color: C.tx3, textTransform: "uppercase", marginBottom: 6 }}>Intensité douleur</div>
+              <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => {
+                  const sel = selectedPt.intensity === n;
+                  const nc = domsColor(n);
+                  return (
+                    <button key={n} onClick={() => setIntensity(selectedPt.id, n)} style={{
+                      width: 24, height: 24, borderRadius: 6,
+                      border: "1.5px solid " + (sel ? nc : C.brdL),
+                      background: sel ? nc + "30" : "transparent",
+                      color: sel ? nc : C.tx3,
+                      fontSize: 10, fontWeight: sel ? 800 : 500,
+                      cursor: "pointer", fontFamily: "inherit", padding: 0,
+                    }}>{n}</button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function InjuryForm({onSave,onCancel,existing}){
@@ -76,6 +276,7 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   const[step,setStep]=useState(0);
   const[vals,setVals]=useState({fatigue:existing?.fatigue||3,sommeil:existing?.sommeil||3,stress:existing?.stress||3,energie:existing?.energie||3,doms:existing?.doms||5});
   const[domsZones,setDomsZones]=useState(existing?.domsZones||[]);
+  const[domsPoints,setDomsPoints]=useState(existing?.domsPoints||[]);
   const[coucher,setCoucher]=useState(existing?.coucher||{h:23,m:0});
   const[reveil,setReveil]=useState(existing?.reveil||{h:7,m:0});
   const[poids,setPoids]=useState(existing?.poids||"");
@@ -125,8 +326,9 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
   if(step===S_DOMS_ZONES){
     return(<div style={{padding:"20px 20px 40px"}}>{progBar}
       <div style={{fontSize:13,fontWeight:600,color:C.tx2,textTransform:"uppercase",marginBottom:8}}>Zones de courbatures</div>
-      <div style={{fontSize:18,fontWeight:800,letterSpacing:"-0.5px",marginBottom:16}}>Où as-tu des DOMS ?</div>
-      <BodyMap selected={domsZones} onToggle={togDoms} color={C.o}/>
+      <div style={{fontSize:18,fontWeight:800,letterSpacing:"-0.5px",marginBottom:4}}>Où as-tu des DOMS ?</div>
+      <div style={{fontSize:11,color:C.tx3,marginBottom:16}}>Touche le corps pour placer un point. Retouche un point pour ajouter l'intensité.</div>
+      <DomsBodyMap points={domsPoints} onChange={setDomsPoints}/>
       <button onClick={()=>setStep(S_INJURY)} style={{width:"100%",marginTop:16,padding:"13px 0",borderRadius:12,border:"none",background:C.ac,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Suivant</button>
     </div>);
   }
@@ -201,12 +403,13 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
       <div style={{background:C.s1,borderRadius:10,padding:"8px 10px",border:"1px solid "+sleepC+"40"}}><div style={{fontSize:8,color:C.tx3,marginBottom:2}}>Sommeil</div><div style={{fontSize:16,fontWeight:800,color:sleepC}}>{dur}h</div><div style={{fontSize:8,color:sleepC}}>{diff>0?"+":""}{diff}h</div></div>
       {poids&&<div style={{background:C.s1,borderRadius:10,padding:"8px 10px",border:"1px solid "+C.brd}}><div style={{fontSize:8,color:C.tx3,marginBottom:2}}>Poids</div><div style={{fontSize:16,fontWeight:800,color:C.ac}}>{poids} kg</div></div>}
     </div>
-    {domsZones.length>0&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:4}}>DOMS</div><div style={{display:"flex",flexWrap:"wrap",gap:3}}>{domsZones.map(id=>{const z=ALL_BZ.find(z=>z.id===id);return z?<span key={id} style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.o+"20",color:C.o}}>{z.label}</span>:null;})}</div></div>)}
+    {domsPoints.length>0&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:4}}>DOMS — {domsPoints.length} point{domsPoints.length>1?"s":""}</div><div style={{display:"flex",flexWrap:"wrap",gap:3}}>{domsPoints.map(p=><span key={p.id} style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:domsColor(p.intensity)+"20",color:domsColor(p.intensity)}}>{p.side==="front"?"Avant":"Arrière"}{p.intensity?` ${p.intensity}/10`:""}</span>)}</div></div>)}
+    {domsPoints.length===0&&domsZones.length>0&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:4}}>DOMS</div><div style={{display:"flex",flexWrap:"wrap",gap:3}}>{domsZones.map(id=>{const z=ALL_BZ.find(z=>z.id===id);return z?<span key={id} style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:C.o+"20",color:C.o}}>{z.label}</span>:null;})}</div></div>)}
     {injOui&&injComment&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.r+"10",border:"1px solid "+C.r+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.r,textTransform:"uppercase",marginBottom:4}}>Blessure signalée</div><div style={{fontSize:11,color:C.r,lineHeight:1.5}}>{injComment}</div></div>)}
     {alerts.length>0&&<div style={{marginBottom:12}}>{alerts.map((a,i)=><div key={i} style={{padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30",fontSize:11,color:C.o,marginBottom:5}}>{a}</div>)}</div>}
     {sleepInterrupt===true&&sleepInterruptNote&&(<div style={{marginBottom:8,padding:"8px 12px",borderRadius:8,background:C.o+"10",border:"1px solid "+C.o+"30"}}><div style={{fontSize:9,fontWeight:600,color:C.o,textTransform:"uppercase",marginBottom:4}}>Réveil nocturne</div><div style={{fontSize:11,color:C.o,lineHeight:1.5}}>{sleepInterruptNote}</div></div>)}
-    <button onClick={()=>onSave({...vals,domsZones,coucher,reveil,sleepDur:dur,poids:+poids||null,score,injComment:injOui?injComment:null,sleepInterrupt:sleepInterrupt??null,sleepInterruptNote:sleepInterrupt?sleepInterruptNote||null:null})} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.g,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Sauvegarder</button>
+    <button onClick={()=>onSave({...vals,domsZones,domsPoints,coucher,reveil,sleepDur:dur,poids:+poids||null,score,injComment:injOui?injComment:null,sleepInterrupt:sleepInterrupt??null,sleepInterruptNote:sleepInterrupt?sleepInterruptNote||null:null})} style={{width:"100%",padding:"13px 0",borderRadius:12,border:"none",background:C.g,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Sauvegarder</button>
   </div>);
 }
 
-export { BodyMap, InjuryForm, WellnessFlow };
+export { BodyMap, DomsBodyMap, InjuryForm, WellnessFlow };

@@ -70,9 +70,15 @@ function resolveParams(
 
 function fmtReps(p: ExerciceParams): string {
   if (!p.reps) return "?"
-  return p.reps.mode === "par_serie"
-    ? p.reps.values.join(" / ")
-    : String(p.reps.value)
+  if (p.reps.mode === "par_serie") {
+    return p.reps.values.map((v, i) => {
+      const mx = p.reps_max?.mode === "par_serie" ? p.reps_max.values[i] : (p.reps_max?.mode === "global" ? p.reps_max.value : null)
+      return mx != null && mx !== v ? `${v}-${mx}` : String(v)
+    }).join(" / ")
+  }
+  const mx = p.reps_max?.mode === "global" ? p.reps_max.value : null
+  if (mx != null && mx !== p.reps.value) return `${p.reps.value}-${mx}`
+  return String(p.reps.value)
 }
 
 function fmtCharge(p: ExerciceParams): string {
