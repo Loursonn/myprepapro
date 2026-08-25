@@ -2369,6 +2369,28 @@ export default function WorkoutDetailPage() {
             const other = exSets[j];
             if (j !== setIdx && !other?.done && !other?.kg) {
               exSets[j] = { ...normalizeSet(other), kg: s.kg };
+
+      setSets((prev) => {
+        const exSets = [...(prev[exId] ?? [])];
+        // La ligne peut manquer si la structure a bougé entre le rendu et le clic
+        while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
+        const s = normalizeSet(exSets[setIdx]);
+
+        if (!s.done && !s.skipped) {
+          const prevStr = prevSets[exId]?.[setIdx] ?? "";
+          if (!s.kg && prevStr) s.kg = parsePrevVal(prevStr, "kg");
+          if (!s.reps && prevStr) s.reps = parsePrevVal(prevStr, "reps");
+          s.done = true;
+          s.skipped = false;
+          justDone = true;
+
+          // Auto-fill ALL empty cluster sub-rows with the same charge
+          if (clusterNb && s.kg) {
+            for (let j = 0; j < exSets.length; j++) {
+              const other = exSets[j];
+              if (j !== setIdx && !other?.done && !other?.kg) {
+                exSets[j] = { ...normalizeSet(other), kg: s.kg };
+              }
             }
           }
         }
@@ -2457,6 +2479,28 @@ export default function WorkoutDetailPage() {
             const other = exSets[j];
             if (j !== setIdx && !other?.done && !other?.kg) {
               exSets[j] = { ...normalizeSet(other), kg: value };
+      setSets((prev) => {
+        const exSets = [...(prev[exId] ?? [])];
+        while (exSets.length <= setIdx) exSets.push({ ...BLANK_SET });
+        const s = { ...normalizeSet(exSets[setIdx]), [field]: value };
+
+        // Auto-validate: if not done/skipped, mark done
+        if (!s.done && !s.skipped) {
+          // If entering kg and reps still empty, autofill from prev
+          if (field === "kg" && !s.reps && !padTarget.clusterNb) {
+            const prevStr = prevSets[exId]?.[setIdx] ?? "";
+            const prevReps = parsePrevVal(prevStr, "reps");
+            if (prevReps) s.reps = prevReps;
+          }
+          s.done = true;
+
+          // Auto-fill ALL empty cluster sub-rows with the same charge
+          if (field === "kg" && padTarget.clusterNb && value) {
+            for (let j = 0; j < exSets.length; j++) {
+              const other = exSets[j];
+              if (j !== setIdx && !other?.done && !other?.kg) {
+                exSets[j] = { ...normalizeSet(other), kg: value };
+              }
             }
           }
         }
