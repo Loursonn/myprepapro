@@ -335,6 +335,10 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
                     style={{ width: 100, height: 100, borderRadius: 8, overflow: "hidden", border: "1px solid " + C.brd, cursor: "pointer" }}>
                     <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   </div>
+                  <a key={i} href={img.url} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "block", width: 100, height: 100, borderRadius: 8, overflow: "hidden", border: "1px solid " + C.brd }}>
+                    <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </a>
                 ))}
               </div>
             </div>
