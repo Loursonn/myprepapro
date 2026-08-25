@@ -330,6 +330,28 @@ export function useCreateTestSession() {
   });
 }
 
+export function useRescheduleTestSession() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, date, athleteId }: { id: string; date: string; athleteId: string }) => {
+      const { error } = await supabase
+        .from("test_sessions")
+        .update({ date })
+        .eq("id", id);
+      if (error) throw error;
+      return athleteId;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: calBaseKey(vars.athleteId) });
+      qc.invalidateQueries({ queryKey: ["calendar-events", vars.athleteId] });
+      qc.invalidateQueries({ queryKey: ["week-schedule", vars.athleteId] });
+      toast.success("Test déplacé");
+    },
+    onError: () => toast.error("Erreur lors du déplacement"),
+  });
+}
+
 export function useDeleteCalendarEvent() {
   const qc = useQueryClient();
 

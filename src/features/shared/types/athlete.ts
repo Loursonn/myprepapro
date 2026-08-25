@@ -83,7 +83,16 @@ export interface WellnessData {
   sleepInterrupt?: boolean;
   sleepInterruptNote?: string;
   domsZones?: string[];
+  domsPoints?: DomsPoint[];
   injComment?: string;
+}
+
+export interface DomsPoint {
+  id: string;
+  x: number;
+  y: number;
+  side: "front" | "back";
+  intensity?: number;
 }
 
 export interface BodyWeight {

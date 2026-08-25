@@ -30,6 +30,7 @@ import {
   useAssignWorkout,
   useRescheduleWorkout,
   useCreateTestSession,
+  useRescheduleTestSession,
   toCalEvent,
 } from "@/features/shared/hooks/useUnifiedCalendar";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
@@ -191,7 +192,7 @@ function DraggableEventChip({
   onEventClick?: (event: CalEvent) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const draggable = event.type === "workout" || event.type === "energy";
+  const draggable = event.type === "workout" || event.type === "energy" || event.type === "test";
   const deletable = event.type === "workout" || event.type === "energy" || event.type === "test";
   const { mutate: del } = useDeleteCalendarEvent();
   // Pas de `transform` ici : le fantôme est rendu par <DragOverlay>. Déplacer
@@ -502,8 +503,8 @@ function PlanningBank({
 
   const q = search.toLowerCase();
   const filteredMuscu      = sessions.filter((s) => s.name.toLowerCase().includes(q));
-  const filteredEnergy     = energySessions.filter((s) => s.session_kind !== "specifique" && !s.athlete_id && s.name.toLowerCase().includes(q));
-  const filteredSpecifique = energySessions.filter((s) => s.session_kind === "specifique" && !s.athlete_id && s.name.toLowerCase().includes(q));
+  const filteredEnergy     = energySessions.filter((s) => s.session_kind !== "specifique" && s.name.toLowerCase().includes(q));
+  const filteredSpecifique = energySessions.filter((s) => s.session_kind === "specifique" && s.name.toLowerCase().includes(q));
   const filteredTests      = testDefinitions.filter((t) => t.name.toLowerCase().includes(q));
 
   const testGroups = TEST_CATEGORY_ORDER
@@ -744,6 +745,7 @@ export function CalendarMonthView({
   const { mutate: rescheduleEnergy }    = useUpdateEnergyAssignment();
   const { data: testDefinitions = [] }  = useTestDefinitions(coachId);
   const { mutate: createTestSession }   = useCreateTestSession();
+  const { mutate: rescheduleTest }      = useRescheduleTestSession();
 
   // ── Fetch all cycles for athlete (to link blockConfig to a Frise cycle) ──
   const { data: allCycles = [] } = useQuery({
@@ -916,8 +918,9 @@ export function CalendarMonthView({
         if (event.date === dateStr) return;
 
         if (event.type === "energy") {
-          // event.id is the energy_session_assignment id
           rescheduleEnergy({ id: event.id, athleteId, scheduled_date: dateStr });
+        } else if (event.type === "test") {
+          rescheduleTest({ id: event.id, date: dateStr, athleteId });
         } else {
           reschedule({ event, newDate: dateStr, athleteId, coachId });
         }
@@ -962,7 +965,7 @@ export function CalendarMonthView({
         });
       }
     },
-    [assignWorkout, assignEnergy, createTestSession, reschedule, rescheduleEnergy, athleteId, coachId],
+    [assignWorkout, assignEnergy, createTestSession, reschedule, rescheduleEnergy, rescheduleTest, athleteId, coachId],
   );
 
   const activeDragSession = activeDragId

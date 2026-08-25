@@ -19,19 +19,26 @@ function formatCharge(value: number | null, unit: ExerciceParams['charge_unit'])
   return String(value)
 }
 
+function fmtRepsRange(reps: ParamValue<number>, reps_max?: ParamValue<number | null>): string {
+  const min = reps.mode === 'global' ? reps.value : undefined
+  const max = reps_max?.mode === 'global' ? reps_max.value : undefined
+  if (min == null) return '?'
+  if (max != null && max !== min) return `${min}-${max}`
+  return String(min)
+}
+
 export function SyntheseBar({ params, color }: SyntheseBarProps) {
   const accent = color ?? VIOLET
-  const { nb_series, cluster, reps, reps_mode: _reps_mode, charge_unit, charge, rir, tempo } = params
+  const { nb_series, cluster, reps, reps_max, reps_mode: _reps_mode, charge_unit, charge, rir, tempo } = params
 
   // Guard: old/incomplete data missing required fields
   if (!reps || !charge || !rir || !tempo) return null
 
   if (charge_unit === 'PDC') {
     // PDC — body weight
-    const repsVal = getVal(reps)
     const rirVal = getVal(rir)
     const tempoVal = getVal(tempo)
-    let text = `${nb_series}×${repsVal ?? '?'} @ PDC`
+    let text = `${nb_series}×${fmtRepsRange(reps, reps_max)} @ PDC`
     if (rirVal != null) text += ` — RIR ${rirVal}`
     if (tempoVal) text += ` — Tempo ${tempoVal}`
     return (
@@ -46,8 +53,10 @@ export function SyntheseBar({ params, color }: SyntheseBarProps) {
     const parts: string[] = []
     for (let i = 0; i < nb_series; i++) {
       const r = reps.mode === 'par_serie' ? reps.values[i] : getVal(reps)
+      const rm = reps_max?.mode === 'par_serie' ? reps_max.values[i] : (reps_max?.mode === 'global' ? reps_max.value : null)
       const c = charge.mode === 'par_serie' ? charge.values[i] : getVal(charge)
-      let seg = `S${i + 1}: ${r ?? '?'}`
+      const rStr = r == null ? '?' : (rm != null && rm !== r ? `${r}-${rm}` : String(r))
+      let seg = `S${i + 1}: ${rStr}`
       if (c != null) seg += `×${formatCharge(c, charge_unit)}`
       parts.push(seg)
     }
@@ -81,12 +90,11 @@ export function SyntheseBar({ params, color }: SyntheseBarProps) {
   }
 
   // Global mode
-  const repsVal = getVal(reps)
   const chargeVal = getVal(charge)
   const rirVal = getVal(rir)
   const tempoVal = getVal(tempo)
 
-  let text = `${nb_series}×${repsVal ?? '?'}`
+  let text = `${nb_series}×${fmtRepsRange(reps, reps_max)}`
   if (chargeVal != null) text += ` @ ${formatCharge(chargeVal, charge_unit)}`
   if (rirVal != null) text += ` — RIR ${rirVal}`
   if (tempoVal) text += ` — Tempo ${tempoVal}`

@@ -63,6 +63,12 @@ const POWER_TEST_METRICS = ["PMA", "FTP", "PC30", "PC5"];
 
 function parseMMSS(raw: string): number {
   const parts = raw.split(":");
+  if (parts.length === 3) {
+    const h = parseInt(parts[0], 10) || 0;
+    const m = parseInt(parts[1], 10) || 0;
+    const s = parseInt(parts[2], 10) || 0;
+    return h * 3600 + m * 60 + s;
+  }
   if (parts.length === 2) {
     const m = parseInt(parts[0], 10) || 0;
     const s = parseInt(parts[1], 10) || 0;
@@ -72,8 +78,10 @@ function parseMMSS(raw: string): number {
 }
 
 function toMMSS(secs: number): string {
-  const m = Math.floor(secs / 60);
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -281,11 +289,11 @@ export default function IntervalEditor({ open, onOpenChange, interval, onSave, t
               style={inp.base}
               value={durValue}
               onChange={(e) => setDurValue(e.target.value)}
-              placeholder={durKind === "time" ? "mm:ss" : durKind === "distance" ? "400" : "200"}
+              placeholder={durKind === "time" ? "mm:ss ou h:mm:ss" : durKind === "distance" ? "400" : "200"}
               min={durKind !== "time" ? 0 : undefined}
             />
             {durKind === "time" && (
-              <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>Format MM:SS (ex: 1:30)</div>
+              <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>Format MM:SS ou H:MM:SS (ex: 1:30, 1:05:00)</div>
             )}
             {durKind === "distance" && (
               <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>Distance en mètres</div>
