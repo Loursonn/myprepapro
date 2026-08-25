@@ -109,6 +109,13 @@ export interface ExerciseInterval {
 }
 
 // ── EnergyStep (union discriminée sur `type`) ─────────────────────────────────
+// ── Session illustration images ─────────────────────────────────────────────
+
+export interface SessionImage {
+  url: string;
+  caption?: string;
+}
+
 export type EnergyStep = EnergyInterval | EnergyGroup | ExerciseInterval;
 
 // ── Constantes de domaine ─────────────────────────────────────────────────────
@@ -176,7 +183,7 @@ export interface EnergySessionRow {
   total_duration_s?: number | null;
   total_distance_m?: number | null;
   notes?: string | null;
-  schema?: FieldSchema | null;
+  schema?: FieldSchema | null;\n  images?: SessionImage[] | null;
   created_by?: string | null;
   athlete_id?: string | null;
   parent_session_id?: string | null;

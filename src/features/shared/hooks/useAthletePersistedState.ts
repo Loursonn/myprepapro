@@ -292,7 +292,7 @@ export function useAthletePersistedState(athleteId: string) {
         return next;
       });
     },
-    [save],
+    [save, persist],
   );
 
   const setVisibilitySettings = useCallback(async (settings: VisibilitySettings) => {

@@ -17,8 +17,10 @@ import { C } from "@/lib/theme";
 import { makeRootGroup, genId } from "@/lib/energy/treeUtils";
 import { expandIntervals, computeTotals } from "@/lib/energy";
 import { formatSLong } from "@/lib/energy/formatTarget";
-import type { EnergyGroup, EnergyStep, SessionKind, StructureType, FieldSchema } from "@/types/energy";
+import type { EnergyGroup, EnergyStep, SessionKind, StructureType, FieldSchema, SessionImage } from "@/types/energy";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { compressImage } from "@/lib/compressImage";
 import IntervalBuilder from "../components/energy/IntervalBuilder";
 import SessionPreview from "../components/energy/SessionPreview";
 import SchemaEditor from "../components/energy/SchemaEditor";
@@ -237,6 +239,9 @@ export default function EnergySessionEditorPage() {
   const [root, setRoot] = useState<EnergyGroup>(makeRootGroup);
   const [fieldSchema, setFieldSchema] = useState<FieldSchema | null>(null);
   const [showSchemaEditor, setShowSchemaEditor] = useState(false);
+  const [images, setImages] = useState<SessionImage[]>([]);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -276,6 +281,7 @@ export default function EnergySessionEditorPage() {
       };
       setRoot(rootG);
       setFieldSchema(existingSession.schema ?? null);
+      setImages((existingSession as any).images ?? []);
       setSportId(existingSession.sport_id ?? null);
       setQualityId(existingSession.quality_id ?? null);
       setFormat(existingSession.format ?? "wod");
@@ -296,6 +302,7 @@ export default function EnergySessionEditorPage() {
     });
     setSportId(session.sport_id ?? null);
     setQualityId(session.quality_id ?? null);
+    setImages((session as any).images ?? []);
     setFormat(session.format ?? "wod");
     setClassiqueBlocks(
       (session.classique_structure?.blocks ?? []).map((b): SessionBlock =>
@@ -337,6 +344,33 @@ export default function EnergySessionEditorPage() {
   const flat = expandIntervals(root);
   const totals = computeTotals(flat);
 
+  async function handleAddImageUrl() {
+    const url = imageUrlInput.trim();
+    if (!url) return;
+    setImages(prev => [...prev, { url }]);
+    setImageUrlInput("");
+  }
+
+  async function handleUploadImage(file: File) {
+    if (!user?.id) return;
+    setIsUploading(true);
+    try {
+      const compressed = await compressImage(file);
+      const ext = (compressed.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `sessions/${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage
+        .from("test-media")
+        .upload(path, compressed, { contentType: compressed.type });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("test-media").getPublicUrl(path);
+      setImages(prev => [...prev, { url: urlData.publicUrl }]);
+    } catch (err) {
+      console.error("[image upload]", err);
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   async function handleSave(andPlan = false) {
     const effectiveKind = sessionKind === "custom" ? "custom" : sessionKind;
     const payload = {
@@ -349,6 +383,7 @@ export default function EnergySessionEditorPage() {
       structure_type: structureType,
       intervals: root.children,
       schema: fieldSchema ?? null,
+      images: images.length > 0 ? images : null,
       sport_id: isSpecifique ? sportId : null,
       quality_id: isSpecifique ? qualityId : null,
       format: isSpecifique ? format : "wod",
@@ -643,6 +678,88 @@ export default function EnergySessionEditorPage() {
             value={fieldSchema}
             onSave={(s) => { setFieldSchema(s); setShowSchemaEditor(false); }}
           />
+
+          {/* ── Illustrations ── */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+              Illustrations
+            </div>
+
+            {/* Existing images */}
+            {images.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                {images.map((img, i) => (
+                  <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.brd}` }}>
+                    <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <button
+                      onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                      style={{
+                        position: "absolute", top: 2, right: 2,
+                        width: 20, height: 20, borderRadius: "50%",
+                        background: "rgba(0,0,0,0.6)", border: "none",
+                        color: "#fff", fontSize: 12, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        lineHeight: 1,
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* URL input */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <input
+                value={imageUrlInput}
+                onChange={(e) => setImageUrlInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddImageUrl(); } }}
+                placeholder="Coller une URL d'image…"
+                style={{
+                  flex: 1, padding: "7px 10px", borderRadius: 8,
+                  border: `1px solid ${C.brd}`, background: C.s2,
+                  color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
+                }}
+              />
+              <button
+                onClick={handleAddImageUrl}
+                disabled={!imageUrlInput.trim()}
+                style={{
+                  padding: "7px 12px", borderRadius: 8,
+                  border: `1px solid ${C.ac}40`, background: C.ac + "12",
+                  color: C.ac, fontSize: 12, fontWeight: 600,
+                  cursor: imageUrlInput.trim() ? "pointer" : "default",
+                  fontFamily: "inherit", opacity: imageUrlInput.trim() ? 1 : 0.5,
+                }}
+              >
+                +
+              </button>
+            </div>
+
+            {/* File upload */}
+            <label style={{
+              display: "block", padding: "10px 0", borderRadius: 10,
+              border: `1px dashed ${C.brdL}`, background: "transparent",
+              color: isUploading ? C.ac : C.tx3, fontSize: 12, fontWeight: 600,
+              cursor: isUploading ? "wait" : "pointer", fontFamily: "inherit",
+              textAlign: "center",
+            }}>
+              {isUploading ? "Upload en cours…" : "Glisser ou cliquer pour ajouter une photo"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: "none" }}
+                disabled={isUploading}
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files) Array.from(files).forEach(handleUploadImage);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
 
           {/* Mini totals recap */}
           {totals.durationS > 0 && (

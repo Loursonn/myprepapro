@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { X, Zap } from "lucide-react";
 import { C } from "@/lib/theme";
 import SessionPreview from "./SessionPreview";
 import { SchemaViewerWithZoom } from "./SchemaViewer";
-import type { EnergySessionRow, EnergyStep, EnergyGroup } from "@/types/energy";
+import type { EnergySessionRow, EnergyStep, EnergyGroup, SessionImage } from "@/types/energy";
+import type { SessionBlock, ClassiqueBlock, WodBlock } from "@/types/specific";
+import { isWodBlock } from "@/types/specific";
 import { formatTarget, formatS } from "@/lib/energy/formatTarget";
 
 // ── Shared constants ──────────────────────────────────────────────────────────
@@ -154,6 +157,76 @@ export function StepTree({ steps, depth = 0 }: { steps: EnergyStep[]; depth?: nu
   );
 }
 
+// ── Classique block rendering ────────────────────────────────────────────────
+
+function ClassiqueBlockView({ block }: { block: ClassiqueBlock }) {
+  return (
+    <div style={{
+      background: C.s2, border: "1px solid " + C.brd,
+      borderLeft: "3px solid #22C993",
+      borderRadius: 9, padding: "10px 12px", marginBottom: 8,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#22C993", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+        {block.title || "Bloc classique"}
+      </div>
+      {block.items.map((item) => (
+        <div key={item.id} style={{
+          display: "flex", gap: 8, alignItems: "baseline",
+          padding: "4px 0", borderBottom: "1px solid " + C.brd,
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.tx, flex: 1, minWidth: 0 }}>
+            {item.name}
+          </span>
+          {item.prescription && (
+            <span style={{ fontSize: 10, color: C.tx3, flexShrink: 0 }}>{item.prescription}</span>
+          )}
+        </div>
+      ))}
+      {block.items.some((it) => it.notes) && (
+        <div style={{ marginTop: 4 }}>
+          {block.items.filter((it) => it.notes).map((it) => (
+            <div key={it.id} style={{ fontSize: 9, color: C.tx3, padding: "1px 0" }}>
+              💡 {it.name} : {it.notes}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WodBlockView({ block }: { block: WodBlock }) {
+  return (
+    <div style={{
+      border: "1px dashed #F5A623",
+      borderRadius: 10, padding: 8, marginBottom: 8,
+      background: "rgba(245,166,35,0.03)",
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#F5A623", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, padding: "0 4px" }}>
+        {block.title || "Bloc WOD"}
+        <span style={{ fontWeight: 400, marginLeft: 6, fontSize: 9, color: C.tx3 }}>
+          {block.steps.length} étape{block.steps.length > 1 ? "s" : ""}
+        </span>
+      </div>
+      <div style={{ marginLeft: 4 }}>
+        <StepTree steps={block.steps} />
+      </div>
+    </div>
+  );
+}
+
+function BlockList({ blocks }: { blocks: SessionBlock[] }) {
+  return (
+    <>
+      {blocks.map((b) =>
+        isWodBlock(b)
+          ? <WodBlockView key={b.id} block={b} />
+          : <ClassiqueBlockView key={b.id} block={b} />,
+      )}
+    </>
+  );
+}
+
 // ── SessionPreviewModal ───────────────────────────────────────────────────────
 
 interface SessionPreviewModalProps {
@@ -177,6 +250,8 @@ interface SessionPreviewModalProps {
 export function SessionPreviewModal({ session, athleteId, onEdit, onStart, startLabel, onCancel, onValidate, onUnvalidate, onClose }: SessionPreviewModalProps) {
   const kc = KIND_COLOR[session.session_kind] ?? "#6B7280";
   const rootGroup = buildRootGroup(session);
+  const isClassique = session.format === "classique";
+  const blocks = isClassique ? session.classique_structure?.blocks ?? [] : [];
 
   return (
     <>
@@ -224,10 +299,12 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
 
         {/* Scrollable body — single column: chart then steps */}
         <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
-          {/* Chart */}
-          <div style={{ padding: "0 18px 12px" }}>
-            <SessionPreview intervals={rootGroup} athleteId={athleteId} />
-          </div>
+          {/* Chart (WOD format only) */}
+          {!isClassique && (
+            <div style={{ padding: "0 18px 12px" }}>
+              <SessionPreview intervals={rootGroup} athleteId={athleteId} />
+            </div>
+          )}
 
           {/* Notes */}
           {session.notes && (
@@ -244,12 +321,33 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
             </div>
           )}
 
-          {/* Steps detail */}
+          {/* Images / Illustrations */}
+          {((session as any).images as SessionImage[] | null)?.length ? (
+            <div style={{ margin: "0 18px 12px" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                Illustrations
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {((session as any).images as SessionImage[]).map((img: SessionImage, i: number) => (
+                  <a key={i} href={img.url} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "block", width: 100, height: 100, borderRadius: 8, overflow: "hidden", border: "1px solid " + C.brd }}>
+                    <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Steps / Blocks detail */}
           <div style={{ padding: "0 18px 20px" }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-              Déroulé de la séance
+              {isClassique ? "Contenu de la séance" : "Déroulé de la séance"}
             </div>
-            <StepTree steps={session.intervals ?? []} />
+            {isClassique ? (
+              <BlockList blocks={blocks} />
+            ) : (
+              <StepTree steps={session.intervals ?? []} />
+            )}
           </div>
         </div>
 
