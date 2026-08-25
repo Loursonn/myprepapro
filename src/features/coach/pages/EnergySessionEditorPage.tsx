@@ -283,7 +283,6 @@ export default function EnergySessionEditorPage() {
       setRoot(rootG);
       setFieldSchema(existingSession.schema ?? null);
       setImages(((existingSession as any).images ?? []).filter((img: SessionImage) => !img.url.startsWith("blob:")));
-      setImages((existingSession as any).images ?? []);
       setSportId(existingSession.sport_id ?? null);
       setQualityId(existingSession.quality_id ?? null);
       setFormat(existingSession.format ?? "wod");
@@ -305,7 +304,6 @@ export default function EnergySessionEditorPage() {
     setSportId(session.sport_id ?? null);
     setQualityId(session.quality_id ?? null);
     setImages(((session as any).images ?? []).filter((img: SessionImage) => !img.url.startsWith("blob:")));
-    setImages((session as any).images ?? []);
     setFormat(session.format ?? "wod");
     setClassiqueBlocks(
       (session.classique_structure?.blocks ?? []).map((b): SessionBlock =>
@@ -366,7 +364,6 @@ export default function EnergySessionEditorPage() {
       const compressed = await compressImage(file);
       const ext = (compressed.name.split(".").pop() || "jpg").toLowerCase();
       const path = `${user.id}/sessions/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const path = `sessions/${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { error } = await supabase.storage
         .from("test-media")
         .upload(path, compressed, { contentType: compressed.type });
@@ -378,9 +375,6 @@ export default function EnergySessionEditorPage() {
     } catch (err) {
       console.error("[image upload]", err);
       // Keep local preview even if upload fails — user can still see what they picked
-      setImages(prev => [...prev, { url: urlData.publicUrl }]);
-    } catch (err) {
-      console.error("[image upload]", err);
     } finally {
       setIsUploading(false);
     }
@@ -709,10 +703,6 @@ export default function EnergySessionEditorPage() {
                     <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     <button
                       onClick={(e) => { e.stopPropagation(); setImages(prev => prev.filter((_, j) => j !== i)); }}
-                  <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.brd}` }}>
-                    <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    <button
-                      onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
                       style={{
                         position: "absolute", top: 2, right: 2,
                         width: 20, height: 20, borderRadius: "50%",
