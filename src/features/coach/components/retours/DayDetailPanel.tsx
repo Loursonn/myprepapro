@@ -226,38 +226,112 @@ function WorkoutCard({ w }: { w: WorkoutDetail }) {
             const planned   = w.planned_exercises.find((p) => p.exercise_id === exId);
             const performed = w.performed_exercises.find((p) => p.exercise_id === exId);
             const name      = planned?.exercise_name ?? performed?.exercise_name ?? "Exercice";
+            const plannedMinReps = planned?.reps_range ? parseInt(planned.reps_range.match(/^(\d+)/)?.[1] ?? "0") || undefined : undefined;
             return (
               <div key={exId}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: C.tx2, marginBottom: 3 }}>{name}</div>
-                {/* Planned target */}
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: C.tx2 }}>{name}</span>
+                  {planned?.method && (
+                    <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 3, background: "rgba(123,111,255,0.12)", color: "#7B6FFF", fontWeight: 600 }}>
+                      {planned.method}
+                    </span>
+                  )}
+                </div>
+                {/* Planned — chips */}
                 {planned && planned.sets > 0 && (
-                  <div style={{ fontSize: 9, color: C.tx3, marginBottom: 4 }}>
-                    Plan : {planned.sets}×{planned.reps_range ?? "—"}
-                    {planned.kg != null ? ` @${planned.kg}kg` : ""}
-                    {planned.rir != null ? ` RIR${planned.rir}` : ""}
-                  </div>
-                )}
-                {/* Actual sets */}
-                {performed ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {performed.sets.map((s, i) => (
-                      <span key={i} style={{
-                        fontSize: 9, padding: "2px 7px", borderRadius: 5,
-                        background: C.s1, border: "1px solid " + C.brdL, color: C.tx2,
-                      }}>
-                        {s.kg != null ? `${s.kg}kg` : "—"}
-                        {s.reps != null ? ` × ${s.reps}` : ""}
-                        {s.rir != null ? ` @${s.rir}` : ""}
-                        {s.method ? ` (${s.method})` : ""}
-                      </span>
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
+                    {[
+                      { l: "Séries", v: String(planned.sets) },
+                      { l: "Reps", v: planned.reps_range ?? "—" },
+                      ...(planned.kg != null ? [{ l: "Charge", v: `${planned.kg}kg` }] : []),
+                      ...(planned.rir != null ? [{ l: "RIR", v: String(planned.rir) }] : []),
+                    ].map(({ l, v }) => (
+                      <div key={l} style={{ display: "flex", flexDirection: "column", gap: 1, padding: "3px 6px", borderRadius: 5, background: C.s1, border: "1px solid " + C.brdL }}>
+                        <span style={{ fontSize: 7, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.3px" }}>{l}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: C.tx }}>{v}</span>
+                      </div>
                     ))}
                   </div>
+                )}
+                {/* Actual sets — colored rows */}
+                {performed ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {performed.sets.map((s, i) => {
+                      if (!s.done) {
+                        const hasData = s.kg != null || s.reps != null;
+                        return (
+                          <div key={i} style={{
+                            display: "flex", alignItems: "center", gap: 6,
+                            padding: "3px 6px", borderRadius: 5,
+                            background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.40)",
+                          }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: C.tx3, minWidth: 18 }}>S{i + 1}</span>
+                            {hasData ? (
+                              <>
+                                {s.kg != null && <span style={{ fontSize: 10, fontWeight: 700, color: C.tx }}>{s.kg}kg</span>}
+                                {s.reps != null && <span style={{ fontSize: 10, color: C.tx }}>× {s.reps}</span>}
+                                {s.rir != null && <span style={{ fontSize: 9, color: C.tx3 }}>RIR {s.rir}</span>}
+                                <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: "#ef4444" }}>✗</span>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: 9, color: "#ef4444" }}>Non réalisé</span>
+                            )}
+                          </div>
+                        );
+                      }
+                      const ok = plannedMinReps === undefined || (s.reps != null && s.reps >= plannedMinReps);
+                      const sc = ok ? "#22c55e" : "#f59e0b";
+                      return (
+                        <div key={i} style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "3px 6px", borderRadius: 5,
+                          background: ok ? "rgba(34,197,94,0.10)" : "rgba(245,158,11,0.10)",
+                          border: "1px solid " + sc + "40",
+                        }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: C.tx3, minWidth: 18 }}>S{i + 1}</span>
+                          {s.kg != null && <span style={{ fontSize: 10, fontWeight: 700, color: C.tx }}>{s.kg}kg</span>}
+                          {s.reps != null && <span style={{ fontSize: 10, color: C.tx }}>× {s.reps}</span>}
+                          {s.rir != null && <span style={{ fontSize: 9, color: C.tx3 }}>RIR {s.rir}</span>}
+                          <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: sc }}>{ok ? "✓" : "~"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <span style={{ fontSize: 9, color: C.tx3, fontStyle: "italic" }}>Non réalisé</span>
+                  <div style={{
+                    padding: "5px 8px", borderRadius: 5,
+                    background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.40)",
+                    fontSize: 9, color: "#ef4444", fontWeight: 600,
+                  }}>
+                    Aucune série enregistrée
+                  </div>
+                )}
+                {/* Athlete comment per exercise */}
+                {w.athlete_exercise_comments?.[exId] && (
+                  <div style={{ marginTop: 3, padding: "3px 6px", borderRadius: 4, background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.30)", fontSize: 9, color: C.tx2, fontStyle: "italic" }}>
+                    💬 {w.athlete_exercise_comments[exId]}
+                  </div>
                 )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Athlete session comment + forme */}
+      {(w.athlete_forme != null || w.athlete_session_comment) && (
+        <div style={{ marginTop: 8, padding: "6px 8px", borderRadius: 6, background: "rgba(245,158,11,0.08)" }}>
+          {w.athlete_forme != null && (
+            <div style={{ fontSize: 10, marginBottom: w.athlete_session_comment ? 3 : 0 }}>
+              <span style={{ color: C.tx3 }}>Forme : </span>
+              <span style={{ fontWeight: 700, color: w.athlete_forme >= 4 ? C.g : w.athlete_forme >= 3 ? "#f59e0b" : C.r }}>
+                {w.athlete_forme}/5
+              </span>
+            </div>
+          )}
+          {w.athlete_session_comment && (
+            <div style={{ fontSize: 10, color: C.tx2, fontStyle: "italic" }}>💬 « {w.athlete_session_comment} »</div>
+          )}
         </div>
       )}
 

@@ -143,9 +143,19 @@ function WorkoutRow({ workout, prevWorkout, isRescheduled, onShowDetail }: { wor
                 )}
               </div>
             )}
-            {/* Comments indicator */}
+            {/* Comments indicators */}
             {workout.exercise_comments.length > 0 && (
-              <div style={{ fontSize: 8, color: C.ac }}>💬 {workout.exercise_comments.length} commentaire{workout.exercise_comments.length > 1 ? "s" : ""}</div>
+              <div style={{ fontSize: 8, color: C.ac }}>💬 {workout.exercise_comments.length} com. coach</div>
+            )}
+            {(workout.athlete_session_comment || Object.keys(workout.athlete_exercise_comments ?? {}).length > 0) && (
+              <div style={{ fontSize: 8, color: "#f59e0b" }}>
+                💬 {[
+                  workout.athlete_session_comment ? "séance" : "",
+                  Object.keys(workout.athlete_exercise_comments ?? {}).length > 0
+                    ? `${Object.keys(workout.athlete_exercise_comments ?? {}).length} exo`
+                    : "",
+                ].filter(Boolean).join(" + ")} (athlète)
+              </div>
             )}
             {/* Voir le détail link */}
             <div
@@ -459,6 +469,27 @@ function WorkoutDetailModal({ workout, prevWorkout, onClose }: { workout: DayWor
             </div>
           )}
 
+          {/* Athlete session comment + forme */}
+          {(workout.athlete_forme != null || workout.athlete_session_comment) && (
+            <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", display: "flex", flexDirection: "column", gap: 4 }}>
+              {workout.athlete_forme != null && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "#f59e0b", textTransform: "uppercase" }}>Forme athlète</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: "1px 6px", borderRadius: 5,
+                    background: workout.athlete_forme >= 4 ? "rgba(34,197,94,0.1)" : workout.athlete_forme >= 3 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)",
+                    color: workout.athlete_forme >= 4 ? "#22c55e" : workout.athlete_forme >= 3 ? "#f59e0b" : "#ef4444",
+                  }}>
+                    {workout.athlete_forme}/5
+                  </span>
+                </div>
+              )}
+              {workout.athlete_session_comment && (
+                <div style={{ fontSize: 11, color: C.tx2, fontStyle: "italic" }}>💬 « {workout.athlete_session_comment} »</div>
+              )}
+            </div>
+          )}
+
           {/* Exercises */}
           {exIds.length > 0 ? exIds.map((exId) => {
             const planned   = workout.planned_exercises.find((p) => p.exercise_id === exId);
@@ -466,46 +497,126 @@ function WorkoutDetailModal({ workout, prevWorkout, onClose }: { workout: DayWor
             const prevEx    = prevWorkout?.performed_exercises.find((p) => p.exercise_id === exId);
             const name      = planned?.exercise_name ?? performed?.exercise_name ?? "Exercice";
             const comment   = workout.exercise_comments.find((c) => c.exercise_id === exId || c.exercise_name === name);
+            const plannedMinReps = planned?.reps_range ? parseInt(planned.reps_range.match(/^(\d+)/)?.[1] ?? "0") || undefined : undefined;
 
             return (
               <div key={exId} style={{ background: C.s2, borderRadius: 9, border: "1px solid " + C.brd, padding: "10px 12px" }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, marginBottom: 6 }}>{name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{name}</span>
+                  {planned?.method && (
+                    <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "rgba(123,111,255,0.12)", color: "#7B6FFF", fontWeight: 600 }}>
+                      {planned.method}
+                    </span>
+                  )}
+                  {!planned && performed && (
+                    <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: C.acS, color: C.ac, fontWeight: 600 }}>
+                      Ajouté
+                    </span>
+                  )}
+                </div>
 
-                {/* Planned */}
+                {/* Planned — chip style */}
                 {planned && planned.sets > 0 && (
-                  <div style={{ fontSize: 10, color: C.tx3, marginBottom: 6 }}>
-                    Prescrit : {planned.sets}×{planned.reps_range ?? "—"}
-                    {planned.kg != null ? ` @${planned.kg}kg` : ""}
-                    {planned.rir != null ? ` RIR${planned.rir}` : ""}
-                    {planned.method ? ` (${planned.method})` : ""}
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: "#7B6FFF", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>Prévu</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {[
+                        { l: "Séries", v: String(planned.sets) },
+                        { l: "Reps", v: planned.reps_range ?? "—" },
+                        ...(planned.kg != null ? [{ l: "Charge", v: `${planned.kg}kg` }] : []),
+                        ...(planned.rir != null ? [{ l: "RIR", v: String(planned.rir) }] : []),
+                      ].map(({ l, v }) => (
+                        <div key={l} style={{ display: "flex", flexDirection: "column", gap: 1, padding: "4px 8px", borderRadius: 6, background: C.s1, border: "1px solid " + C.brdL }}>
+                          <span style={{ fontSize: 7, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.3px" }}>{l}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: C.tx }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* Performed sets table */}
+                {/* Performed sets — colored rows */}
                 {performed && performed.sets.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    {performed.sets.map((s) => (
-                      <div key={s.set_num} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, paddingLeft: 4 }}>
-                        <span style={{ fontSize: 9, color: C.tx3, minWidth: 20 }}>S{s.set_num}</span>
-                        <span style={{ fontWeight: 700, color: C.tx }}>{s.kg != null ? `${s.kg} kg` : "—"}</span>
-                        <span style={{ color: C.tx2 }}>× {s.reps ?? "—"}</span>
-                        {s.rir != null && <span style={{ fontSize: 9, color: C.tx3 }}>RIR {s.rir}</span>}
-                        {s.method && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: C.ac + "20", color: C.ac, fontWeight: 600 }}>{s.method}</span>}
-                      </div>
-                    ))}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>
+                      Réalisé ({performed.sets.length} série{performed.sets.length > 1 ? "s" : ""})
+                    </div>
+                    {performed.sets.map((s) => {
+                      if (!s.done) {
+                        const hasData = s.kg != null || s.reps != null;
+                        return (
+                          <div key={s.set_num} style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "5px 8px", borderRadius: 7, marginBottom: 3,
+                            background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.40)",
+                          }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: C.tx3, minWidth: 22 }}>S{s.set_num}</span>
+                            {hasData ? (
+                              <>
+                                {s.kg != null && <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
+                                {s.reps != null && <span style={{ fontSize: 12, color: C.tx }}>× {s.reps}</span>}
+                                {s.rir != null && <span style={{ fontSize: 11, color: C.tx3 }}>RIR {s.rir}</span>}
+                                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#ef4444" }}>✗</span>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: 11, color: "#ef4444" }}>Non réalisé</span>
+                            )}
+                          </div>
+                        );
+                      }
+                      const ok = plannedMinReps === undefined || (s.reps != null && s.reps >= plannedMinReps);
+                      const sc = ok ? "#22c55e" : "#f59e0b";
+                      return (
+                        <div key={s.set_num} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "5px 8px", borderRadius: 7, marginBottom: 3,
+                          background: ok ? "rgba(34,197,94,0.10)" : "rgba(245,158,11,0.10)",
+                          border: "1px solid " + sc + "40",
+                        }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: C.tx3, minWidth: 22 }}>S{s.set_num}</span>
+                          {s.kg != null && <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
+                          {s.reps != null && <span style={{ fontSize: 12, color: C.tx }}>× {s.reps}</span>}
+                          {s.rir != null && <span style={{ fontSize: 11, color: C.tx3 }}>RIR {s.rir}</span>}
+                          {s.method && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(123,111,255,0.12)", color: "#7B6FFF", fontWeight: 600 }}>{s.method}</span>}
+                          <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: sc }}>{ok ? "✓" : "~"}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 10, color: C.tx3, fontStyle: "italic" }}>Non enregistré</div>
+                  <div style={{
+                    padding: "7px 10px", borderRadius: 7,
+                    background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.40)",
+                    fontSize: 11, color: "#ef4444", fontWeight: 600,
+                  }}>
+                    Aucune série enregistrée
+                  </div>
                 )}
 
                 {/* S-1 comparison */}
                 {prevEx && prevEx.sets.length > 0 && (
-                  <div style={{ marginTop: 6, padding: "4px 8px", borderRadius: 5, background: "rgba(59,141,240,0.08)", fontSize: 9, color: C.b }}>
-                    S-1 : {prevEx.sets.map((s) => `${s.kg ?? "—"}kg×${s.reps ?? "—"}`).join(" / ")}
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 3 }}>S-1</div>
+                    <div style={{ padding: "5px 8px", borderRadius: 6, background: C.s1, border: "1px solid " + C.brdL }}>
+                      {prevEx.sets.map((s) => (
+                        <div key={s.set_num} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx3, padding: "1px 0" }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, minWidth: 22 }}>S{s.set_num}</span>
+                          {s.kg != null && <span>{s.kg} kg</span>}
+                          {s.reps != null && <span>× {s.reps}</span>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* Comment */}
+                {/* Athlete comment on exercise */}
+                {workout.athlete_exercise_comments?.[exId] && (
+                  <div style={{ marginTop: 6, padding: "5px 8px", borderRadius: 5, background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.30)", fontSize: 10, color: C.tx2, fontStyle: "italic" }}>
+                    💬 {workout.athlete_exercise_comments[exId]}
+                  </div>
+                )}
+
+                {/* Coach comment */}
                 {comment && (
                   <div style={{ marginTop: 6, padding: "5px 8px", borderRadius: 5, background: C.acS, fontSize: 10, color: C.ac }}>
                     💬 {comment.comment}

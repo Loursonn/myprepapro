@@ -60,7 +60,8 @@ export function useSessionWeekLogs(
     microcycles.map(m => [m.id, m.week_number])
   )
 
-  const logs: SessionWeekLog[] = rawLogs.map(log => ({
+  // Assign week numbers: prefer microcycle mapping, fallback to sequential order
+  const logsWithWeek = rawLogs.map(log => ({
     id:                   log.id,
     scheduledDate:        log.scheduled_date,
     status:               log.status,
@@ -70,6 +71,23 @@ export function useSessionWeekLogs(
     weekNumber:           log.microcycle_id ? (microMap.get(log.microcycle_id) ?? null) : null,
     notes:                log.notes,
   }))
+
+  // For logs without microcycle mapping, assign week numbers by date order
+  const unmapped = logsWithWeek.filter(l => l.weekNumber === null)
+  if (unmapped.length > 0) {
+    const mappedWeeks = new Set(logsWithWeek.filter(l => l.weekNumber !== null).map(l => l.weekNumber!))
+    // Sort by date ascending for sequential assignment
+    const sorted = [...unmapped].sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
+    let nextWeek = 1
+    for (const log of sorted) {
+      while (mappedWeeks.has(nextWeek)) nextWeek++
+      log.weekNumber = nextWeek
+      mappedWeeks.add(nextWeek)
+      nextWeek++
+    }
+  }
+
+  const logs: SessionWeekLog[] = logsWithWeek
 
   function getLogForWeek(weekNumber: number): SessionWeekLog | null {
     return logs.find(l => l.weekNumber === weekNumber) ?? null

@@ -37,8 +37,8 @@ function getDisplayParams(exercice: Exercice, activeWeek: number, _multiSemaine:
       ?? null)
     : (p as import("./types").ExerciceParams)
   if (!raw) return null
-  // Guard incomplete stored params
-  if (!raw.reps || !raw.charge || !raw.rir || !raw.tempo) return null
+  // Guard: at minimum reps must exist to show anything
+  if (!raw.reps) return null
   return raw
 }
 

@@ -44,6 +44,7 @@ export interface PerformedSet {
   reps: number | null;
   rir: number | null;
   method: string | null;
+  done: boolean;
 }
 
 export interface PerformedExercise {
@@ -137,6 +138,9 @@ export interface WeeklyRetourData {
     exercise_comments: WorkoutExerciseComment[];
     planned_exercises: PlannedExercise[];
     performed_exercises: PerformedExercise[];
+    athlete_session_comment: string | null;
+    athlete_exercise_comments: Record<string, string>;
+    athlete_forme: number | null;
   }[];
 
   energy_sessions: EnergySessionDetail[];
@@ -198,6 +202,9 @@ export interface WorkoutDetail {
   planned_exercises: PlannedExercise[];
   performed_exercises: PerformedExercise[];
   exercise_comments: WorkoutExerciseComment[];
+  athlete_session_comment: string | null;
+  athlete_exercise_comments: Record<string, string>;
+  athlete_forme: number | null;
 }
 
 export interface TestDetail {
