@@ -6,7 +6,8 @@ import type {
   PerformedExercise, PerformedSet, PlannedExercise, WellnessDay, EnergySessionDetail,
   FreeActivityDetail, NutritionStrategy, NutritionDailyLog,
 } from "@/features/shared/types/retours.types";
-import type { SetRow, Exercise, BlockConfig, ArchivedBlock } from "@/features/shared/types/athlete";
+import type { SetRow, Exercise, BlockConfig, ArchivedBlock, AthleteModifications, SessionSetLog } from "@/features/shared/types/athlete";
+import type { ProgSession, Exercice, ExerciceParams } from "@/features/coach/components/programmation/types";
 import { startOfWeek, endOfWeek, subWeeks, format, eachDayOfInterval, addDays } from "date-fns";
 import { normalizeDayMap as normalizeWH } from "@/lib/date";
 
@@ -27,7 +28,7 @@ export function useWeeklyRetours(athleteId: string, weekStartDate: Date) {
         .from("app_data")
         .select("key, value")
         .eq("athlete_id", athleteId)
-        .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:sessionlogs", "asp:blockHistory", "asp:freesess"]);
+        .in("key", ["asp:wh", "asp:sets", "asp:exos", "asp:blockConfig", "asp:sessionlogs", "asp:blockHistory", "asp:freesess", "asp:prog"]);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const appDataMap: Record<string, any> = Object.fromEntries(
@@ -154,6 +155,7 @@ async function fetchWeekData(
   const currentExos: Record<string, Exercise[]>     = appDataMap["asp:exos"]          ?? {};
   const currentSets: Record<string, SetRow[]>       = appDataMap["asp:sets"]           ?? {};
   const currentBlockConfig: BlockConfig             = appDataMap["asp:blockConfig"]   ?? {};
+  const progSessions: ProgSession[]                 = appDataMap["asp:prog"]          ?? [];
   const blockHistory: ArchivedBlock[]               = appDataMap["asp:blockHistory"]  ?? [];
 
   // Merged wellness across all blocks
@@ -162,7 +164,7 @@ async function fetchWeekData(
   // ── Parallel DB queries ──────────────────────────────────────────────────────
   const [workoutsRes, energyRes, testsRes, compsRes, nutritionLogsRes, nutritionStrategyRes] = await Promise.all([
     db.from("workout_logs")
-      .select("id, session_id, session_name, scheduled_date, status, duration_s, notes, rpe_score")
+      .select("id, session_id, session_name, scheduled_date, status, duration_s, notes, rpe_score, athlete_modifications, week_number")
       .eq("athlete_id", athleteId)
       // include skipped — coaches want to see them
       .gte("scheduled_date", start)
@@ -222,45 +224,144 @@ async function fetchWeekData(
     ? Math.round(scoresInWeek.reduce((a, b) => a + b, 0) / scoresInWeek.length)
     : null;
 
+  // ── Pre-resolve exercise names for all workouts ─────────────────────────────
+  // Collect all exercise IDs that appear in sessionSets but may not be in progSession/planned
+  const globalExNameMap = new Map<string, string>();
+  // Populate from progSessions
+  for (const ps of progSessions) {
+    for (const b of ps.blocs) {
+      for (const ex of b.exercices) globalExNameMap.set(ex.id, ex.exercise_name);
+    }
+  }
+  // Populate from customExercises in each workout
+  const allUnknownIds = new Set<string>();
+  for (const w of workoutList) {
+    const mods = (w.athlete_modifications as AthleteModifications | null) ?? null;
+    if (mods?.customExercises) {
+      for (const ce of mods.customExercises) {
+        if (ce.exerciseId) globalExNameMap.set(ce.exerciseId, ce.name);
+        globalExNameMap.set(ce.tempId, ce.name);
+      }
+    }
+    const ss = mods?.sessionSets;
+    if (ss) {
+      for (const id of Object.keys(ss)) {
+        if (!globalExNameMap.has(id)) allUnknownIds.add(id);
+      }
+    }
+  }
+  // Single DB query for all unknown exercise IDs
+  if (allUnknownIds.size > 0) {
+    const { data: exRows } = await db
+      .from("exercises")
+      .select("id, name")
+      .in("id", [...allUnknownIds]);
+    for (const row of exRows ?? []) globalExNameMap.set(row.id, row.name);
+  }
+
   // ── Build enriched workouts ──────────────────────────────────────────────────
   const enrichedWorkouts = workoutList.map((w) => {
-    // Find which block this workout belongs to
+    // Find which block this workout belongs to (legacy path)
     const { exos, sets, blockConfig } = findBlockForDate(
       w.scheduled_date, currentBlockConfig, currentExos, currentSets, blockHistory,
     );
 
     const weekNum  = calcWeekNum(w.scheduled_date, blockConfig.startDate);
-    const exercises: Exercise[] = exos[w.session_id] ?? [];
+    const legacyExercises: Exercise[] = exos[w.session_id] ?? [];
 
-    const planned: PlannedExercise[] = exercises.map((ex) => {
-      const cfg = ex.weeks[weekNum] ?? {};
-      return {
-        exercise_id:   ex.id,
-        exercise_name: ex.name,
-        sets:          cfg.sets      ?? 0,
-        reps_range:    cfg.repsRange ?? null,
-        kg:            cfg.kg        ?? null,
-        rir:           cfg.rir       ?? null,
-        method:        cfg.method    ?? null,
-      };
-    });
+    // ── Planned: try asp:prog first, fallback to legacy asp:exos ──────────
+    const progSession = progSessions.find((s) => s.id === w.session_id);
+    const wkNum = w.week_number as number | undefined;
 
-    const performed: PerformedExercise[] = exercises
-      .map((ex): PerformedExercise | null => {
-        const rows = (sets[`${ex.id}_${weekNum}`] ?? [])
-          .filter((r) => r.done)
-          .map((r, i): PerformedSet => ({
-            set_num: i + 1,
-            kg:     r.kg   ?? null,
-            reps:   r.reps ?? null,
-            rir:    r.rir  ?? null,
-            method: r.type ?? null,
-          }));
-        return rows.length > 0
-          ? { exercise_id: ex.id, exercise_name: ex.name, sets: rows }
-          : null;
-      })
-      .filter((e): e is PerformedExercise => e !== null);
+    let planned: PlannedExercise[];
+    if (progSession && progSession.blocs.length > 0) {
+      // New system: read from asp:prog
+      planned = progSession.blocs.flatMap((b) =>
+        b.exercices.map((ex: Exercice): PlannedExercise => {
+          const params = ex.multi_semaine && wkNum != null && typeof ex.params === "object" && !("nb_series" in ex.params)
+            ? ((ex.params as Record<string, ExerciceParams>)[String(wkNum)] ?? null)
+            : ("nb_series" in ex.params ? ex.params as ExerciceParams : null);
+          const repsRange = params
+            ? (params.reps.mode === "global"
+              ? (params.reps_max?.mode === "global" && params.reps_max.value != null && params.reps_max.value !== params.reps.value
+                ? `${params.reps.value}-${params.reps_max.value}`
+                : String(params.reps.value))
+              : params.reps.values.join("/"))
+            : null;
+          const charge = params?.charge?.mode === "global" ? params.charge.value : null;
+          return {
+            exercise_id:   ex.id,
+            exercise_name: ex.exercise_name,
+            sets:          params?.nb_series ?? 0,
+            reps_range:    repsRange,
+            kg:            typeof charge === "number" ? charge : null,
+            rir:           params?.rir?.mode === "global" ? (params.rir.value ?? null) : null,
+            method:        ex.mode === "methode" ? (ex.methode_id ?? "méthode") : null,
+          };
+        })
+      );
+    } else {
+      // Legacy: read from asp:exos
+      planned = legacyExercises.map((ex) => {
+        const cfg = ex.weeks[weekNum] ?? {};
+        return {
+          exercise_id:   ex.id,
+          exercise_name: ex.name,
+          sets:          cfg.sets      ?? 0,
+          reps_range:    cfg.repsRange ?? null,
+          kg:            cfg.kg        ?? null,
+          rir:           cfg.rir       ?? null,
+          method:        cfg.method    ?? null,
+        };
+      });
+    }
+
+    // ── Performed: try athlete_modifications first, fallback to asp:sets ──
+    const mods = (w.athlete_modifications as AthleteModifications | null) ?? null;
+    const sessionSets = mods?.sessionSets ?? null;
+
+    let performed: PerformedExercise[];
+    if (sessionSets && Object.keys(sessionSets).length > 0) {
+      // New system: read from workout_logs.athlete_modifications.sessionSets
+      // Name lookup uses pre-resolved globalExNameMap + planned exercises
+      for (const p of planned) globalExNameMap.set(p.exercise_id, p.exercise_name);
+
+      performed = Object.entries(sessionSets)
+        .map(([exId, rawSets]): PerformedExercise => {
+          const allSets = rawSets as SessionSetLog[];
+          return {
+            exercise_id:   exId,
+            exercise_name: globalExNameMap.get(exId) ?? exId,
+            sets: allSets.map((s, i): PerformedSet => ({
+              set_num: i + 1,
+              kg:     s.kg   ?? null,
+              reps:   s.reps ?? null,
+              rir:    s.rir  ?? null,
+              method: null,
+              done:   s.done,
+            })),
+          };
+        });
+    } else {
+      // Legacy: read from asp:sets
+      performed = legacyExercises
+        .map((ex): PerformedExercise | null => {
+          const rows = (sets[`${ex.id}_${weekNum}`] ?? [])
+            .filter((r) => r.done)
+            .map((r, i): PerformedSet => ({
+              set_num: i + 1,
+              kg:     r.kg   ?? null,
+              reps:   r.reps ?? null,
+              rir:    r.rir  ?? null,
+              method: r.type ?? null,
+              done:   r.done ?? true,
+            }));
+          return rows.length > 0
+            ? { exercise_id: ex.id, exercise_name: ex.name, sets: rows }
+            : null;
+        })
+        .filter((e): e is PerformedExercise => e !== null);
+    }
 
     return {
       id:             w.id,
@@ -275,6 +376,9 @@ async function fetchWeekData(
       exercise_comments: (comments as any[]).filter((c) => c.workout_log_id === w.id),
       planned_exercises:   planned,
       performed_exercises: performed,
+      athlete_session_comment:   mods?.sessionComment ?? null,
+      athlete_exercise_comments: mods?.exerciceComments ?? {},
+      athlete_forme:             mods?.sessionForme ?? null,
     };
   });
 

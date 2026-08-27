@@ -190,11 +190,12 @@ function SetRow({
 // ─── ExerciceRealise ───────────────────────────────────────────────────────────
 
 function ExerciceRealise({
-  exercice, sets, params,
+  exercice, sets, params, athleteComment,
 }: {
   exercice: Exercice
   sets: SessionSetLog[]
   params: ExerciceParams | null
+  athleteComment?: string
 }) {
   const plannedReps: (number | undefined)[] = params
     ? (params.reps.mode === "par_serie"
@@ -212,17 +213,38 @@ function ExerciceRealise({
       </div>
 
       {sets.length === 0 ? (
-        <div style={{
-          padding: "7px 10px", borderRadius: 7,
-          background: RED_S, border: "1px solid " + RED + "40",
-          fontSize: 11, color: RED, fontWeight: 600,
-        }}>
-          Aucune série enregistrée
+        <div>
+          <div style={{
+            padding: "7px 10px", borderRadius: 7,
+            background: RED_S, border: "1px solid " + RED + "40",
+            fontSize: 11, color: RED, fontWeight: 600,
+          }}>
+            Aucune série enregistrée
+          </div>
+          {params && (
+            <div style={{
+              padding: "6px 10px", borderRadius: 7, marginTop: 4,
+              background: C.s1, border: "1px dashed " + C.brdL,
+              fontSize: 10, color: C.tx3,
+            }}>
+              Prévu : {params.nb_series}× {fmtReps(params)} · {fmtCharge(params)} · {fmtRIR(params)}
+            </div>
+          )}
         </div>
       ) : (
         sets.map((set, i) => (
           <SetRow key={i} index={i} set={set} plannedReps={plannedReps[i]} />
         ))
+      )}
+
+      {athleteComment && (
+        <div style={{
+          padding: "5px 8px", borderRadius: 6, marginTop: 4,
+          background: AMBER_S, border: "1px solid " + AMBER + "30",
+          fontSize: 10, color: C.tx2, fontStyle: "italic",
+        }}>
+          💬 {athleteComment}
+        </div>
       )}
     </div>
   )
@@ -486,15 +508,33 @@ export function ProgSessionWeekDrawer({ session, cycleId, athleteId, onChange, o
               }
             />
             <div ref={col2Ref} style={{ flex: 1, overflowY: "auto", padding: "10px 10px", paddingBottom: 32 }}>
-              {atMods?.sessionComment && (
+              {/* Session forme + comment */}
+              {(atMods?.sessionForme != null || atMods?.sessionComment) && (
                 <div style={{
                   padding: "7px 10px", borderRadius: 8, marginBottom: 8,
                   border: "1px solid " + C.brdL, background: C.s2,
+                  display: "flex", flexDirection: "column", gap: 4,
                 }}>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.4px", marginBottom: 3 }}>
-                    Note
-                  </div>
-                  <div style={{ fontSize: 11, color: C.tx }}>{atMods.sessionComment}</div>
+                  {atMods?.sessionForme != null && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.4px" }}>Forme</span>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: "1px 6px", borderRadius: 5,
+                        background: atMods.sessionForme >= 4 ? GREEN_S : atMods.sessionForme >= 3 ? AMBER_S : RED_S,
+                        color: atMods.sessionForme >= 4 ? GREEN : atMods.sessionForme >= 3 ? AMBER : RED,
+                      }}>
+                        {atMods.sessionForme}/5
+                      </span>
+                    </div>
+                  )}
+                  {atMods?.sessionComment && (
+                    <div>
+                      <div style={{ fontSize: 8, fontWeight: 700, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.4px", marginBottom: 2 }}>
+                        Commentaire athlète
+                      </div>
+                      <div style={{ fontSize: 11, color: C.tx, fontStyle: "italic" }}>« {atMods.sessionComment} »</div>
+                    </div>
+                  )}
                 </div>
               )}
               {noRealise && !currentLog ? (
@@ -505,7 +545,7 @@ export function ProgSessionWeekDrawer({ session, cycleId, athleteId, onChange, o
                     {bloc.exercices.map(ex => {
                       const sets = (atMods?.sessionSets?.[ex.id] ?? []) as SessionSetLog[]
                       const params = resolveParams(ex, activeWeek, session.multi_semaine)
-                      return <ExerciceRealise key={ex.id} exercice={ex} sets={sets} params={params} />
+                      return <ExerciceRealise key={ex.id} exercice={ex} sets={sets} params={params} athleteComment={atMods?.exerciceComments?.[ex.id]} />
                     })}
                   </BlocSection>
                 ))

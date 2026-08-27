@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
-import { X, Trash2, Plus, ChevronLeft, Pencil } from "lucide-react";
+import { X, Trash2, Plus, ChevronLeft, Pencil, ChevronDown, ChevronUp, Check, Minus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { C } from "@/lib/theme";
 import type { CalEvent } from "@/features/shared/hooks/useUnifiedCalendar";
@@ -16,18 +16,8 @@ import type { NutritionDailyLog } from "@/lib/nutrition";
 import { CompetitionFormModal } from "./CompetitionFormModal";
 import { CoachSessionOverrideModal } from "./CoachSessionOverrideModal";
 import { SessionPreviewModal } from "@/features/coach/components/energy/SessionPreviewModal";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface SetRow {
-  id: string;
-  exercise_id: string;
-  set_num: number;
-  kg: number | null;
-  reps: number | null;
-  rir: number | null;
-  method: string | null;
-}
+import { useProgrammation } from "@/features/coach/components/programmation/hooks/useProgrammation";
+import type { ProgSession, Bloc, Exercice, ExerciceParams } from "@/features/coach/components/programmation/types";
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 
@@ -58,55 +48,407 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   skipped:     { label: "Sautée",     color: C.o   },
 };
 
+// ── WorkoutRecapModal (self-contained popup with accordion) ─────────────────
+
+type SessionSetLog = { done: boolean; skipped?: boolean; kg?: number | null; reps?: number; rir?: number | null; note?: string };
+
+type ExoRow = {
+  id: string;
+  name: string;
+  blocName: string;
+  mode: string;
+  methodeId?: string;
+  libreText?: string;
+  comment?: string;
+  planned: ExerciceParams | null;
+  actual: SessionSetLog[];
+};
+
+/** Format planned params to readable string */
+function fmtPlanned(p: ExerciceParams): string {
+  const parts: string[] = [];
+  parts.push(`${p.nb_series}×`);
+  if (p.reps.mode === "global") {
+    const rMin = p.reps.value;
+    const rMax = p.reps_max?.mode === "global" ? p.reps_max.value : null;
+    parts.push(rMax != null && rMax !== rMin ? `${rMin}-${rMax}` : String(rMin));
+  } else {
+    parts.push(p.reps.values.join("/"));
+  }
+  if (p.charge.mode === "global" && p.charge.value != null) {
+    parts.push(p.charge_unit === "%RM" ? `@${p.charge.value}%` : `@${p.charge.value}kg`);
+  }
+  if (p.rir.mode === "global" && p.rir.value != null) {
+    parts.push(`RIR${p.rir.value}`);
+  }
+  if (p.tempo.mode === "global" && p.tempo.value) {
+    parts.push(`T:${p.tempo.value}`);
+  }
+  return parts.join(" ");
+}
+
+/** Build exercise rows from prog + athlete data */
+function buildExoRows(
+  progSession: ProgSession | undefined,
+  sessionSets: Record<string, SessionSetLog[]> | null,
+  weekNumber: number | undefined,
+): ExoRow[] {
+  const allExercices = progSession?.blocs?.flatMap((b: Bloc) =>
+    b.exercices.map((ex: Exercice) => ({ ...ex, blocName: b.name, blocCategory: b.category }))
+  ) ?? [];
+
+  const rows: ExoRow[] = [];
+  const seenIds = new Set<string>();
+
+  for (const ex of allExercices) {
+    seenIds.add(ex.id);
+    const params = ex.multi_semaine && weekNumber != null && typeof ex.params === "object" && !("nb_series" in ex.params)
+      ? ((ex.params as Record<string, ExerciceParams>)[String(weekNumber)] ?? null)
+      : ("nb_series" in ex.params ? ex.params as ExerciceParams : null);
+    const actual = (sessionSets?.[ex.id] ?? []) as SessionSetLog[];
+    rows.push({
+      id: ex.id, name: ex.exercise_name, blocName: ex.blocName, mode: ex.mode,
+      methodeId: ex.methode_id, libreText: ex.libre_text, comment: ex.comment,
+      planned: params, actual: actual.filter(s => s.done),
+    });
+  }
+
+  if (sessionSets) {
+    for (const [exId, rawSets] of Object.entries(sessionSets)) {
+      if (seenIds.has(exId)) continue;
+      const doneSets = (rawSets as SessionSetLog[]).filter(s => s.done);
+      if (doneSets.length === 0) continue;
+      rows.push({ id: exId, name: "Exercice ajouté", blocName: "Bonus", mode: "classique", planned: null, actual: doneSets });
+    }
+  }
+
+  return rows;
+}
+
+/** Quick summary for collapsed accordion row */
+function exoQuickSummary(exo: ExoRow, isCompleted: boolean): { text: string; color: string } {
+  const hasActual = exo.actual.length > 0;
+  if (hasActual) {
+    const kgs = exo.actual.map(s => s.kg).filter((v): v is number => v != null);
+    const reps = exo.actual.map(s => s.reps).filter((v): v is number => v != null);
+    const maxKg = kgs.length ? Math.max(...kgs) : null;
+    const avgReps = reps.length ? Math.round(reps.reduce((a, b) => a + b, 0) / reps.length) : null;
+    const plannedSets = exo.planned?.nb_series ?? exo.actual.length;
+    const parts: string[] = [`${exo.actual.length}/${plannedSets} séries`];
+    if (maxKg != null && avgReps != null) parts.push(`${maxKg}kg × ${avgReps}`);
+    else if (maxKg != null) parts.push(`${maxKg}kg`);
+    else if (avgReps != null) parts.push(`${avgReps} reps`);
+    return { text: parts.join(" · "), color: exo.actual.length >= plannedSets ? C.g : C.o };
+  }
+  if (isCompleted) {
+    const p = exo.planned ? ` · Prévu : ${fmtPlanned(exo.planned)}` : "";
+    return { text: `Non réalisé${p}`, color: C.r };
+  }
+  if (exo.planned) return { text: fmtPlanned(exo.planned), color: C.tx3 };
+  return { text: "—", color: C.tx3 };
+}
+
+/** Accordion exercise row */
+function ExoAccordionRow({ exo, isCompleted, exerciceComment }: {
+  exo: ExoRow; isCompleted: boolean; exerciceComment?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasActual = exo.actual.length > 0;
+  const summary = exoQuickSummary(exo, isCompleted);
+  const statusIcon = hasActual
+    ? (exo.actual.length >= (exo.planned?.nb_series ?? exo.actual.length)
+      ? <Check size={12} style={{ color: C.g }} />
+      : <Minus size={12} style={{ color: C.o }} />)
+    : (isCompleted ? <X size={12} style={{ color: C.r }} /> : null);
+
+  return (
+    <div style={{
+      background: C.s2, borderRadius: 10, border: "1px solid " + C.brd,
+      overflow: "hidden", transition: "all 150ms",
+    }}>
+      {/* Collapsed header — always visible */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: "100%", padding: "10px 12px",
+          display: "flex", alignItems: "center", gap: 8,
+          background: "transparent", border: "none", cursor: "pointer",
+          fontFamily: "inherit", textAlign: "left",
+        }}
+      >
+        {/* Status dot */}
+        {statusIcon && <span style={{ flexShrink: 0, lineHeight: 0 }}>{statusIcon}</span>}
+
+        {/* Name + badges */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {exo.name}
+            {exo.mode === "methode" && exo.methodeId && (
+              <span style={{ fontSize: 8, marginLeft: 5, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600, verticalAlign: "middle" }}>
+                Méthode
+              </span>
+            )}
+            {exo.mode === "libre" && (
+              <span style={{ fontSize: 8, marginLeft: 5, padding: "1px 5px", borderRadius: 4, background: C.oS, color: C.o, fontWeight: 600, verticalAlign: "middle" }}>
+                Libre
+              </span>
+            )}
+            {!exo.planned && hasActual && (
+              <span style={{ fontSize: 8, marginLeft: 5, padding: "1px 5px", borderRadius: 4, background: C.acS, color: C.ac, fontWeight: 600, verticalAlign: "middle" }}>
+                Ajouté
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 10, color: summary.color, marginTop: 2 }}>{summary.text}</div>
+        </div>
+
+        {/* Chevron */}
+        {open ? <ChevronUp size={14} color={C.tx3} /> : <ChevronDown size={14} color={C.tx3} />}
+      </button>
+
+      {/* Expanded details */}
+      {open && (
+        <div style={{ padding: "0 12px 10px", display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid " + C.brd }}>
+          {exo.comment && (
+            <div style={{ fontSize: 10, color: C.tx3, fontStyle: "italic", paddingTop: 8 }}>
+              {exo.comment}
+            </div>
+          )}
+          {exo.mode === "libre" && exo.libreText && (
+            <div style={{ fontSize: 10, color: C.tx2, paddingTop: exo.comment ? 0 : 8 }}>
+              {exo.libreText}
+            </div>
+          )}
+
+          {/* Prévu vs Réalisé side-by-side */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: hasActual && exo.planned ? "1fr 1fr" : "1fr",
+            gap: 8, paddingTop: 6,
+          }}>
+            {/* Planned */}
+            {exo.planned && (
+              <div style={{
+                padding: "8px 10px", borderRadius: 8,
+                background: C.s1, border: "1px dashed " + C.brd,
+              }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: 6 }}>
+                  Prévu
+                </div>
+                <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.5 }}>
+                  {fmtPlanned(exo.planned)}
+                </div>
+              </div>
+            )}
+
+            {/* Actual */}
+            {hasActual && (
+              <div style={{
+                padding: "8px 10px", borderRadius: 8,
+                background: C.gS + "30",
+              }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.g, textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: 6 }}>
+                  Réalisé ({exo.actual.length} série{exo.actual.length > 1 ? "s" : ""})
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {exo.actual.map((s, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.tx2 }}>
+                      <span style={{ color: C.tx3, minWidth: 18, fontSize: 10, fontWeight: 600 }}>S{i + 1}</span>
+                      {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg}kg</span>}
+                      {s.reps != null && <span>×{s.reps}</span>}
+                      {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR{s.rir}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Not done */}
+          {!hasActual && isCompleted && (
+            <div style={{ fontSize: 10, color: C.r, fontStyle: "italic", paddingTop: 4 }}>Non réalisé</div>
+          )}
+
+          {/* Exercise comment */}
+          {exerciceComment && (
+            <div style={{ fontSize: 10, color: C.tx2, fontStyle: "italic", padding: "6px 8px", background: C.acS + "30", borderRadius: 6 }}>
+              💬 {exerciceComment}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkoutRecapModal({ event, athleteId, onClose }: { event: CalEvent; athleteId: string; onClose: () => void }) {
+  const mods = (event.raw?.athlete_modifications as AthleteModifications | null) ?? null;
+  const sessionSets = mods?.sessionSets ?? null;
+  const isCompleted = event.status === "completed";
+  const sessionId = event.raw?.session_id as string | undefined;
+  const weekNumber = event.raw?.week_number as number | undefined;
+
+  const { data: progSessions = [], isLoading } = useProgrammation(athleteId);
+  const progSession = progSessions.find((s: ProgSession) => s.id === sessionId);
+  const exoRows = buildExoRows(progSession, sessionSets, weekNumber);
+
+  // Stats summary
+  const totalPlanned = exoRows.filter(e => e.planned).length;
+  const totalDone = exoRows.filter(e => e.actual.length > 0).length;
+  const totalSets = exoRows.reduce((acc, e) => acc + e.actual.length, 0);
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.65)" }} />
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 71,
+        maxHeight: "92vh",
+        background: C.s1, borderRadius: "18px 18px 0 0", border: "1px solid " + C.brd,
+        borderBottom: "none",
+        display: "flex", flexDirection: "column",
+        animation: "slideUp 200ms ease-out",
+      }}>
+        <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+
+        {/* Header */}
+        <div style={{
+          padding: "16px 20px", borderBottom: "1px solid " + C.brd,
+          display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.tx }}>{event.title}</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: C.tx3 }}>{format(new Date(event.date), "d MMMM yyyy", { locale: fr })}</span>
+              {event.status && STATUS_LABEL[event.status] && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 12,
+                  background: STATUS_LABEL[event.status].color + "20",
+                  color: STATUS_LABEL[event.status].color,
+                  textTransform: "uppercase",
+                }}>
+                  {STATUS_LABEL[event.status].label}
+                </span>
+              )}
+              {event.rpe != null && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 12,
+                  background: rpeBg(event.rpe), color: rpeColor(event.rpe),
+                }}>
+                  RPE {event.rpe}/10
+                </span>
+              )}
+              {mods?.sessionForme != null && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 12,
+                  background: mods.sessionForme >= 4 ? C.gS : mods.sessionForme >= 3 ? C.oS : C.rS,
+                  color: mods.sessionForme >= 4 ? C.g : mods.sessionForme >= 3 ? C.o : C.r,
+                }}>
+                  Forme {mods.sessionForme}/5
+                </span>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL,
+            background: "transparent", color: C.tx3, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Quick stats bar */}
+        {isCompleted && !isLoading && exoRows.length > 0 && (
+          <div style={{
+            display: "flex", gap: 1, padding: "0 20px", marginTop: 12,
+          }}>
+            {[
+              { label: "Exercices", value: `${totalDone}/${totalPlanned || exoRows.length}`, color: totalDone >= totalPlanned ? C.g : C.o },
+              { label: "Séries", value: String(totalSets), color: C.ac },
+              ...(event.rpe != null ? [{ label: "RPE", value: `${event.rpe}/10`, color: rpeColor(event.rpe) }] : []),
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{
+                flex: 1, textAlign: "center", padding: "8px 6px",
+                background: C.s2, borderRadius: 8,
+              }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.3px" }}>{label}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color, marginTop: 2 }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Body — accordion list */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
+          {isLoading ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: C.tx3, fontSize: 12 }}>Chargement…</div>
+          ) : exoRows.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px 0", color: C.tx3, fontSize: 12, background: C.s2, borderRadius: 10 }}>
+              Aucun exercice trouvé pour cette séance
+            </div>
+          ) : (
+            <>
+              {exoRows.map((exo, idx) => {
+                const showBlocHeader = idx === 0 || exo.blocName !== exoRows[idx - 1].blocName;
+                return (
+                  <div key={exo.id}>
+                    {showBlocHeader && (
+                      <div style={{
+                        fontSize: 10, fontWeight: 700, color: C.ac,
+                        textTransform: "uppercase", letterSpacing: "0.5px",
+                        marginBottom: 4, marginTop: idx > 0 ? 10 : 2,
+                        paddingLeft: 2,
+                      }}>
+                        {exo.blocName}
+                      </div>
+                    )}
+                    <ExoAccordionRow
+                      exo={exo}
+                      isCompleted={isCompleted}
+                      exerciceComment={mods?.exerciceComments?.[exo.id]}
+                    />
+                  </div>
+                );
+              })}
+
+              {/* Session comment */}
+              {mods?.sessionComment && (
+                <div style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, padding: "10px 12px", marginTop: 6 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
+                    Commentaire séance
+                  </div>
+                  <div style={{ fontSize: 12, color: C.tx2, fontStyle: "italic", lineHeight: 1.4 }}>
+                    « {mods.sessionComment} »
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── WorkoutDetailView ─────────────────────────────────────────────────────────
 
 function WorkoutDetailView({
   event,
-  exos,
-  localSets,
   onAdaptForDay,
   athleteId,
+  onOpenRecap,
 }: {
   event: CalEvent;
-  exos?: Record<string, unknown[]>;
-  localSets?: Record<string, unknown[]>;
   onAdaptForDay?: () => void;
   athleteId?: string;
+  onOpenRecap: () => void;
 }) {
   const navigate     = useNavigate();
   const sessionId    = event.raw?.session_id as string | undefined;
   const isProjected  = event.raw?.source === "block_plan";
   const isCompleted  = event.status === "completed";
-  const week         = event.raw?.week as number | undefined;
-  const hasOverride  = !!(event.raw?.athlete_modifications as AthleteModifications | null)?.coachOverride;
-  // Real DB workout: show set_logs. Projected+completed: use local sets from app_data.
-  const workoutLogId = !isProjected && isCompleted ? event.id : null;
-
-  // Fetch set_logs for completed real workouts
-  const { data: sets = [], isLoading: setsLoading } = useQuery({
-    queryKey: ["workout-sets", workoutLogId],
-    enabled: !!workoutLogId,
-    staleTime: 60_000,
-    queryFn: async (): Promise<SetRow[]> => {
-      const { data } = await supabase
-        .from("set_logs")
-        .select("id, exercise_id, set_num, kg, reps, rir, method")
-        .eq("workout_log_id", workoutLogId)
-        .order("set_num");
-      return (data ?? []) as SetRow[];
-    },
-  });
-
-  // Build exercise name map from exos
-  const allExosList = Object.values(exos ?? {}).flat() as Array<{ id: string; name: string }>;
-  const exoById: Record<string, string> = {};
-  for (const e of allExosList) { if (e.id) exoById[e.id] = e.name ?? e.id; }
-
-  // Planned exercises for this session (with weekly config)
-  const plannedExos = (sessionId && exos ? exos[sessionId] ?? [] : []) as Array<{
-    id: string; name: string; bloc?: string;
-    weeks?: Record<string, { sets?: number; repsRange?: string; kg?: number; rir?: number; method?: string }>;
-  }>;
+  const mods = (event.raw?.athlete_modifications as AthleteModifications | null) ?? null;
+  const hasOverride  = !!mods?.coachOverride;
 
   const statusInfo = event.status ? STATUS_LABEL[event.status] : null;
 
@@ -182,211 +524,38 @@ function WorkoutDetailView({
         </button>
       )}
 
-      {/* Completed: show set_logs */}
-      {workoutLogId && (
-        setsLoading ? (
-          <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12 }}>
-            Chargement…
-          </div>
-        ) : sets.length === 0 && week && localSets && plannedExos.length > 0 ? (() => {
-          // DB set_logs empty → fall back to app_data local sets
-          const exosWithSets = plannedExos
-            .map(ex => ({
-              ex,
-              rows: ((localSets[ex.id + "_" + week] ?? []) as Array<{ done?: boolean; kg?: number; reps?: number; rir?: number; method?: string }>)
-                .filter(r => r.done),
-            }))
-            .filter(({ rows }) => rows.length > 0);
-          if (exosWithSets.length === 0) return (
-            <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12, background: C.s2, borderRadius: 10 }}>
-              Séance validée — séries non enregistrées
-            </div>
-          );
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {exosWithSets.map(({ ex, rows }) => (
-                <div key={ex.id} style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
-                  <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>{ex.name ?? "Exercice"}</div>
-                  <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                    {rows.map((s, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx2 }}>
-                        <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
-                        {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
-                        {s.reps != null && <span>× {s.reps} rép.</span>}
-                        {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>}
-                        {s.method && s.method !== "normal" && (
-                          <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600 }}>{s.method}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })() : sets.length === 0 ? (
-          <div style={{
-            textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12,
-            background: C.s2, borderRadius: 10,
+      {/* Recap button */}
+      <button
+        onClick={onOpenRecap}
+        style={{
+          width: "100%", padding: "12px 14px", borderRadius: 10,
+          border: "1px solid " + C.ac + "40", background: C.acS,
+          color: C.ac, fontSize: 13, fontWeight: 700,
+          cursor: "pointer", fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        }}
+      >
+        📋 {isCompleted ? "Voir le récap (Prévu vs Réalisé)" : "Voir les exercices prévus"}
+      </button>
+
+      {/* Quick athlete feedback summary */}
+      {isCompleted && mods?.sessionForme != null && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: C.tx3 }}>Forme :</span>
+          <span style={{
+            fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
+            background: mods.sessionForme >= 4 ? C.gS : mods.sessionForme >= 3 ? C.oS : C.rS,
+            color: mods.sessionForme >= 4 ? C.g : mods.sessionForme >= 3 ? C.o : C.r,
           }}>
-            Aucune série enregistrée
-          </div>
-        ) : (() => {
-          // Group sets by exercise_id
-          const grouped: Record<string, SetRow[]> = {};
-          for (const s of sets) {
-            (grouped[s.exercise_id] ??= []).push(s);
-          }
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {Object.entries(grouped).map(([exId, rows]) => {
-                const planEx = plannedExos.find((e) => e.id === exId);
-                const cfg = planEx && week ? (planEx.weeks?.[String(week)] ?? null) : null;
-                return (
-                  <div key={exId} style={{
-                    background: C.s2, borderRadius: 10,
-                    border: "1px solid " + C.brd,
-                    overflow: "hidden",
-                  }}>
-                    <div style={{
-                      padding: "8px 12px",
-                      borderBottom: "1px solid " + C.brd,
-                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
-                    }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{exoById[exId] ?? planEx?.name ?? "Exercice"}</span>
-                      {cfg && cfg.sets != null && cfg.sets > 0 && (
-                        <span style={{ fontSize: 10, color: C.tx3 }}>
-                          Plan : {cfg.sets}×{cfg.repsRange ?? "—"}
-                          {cfg.kg != null ? ` @${cfg.kg}kg` : ""}
-                          {cfg.rir != null ? ` RIR${cfg.rir}` : ""}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                      {rows.map((s, i) => (
-                        <div key={s.id} style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          fontSize: 11, color: C.tx2,
-                        }}>
-                          <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
-                          {s.kg != null && (
-                            <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>
-                          )}
-                          {s.reps != null && (
-                            <span>× {s.reps} rép.</span>
-                          )}
-                          {s.rir != null && (
-                            <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>
-                          )}
-                          {s.method && s.method !== "normal" && (
-                            <span style={{
-                              fontSize: 9, padding: "1px 5px", borderRadius: 4,
-                              background: C.coachS, color: C.coach, fontWeight: 600,
-                            }}>
-                              {s.method}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()
+            {mods.sessionForme}/5
+          </span>
+        </div>
       )}
-
-      {/* Non-DB: projected or missing workout log */}
-      {!workoutLogId && (() => {
-        if (plannedExos.length === 0) {
-          return (
-            <div style={{ textAlign: "center", padding: "20px 0", color: C.tx3, fontSize: 12, background: C.s2, borderRadius: 10 }}>
-              Programme non chargé — ouvre la vue Programmation
-            </div>
-          );
-        }
-
-        // Completed projected: try local sets first
-        if (isProjected && isCompleted) {
-          const exosWithSets = week && localSets
-            ? plannedExos
-                .map(ex => ({
-                  ex,
-                  rows: ((localSets[ex.id + "_" + week] ?? []) as Array<{ done?: boolean; kg?: number; reps?: number; rir?: number; method?: string }>)
-                    .filter(r => r.done),
-                }))
-                .filter(({ rows }) => rows.length > 0)
-            : [];
-
-          if (exosWithSets.length > 0) {
-            return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {exosWithSets.map(({ ex, rows }) => (
-                  <div key={ex.id} style={{ background: C.s2, borderRadius: 10, border: "1px solid " + C.brd, overflow: "hidden" }}>
-                    <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.brd, fontSize: 12, fontWeight: 700, color: C.tx }}>
-                      {ex.name ?? "Exercice"}
-                    </div>
-                    <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                      {rows.map((s, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.tx2 }}>
-                          <span style={{ color: C.tx3, minWidth: 20, fontSize: 10 }}>S{i + 1}</span>
-                          {s.kg != null && <span style={{ fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
-                          {s.reps != null && <span>× {s.reps} rép.</span>}
-                          {s.rir != null && <span style={{ color: C.tx3, fontSize: 10 }}>RIR {s.rir}</span>}
-                          {s.method && s.method !== "normal" && (
-                            <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: C.coachS, color: C.coach, fontWeight: 600 }}>
-                              {s.method}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          }
-
-          // Completed but no individual sets logged → show planned exercises
-          return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 10, color: C.tx3, marginBottom: 4, fontStyle: "italic" }}>
-                Séance validée — séries non enregistrées
-              </div>
-              {plannedExos.map((ex, i) => (
-                <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd, fontSize: 12, fontWeight: 600, color: C.tx }}>
-                  {ex.name ?? "Exercice"}
-                </div>
-              ))}
-            </div>
-          );
-        }
-
-        // Planned (not completed): show exercise list with weekly targets
-        return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 2 }}>
-              Exercices prévus
-            </div>
-            {plannedExos.map((ex, i) => {
-              const cfg = week ? (ex.weeks?.[String(week)] ?? null) : null;
-              return (
-                <div key={ex.id ?? i} style={{ padding: "8px 12px", borderRadius: 8, background: C.s2, border: "1px solid " + C.brd }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, marginBottom: cfg ? 4 : 0 }}>{ex.name ?? "Exercice"}</div>
-                  {cfg && cfg.sets != null && cfg.sets > 0 && (
-                    <div style={{ fontSize: 10, color: C.tx3 }}>
-                      {cfg.sets}×{cfg.repsRange ?? "—"}
-                      {cfg.kg != null ? ` @${cfg.kg}kg` : ""}
-                      {cfg.rir != null ? ` RIR${cfg.rir}` : ""}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {isCompleted && mods?.sessionComment && (
+        <div style={{ fontSize: 12, color: C.tx2, fontStyle: "italic", background: C.s2, borderRadius: 8, padding: "8px 12px", border: "1px solid " + C.brd }}>
+          « {mods.sessionComment} »
+        </div>
+      )}
     </div>
   );
 }
@@ -784,11 +953,13 @@ export function DayDetailsDrawer({
   const { user } = useAuth();
   // Track when user wants to open the full energy session modal from detail view
   const [energyFullPreview, setEnergyFullPreview] = useState<CalEvent | null>(null);
+  const [workoutRecapEvent, setWorkoutRecapEvent] = useState<CalEvent | null>(null);
 
   useEffect(() => {
     setSelectedEvent(initialSelectedEvent ?? null);
     setEnergyPreview(null);
     setEnergyFullPreview(null);
+    setWorkoutRecapEvent(null);
   }, [day, initialSelectedEvent]);
 
   if (!open || !day) return null;
@@ -893,10 +1064,9 @@ export function DayDetailsDrawer({
             ) : (
               <WorkoutDetailView
                 event={selectedEvent}
-                exos={exos}
-                localSets={sets}
                 onAdaptForDay={() => setOverrideLogId(selectedEvent.id)}
                 athleteId={athleteId}
+                onOpenRecap={() => setWorkoutRecapEvent(selectedEvent)}
               />
             )
           ) : (
@@ -1045,6 +1215,15 @@ export function DayDetailsDrawer({
           event={(energyFullPreview ?? energyPreview)!}
           athleteId={athleteId}
           onClose={() => { setEnergyPreview(null); setEnergyFullPreview(null); }}
+        />
+      )}
+
+      {/* Workout recap modal (Prévu vs Réalisé) */}
+      {workoutRecapEvent && (
+        <WorkoutRecapModal
+          event={workoutRecapEvent}
+          athleteId={athleteId}
+          onClose={() => setWorkoutRecapEvent(null)}
         />
       )}
 
