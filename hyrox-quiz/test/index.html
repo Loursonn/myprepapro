@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ton niveau Hyrox en 2 minutes — Hugo Yoxx</title>
+<meta name="description" content="15 questions. Ta note sur 20, ton point faible et le programme que je te donnerais si tu étais mon athlète.">
+<meta property="og:title" content="Ton niveau Hyrox en 2 minutes">
+<meta property="og:description" content="Ta note sur 20, ton point faible, ton programme. Gratuit, résultat immédiat.">
+<meta property="og:image" content="/og.jpg">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#F4EEDF">
+<link rel="icon" href="/assets/picto.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet">
+<style>
+/* Pavot : dépose pavot.woff2 dans /assets et la police prend le relais automatiquement */
+@font-face{font-family:Pavot;src:url(/assets/pavot.woff2) format("woff2"),url(/assets/pavot.woff) format("woff");font-weight:400;font-display:swap}
+@font-face{font-family:Pavot;src:url(/assets/pavot-bold.woff) format("woff");font-weight:700;font-display:swap}
+:root{--bg:#F4EEDF;--ink:#0B0E47;--acc:#E84AF4;--mute:rgba(11,14,71,.6);--line:rgba(11,14,71,.18);--soft:rgba(11,14,71,.06)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"DM Sans",system-ui,sans-serif;font-size:17px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+.wrap{max-width:560px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;padding:22px 20px 32px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
+header img{height:26px;width:auto;display:block}
+.count{font-size:14px;font-weight:500;color:var(--mute);font-variant-numeric:tabular-nums}
+.track{height:3px;background:var(--line);border-radius:2px;overflow:hidden;margin-bottom:40px}
+.track i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s ease}
+main{flex:1;display:flex;flex-direction:column}
+h1,h2,.num,.prof{font-family:Pavot,"Instrument Serif",Georgia,serif;font-weight:400;line-height:1;letter-spacing:-.01em}
+h1{font-size:clamp(46px,12vw,72px);margin-bottom:18px}
+h2{font-size:clamp(34px,8.5vw,46px);margin-bottom:10px}
+.sub{color:var(--mute);margin-bottom:28px;font-size:17px;max-width:38ch}
+.opts{display:flex;flex-direction:column;gap:10px}
+.opt{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:16px 18px;border:1.5px solid var(--line);border-radius:12px;font-size:18px;font-weight:500;background:transparent;transition:border-color .15s,background .15s,color .15s,transform .1s}
+.opt:before{content:"";width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);flex:none;transition:all .15s}
+.opt:hover{border-color:var(--ink)}
+.opt.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.opt.on:before{background:var(--acc);border-color:var(--acc)}
+.opt:active{transform:scale(.985)}
+input[type=text],input[type=tel]{width:100%;padding:18px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);font-size:22px;font-family:inherit}
+input:focus{border-color:var(--ink);outline:0}
+.flabel{display:block;font-size:14px;font-weight:600;color:var(--ink);margin:18px 0 8px}
+.cta{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:18px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:600;font-size:18px;text-decoration:none;margin-top:24px;transition:transform .1s,opacity .15s}
+.cta:active{transform:scale(.985)}
+.cta[disabled]{opacity:.3;cursor:not-allowed}
+.cta.acc{background:var(--acc);color:var(--ink)}
+.cta.save{background:transparent;border:1.5px solid var(--line);color:var(--ink);margin-top:12px}
+.cta.save:hover{border-color:var(--ink)}
+.cta.save[disabled]{opacity:.5}
+.cta.save svg{flex:none}
+.cal-frame{border:1.5px solid var(--line);border-radius:16px;overflow:hidden;margin-top:8px;min-height:640px}
+.back{color:var(--mute);margin-top:18px;font-size:15px;text-decoration:underline;align-self:flex-start}
+.note{color:var(--mute);font-size:14px;margin-top:10px}
+.err{color:var(--acc);font-size:15px;margin-top:10px;min-height:20px;font-weight:500}
+.screen{animation:in .3s ease both}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.intro .picto{width:64px;margin-bottom:28px}
+.intro p{font-size:18px;max-width:36ch;margin-bottom:6px}
+.intro .tag{color:var(--mute)}
+/* carte résultat */
+.card{position:relative;overflow:hidden;background:var(--ink);color:var(--bg);border-radius:18px;padding:28px 26px 24px;margin:4px 0 28px}
+.card:before{content:"";position:absolute;inset:0;background:url(/assets/pattern.png) 0 0/560px auto;opacity:.07;pointer-events:none}
+.card>*{position:relative}
+.card .who{font-size:15px;color:rgba(244,238,223,.65)}
+.num{font-size:clamp(110px,34vw,170px);color:var(--acc);letter-spacing:-.04em;margin:2px 0 8px}
+.num small{font-size:.26em;color:rgba(244,238,223,.6);letter-spacing:0;margin-left:4px}
+.bar .lab{display:flex;justify-content:space-between;font-size:15px;margin-bottom:6px}
+.bar .tr{height:6px;background:rgba(244,238,223,.18);border-radius:3px;overflow:hidden}
+.bar .tr i{display:block;height:100%;width:0;background:var(--acc);transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+.bar+.bar{margin-top:12px}
+.card .sig{position:absolute;right:22px;top:20px;width:34px;opacity:.9}
+.prof{font-size:clamp(34px,8.5vw,44px);margin-bottom:10px}
+.rv{opacity:0;transform:translateY(14px);animation:up .55s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:var(--d,0s)}
+@keyframes up{to{opacity:1;transform:none}}
+.card{animation:pop .6s cubic-bezier(.2,.9,.2,1.2) both}
+@keyframes pop{from{opacity:0;transform:scale(.94) translateY(10px)}to{opacity:1;transform:none}}
+.badge{display:inline-flex;align-items:center;gap:8px;background:var(--acc);color:var(--ink);font-weight:600;font-size:14px;padding:6px 12px;border-radius:999px;margin-bottom:10px}
+.badge:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink)}
+.focus{margin:22px 0 0;padding:16px 18px;border:1.5px solid var(--line);border-radius:14px;background:rgba(255,255,255,.35)}
+.focus b{display:block;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--acc);margin-bottom:4px}
+.stations{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+.stations span{border:1.5px solid var(--ink);border-radius:999px;padding:5px 12px;font-size:14px;font-weight:500}
+.steps{display:flex;gap:6px;align-items:center;margin:26px 0 8px;font-size:13px;color:var(--mute)}
+.steps i{font-style:normal;display:inline-flex;align-items:center;gap:6px}
+.steps i:before{content:"";width:16px;height:16px;border-radius:50%;background:var(--ink);flex:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='%23F4EEDF' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")}
+.steps i.next:before{background:var(--acc);background-image:none}
+.steps em{flex:1;height:1px;background:var(--line)}
+.cta.pulse.rv{animation:up .55s cubic-bezier(.2,.8,.2,1) var(--d,0s) forwards,pulse 2.2s ease-in-out 2.8s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(232,74,244,.45)}50%{box-shadow:0 0 0 12px rgba(232,74,244,0)}}
+#fx{position:fixed;inset:0;pointer-events:none;z-index:5}
+@media (prefers-reduced-motion:reduce){.rv,.card{animation:none;opacity:1;transform:none}.cta.pulse{animation:none}}
+.plan{list-style:none;margin-top:20px;display:flex;flex-direction:column;gap:14px}
+.plan li{padding-left:22px;position:relative}
+.plan li:before{content:"";position:absolute;left:0;top:9px;width:9px;height:9px;border-radius:50%;background:var(--acc)}
+.plan li b{display:block;font-weight:600}
+footer{margin-top:36px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--mute)}
+footer a{color:inherit}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a href="https://instagram.com/hugo_yoxx" target="_blank" rel="noopener"><img src="/assets/logo.png" alt="Hugo Yoxx"></a><div class="count" id="count"></div></header>
+  <div class="track" id="track"><i></i></div>
+  <main id="app"></main>
+  <footer><span>Performe. Profite.</span><a href="https://instagram.com/hugo_yoxx" target="_blank" rel="noopener">@hugo_yoxx</a></footer>
+</div>
+
+<script>
+/* ============ À MODIFIER ============ */
+const CONFIG = {
+  WHATSAPP: "33668203305",   // ton numéro sans + ni 0 : 33612345678
+  SHEET_WEBHOOK: "https://hook.eu2.make.com/gwhoqqkvcqxdk28g18wsvfk5n9tgooss"          // URL Apps Script (README) — vide = pas d'envoi
+};
+/* ==================================== */
+
+const Q = [
+ {id:"intro",type:"intro",title:"Quel est ton niveau Hyrox\u00a0?",p:"Ta note sur 20, ton point faible et le programme que je te donnerais si tu étais mon athlète.",tag:"19 questions. 3 minutes. Résultat immédiat.",cta:"Je fais le test"},
+ {id:"prenom",type:"text",title:"On commence par toi.",sub:"Ton prénom\u00a0?",ph:"Prénom"},
+ {id:"t1",type:"transition",title:"Ok {prenom}. On commence par la course.",sub:"4 questions.",cta:"C'est parti"},
+ {id:"freq_course",type:"single",axis:"course",title:"Tu cours combien de fois par semaine\u00a0?",opts:[["0 à 1 fois",0],["2 fois",1],["3 fois",1.5],["4 fois",2],["5 fois",2.5],["6 fois ou plus",3]]},
+ {id:"exp_course",type:"single",axis:"course",title:"Ton niveau en course à pied\u00a0?",opts:[["Débutant",0],["Intermédiaire",1],["Avancé",2],["Expert",3]]},
+ {id:"allure",type:"single",axis:"course",title:"Ton allure sur 10 km. Sans tricher.",opts:[["4:00 min/km ou moins",4],["4:00 – 4:30",3.5],["4:30 – 5:00",3],["5:00 – 5:30",2.5],["5:30 – 6:00",2],["6:00 – 6:30",1.5],["6:30 ou plus",1],["Je ne sais pas",0.5]]},
+ {id:"lim_course",type:"multi",title:"Qu'est-ce qui te freine quand tu cours\u00a0?",sub:"Plusieurs réponses possibles.",opts:[["Le souffle, le cardio"],["Les jambes lourdes"],["La régularité, je décroche"],["Les douleurs"],["Le mental, l'envie de lâcher"]]},
+ {id:"t2",type:"transition",title:"Bien joué {prenom}. Le run est fini, place aux stations.",sub:"5 questions sur ton renfo.",cta:"Continuer"},
+ {id:"freq_force",type:"single",axis:"force",title:"Combien de séances de renfo par semaine\u00a0?",opts:[["0 à 1",0],["2",1],["3",1.5],["4",2],["5",2.5],["6 ou plus",3]]},
+ {id:"exp_force",type:"single",axis:"force",title:"En renfo, tu te situes où\u00a0?",opts:[["Débutant",0],["Intermédiaire",1],["Avancé",2],["Expert",3]]},
+ {id:"stations_ok",type:"single",axis:"force",title:"Les stations Hyrox, tu les gères\u00a0?",opts:[["Oui",4],["Plutôt oui",3],["Plutôt non",1.5],["Non",0]]},
+ {id:"stations_dur",type:"multi",title:"Sur lesquelles tu souffres\u00a0?",sub:"Plusieurs réponses possibles.",show:a=>a.stations_ok!=="Oui",opts:[["SkiErg"],["Sled Push"],["Sled Pull"],["Burpee Broad Jumps"],["Rowing"],["Farmers Carry"],["Sandbag Lunges"],["Wall Balls"]]},
+ {id:"lim_force",type:"multi",title:"Qu'est-ce qui te bloque sur les stations\u00a0?",sub:"Plusieurs réponses possibles.",opts:[["La force brute"],["La technique"],["Le cardio qui monte trop vite"],["Le grip"],["Le mental, l'envie de lâcher"],["Je ne sais pas"]]},
+ {id:"t3",type:"transition",title:"Dernière ligne droite avant ta note.",sub:"3 questions sur ta compète.",cta:"Continuer"},
+ {id:"hyrox",type:"single",title:"Tu as un Hyrox dans le viseur\u00a0?",opts:[["Oui"],["Pas encore"]]},
+ {id:"format",type:"single",title:"Dans quel format\u00a0?",show:a=>a.hyrox!=="Pas encore",opts:[["Solo"],["Duo"],["Duo mixte"]]},
+ {id:"cat",type:"single",title:"Quelle catégorie\u00a0?",show:a=>a.hyrox!=="Pas encore"&&a.format!=="Duo mixte",opts:[["Open"],["Pro"]]},
+ {id:"delai",type:"single",title:"Il est dans combien de temps\u00a0?",show:a=>a.hyrox!=="Pas encore",opts:[["Moins de 4 semaines"],["4 à 8 semaines"],["8 à 12 semaines"],["Plus de 12 semaines"]]},
+ {id:"t4",type:"transition",title:"Presque fini, {prenom}.",sub:"4 dernières questions pour bien cibler mes conseils.",cta:"Continuer"},
+ {id:"quali_hist",type:"single",title:"Aujourd'hui, ton entraînement c'est plutôt\u00a0?",opts:[["Je me débrouille seul, gratuit",0],["J'utilise une appli ou un programme payant",1],["J'ai déjà eu un coach",2]]},
+ {id:"quali_situation",type:"single",title:"Aujourd'hui, tu es plutôt\u00a0?",opts:[["Étudiant",0],["Jeune actif, ça commence",1],["En poste, carrière installée",2],["Entrepreneur / indépendant",2]]},
+ {id:"quali_offre",type:"single",title:"Ce qui te correspond le mieux aujourd'hui\u00a0?",opts:[["Un plan que je suis par moi-même"],["Un accompagnement avec un vrai suivi, même si ça coûte plus cher"],["Je préfère d'abord essayer avant de m'engager"]]},
+ {id:"quali_urgence",type:"single",title:"Tu veux commencer\u00a0?",opts:[["Cette semaine",2],["Ce mois-ci",1],["Je regarde encore",0]]},
+ {id:"tel",type:"tel",title:"Ta note est prête, {prenom}.",sub:"Ton numéro WhatsApp et ton Instagram, pour recevoir ta note et qu'on se suive.",ph:"06 12 34 56 78",insta:true,igPh:"@ton_pseudo",note:"Zéro spam. Ton plan perso, et je réponds à tes questions en direct.",cta:"Voir ma note"}
+];
+
+const PROFILES = {
+ sprint:{name:"Sprint final",text:"Plus le temps de tout reconstruire. On va à l'essentiel. Tu peux diviser le volume par 2 à l'approche de la course (J-7) en gardant l'intensité.",plan:[["Seuil","Tiens ton allure de course cible. Travaille au 2e seuil : 8 × 1000 m vers 4 × 2000 m à allure course, voire légèrement plus vite."],["Compromised","Enchaîne station et course. Sled lourd + course, type 6 × (20 m de sled + 800 m), récup active 2' en footing léger."],["Une à deux EF par semaine","Récupère pour encaisser le reste, sans faire plus de distance que d'habitude."]]},
+ force:{name:"Force sans moteur",text:"Tu as une bonne base de renfo. Les 8 km ne te laissent pas récupérer et tu subis de plus en plus à chaque station. Tu dois développer ta course progressivement.",plan:[["Priorité","Du volume en endurance fondamentale, plus du développement de VO2max : des fractionnés type 30/30 vers des 1'/1' en récup active (footing léger). Objectif : garder le cœur haut le plus longtemps possible."],["Stations","Maintien, pas de surcharge. Tu peux t'entraîner avec une charge légèrement supérieure à celle de course pour être à l'aise."],["Objectif","Arrive aux stations avec de la fraîcheur."]]},
+ fond:{name:"Fondations",text:"Tout est à construire. Bonne nouvelle : tu vas progresser vite.",plan:[["Priorité","La régularité : 2 courses faciles (si tu le sens, glisse des accélérations de 30 s dedans) et 2 renfos par semaine axés technique."],["Technique","Apprends les 8 stations avant de les charger."],["Objectif","Finis ton premier Hyrox en contrôle, sans le subir."]]},
+ moteur:{name:"Moteur sans force",text:"Tu tiens l'allure. Sled, lunges et wall balls te cassent les jambes pour la suite.",plan:[["Priorité","Force fonctionnelle : squat, hinge, portés lourds, et du sled lourd enchaîné en course, à 105-110 % de la charge de compète avec des 400 m de run ou du rameur. Objectif : récupérer sur les runs et les ergos à une allure sous l'allure course, avec une récup plutôt complète."],["Stations","Charges plus lourdes qu'en compète, en fatigue."],["Objectif","Que les stations ne coûtent plus rien à tes runs."]]},
+ perf:{name:"Performance",text:"Bases solides des deux côtés. Maintenant, on va chercher le chrono. Pour optimiser, tu devrais tester tes points faibles et adapter ton entraînement. En attendant, voici quelques axes de travail.",plan:[["Priorité","Compromised running à allure cible : charges légèrement supérieures, puis accumule de la course à l'allure cible, 800 m vers 1200 m, pour être à l'aise le jour J."],["Détails","Transitions, gestion d'allure, pacing des stations. Prends tes repères."],["Objectif","Le sub de ta catégorie."]]}
+};
+
+const FOCUS = {
+ course:{
+  "Le souffle, le cardio":"Ton plafond est cardiaque. On va te faire monter dans les tours et augmenter ton volume de course progressivement.",
+  "Les jambes lourdes":"Tes jambes lâchent avant ton souffle. On va développer plus de volume sur l'aspect force.",
+  "La régularité, je décroche":"Tu n'as pas un problème de niveau, tu as un problème de rythme. Il te faut des séances qui t'apprennent à tenir un rythme : ça vient avec l'expérience.",
+  "Les douleurs":"On ne progresse pas en serrant les dents. On adapte le volume, on renforce, on avance. Le plus important : trouver la source et régler la racine, pas le résultat.",
+  "Le mental, l'envie de lâcher":"Tu lâches quand ça pique ? Tant mieux : tu as de la marge accessible rapidement. Il faut comprendre pourquoi tu n'arrives pas à te rentrer dedans."},
+ force:{
+  "La force brute":"Le sled te coûte trop cher. On monte tes curseurs de force, le reste viendra.",
+  "La technique":"Tu perds des secondes et de l'énergie sur la technique. C'est le gain le plus rapide : à chaque entraînement tu peux la bosser.",
+  "Le cardio qui monte trop vite":"Tes stations font exploser ton cardio. Parfait : on va développer tes qualités cardiaques.",
+  "Le grip":"Farmers et sled pull : ton grip lâche avant tes jambes. On le travaille à part, ça vient vite avec des extras.",
+  "Le mental, l'envie de lâcher":"Tu lâches quand ça pique ? Tant mieux : tu as de la marge accessible rapidement. Il faut comprendre pourquoi tu n'arrives pas à te rentrer dedans.",
+  "Je ne sais pas":"Tu ne sais pas encore où ça coince. Le premier bloc sert à le découvrir."}
+};
+function focus(key, rc, rf){
+  const axis = key==="sprint" ? (rf < rc ? "force" : "course") : (key==="force"||key==="fond") ? "course" : "force";
+  const picked = (axis==="course" ? A.lim_course : A.lim_force) || [];
+  const k = picked.find(x => FOCUS[axis][x]); return k ? {axis, k, text:FOCUS[axis][k]} : null;
+}
+
+/* ---- Qualification lead : score (budget/sérieux) + branche (offre voulue) ---- */
+function qualScore(){
+  return ["quali_hist","quali_situation","quali_urgence"].reduce((s,id) => {
+    const q = Q.find(x => x.id === id), o = q.opts.find(o => o[0] === A[id]);
+    return s + (o ? o[1] : 0);
+  }, 0);
+}
+function qualBranch(){
+  if(A.quali_offre === "Un accompagnement avec un vrai suivi, même si ça coûte plus cher") return "suivi";
+  if(A.quali_offre === "Je préfère d'abord essayer avant de m'engager") return "essai";
+  return "seul";
+}
+const ACTIONS = {
+ suivi: { haut:"🔥 Prêt à payer un suivi. Appelle-le aujourd'hui, propose direct le 1-to-1.",
+          mid:"🟡 Intéressé par un suivi, pas encore acquis. Envoie le programme, propose un appel sous 48h.",
+          bas:"🟡 Dit vouloir un suivi mais profil peu engagé. Envoie le programme, ne pousse pas l'appel tout de suite." },
+ essai: { haut:"🟠 Hésite mais a le profil pour payer. Envoie le programme, relance dans 2 semaines pour proposer le 1-to-1.",
+          mid:"🟡 Veut tester d'abord. Envoie le programme, relance dans 3-4 semaines.",
+          bas:"🌱 Pas prêt, veut juste tester. Envoie le programme, laisse venir." },
+ seul:  { haut:"🟠 Veut un plan seul mais profil solvable. Envoie le programme, garde-le à l'œil pour plus tard.",
+          mid:"🌱 Veut un plan, pas de relance commerciale nécessaire.",
+          bas:"🌱 Plan gratuit/pas cher recherché. Envoie le programme, autonomie totale." }
+};
+function qualAction(branch, score){
+  const tier = score >= 4 ? "haut" : score >= 2 ? "mid" : "bas";
+  return ACTIONS[branch][tier];
+}
+function confetti(){
+  if(matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  const c = document.createElement("canvas"); c.id="fx"; document.body.appendChild(c);
+  const ctx = c.getContext("2d"), W = c.width = innerWidth, H = c.height = innerHeight, cols = ["#E84AF4","#0B0E47","#F4EEDF","#E84AF4"];
+  const P = Array.from({length:110}, () => ({x:W/2+(Math.random()-.5)*120, y:H*0.35, vx:(Math.random()-.5)*14, vy:-Math.random()*13-4, r:Math.random()*5+3, c:cols[Math.random()*4|0], a:Math.random()*6, s:(Math.random()-.5)*.3}));
+  let t = 0; (function f(){ ctx.clearRect(0,0,W,H); t++;
+    P.forEach(p => { p.x+=p.vx; p.y+=p.vy; p.vy+=.35; p.vx*=.99; p.a+=p.s; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.a); ctx.fillStyle=p.c; ctx.globalAlpha=Math.max(0,1-t/90); ctx.fillRect(-p.r,-p.r/2,p.r*2,p.r); ctx.restore(); });
+    if(t < 95) requestAnimationFrame(f); else c.remove(); })();
+}
+
+const A = {}; let i = 0;
+const app = document.getElementById("app"), cnt = document.getElementById("count"), bar = document.querySelector("#track i"), track = document.getElementById("track");
+const visible = () => Q.filter(q => !q.show || q.show(A));
+const qs = () => visible().filter(q => q.type !== "transition" && q.type !== "intro");
+const fill = s => s.replace("{prenom}", A.prenom || "");
+
+function progress(){
+  const cur = Q[i], list = qs();
+  if(cur.type === "intro"){ cnt.textContent = ""; track.style.visibility = "hidden"; return; }
+  track.style.visibility = "visible";
+  const done = list.filter(q => A[q.id] !== undefined && A[q.id] !== "").length;
+  cnt.textContent = (cur.type === "transition" ? done : Math.min(done + 1, list.length)) + " / " + list.length;
+  bar.style.width = (done / list.length * 100) + "%";
+}
+function go(step){
+  let n = i + step;
+  while(n >= 0 && n < Q.length && Q[n].show && !Q[n].show(A)) n += step;
+  if(n >= Q.length) return result();
+  i = Math.max(0, n); render();
+}
+function render(){
+  const q = Q[i]; progress();
+  let h = `<div class="screen ${q.type}">`;
+  if(q.type === "intro"){
+    h += `<img class="picto" src="/assets/picto.png" alt=""><h1>${q.title}</h1><p>${q.p}</p><p class="tag">${q.tag}</p><button class="cta" id="next">${q.cta}</button>`;
+  } else if(q.type === "transition"){
+    h += `<h1>${fill(q.title)}</h1><p class="sub">${q.sub}</p><button class="cta" id="next">${q.cta}</button>`;
+  } else {
+    h += `<h2>${fill(q.title)}</h2>${q.sub ? `<p class="sub">${q.sub}</p>` : ""}`;
+    if(q.type === "single" || q.type === "multi"){
+      const sel = A[q.id] || (q.type === "multi" ? [] : "");
+      h += `<div class="opts">` + q.opts.map(o => `<button class="opt ${q.type==="multi"?sel.includes(o[0]):sel===o[0]?"on":""}" data-v="${o[0]}">${o[0]}</button>`).join("") + `</div>`;
+      if(q.type === "multi") h += `<button class="cta" id="next" ${sel.length?"":"disabled"}>Continuer</button>`;
+    } else {
+      h += `<input type="${q.type}" id="inp" placeholder="${q.ph}" value="${A[q.id]||""}" autocomplete="${q.type==="tel"?"tel":"given-name"}">`;
+      if(q.insta) h += `<label class="flabel" for="inp2">Ton Instagram</label><input type="text" id="inp2" placeholder="${q.igPh||"@ton_pseudo"}" value="${A.instagram||""}" autocomplete="off" autocapitalize="off">`;
+      if(q.note) h += `<p class="note">${q.note}</p>`;
+      h += `<p class="err" id="err"></p><button class="cta" id="next">${q.cta||"Continuer"}</button>`;
+    }
+  }
+  if(i > 1) h += `<button class="back" id="back">Retour</button>`;
+  app.innerHTML = h + `</div>`;
+
+  app.querySelectorAll(".opt").forEach(b => b.onclick = () => {
+    const v = b.dataset.v;
+    if(q.type === "single"){
+      A[q.id] = v; app.querySelectorAll(".opt").forEach(x => x.classList.remove("on")); b.classList.add("on");
+      setTimeout(() => go(1), 240);
+    } else {
+      const s = A[q.id] = A[q.id] || []; const k = s.indexOf(v);
+      k > -1 ? s.splice(k,1) : s.push(v); b.classList.toggle("on"); document.getElementById("next").disabled = !s.length;
+    }
+  });
+  const nx = document.getElementById("next");
+  if(nx) nx.onclick = () => {
+    if(q.type === "text" || q.type === "tel"){
+      const v = document.getElementById("inp").value.trim(), e = document.getElementById("err");
+      if(q.type === "text" && v.length < 2) return e.textContent = "Ton prénom, même court.";
+      if(q.type === "tel" && v.replace(/\D/g,"").length < 9) return e.textContent = "Il manque des chiffres à ton numéro.";
+      if(q.insta){
+        const ig = document.getElementById("inp2").value.trim().replace(/^@/,"");
+        if(ig.length < 2) return e.textContent = "Ton pseudo Instagram, pour qu'on se suive.";
+        A.instagram = "@" + ig;
+      }
+      A[q.id] = v;
+    }
+    go(1);
+  };
+  const bk = document.getElementById("back"); if(bk) bk.onclick = () => go(-1);
+  const inp = document.getElementById("inp"); if(inp){ inp.focus(); inp.onkeydown = e => { if(e.key === "Enter") nx.click(); }; }
+  const inp2 = document.getElementById("inp2"); if(inp2) inp2.onkeydown = e => { if(e.key === "Enter") nx.click(); };
+  window.scrollTo({top:0});
+}
+
+const score = axis => Q.filter(q => q.axis === axis).reduce((s,q) => { const o = q.opts.find(o => o[0] === A[q.id]); return s + (o ? o[1] : 0); }, 0);
+function profile(c, f){
+  if(A.delai === "Moins de 4 semaines" || A.delai === "4 à 8 semaines") return "sprint";
+  if(c < 5 && f >= 5) return "force"; if(c < 5 && f < 5) return "fond"; if(c >= 5 && f < 5) return "moteur"; return "perf";
+}
+function sendLead(data){
+  if(!CONFIG.SHEET_WEBHOOK) return;
+  const form = new URLSearchParams();
+  Object.entries(data).forEach(([k,v]) => form.append(k, Array.isArray(v) ? v.join(", ") : String(v ?? "")));
+  try{ fetch(CONFIG.SHEET_WEBHOOK,{method:"POST",mode:"no-cors",body:form}); }catch(e){}
+}
+/* ---- Carte résultat téléchargeable (canvas, aucune lib externe) ---- */
+const CARD_W = 1080, CARD_H = 1920;
+function loadImage(src){ return new Promise((res,rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; }); }
+function recolor(img, [r,g,b]){
+  const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height);
+  for(let i = 0; i < d.data.length; i += 4){ if(d.data[i+3] > 0){ d.data[i] = r; d.data[i+1] = g; d.data[i+2] = b; } }
+  x.putImageData(d, 0, 0); return c;
+}
+function wrap(ctx, text, x, y, maxW, lh){
+  const words = text.split(" "); let line = "", n = 0;
+  for(const w of words){
+    const test = line ? line + " " + w : w;
+    if(ctx.measureText(test).width > maxW && line){ ctx.fillText(line, x, y + n*lh); line = w; n++; } else line = test;
+  }
+  ctx.fillText(line, x, y + n*lh); return y + (n+1)*lh;
+}
+let cardAssets = null;
+async function loadCardAssets(){
+  if(cardAssets) return cardAssets;
+  const [logo, sig, pattern] = await Promise.all([loadImage("/assets/logo.png"), loadImage("/assets/signature.png"), loadImage("/assets/pattern.png")]);
+  await Promise.all(["400 480px Pavot","400 96px Pavot","700 40px \"DM Sans\"","600 32px \"DM Sans\"","400 34px \"DM Sans\""].map(f => document.fonts.load(f)));
+  cardAssets = { logoCream: recolor(logo, [244,238,223]), sig, pattern }; return cardAssets;
+}
+function pill(x, px, py, label, INK, BG){
+  x.font = "600 28px \"DM Sans\""; const w = x.measureText(label).width + 44;
+  x.strokeStyle = "rgba(244,238,223,.4)"; x.lineWidth = 1.5; x.beginPath(); x.roundRect(px, py, w, 52, 26); x.stroke();
+  x.fillStyle = "#F4EEDF"; x.fillText(label, px + 22, py + 34); return w;
+}
+async function buildResultCard({ prenom, t, c, f, profName, strong, fo, plan, stations }){
+  const { logoCream, sig, pattern } = await loadCardAssets();
+  const SCRATCH_H = 2700; // hauteur généreuse pour mesurer le contenu réel, rognée ensuite
+  const sc = document.createElement("canvas"); sc.width = CARD_W; sc.height = SCRATCH_H;
+  const x = sc.getContext("2d"), M = 92, INK = "#0B0E47", BG = "#F4EEDF", ACC = "#E84AF4";
+  x.fillStyle = INK; x.fillRect(0, 0, CARD_W, SCRATCH_H);
+  x.save(); x.globalAlpha = .06;
+  const ts = 380; for(let py = -ts; py < SCRATCH_H + ts; py += ts) for(let px = -ts; px < CARD_W + ts; px += ts) x.drawImage(pattern, px, py, ts, ts);
+  x.restore();
+  const lw = logoCream.width / logoCream.height * 56; x.drawImage(logoCream, M, 96, lw, 56);
+  x.drawImage(sig, CARD_W - M - 60, 90, 60, 60 * sig.height / sig.width);
+  x.fillStyle = "rgba(244,238,223,.65)"; x.font = "600 32px \"DM Sans\""; x.textBaseline = "alphabetic";
+  x.fillText((prenom || "TOI").toUpperCase() + " · TA NOTE", M, 260);
+  x.fillStyle = ACC; x.font = "400 460px Pavot"; const tt = String(t);
+  x.fillText(tt, M, 700); const tw = x.measureText(tt).width;
+  x.fillStyle = "rgba(244,238,223,.55)"; x.font = "400 100px Pavot"; x.fillText("/20", M + tw + 20, 700);
+  let by = 800;
+  [["Course", c], ["Force", f]].forEach(([lab, val]) => {
+    x.fillStyle = "rgba(244,238,223,.85)"; x.font = "600 32px \"DM Sans\"";
+    x.fillText(lab, M, by); const vt = val + " / 10"; x.textAlign = "right"; x.fillText(vt, CARD_W - M, by); x.textAlign = "left";
+    by += 20; x.fillStyle = "rgba(244,238,223,.18)"; x.fillRect(M, by, CARD_W - 2*M, 14);
+    x.fillStyle = ACC; x.fillRect(M, by, (CARD_W - 2*M) * (val/10), 14); by += 74;
+  });
+  by += 24; x.fillStyle = "#F4EEDF"; x.font = "400 92px Pavot"; by = wrap(x, profName, M, by + 92, CARD_W - 2*M, 96) - 16;
+  by += 30; const badge = "TON POINT FORT · " + strong.toUpperCase();
+  x.font = "700 30px \"DM Sans\""; const bw = x.measureText(badge).width + 56;
+  x.fillStyle = ACC; x.beginPath(); x.roundRect(M, by, bw, 60, 30); x.fill();
+  x.fillStyle = INK; x.fillText(badge, M + 28, by + 39);
+  by += 100;
+  if(fo){
+    x.fillStyle = ACC; x.font = "700 26px \"DM Sans\""; x.fillText("TON FREIN N°1 · " + fo.k.toUpperCase(), M, by); by += 44;
+    x.fillStyle = "rgba(244,238,223,.85)"; x.font = "400 34px \"DM Sans\"";
+    by = wrap(x, fo.text, M, by + 6, CARD_W - 2*M, 44);
+  }
+  if(plan && plan[0]){
+    by += 56; x.fillStyle = ACC; x.font = "700 26px \"DM Sans\""; x.fillText(plan[0][0].toUpperCase(), M, by); by += 44;
+    x.fillStyle = "rgba(244,238,223,.85)"; x.font = "400 34px \"DM Sans\"";
+    by = wrap(x, plan[0][1], M, by + 6, CARD_W - 2*M, 44);
+  }
+  if(stations && stations.length){
+    by += 50; let px = M;
+    stations.slice(0, 3).forEach(s => { const w = pill(x, px, by, s, INK, BG); px += w + 12; });
+    by += 52;
+  }
+  // La carte est rognée à la hauteur réelle du contenu (+ zone pied de page fixe) : pas de vide, pas de collision.
+  const finalH = Math.max(1500, by + 300);
+  const cv = document.createElement("canvas"); cv.width = CARD_W; cv.height = finalH;
+  const fx = cv.getContext("2d");
+  fx.drawImage(sc, 0, 0, CARD_W, finalH, 0, 0, CARD_W, finalH);
+  fx.strokeStyle = "rgba(244,238,223,.25)"; fx.lineWidth = 1.5; fx.beginPath();
+  fx.moveTo(M, finalH - 210); fx.lineTo(CARD_W - M, finalH - 210); fx.stroke();
+  fx.fillStyle = "#F4EEDF"; fx.textAlign = "center"; fx.font = "700 40px \"DM Sans\"";
+  fx.fillText("Fais le test toi aussi →", CARD_W/2, finalH - 140);
+  fx.fillStyle = "rgba(244,238,223,.6)"; fx.font = "400 30px \"DM Sans\"";
+  fx.fillText("@hugo_yoxx · Performe. Profite.", CARD_W/2, finalH - 90);
+  return cv;
+}
+async function saveCard(data){
+  const btn = document.getElementById("saveBtn"); if(!btn) return;
+  const orig = btn.innerHTML; btn.disabled = true; btn.textContent = "Génération…";
+  try{
+    const cv = await buildResultCard(data);
+    const blob = await new Promise(res => cv.toBlob(res, "image/png", 0.95));
+    const file = new File([blob], "ma-note-hyrox.png", { type: "image/png" });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try{ await navigator.share({ files: [file], title: "Ma note Hyrox" }); btn.innerHTML = orig; btn.disabled = false; return; }
+      catch(e){ if(e.name === "AbortError"){ btn.innerHTML = orig; btn.disabled = false; return; } }
+    }
+    const url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = "ma-note-hyrox.png"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch(e){ /* échec silencieux : l'essentiel (WhatsApp) reste disponible */ }
+  btn.innerHTML = orig; btn.disabled = false;
+}
+
+function loadCalendly(){
+  const box = document.getElementById("calBox"); if(!box) return;
+  const url = "https://calendly.com/prep-hugoo/30min?background_color=f4eedf&text_color=0b0e47&primary_color=e84af4";
+  const init = () => window.Calendly && window.Calendly.initInlineWidget({ url, parentElement: box });
+  if(window.Calendly) return init();
+  const s = document.createElement("script"); s.src = "https://assets.calendly.com/assets/external/widget.js"; s.onload = init; document.head.appendChild(s);
+}
+
+function result(){
+  const rc = score("course"), rf = score("force"), key = profile(rc,rf), p = PROFILES[key];
+  const c = Math.round((5+rc*0.4)*10)/10, f = Math.round((5+rf*0.4)*10)/10, t = Math.round((c+f)*10)/10;   // affichage : 5–9 par axe, 10–18 au total
+  const qscore = qualScore(), qbranch = qualBranch(), action = qualAction(qbranch, qscore);
+  sendLead({date:new Date().toISOString(),...A,score_course:c,score_force:f,score_total:t,brut_course:rc,brut_force:rf,profil:p.name,quali_score:qscore,quali_branche:qbranch,action:action});
+  cnt.textContent = ""; bar.style.width = "100%";
+  const msg = encodeURIComponent(`Salut Hugo, je viens de faire le test Hyrox. ${A.prenom}, ${t}/20, profil ${p.name}. Envoie-moi mon programme.`);
+  const fo = focus(key, rc, rf), st = (A.stations_dur||[]).slice(0,3);
+  const strong = rc >= rf ? "Course" : "Force", weak = rc >= rf ? "Force" : "Course";
+  app.innerHTML = `<div class="screen">
+    <div class="card"><div class="who">${A.prenom}, ta note</div><div class="num"><span id="n">0</span><small>/ 20</small></div>
+      <div class="bar"><div class="lab"><span>Course</span><span>${c} / 10</span></div><div class="tr"><i id="bc"></i></div></div>
+      <div class="bar"><div class="lab"><span>Force</span><span>${f} / 10</span></div><div class="tr"><i id="bf"></i></div></div>
+      <img class="sig" src="/assets/signature.png" alt=""></div>
+    <div class="rv" style="--d:.9s"><span class="badge">Ton point fort : ${strong}</span></div>
+    <h2 class="prof rv" style="--d:1.05s">${p.name}</h2>
+    <p class="rv" style="--d:1.2s">${p.text}</p>
+    ${fo ? `<div class="focus rv" style="--d:1.35s"><b>Ton frein n°1 · ${fo.k}</b>${fo.text}</div>` : ""}
+    ${st.length ? `<div class="stations rv" style="--d:1.45s">${st.map(x=>`<span>${x}</span>`).join("")}</div>` : ""}
+    <ul class="plan">${p.plan.map((x,i)=>`<li class="rv" style="--d:${1.55+i*.12}s"><b>${x[0]}</b>${x[1]}</li>`).join("")}</ul>
+    <div class="steps rv" style="--d:2s"><i>Ta note</i><em></em><i>Ton profil</i><em></em><i class="next">Ton programme</i></div>
+    <a class="cta acc pulse rv" style="--d:2.1s" href="https://wa.me/${CONFIG.WHATSAPP}?text=${msg}" target="_blank" rel="noopener">Recevoir mon programme sur WhatsApp</a>
+    <button class="cta save rv" id="saveBtn" style="--d:2.2s"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>Enregistrer ma note</button>
+    <h2 class="rv" style="--d:2.3s;font-size:26px;margin-top:32px">Envie d'aller plus vite\u00a0?</h2>
+    <p class="sub rv" style="--d:2.35s;margin-bottom:14px">Réserve un appel de 30 minutes, on regarde ton profil ensemble.</p>
+    <div class="cal-frame rv" style="--d:2.4s" id="calBox"></div>
+    <p class="note rv" style="--d:2.6s">Le plan détaillé de ton profil, ton axe ${weak.toLowerCase()} en priorité, et je réponds à tes questions en direct.</p></div>`;
+  setTimeout(confetti, 900);
+  document.getElementById("saveBtn").onclick = () => saveCard({ prenom: A.prenom, t, c, f, profName: p.name, strong, fo, plan: p.plan, stations: st });
+  setTimeout(loadCalendly, 500);
+  const n = document.getElementById("n"), t0 = performance.now(), dur = matchMedia("(prefers-reduced-motion:reduce)").matches ? 0 : 1200;
+  (function tick(now){ const k = dur ? Math.min(1,(now-t0)/dur) : 1, e = 1-Math.pow(1-k,3); n.textContent = Math.round(t*e*10)/10; if(k<1) requestAnimationFrame(tick); })(t0);
+  setTimeout(() => { document.getElementById("bc").style.width = c*10+"%"; document.getElementById("bf").style.width = f*10+"%"; }, 150);
+  window.scrollTo({top:0});
+}
+render();
+</script>
+</body>
+</html>
