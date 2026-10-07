@@ -183,7 +183,8 @@ export interface EnergySessionRow {
   total_duration_s?: number | null;
   total_distance_m?: number | null;
   notes?: string | null;
-  schema?: FieldSchema | null;\n  images?: SessionImage[] | null;
+  schema?: FieldSchema | null;
+  images?: SessionImage[] | null;
   created_by?: string | null;
   athlete_id?: string | null;
   parent_session_id?: string | null;
