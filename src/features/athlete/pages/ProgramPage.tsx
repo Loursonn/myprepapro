@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, X, Zap } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, X, Zap } from "lucide-react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { toast } from "sonner";
 import { C } from "@/lib/theme";
@@ -1063,11 +1063,30 @@ function localMonday(): string {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
+function weekLabel(offset: number): string {
+  if (offset === 0)  return "Cette semaine";
+  if (offset === 1)  return "Semaine prochaine";
+  if (offset === -1) return "Semaine dernière";
+  return offset > 0 ? `Dans ${offset} semaines` : `Il y a ${-offset} semaines`;
+}
+
+function weekRangeLabel(days: WeekDay[]): string {
+  if (!days.length) return "";
+  return `${fmtShort(days[0].date)} → ${fmtShort(days[days.length - 1].date)}`;
+}
+
+const weekNavBtn: React.CSSProperties = {
+  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+  display: "flex", alignItems: "center", justifyContent: "center",
+  background: C.s2, border: "1px solid " + C.brd, color: C.tx, cursor: "pointer",
+};
+
 export default function ProgramPage() {
   const navigate  = useNavigate();
   const qc        = useQueryClient();
   const { athleteId, viewOnly } = useAthleteContext();
-  const { data, isLoading } = useActivePlan(athleteId ?? "");
+  const [weekOffset, setWeekOffset] = useState(0);
+  const { data, isLoading, isPlaceholderData } = useActivePlan(athleteId ?? "", weekOffset);
 
   const [workoutPreview,   setWorkoutPreview]   = useState<WeekSession | null>(null);
   const [energyPreview,    setEnergyPreview]    = useState<{ sessionId: string; assignmentId: string; status: string; scheduledDate: string } | null>(null);
@@ -1206,15 +1225,42 @@ export default function ProgramPage() {
 
           {/* ── Cette semaine ── */}
           <section>
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.tx, marginBottom: 16 }}>
-              Cette semaine
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <button
+                type="button"
+                aria-label="Semaine précédente"
+                style={weekNavBtn}
+                onClick={() => { haptic(); setWeekOffset(o => o - 1); }}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeekOffset(0)}
+                disabled={weekOffset === 0}
+                style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, textAlign: "center", cursor: weekOffset === 0 ? "default" : "pointer" }}
+              >
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.tx }}>{weekLabel(weekOffset)}</div>
+                <div style={{ fontSize: 11, color: C.tx3, marginTop: 2 }}>
+                  {weekRangeLabel(data?.weekDays ?? [])}
+                  {weekOffset !== 0 && <span style={{ color: C.ac }}> · revenir à aujourd'hui</span>}
+                </div>
+              </button>
+              <button
+                type="button"
+                aria-label="Semaine suivante"
+                style={weekNavBtn}
+                onClick={() => { haptic(); setWeekOffset(o => o + 1); }}
+              >
+                <ChevronRight size={18} />
+              </button>
             </div>
             {!data?.weekDays.length ? (
               <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, padding: "24px 16px", textAlign: "center", color: C.tx3, fontSize: 12 }}>
                 Aucune séance cette semaine
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: isPlaceholderData ? 0.5 : 1, transition: "opacity 150ms" }}>
                 {data.weekDays.map(day => (
                   <DayRow
                     key={day.date}
