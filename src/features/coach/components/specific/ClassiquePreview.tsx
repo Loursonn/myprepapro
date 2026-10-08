@@ -9,7 +9,7 @@ import type { SessionBlock, ClassiqueBlock, WodBlock } from "@/types/specific";
 import { isWodBlock } from "@/types/specific";
 
 const ORANGE = "#F5A623";
-const GREEN  = "#22C993";
+const GREEN  = "#9DB06A";
 
 function hasContent(b: SessionBlock): boolean {
   if (isWodBlock(b)) return b.title.trim().length > 0 || b.steps.length > 0;

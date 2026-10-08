@@ -227,7 +227,7 @@ export default function ContextBar() {
                       }}
                       style={{
                         cursor: "pointer",
-                        background: a.id === athleteId ? "rgba(168,85,247,0.12)" : "transparent",
+                        background: a.id === athleteId ? "rgba(201,161,74,0.12)" : "transparent",
                         color: a.id === athleteId ? C.ac : C.tx,
                         fontSize: 12,
                         padding: "8px 12px",

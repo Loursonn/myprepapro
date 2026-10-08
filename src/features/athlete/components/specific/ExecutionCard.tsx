@@ -6,8 +6,8 @@ import type { FlatExecStep } from "@/features/athlete/hooks/useSpecificExecution
 import { formatTarget } from "@/lib/energy/formatTarget";
 
 const PHASE_COLOR: Record<string, string> = {
-  warmup: "#22C993", work: "#E5484D", recovery: "#4FA3FF",
-  rest: "#8B8A92", cooldown: "#22C993", open: "#8B8A92",
+  warmup: "#9DB06A", work: "#E5484D", recovery: "#4FA3FF",
+  rest: "#8B8A92", cooldown: "#9DB06A", open: "#8B8A92",
 };
 const PHASE_LABEL: Record<string, string> = {
   warmup: "Échauffement", work: "Effort", recovery: "Récupération",
@@ -36,7 +36,7 @@ interface Props {
 export default function ExecutionCard({ current, next, secondsLeft, isLastStep, onNext, onSkip }: Props) {
   const { step, roundLabel } = current;
   const isExercise = step.type === "exercise";
-  const color = isExercise ? "#7B6FFF" : (PHASE_COLOR[step.role] ?? "#8B8A92");
+  const color = isExercise ? "#C9A14A" : (PHASE_COLOR[step.role] ?? "#8B8A92");
   const phaseLabel = isExercise
     ? (step.role === "work" ? "Effort · Exercice" : "Exercice")
     : (PHASE_LABEL[step.role] ?? step.role);
@@ -64,7 +64,7 @@ export default function ExecutionCard({ current, next, secondsLeft, isLastStep, 
 
   return (
     <div style={{
-      background: "var(--card, #1D1C1E)", border: `1px solid ${color}`,
+      background: "var(--card, #15120F)", border: `1px solid ${color}`,
       borderRadius: 16, padding: "24px 18px", textAlign: "center",
     }}>
       <div style={{

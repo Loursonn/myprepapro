@@ -30,7 +30,7 @@ interface Comp {
 
 const PRIORITY_COLOR: Record<string, string> = {
   A: "#F5A623",
-  B: "#7B6FFF",
+  B: "#C9A14A",
   C: "#9194A0",
 };
 

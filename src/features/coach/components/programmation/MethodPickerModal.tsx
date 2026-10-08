@@ -3,7 +3,7 @@ import { C } from "@/lib/theme"
 import { X } from "lucide-react"
 import type { TrainingMethod } from "@/types/trainingMethods"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 
 interface MethodPickerModalProps {

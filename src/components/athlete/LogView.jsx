@@ -25,7 +25,7 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
   const done=rows.filter(r=>r.done||r.skipped).length;const note=athleteNotes?.[storeKey]||"";
   const iS={background:C.s1,color:C.tx,border:"1px solid "+C.brdL,fontFamily:"inherit",fontSize:13,fontWeight:700,textAlign:"center",borderRadius:6,padding:"4px 2px",width:"100%"};
   const rowLabel=r=>{if(r.type==="drop")return"Drop "+r.dropIdx;if(r.type==="activation")return"Activ.";if(r.type==="mini")return"Mini "+r.idx;if(r.type==="round")return"Rd "+r.idx;if(r.type==="amrap")return"AMRAP";if(r.type==="iso")return"Pos."+r.idx;if(r.type==="cluster")return"S"+r.setIdx+" C"+r.clusterIdx;return r.setIdx?"Set "+r.setIdx:"Set";};
-  const rowC=r=>{if(r.type==="drop")return C.o;if(r.type==="activation")return C.g;if(r.type==="mini")return C.ac+"80";if(r.type==="round")return C.r;if(r.type==="amrap")return C.b;if(r.type==="iso")return C.tx2;if(r.type==="cluster")return"#C060D0";return C.tx3;};
+  const rowC=r=>{if(r.type==="drop")return C.o;if(r.type==="activation")return C.g;if(r.type==="mini")return C.ac+"80";if(r.type==="round")return C.r;if(r.type==="amrap")return C.b;if(r.type==="iso")return C.tx2;if(r.type==="cluster")return"#B48EA0";return C.tx3;};
   return(<div>
     {planned?.repsRange&&<div style={{padding:"6px 10px",borderRadius:7,background:C.acS,border:"1px solid "+C.ac+"30",marginBottom:10,fontSize:11,color:C.ac}}>Cible: {planned.repsRange} reps</div>}
     {isUnilateral&&<div style={{display:"grid",gridTemplateColumns:"40px 1fr 1fr",gap:4,marginBottom:4,padding:"3px 8px"}}><span/><div style={{fontSize:9,fontWeight:700,color:C.tx3,textAlign:"center"}}>DROIT</div><div style={{fontSize:9,fontWeight:700,color:C.tx3,textAlign:"center"}}>GAUCHE</div></div>}
@@ -59,8 +59,8 @@ function SmartSetEditor({planned,storeKey,sessionSets,updateSets,athleteNotes,se
       const showPause=((r.type==="round"||r.type==="mini")&&i<rows.length-1&&rows[i+1]?.type===r.type)||(isCluster&&!r.isLast&&i<rows.length-1&&rows[i+1]?.type==="cluster");
       const delCol=postSession&&!viewOnly?" 24px":"";
       const isUni=isUnilateral&&!isIso&&!isAmrap&&!isDrop&&!isMini&&!isCluster;
-      const rowBg=r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#C060D008":C.s2;
-      const rowBrd=r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#C060D030":C.brd;
+      const rowBg=r.done?C.g+"10":r.skipped?C.tx3+"08":isDrop?C.o+"08":isMini?C.ac+"08":isCluster?"#B48EA008":C.s2;
+      const rowBrd=r.done?C.g+"30":r.skipped?C.tx3+"20":isDrop?C.o+"20":isMini?C.ac+"20":isCluster?"#B48EA030":C.brd;
       if(isUni){
         return(<div key={i}><div style={{display:"grid",gridTemplateColumns:"40px 1fr 1fr "+((!isAmrap&&showRIR)?"44px ":"")+"28px 28px"+delCol,gap:4,alignItems:"center",marginBottom:4,padding:"6px 8px",borderRadius:8,background:rowBg,border:"1px solid "+rowBrd,opacity:r.skipped?0.5:1,transition:"all 0.2s"}}>
           <span style={{fontSize:9,color:rowC(r),fontWeight:600,textAlign:"center"}}>{rowLabel(r)}</span>

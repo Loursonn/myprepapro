@@ -40,7 +40,7 @@ function relWeekLabel(offset: number): string {
   return `S${offset}`;
 }
 
-const FALLBACK_COLORS = ["#7B6FFF","#8b5cf6","#F5A623","#3B8DF0","#22C993","#FB923C"];
+const FALLBACK_COLORS = ["#C9A14A","#8b5cf6","#F5A623","#7E9CA8","#9DB06A","#D99A3E"];
 
 function buildBlocMap(session: { blocs?: BlocMeta[] } | undefined, exercises: Exercise[]): BlocMap {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,7 +121,7 @@ function LeftExoBlock({
         </span>
         <span style={{
           fontSize: 10, fontWeight: 800,
-          color: hasSets ? "#22C993" : "#FB923C",
+          color: hasSets ? "#9DB06A" : "#D99A3E",
         }}>
           {hasSets ? "✓" : "✗"}
         </span>
@@ -132,8 +132,8 @@ function LeftExoBlock({
         <div style={{
           marginLeft: 14, marginBottom: 5,
           padding: "5px 8px", borderRadius: 6,
-          background: "#7B6FFF12", border: `1px solid #7B6FFF25`,
-          fontSize: 10, color: "#7B6FFF", fontStyle: "italic", lineHeight: 1.4,
+          background: "#C9A14A12", border: `1px solid #C9A14A25`,
+          fontSize: 10, color: "#C9A14A", fontStyle: "italic", lineHeight: 1.4,
         }}>
           <span style={{ fontSize: 8, fontWeight: 700, display: "block", marginBottom: 2, opacity: 0.8 }}>
             CONSIGNE COACH
@@ -203,8 +203,8 @@ function LeftExoBlock({
         <div style={{
           marginLeft: 14, marginTop: 6,
           padding: "5px 8px", borderRadius: 6,
-          background: "#3B8DF012", border: `1px solid #3B8DF025`,
-          fontSize: 10, color: "#3B8DF0", fontStyle: "italic", lineHeight: 1.4,
+          background: "#7E9CA812", border: `1px solid #7E9CA825`,
+          fontSize: 10, color: "#7E9CA8", fontStyle: "italic", lineHeight: 1.4,
         }}>
           <span style={{ fontSize: 8, fontWeight: 700, display: "block", marginBottom: 2, opacity: 0.8 }}>
             NOTE ATHLÈTE
@@ -254,18 +254,18 @@ function LeftColumn({
       {missedWeekLabel && (
         <div style={{
           padding: "7px 14px",
-          background: "linear-gradient(90deg, #FB923C18 0%, #FB923C08 100%)",
-          borderBottom: `1px solid #FB923C30`,
-          borderLeft: `3px solid #FB923C`,
+          background: "linear-gradient(90deg, #D99A3E18 0%, #D99A3E08 100%)",
+          borderBottom: `1px solid #D99A3E30`,
+          borderLeft: `3px solid #D99A3E`,
           display: "flex", alignItems: "center", gap: 8,
           flexShrink: 0,
         }}>
           <span style={{ fontSize: 14 }}>⚠️</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: "#FB923C", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: "#D99A3E", textTransform: "uppercase", letterSpacing: "0.4px" }}>
               Séance manquée — {missedWeekLabel}
             </div>
-            <div style={{ fontSize: 9, color: "#FB923C99", marginTop: 1 }}>
+            <div style={{ fontSize: 9, color: "#D99A3E99", marginTop: 1 }}>
               Affichage de la dernière séance réalisée
             </div>
           </div>
@@ -281,28 +281,28 @@ function LeftColumn({
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
           <span style={{
             fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
-            background: isDone ? "#22C99318" : "rgba(255,255,255,0.06)",
-            color: isDone ? "#22C993" : C.tx3,
-            border: `1px solid ${isDone ? "#22C99340" : "rgba(255,255,255,0.1)"}`,
+            background: isDone ? "#9DB06A18" : "rgba(255,255,255,0.06)",
+            color: isDone ? "#9DB06A" : C.tx3,
+            border: `1px solid ${isDone ? "#9DB06A40" : "rgba(255,255,255,0.1)"}`,
           }}>
             {isDone ? "✓ Dernière réalisée" : "Réalisé athlète"}
           </span>
-          <span style={{ fontSize: 10, color: isDone ? "#22C993" : C.tx3 }}>{weekLabel}</span>
+          <span style={{ fontSize: 10, color: isDone ? "#9DB06A" : C.tx3 }}>{weekLabel}</span>
         </div>
         {/* Wellness pills */}
         {!isFirstWeek && workoutLog && (
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
             {workoutLog.rpe_score != null && (
-              <Pill label="RPE" value={`${workoutLog.rpe_score}/10`} color="#A855F7" />
+              <Pill label="RPE" value={`${workoutLog.rpe_score}/10`} color="#C9A14A" />
             )}
             {wellness?.fatigue != null && (
-              <Pill label="Fatigue" value={`${wellness.fatigue}/10`} color="#FB923C" />
+              <Pill label="Fatigue" value={`${wellness.fatigue}/10`} color="#D99A3E" />
             )}
             {(wellness?.sleepDur ?? wellness?.sommeil) != null && (
               <Pill
                 label="Sommeil"
                 value={`${wellness?.sleepDur ?? wellness?.sommeil}h`}
-                color="#3B8DF0"
+                color="#7E9CA8"
               />
             )}
           </div>
@@ -374,9 +374,9 @@ function LeftColumn({
             <div style={{ marginTop: 8 }}>
               <span style={{
                 fontSize: 9, padding: "2px 8px", borderRadius: 20, fontWeight: 700,
-                background: workoutLog.status === "completed" ? "#22C99318" : workoutLog.status === "missed" || workoutLog.status === "skipped" ? "#FB923C18" : "rgba(255,255,255,0.04)",
-                color: workoutLog.status === "completed" ? "#22C993" : workoutLog.status === "missed" || workoutLog.status === "skipped" ? "#FB923C" : C.tx3,
-                border: `1px solid ${workoutLog.status === "completed" ? "#22C99340" : workoutLog.status === "missed" || workoutLog.status === "skipped" ? "#FB923C40" : "rgba(255,255,255,0.08)"}`,
+                background: workoutLog.status === "completed" ? "#9DB06A18" : workoutLog.status === "missed" || workoutLog.status === "skipped" ? "#D99A3E18" : "rgba(255,255,255,0.04)",
+                color: workoutLog.status === "completed" ? "#9DB06A" : workoutLog.status === "missed" || workoutLog.status === "skipped" ? "#D99A3E" : C.tx3,
+                border: `1px solid ${workoutLog.status === "completed" ? "#9DB06A40" : workoutLog.status === "missed" || workoutLog.status === "skipped" ? "#D99A3E40" : "rgba(255,255,255,0.08)"}`,
               }}>
                 {workoutLog.status === "completed" ? "✓ Complétée"
                   : workoutLog.status === "missed" || workoutLog.status === "skipped" ? "✗ Manquée"
@@ -603,7 +603,7 @@ export function WorkoutSplitModal({
 
   if (!open) return null;
 
-  const navBadgeColor = isPast ? C.tx3 : rightWeekIndex === currentWeekIndex ? "#7B6FFF" : C.tx3;
+  const navBadgeColor = isPast ? C.tx3 : rightWeekIndex === currentWeekIndex ? "#C9A14A" : C.tx3;
 
   return (
     <div style={{
@@ -712,14 +712,14 @@ export function WorkoutSplitModal({
 
           {/* Main label */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 9, fontWeight: 600, color: "#7B6FFF", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 3 }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: "#C9A14A", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 3 }}>
               Semaine à planifier
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               {/* Relative week badge */}
               <span style={{
                 fontSize: 15, fontWeight: 800,
-                color: isPast ? C.tx3 : "#7B6FFF",
+                color: isPast ? C.tx3 : "#C9A14A",
               }}>
                 {rightRelLabel}
               </span>
@@ -736,8 +736,8 @@ export function WorkoutSplitModal({
               {leftIsMissed && (
                 <span style={{
                   fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 20,
-                  background: "#FB923C18", color: "#FB923C",
-                  border: `1px solid #FB923C40`,
+                  background: "#D99A3E18", color: "#D99A3E",
+                  border: `1px solid #D99A3E40`,
                   textTransform: "uppercase", letterSpacing: "0.4px",
                 }}>
                   ⚠ Séance manquée
@@ -776,9 +776,9 @@ export function WorkoutSplitModal({
           {(["left", "right"] as const).map(t => (
             <button key={t} onClick={() => setMobileTab(t)} style={{
               flex: 1, padding: "8px 4px", border: "none",
-              borderBottom: `2px solid ${mobileTab === t ? "#7B6FFF" : "transparent"}`,
+              borderBottom: `2px solid ${mobileTab === t ? "#C9A14A" : "transparent"}`,
               background: "transparent",
-              color: mobileTab === t ? "#7B6FFF" : C.tx3,
+              color: mobileTab === t ? "#C9A14A" : C.tx3,
               fontSize: 10, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit", textTransform: "uppercase" as const,
             }}>
@@ -796,7 +796,7 @@ export function WorkoutSplitModal({
             style={{
               width: "40%", minWidth: 0, flexShrink: 0,
               borderRight: leftIsDone
-                ? `1px solid #22C99330`
+                ? `1px solid #9DB06A30`
                 : `0.5px solid rgba(255,255,255,0.08)`,
               overflow: "hidden", display: "flex", flexDirection: "column",
               position: "relative",
@@ -824,9 +824,9 @@ export function WorkoutSplitModal({
                 zIndex: 10,
                 width: 28, height: 28, borderRadius: "50%",
                 background: "#13121A",
-                border: `1px solid #22C99340`,
+                border: `1px solid #9DB06A40`,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, color: "#22C993",
+                fontSize: 13, color: "#9DB06A",
                 pointerEvents: "none",
               }}>→</div>
             )}
@@ -856,8 +856,8 @@ export function WorkoutSplitModal({
                 if (isNextAfterDone) return (
                   <span style={{
                     fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
-                    background: "#7B6FFF22", color: "#7B6FFF",
-                    border: `1px solid #7B6FFF50`,
+                    background: "#C9A14A22", color: "#C9A14A",
+                    border: `1px solid #C9A14A50`,
                     display: "flex", alignItems: "center", gap: 4,
                   }}>
                     <span style={{ fontSize: 11 }}>→</span> Prochaine à planifier
@@ -866,8 +866,8 @@ export function WorkoutSplitModal({
                 return (
                   <span style={{
                     fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 20,
-                    background: "#7B6FFF18", color: "#7B6FFF",
-                    border: `1px solid #7B6FFF30`,
+                    background: "#C9A14A18", color: "#C9A14A",
+                    border: `1px solid #C9A14A30`,
                   }}>
                     {rightWeekIndex === currentWeekIndex ? "À planifier · actuelle" : "À planifier"}
                   </span>
@@ -900,7 +900,7 @@ export function WorkoutSplitModal({
                 </span>
                 <button onClick={handleDuplicate} style={{
                   padding: "6px 16px", borderRadius: 7, border: "none",
-                  background: "#7B6FFF", color: "#fff",
+                  background: "#C9A14A", color: "#fff",
                   fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                 }}>
                   Confirmer
@@ -930,7 +930,7 @@ export function WorkoutSplitModal({
                 {!isPast && (
                   <button onClick={() => { toast.success(`S${rightWeekIndex} enregistrée`); onClose(); }} style={{
                     padding: "6px 20px", borderRadius: 7, border: "none",
-                    background: "#7B6FFF", color: "#fff",
+                    background: "#C9A14A", color: "#fff",
                     fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                   }}>
                     Enregistrer S{rightWeekIndex}

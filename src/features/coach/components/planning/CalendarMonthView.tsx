@@ -59,9 +59,9 @@ function findCurrentCycleId(cycles: Array<{ id: string; start_date: string; end_
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-const FREE_COLOR    = "#0D9488";
-const TEST_COLOR    = "#C49A6C";
-const BIO_COLOR     = "#22C993";
+const FREE_COLOR    = "#7FA88E";   // patine (DA)
+const TEST_COLOR    = "#A67C52";   // bronze (DA)
+const BIO_COLOR     = "#9DB06A";   // olivier (DA)
 const BIO_BANK_ID   = "bio-mensurations";
 const BIO_TITLE     = "Mensurations / Photos";
 
@@ -70,7 +70,7 @@ function isBiometric(event: CalEvent): boolean {
 }
 
 function energyChipColor(_event: CalEvent): string {
-  return C.o;
+  return C.b;  // ardoise — distinct from muscu (or)
 }
 
 // Le curseur décide du jour ciblé, pas le rectangle de la vignette déplacée :
@@ -83,18 +83,18 @@ const dayCollisionDetection: CollisionDetection = (args) => {
 };
 
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
-  workout:       C.ac,
-  test:          TEST_COLOR,
-  competition:   C.coach,
-  energy:        C.o,
-  free_activity: FREE_COLOR,
+  workout:       C.ac,            // or — muscu
+  test:          TEST_COLOR,      // bronze — tests
+  competition:   C.r,             // terracotta — compétitions
+  energy:        C.b,             // ardoise — énergie
+  free_activity: FREE_COLOR,      // patine — activités libres
 };
 
 const TYPE_BG: Record<CalEvent["type"], string> = {
   workout:       C.acS,
   test:          TEST_COLOR + "20",
-  competition:   C.coachS,
-  energy:        C.oS,
+  competition:   C.rS,
+  energy:        C.bS,
   free_activity: FREE_COLOR + "20",
 };
 
@@ -125,11 +125,11 @@ function EventChip({
 
   // Status overrides base type color — partial takes priority over completed
   const isPartialEnergy = event.type === "energy" && event.partial;
-  const color = isPartialEnergy     ? "#3B8DF0"
+  const color = isPartialEnergy     ? "#7E9CA8"
               : st === "completed"  ? C.g
               : st === "missed"     ? C.r
               : baseColor;
-  const bg    = isPartialEnergy     ? "#3B8DF020"
+  const bg    = isPartialEnergy     ? "#7E9CA820"
               : st === "completed"  ? C.gS
               : st === "missed"     ? C.rS
               : baseBg;
@@ -268,8 +268,8 @@ function DraggableSession({
   sessionType: BankItemType;
   isDragging: boolean;
 }) {
-  const color  = sessionType === "energy" ? "#A855F7" : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : sessionType === "biometric" ? BIO_COLOR : C.ac;
-  const colorS = sessionType === "energy" ? "#A855F720" : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : sessionType === "biometric" ? BIO_COLOR + "20" : C.acS;
+  const color  = sessionType === "energy" ? C.b : sessionType === "specifique" ? "#F5A623" : sessionType === "test" ? TEST_COLOR : sessionType === "biometric" ? BIO_COLOR : C.ac;
+  const colorS = sessionType === "energy" ? C.bS : sessionType === "specifique" ? "#F5A62320" : sessionType === "test" ? TEST_COLOR + "20" : sessionType === "biometric" ? BIO_COLOR + "20" : C.acS;
 
   // Idem : le fantôme est rendu par <DragOverlay>, la vignette source reste en place.
   const { attributes, listeners, setNodeRef } = useDraggable({
@@ -444,7 +444,7 @@ function DroppableDay({
 // ── Session bank sidebar ──────────────────────────────────────────────────────
 
 const ENERGY_KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
 const ENERGY_KIND_LABEL: Record<string, string> = {
@@ -455,8 +455,8 @@ const ENERGY_KIND_LABEL: Record<string, string> = {
 type BankTab = "workout" | "energy" | "specifique" | "tests";
 
 const BANK_TABS: { key: BankTab; label: string; Icon: typeof Dumbbell; color: string }[] = [
-  { key: "workout",    label: "Muscu",      Icon: Dumbbell,     color: "#7B6FFF" },
-  { key: "energy",     label: "Énergie",    Icon: Zap,          color: "#A855F7" },
+  { key: "workout",    label: "Muscu",      Icon: Dumbbell,     color: "#C9A14A" },
+  { key: "energy",     label: "Énergie",    Icon: Zap,          color: "#C9A14A" },
   { key: "specifique", label: "Spécifique", Icon: Target,       color: "#F5A623" },
   { key: "tests",      label: "Tests",      Icon: FlaskConical, color: TEST_COLOR },
 ];
@@ -590,7 +590,7 @@ function PlanningBank({
         {tab === "energy" && (
           filteredEnergy.length === 0 ? empty("Aucune séance énergétique") :
           filteredEnergy.map((s) => {
-            const kc = ENERGY_KIND_COLOR[s.session_kind] ?? "#A855F7";
+            const kc = ENERGY_KIND_COLOR[s.session_kind] ?? "#C9A14A";
             return (
               <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <DraggableSession session={{ id: s.id, name: s.name }} sessionType="energy" isDragging={activeDragId === s.id} />
@@ -1008,7 +1008,7 @@ export function CalendarMonthView({
               <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 4, flexWrap: "wrap" }}>
                 {[
                   { label: "Séance",  color: C.ac      },
-                  { label: "Énergie", color: "#A855F7"  },
+                  { label: "Énergie", color: "#C9A14A"  },
                   { label: "Test",    color: C.o        },
                   { label: "Compét",  color: C.coach    },
                 ].map(({ label, color }) => (
@@ -1193,7 +1193,7 @@ export function CalendarMonthView({
             >
               {[
                 { label: "Séances",      count: events.filter((e) => e.type === "workout").length,     color: C.ac       },
-                { label: "Énergie",      count: events.filter((e) => e.type === "energy").length,      color: "#A855F7"  },
+                { label: "Énergie",      count: events.filter((e) => e.type === "energy").length,      color: "#C9A14A"  },
                 { label: "Complétées",   count: events.filter((e) => e.status === "completed").length, color: C.g        },
                 { label: "Manquées",     count: events.filter((e) => e.status === "missed").length,    color: C.r        },
                 { label: "Tests",        count: events.filter((e) => e.type === "test").length,        color: C.o        },
@@ -1237,11 +1237,11 @@ export function CalendarMonthView({
           <div
             style={{
               padding: "7px 10px", borderRadius: 8,
-              border: "1px solid " + (activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac) + "60",
-              background: activeDragIsEnergy ? "#A855F7" : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac,
+              border: "1px solid " + (activeDragIsEnergy ? C.b : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac) + "60",
+              background: activeDragIsEnergy ? C.b : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac,
               color: "#fff",
               fontSize: 11, fontWeight: 600,
-              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(168,85,247,0.4)" : activeDragIsTest ? "rgba(196,154,108,0.4)" : activeDragIsBio ? "rgba(34,201,147,0.4)" : "rgba(59,141,240,0.4)"}`,
+              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(126,156,168,0.4)" : activeDragIsTest ? "rgba(166,124,82,0.4)" : activeDragIsBio ? "rgba(157,176,106,0.4)" : "rgba(201,161,74,0.4)"}`,
               pointerEvents: "none",
               display: "flex", alignItems: "center", gap: 6,
             }}

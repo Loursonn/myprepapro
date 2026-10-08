@@ -2,7 +2,7 @@ import { useState } from "react"
 import { C } from "@/lib/theme"
 import type { ProgSession } from "./types"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]

@@ -208,7 +208,7 @@ export function MethodPickerDialog({ setsCount, onAttach, onClose }: MethodPicke
                     </div>
                     {((selected.config as Record<string, unknown>)?.weekly_configs as FullWeekConfig[]).map((wc) => (
                       <div key={wc.week} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "#7B6FFF", flexShrink: 0, minWidth: 24 }}>S{wc.week}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#C9A14A", flexShrink: 0, minWidth: 24 }}>S{wc.week}</span>
                         <span style={{ fontSize: 11, color: C.tx2, fontFamily: "monospace" }}>
                           {wc.config ? methodConfigToText(wc.config as MethodConfig) : "—"}
                         </span>

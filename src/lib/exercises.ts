@@ -61,11 +61,11 @@ export const fuzzyExMatch = (a: string, b: string): boolean => {
 // ── Methods ───────────────────────────────────────────────────────────────────
 
 export const DEF_METHODS = {
-  myoreps:     { label: "Myoreps",   c: "#7B6FFF", e: "MR" },
+  myoreps:     { label: "Myoreps",   c: "#C9A14A", e: "MR" },
   dropset:     { label: "Dropset",   c: "#F5A623", e: "DS" },
-  restpause:   { label: "Restpause", c: "#EF4B4B", e: "RP" },
-  cluster:     { label: "Cluster",   c: "#C060D0", e: "CL" },
-  amrap:       { label: "AMRAP",     c: "#3B8DF0", e: "AM" },
+  restpause:   { label: "Restpause", c: "#D9705A", e: "RP" },
+  cluster:     { label: "Cluster",   c: "#B48EA0", e: "CL" },
+  amrap:       { label: "AMRAP",     c: "#7E9CA8", e: "AM" },
   isometrique: { label: "IsoMax",    c: "#9194A0", e: "ISO" },
 } as const;
 
@@ -80,9 +80,9 @@ export const BLOC_METHODS = [
 
 export const EVENT_TYPES = [
   { v: "competition", l: "Compétition", e: "🏆", c: "#F5A623" },
-  { v: "match",       l: "Match",        e: "⚽", c: "#EF4B4B" },
-  { v: "stage",       l: "Stage",        e: "🏕", c: "#7B6FFF" },
-  { v: "off",         l: "Récup/Off",    e: "🔄", c: "#22C993" },
+  { v: "match",       l: "Match",        e: "⚽", c: "#D9705A" },
+  { v: "stage",       l: "Stage",        e: "🏕", c: "#C9A14A" },
+  { v: "off",         l: "Récup/Off",    e: "🔄", c: "#9DB06A" },
   { v: "autre",       l: "Autre",        e: "📌", c: "#9194A0" },
 ];
 

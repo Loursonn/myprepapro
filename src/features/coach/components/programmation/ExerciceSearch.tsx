@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { Search, Plus } from "lucide-react"
 import { EX_TYPES, exTypeLabel, exTypeColor } from "@/lib/exerciseTypes"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 
 interface ExerciceSearchProps {
   value: string

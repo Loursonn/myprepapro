@@ -11,13 +11,13 @@ import {
 import { localISO } from "@/lib/date";
 
 const C = {
-  bg: "#08090C", s1: "#111318", s2: "#181B24",
+  bg: "#15120F", s1: "#1E1A16", s2: "#27221D",
   brd: "rgba(255,255,255,0.06)", brdL: "rgba(255,255,255,0.1)",
   tx: "#F2F2F4", tx2: "#9194A0", tx3: "#555866",
-  ac: "#7B6FFF", acS: "rgba(123,111,255,0.12)",
-  coach: "#D4538E", coachS: "rgba(212,83,142,0.12)",
-  g: "#22C993", gS: "rgba(34,201,147,0.1)",
-  r: "#EF4B4B", b: "#3B8DF0", o: "#F5A623",
+  ac: "#C9A14A", acS: "rgba(123,111,255,0.12)",
+  coach: "#C9A14A", coachS: "rgba(212,83,142,0.12)",
+  g: "#9DB06A", gS: "rgba(34,201,147,0.1)",
+  r: "#D9705A", b: "#7E9CA8", o: "#F5A623",
 };
 
 const NAP_OPTIONS = [

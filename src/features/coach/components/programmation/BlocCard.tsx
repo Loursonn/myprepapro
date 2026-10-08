@@ -14,11 +14,11 @@ import { defaultExerciceParams } from "./types"
 import { BlocForm } from "./BlocForm"
 import { ExerciceRow } from "./ExerciceRow"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 
 const BLOC_PALETTE = [
-  "#7B6FFF", "#F97316", "#22C55E", "#EF4444",
+  "#C9A14A", "#F97316", "#22C55E", "#EF4444",
   "#3B9EFF", "#FACC15", "#EC4899", "#14B8A6",
 ]
 

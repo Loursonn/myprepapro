@@ -269,7 +269,7 @@ export default function SpecificCatalog() {
                 Toutes
               </button>
               {qualitiesInSport.map((q) => (
-                <button key={q.id} onClick={() => setSelectedQuality(q.id)} style={chip(selectedQuality === q.id, "#7B6FFF")}>
+                <button key={q.id} onClick={() => setSelectedQuality(q.id)} style={chip(selectedQuality === q.id, "#C9A14A")}>
                   {q.name}
                 </button>
               ))}

@@ -7,7 +7,7 @@ import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { localISO } from "@/lib/date";
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 
 interface RmDrawerProps {
   open: boolean

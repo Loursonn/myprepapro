@@ -55,8 +55,8 @@ function ReadinessCircle({ score, color }: { score: number; color: string }) {
       <svg width={136} height={136} viewBox="0 0 136 136" style={{ transform: "rotate(-90deg)" }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#A855F7" />
-            <stop offset="100%" stopColor="#F472B6" />
+            <stop offset="0%" stopColor="#C9A14A" />
+            <stop offset="100%" stopColor="#C9A14A" />
           </linearGradient>
         </defs>
         <circle cx={68} cy={68} r={r} fill="none" stroke="rgba(124,116,128,0.2)" strokeWidth={10} />
@@ -75,7 +75,7 @@ function ReadinessCircle({ score, color }: { score: number; color: string }) {
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
       }}>
-        <div style={{ fontSize: 30, fontWeight: 900, color: useGradient ? "#A855F7" : color, lineHeight: 1 }}>{score}</div>
+        <div style={{ fontSize: 30, fontWeight: 900, color: useGradient ? "#C9A14A" : color, lineHeight: 1 }}>{score}</div>
         <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>/ 100</div>
       </div>
     </div>
@@ -343,7 +343,7 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByD
   const dayFreeActivities = freeSessions.filter((f) => f.date === day.date && f.sport);
 
   const ENERGY_KIND_COLOR: Record<string, string> = {
-    vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+    vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
     footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280",
   };
   const ENERGY_KIND_LABEL: Record<string, string> = {
@@ -447,7 +447,7 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByD
 
               {/* Séances énergie */}
               {dayEnergySessions.map((ev) => {
-                const kc = ENERGY_KIND_COLOR[ev.sessionKind ?? ""] ?? "#A855F7";
+                const kc = ENERGY_KIND_COLOR[ev.sessionKind ?? ""] ?? "#C9A14A";
                 const kl = ENERGY_KIND_LABEL[ev.sessionKind ?? ""] ?? ev.sessionKind ?? "Énergie";
                 const isDone = ev.status === "completed";
                 return (
@@ -476,10 +476,10 @@ function DayPreviewSheet({ day, onClose, onStartSession, freeSessions, energyByD
 
               {/* Tests */}
               {day.tests.map((t) => {
-                const tc = t.type === "musculation" ? "#7B6FFF"
-                  : t.type === "energetique" ? "#EF4B4B"
+                const tc = t.type === "musculation" ? "#C9A14A"
+                  : t.type === "energetique" ? "#D9705A"
                   : t.type === "specifique" ? "#F5A623"
-                  : "#22C993";
+                  : "#9DB06A";
                 return (
                   <button
                     key={t.id}
@@ -931,7 +931,7 @@ export default function TodayPage() {
     setShowWellness, freeSessions, setFreeSessions,
     nutritionStrategy, nutritionLog,
     athleteProfile: profile,
-    viewOnly,
+    viewOnly, coachFeedbacks,
   } = useAthleteContext();
 
   const wellness        = useTodayWellness();
@@ -1090,6 +1090,15 @@ export default function TodayPage() {
     : avgFormeScore >= 45 ? "Correcte"
     : "À surveiller";
 
+  // Recent coach feedback (14 days)
+  const recentFb = useMemo(() => {
+    if (!coachFeedbacks) return null;
+    return Object.entries(coachFeedbacks)
+      .map(([w, fb]: [string, any]) => ({ week: Number(w), ...fb }))
+      .filter((fb: any) => fb.note && fb.date && Date.now() - new Date(fb.date).getTime() <= 14 * 86_400_000)
+      .sort((a: any, b: any) => (a.date < b.date ? 1 : -1))[0] ?? null;
+  }, [coachFeedbacks]);
+
   return (
     <>
       <div
@@ -1164,6 +1173,32 @@ export default function TodayPage() {
             </button>
           )}
         </div>
+
+        {/* Section 1a — Message du coach */}
+        {recentFb && (
+          <button
+            onClick={() => { navigate("coach-feedback"); haptic(); }}
+            style={{
+              width: "100%", marginBottom: 20, padding: "13px 16px",
+              background: C.s1, borderRadius: 16,
+              border: "1px solid " + C.coach + "40",
+              cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.coach }}>Retour du coach</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 9, color: C.tx3 }}>{new Date(recentFb.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+                <span style={{ fontSize: 11, color: C.coach }}>›</span>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.55, fontStyle: "italic", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const }}>
+              "{recentFb.note}"
+            </div>
+          </button>
+        )}
 
         {/* Section 1b — Nutrition du jour */}
         {todayNutrition && (() => {
@@ -1244,7 +1279,7 @@ export default function TodayPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {todayTests.map((t) => {
                 const bio = t.type === "biometric";
-                const tc = t.completed ? C.g : bio ? "#22C993" : C.ac;
+                const tc = t.completed ? C.g : bio ? "#9DB06A" : C.ac;
                 return (
                   <button
                     key={t.id}
@@ -1269,7 +1304,7 @@ export default function TodayPage() {
 
         {/* Section 2 — Séance du jour */}
         {(() => {
-          const EKC: Record<string, string> = { vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B", footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280" };
+          const EKC: Record<string, string> = { vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B", footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280" };
           const EKL: Record<string, string> = { vo2: "VO₂", tempo: "Tempo", seuil: "Seuil", footing: "Footing", fartlek: "Fartlek", specifique: "Spécifique", autre: "Autre", custom: "Custom" };
 
           const pendingWorkouts = workouts.filter(w => !w.isCompleted);
@@ -1334,7 +1369,7 @@ export default function TodayPage() {
 
                   {/* Energy en attente */}
                   {pendingEnergy.map((ev) => {
-                    const kc = EKC[ev.sessionKind ?? ""] ?? "#A855F7";
+                    const kc = EKC[ev.sessionKind ?? ""] ?? "#C9A14A";
                     const kl = EKL[ev.sessionKind ?? ""] ?? ev.sessionKind ?? "Énergie";
                     return (
                       <button
@@ -1363,7 +1398,7 @@ export default function TodayPage() {
           <div style={{
             marginBottom: 12, padding: "8px 14px", borderRadius: 10,
             background: "rgba(59,141,240,0.1)", border: "1px solid rgba(59,141,240,0.3)",
-            fontSize: 12, fontWeight: 600, color: "#3B8DF0",
+            fontSize: 12, fontWeight: 600, color: "#7E9CA8",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             ℹ️ {todayActivePlanSessions.length} séances prévues aujourd'hui
@@ -1503,7 +1538,7 @@ export default function TodayPage() {
                         key={s.session.id}
                         style={{
                           width: 5, height: 5, borderRadius: "50%",
-                          background: s.isCompleted ? "#22C993" : C.coach,
+                          background: s.isCompleted ? "#9DB06A" : C.coach,
                         }}
                       />
                     ))}
@@ -1512,7 +1547,7 @@ export default function TodayPage() {
                         key={ev.id}
                         style={{
                           width: 5, height: 5, borderRadius: "50%",
-                          background: ev.status === "completed" ? "#22C993" : "#A855F7",
+                          background: ev.status === "completed" ? "#9DB06A" : "#C9A14A",
                         }}
                       />
                     ))}
@@ -1521,7 +1556,7 @@ export default function TodayPage() {
                         key={t.id}
                         style={{
                           width: 5, height: 5, borderRadius: "50%",
-                          background: t.completed ? "#22C993" : C.ac,
+                          background: t.completed ? "#9DB06A" : C.ac,
                         }}
                       />
                     ))}
@@ -1530,14 +1565,14 @@ export default function TodayPage() {
                         key={f.id}
                         style={{
                           width: 5, height: 5, borderRadius: "50%",
-                          background: "#22C993",
+                          background: "#9DB06A",
                         }}
                       />
                     ))}
                   </div>
                   {/* "Repos" label or done check */}
                   {allDone ? (
-                    <div style={{ fontSize: 8, color: "#22C993", fontWeight: 700 }}>✓</div>
+                    <div style={{ fontSize: 8, color: "#9DB06A", fontWeight: 700 }}>✓</div>
                   ) : !hasSess && !hasTest && dayFree.length === 0 ? (
                     <div style={{ fontSize: 8, color: C.tx3 }}>—</div>
                   ) : null}

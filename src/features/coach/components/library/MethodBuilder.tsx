@@ -32,7 +32,7 @@ type FormValues = z.infer<typeof schema>;
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 const GREEN  = "#22c55e"
 const GREEN_S  = "rgba(34,197,94,0.10)"

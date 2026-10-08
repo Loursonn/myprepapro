@@ -24,7 +24,7 @@ export default function SessionEndForm({ onSubmit, isPending }: Props) {
 
   return (
     <div style={{
-      background: "var(--card, #1D1C1E)", border: "1px solid var(--border, #2E2D33)",
+      background: "var(--card, #15120F)", border: "1px solid var(--border, #2E2D33)",
       borderRadius: 16, padding: 18,
     }}>
       {/* RPE */}
@@ -62,8 +62,8 @@ export default function SessionEndForm({ onSubmit, isPending }: Props) {
             onClick={() => setRespected(true)}
             style={{
               background: respected === true ? "rgba(34,201,147,0.1)" : "var(--card2, #26252A)",
-              border: `1px solid ${respected === true ? "#22C993" : "var(--border, #2E2D33)"}`,
-              color: respected === true ? "#22C993" : "#8B8A92",
+              border: `1px solid ${respected === true ? "#9DB06A" : "var(--border, #2E2D33)"}`,
+              color: respected === true ? "#9DB06A" : "#8B8A92",
               borderRadius: 10, padding: 10, fontWeight: 600,
               cursor: "pointer", fontFamily: "inherit",
             }}
@@ -110,7 +110,7 @@ export default function SessionEndForm({ onSubmit, isPending }: Props) {
         onClick={handleSubmit}
         disabled={isPending}
         style={{
-          width: "100%", background: "#22C993", color: "#04150e",
+          width: "100%", background: "#9DB06A", color: "#04150e",
           border: "none", borderRadius: 12, padding: 13,
           fontSize: 15, fontWeight: 700, cursor: "pointer",
           fontFamily: "inherit", opacity: isPending ? 0.7 : 1,

@@ -137,7 +137,7 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
               {quality && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                  background: "#7B6FFF20", color: "#7B6FFF",
+                  background: "#C9A14A20", color: "#C9A14A",
                 }}>
                   {quality.name}
                 </span>
@@ -145,8 +145,8 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
               {/* Format pill */}
               <span style={{
                 fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                background: formatLabel === "Classique" ? "#22C99320" : formatLabel === "Mixte" ? "#A855F720" : ORANGE + "20",
-                color: formatLabel === "Classique" ? "#22C993" : formatLabel === "Mixte" ? "#A855F7" : ORANGE,
+                background: formatLabel === "Classique" ? "#9DB06A20" : formatLabel === "Mixte" ? "#C9A14A20" : ORANGE + "20",
+                color: formatLabel === "Classique" ? "#9DB06A" : formatLabel === "Mixte" ? "#C9A14A" : ORANGE,
               }}>
                 {formatLabel}
               </span>
@@ -187,7 +187,7 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
                   <div key={b.id} style={{
                     background: C.s2, borderRadius: 6, padding: "5px 8px",
                     display: "flex", alignItems: "center", gap: 6,
-                    borderLeft: `2px solid ${wod ? ORANGE : "#22C993"}80`,
+                    borderLeft: `2px solid ${wod ? ORANGE : "#9DB06A"}80`,
                   }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: C.tx2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {b.title || "Bloc"}
@@ -237,7 +237,7 @@ export default function SpecificSessionCard({ session, sport, quality, canEdit, 
             }}
           >
             {actionBtn("Attribuer", C.g, () => setShowAssign(true))}
-            {canEdit && actionBtn("Modifier", "#7B6FFF", handleEdit)}
+            {canEdit && actionBtn("Modifier", "#C9A14A", handleEdit)}
             {actionBtn("Dupliquer", C.tx2, handleDuplicate)}
             {canDelete && actionBtn("Supprimer", C.r, () => setShowConfirmDelete(true))}
           </div>

@@ -9,7 +9,7 @@ import { BlocCard } from "./BlocCard"
 import { useBlocBank, useUpdateBlocBank } from "./hooks/useBlocBank"
 import { CardSkeleton } from "@/features/shared/components/skeletons"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 
 /**
  * Banque de blocs préconstruits du coach.

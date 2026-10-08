@@ -460,7 +460,7 @@ function CoachProgramEditor({exos,setExos,sessions,setSessions,athleteNotes,allM
   const toggleMultiWeek=id=>setMultiWeekExs(prev=>{const n=new Set(prev);if(n.has(id))n.delete(id);else n.add(id);return n;});
   const[expandedMethodWeek,setExpandedMethodWeek]=useState(null);const[exosSearch,setExosSearch]=useState("");const[exosTypeFilter,setExosTypeFilter]=useState("");
   const[copiedSet,setCopiedSet]=useState(null); // { val: number, isRm: boolean }
-  const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#7B6FFF",e:"NEW"});
+  const[newMForm,setNewMForm]=useState(false);const[newM,setNewM]=useState({label:"",c:"#C9A14A",e:"NEW"});
   const dropRef=useRef(null);
   const[showAI,setShowAI]=useState(false);
   const[addForm,setAddForm]=useState(false);

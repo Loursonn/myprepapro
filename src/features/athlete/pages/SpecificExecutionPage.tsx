@@ -29,14 +29,14 @@ import { formatSLong } from "@/lib/energy/formatTarget";
 
 // ── Colors ──────────────────────────────────────────────────────────────────
 const C = {
-  bg: "var(--bg, #08090C)",
-  card: "var(--card, #1D1C1E)",
+  bg: "var(--bg, #15120F)",
+  card: "var(--card, #15120F)",
   border: "var(--border, #2E2D33)",
   tx: "#F2F1F5",
   tx2: "#8B8A92",
   orange: "#F5A623",
-  green: "#22C993",
-  purple: "#7B6FFF",
+  green: "#9DB06A",
+  purple: "#C9A14A",
 };
 
 // ── Classique block preview ─────────────────────────────────────────────────

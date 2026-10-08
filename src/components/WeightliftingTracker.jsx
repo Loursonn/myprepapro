@@ -690,7 +690,7 @@ export default function App({athleteId,defaultMode,canToggleMode=true,userName,a
     <div style={{position:"sticky",top:0,zIndex:20,background:C.bg,borderBottom:"1px solid "+C.brd}}>
       <div style={{padding:"8px "+(mode==="coach"?"16px":"16px")+" 8px",display:"flex",alignItems:"center",justifyContent:"space-between",maxWidth:"none",margin:"0"}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{fontSize:14,fontWeight:700,letterSpacing:"-0.3px"}}>MyPrepaPro</div>
+          <div style={{fontSize:14,fontWeight:700,letterSpacing:"-0.3px"}}>Agon</div>
           {saveStatus&&<div style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:6,background:saveStatus==="saved"?C.gS:C.rS,color:saveStatus==="saved"?C.g:C.r}}>{saveStatus==="saved"?"OK":"Err"}</div>}
           {activeInjuries.length>0&&<div style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:6,background:C.rS,color:C.r}}>{activeInjuries.length} bless.</div>}
           {viewOnly&&mode==="athlete"&&<div style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:6,background:C.coachS,color:C.coach,border:"1px solid "+C.coach+"40"}}>Observation</div>}

@@ -16,7 +16,7 @@ export const MicrocycleCard = memo(function MicrocycleCard({ micro, athleteId }:
 
   return (
     <div
-      className="rounded-lg border border-[#7C7480]/20 bg-[#7C7480]/5 px-3 py-2.5"
+      className="rounded-lg border border-[#7D7468]/20 bg-[#7D7468]/5 px-3 py-2.5"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
@@ -36,17 +36,17 @@ export const MicrocycleCard = memo(function MicrocycleCard({ micro, athleteId }:
       {/* Mini-stats grid */}
       <div className="grid grid-cols-3 gap-1.5">
         {/* Séances */}
-        <div className="rounded-md p-1.5 bg-[#A855F7]/10 border border-[#A855F7]/20">
+        <div className="rounded-md p-1.5 bg-[#C9A14A]/10 border border-[#C9A14A]/20">
           <div className="text-[9px] text-white/40 mb-0.5">Séances</div>
-          <div className="text-sm font-bold text-[#A855F7]">
+          <div className="text-sm font-bold text-[#C9A14A]">
             {stats ? `${stats.completed}/${stats.planned}` : "—"}
           </div>
         </div>
 
         {/* RPE */}
-        <div className="rounded-md p-1.5 bg-[#FB923C]/10 border border-[#FB923C]/20">
+        <div className="rounded-md p-1.5 bg-[#D99A3E]/10 border border-[#D99A3E]/20">
           <div className="text-[9px] text-white/40 mb-0.5">RPE moy.</div>
-          <div className="text-sm font-bold text-[#FB923C]">
+          <div className="text-sm font-bold text-[#D99A3E]">
             {stats?.avg_rpe != null ? stats.avg_rpe.toFixed(1) : "—"}
           </div>
         </div>

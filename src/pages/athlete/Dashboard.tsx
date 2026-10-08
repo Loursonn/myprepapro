@@ -3,11 +3,11 @@ import { useAuth } from "@/hooks/useAuth";
 import WeightliftingTracker from "@/components/WeightliftingTracker.jsx";
 
 const C = {
-  bg: "#08090C", s1: "#111318", s2: "#181B24",
+  bg: "#15120F", s1: "#1E1A16", s2: "#27221D",
   brd: "rgba(255,255,255,0.06)", brdL: "rgba(255,255,255,0.1)",
   tx: "#F2F2F4", tx2: "#9194A0", tx3: "#555866",
-  ac: "#7B6FFF", acS: "rgba(123,111,255,0.12)",
-  g: "#22C993", r: "#EF4B4B",
+  ac: "#C9A14A", acS: "rgba(123,111,255,0.12)",
+  g: "#9DB06A", r: "#D9705A",
 };
 
 export default function AthleteDashboard() {

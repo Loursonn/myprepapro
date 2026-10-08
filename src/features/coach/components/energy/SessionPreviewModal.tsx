@@ -15,17 +15,17 @@ export const KIND_LABEL: Record<string, string> = {
   footing: "Footing", fartlek: "Fartlek", specifique: "Spécifique", autre: "Autre", custom: "Custom",
 };
 export const KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280",
 };
 
 export const ROLE_COLOR: Record<string, string> = {
   warmup:   "#F59E0B",
   work:     "#EF4444",
-  recovery: "#3B8DF0",
+  recovery: "#7E9CA8",
   rest:     "#6B7280",
   cooldown: "#10B981",
-  open:     "#A855F7",
+  open:     "#C9A14A",
 };
 export const ROLE_LABEL_FR: Record<string, string> = {
   warmup:   "Écho",
@@ -99,7 +99,7 @@ export function StepTree({ steps, depth = 0 }: { steps: EnergyStep[]; depth?: nu
         }
         // Exercise
         if (step.type === "exercise") {
-          const exoColor = "#7B6FFF";
+          const exoColor = "#C9A14A";
           const detail = [
             step.reps_min ? (step.reps_max && step.reps_max !== step.reps_min ? `${step.reps_min}-${step.reps_max} reps` : `${step.reps_min} reps`) : null,
             step.weight_kg ? `${step.weight_kg} ${step.weight_unit === "bw" ? "BW" : step.weight_unit === "pct_rm" ? "%RM" : "kg"}` : null,
@@ -163,10 +163,10 @@ function ClassiqueBlockView({ block }: { block: ClassiqueBlock }) {
   return (
     <div style={{
       background: C.s2, border: "1px solid " + C.brd,
-      borderLeft: "3px solid #22C993",
+      borderLeft: "3px solid #9DB06A",
       borderRadius: 9, padding: "10px 12px", marginBottom: 8,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: "#22C993", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#9DB06A", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
         {block.title || "Bloc classique"}
       </div>
       {block.items.map((item) => (
@@ -376,7 +376,7 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
             </button>
           )}
           {onValidate && (
-            <button onClick={onValidate} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", background: "#22C993", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onValidate} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", background: "#9DB06A", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
               Valider la séance ✓
             </button>
           )}

@@ -318,7 +318,7 @@ export default function RetoursPage() {
                             </span>
                           )}
                           {customExCount > 0 && (
-                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: "rgba(59,141,240,0.1)", color: "#3B8DF0", border: "1px solid rgba(59,141,240,0.25)" }}>
+                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: "rgba(59,141,240,0.1)", color: "#7E9CA8", border: "1px solid rgba(59,141,240,0.25)" }}>
                               +{customExCount} exercice{customExCount > 1 ? "s" : ""} ajouté{customExCount > 1 ? "s" : ""}
                             </span>
                           )}

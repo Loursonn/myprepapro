@@ -10,7 +10,7 @@ import { localISO } from "@/lib/date";
 const db = supabase as any;
 
 const WELL_COLOR = (s: number) =>
-  s >= 70 ? "#22C993" : s >= 50 ? "#F5A623" : "#EF4B4B";
+  s >= 70 ? "#9DB06A" : s >= 50 ? "#F5A623" : "#D9705A";
 
 export type SessionStatus = "planned" | "in_progress" | "completed" | "missed" | "skipped";
 
@@ -160,7 +160,7 @@ export function useCoachDashboard() {
             rpeScore:    l.rpe_score,
           })),
           wellnessScore: score,
-          wellnessColor: score != null ? WELL_COLOR(score) : "#7C7480",
+          wellnessColor: score != null ? WELL_COLOR(score) : "#7D7468",
         };
       });
   }, [logsQ.data, wellQ.data, athletes]);

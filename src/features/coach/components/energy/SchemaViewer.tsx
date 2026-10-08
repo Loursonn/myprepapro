@@ -54,7 +54,7 @@ export function SchemaFullscreenDialog({ schema, open, onOpenChange }: Fullscree
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-[95vw] w-full sm:max-w-[700px] p-4 bg-[#08090C] border-[#2E2D33]"
+        className="max-w-[95vw] w-full sm:max-w-[700px] p-4 bg-[#15120F] border-[#2E2D33]"
         style={{ borderRadius: 16 }}
       >
         <DialogTitle className="sr-only">Schéma</DialogTitle>

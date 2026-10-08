@@ -56,7 +56,7 @@ function ResultRow({ result }: { result: AthleteTestResult }) {
             return (
               <div key={v.id} style={{
                 padding: '4px 10px', borderRadius: 7,
-                background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)',
+                background: 'rgba(201,161,74,0.08)', border: '1px solid rgba(201,161,74,0.15)',
               }}>
                 <span style={{ fontSize: 11, color: C.tx3 }}>{v.test_variables?.label ?? '—'} </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.ac }}>

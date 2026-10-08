@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 const S = {
-  bg: "#08090C", s1: "#111318", s2: "#181B24",
+  bg: "#15120F", s1: "#1E1A16", s2: "#27221D",
   brd: "rgba(255,255,255,0.06)", brdL: "rgba(255,255,255,0.1)",
   tx: "#F2F2F4", tx2: "#9194A0", tx3: "#555866",
-  ac: "#7B6FFF", g: "#22C993", r: "#EF4B4B",
+  ac: "#C9A14A", g: "#9DB06A", r: "#D9705A",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -70,7 +70,7 @@ export default function ResetPassword() {
       <div style={{ width: "100%", maxWidth: 380 }}>
 
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 32, fontWeight: 900, color: S.tx, letterSpacing: "-1px" }}>MyPrepaPro</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: S.tx, letterSpacing: "-1px" }}>Agon</div>
           <div style={{ fontSize: 13, color: S.tx3, marginTop: 4 }}>Réinitialisation du mot de passe</div>
         </div>
 

@@ -53,7 +53,7 @@ export const ITEM_STATUS_LABEL: Record<RoadmapItemStatus, string> = {
 }
 
 export const ITEM_STATUS_COLOR: Record<RoadmapItemStatus, string> = {
-  idea:        '#7C7480',
+  idea:        '#7D7468',
   backlog:     '#60a5fa',
   planned:     '#facc15',
   in_progress: '#f97316',
@@ -70,7 +70,7 @@ export const CATEGORY_LABEL: Record<RoadmapCategory, string> = {
 }
 
 export const CATEGORY_COLOR: Record<RoadmapCategory, string> = {
-  coach:     '#a855f7',
+  coach:     '#C9A14A',
   athlete:   '#22c55e',
   planning:  '#3b82f6',
   nutrition: '#f97316',

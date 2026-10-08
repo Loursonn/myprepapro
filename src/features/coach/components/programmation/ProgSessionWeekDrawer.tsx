@@ -13,7 +13,7 @@ import { SessionBlocEditor } from "./SessionBlocEditor"
 import { useSessionWeekLogs } from "./hooks/useSessionWeekLogs"
 import type { SessionSetLog } from "@/features/shared/types/athlete"
 
-const VIOLET  = "#7B6FFF"
+const VIOLET  = "#C9A14A"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 const GREEN   = "#22c55e"
 const GREEN_S = "rgba(34,197,94,0.10)"
@@ -23,7 +23,7 @@ const AMBER   = "#f59e0b"
 const AMBER_S = "rgba(245,158,11,0.10)"
 
 const BLOC_PALETTE = [
-  "#7B6FFF", "#F97316", "#22C55E", "#EF4444",
+  "#C9A14A", "#F97316", "#22C55E", "#EF4444",
   "#3B9EFF", "#FACC15", "#EC4899", "#14B8A6",
 ]
 

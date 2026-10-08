@@ -7,7 +7,7 @@ import { ExerciceParamsPanel } from "./ExerciceParamsPanel"
 import { RmDrawer } from "./RmDrawer"
 import { useExerciceRM } from "./hooks/useExerciceRM"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 
 interface ExerciceRowProps {
   exercice: Exercice

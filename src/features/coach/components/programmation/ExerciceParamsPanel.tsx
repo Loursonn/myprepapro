@@ -12,7 +12,7 @@ import { useExerciceRM } from "./hooks/useExerciceRM"
 import type { TrainingMethod } from "@/types/trainingMethods"
 import { methodConfigToExerciceParams } from "@/features/coach/components/library/MethodPreview"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 const ORANGE = "#F5A623"
 

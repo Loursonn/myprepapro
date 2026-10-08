@@ -17,7 +17,7 @@ import type { EnergySessionAssignmentRow, EnergyStep, EnergyInterval, BlockLogs 
 import { localISO } from "@/lib/date";
 
 const KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
 const KIND_LABEL: Record<string, string> = {
@@ -58,9 +58,9 @@ function assignmentStatus(a: EnergySessionAssignmentRow, today: string): "comple
 }
 
 const STATUS_COLOR = {
-  completed: "#22C993",
-  partial:   "#3B8DF0",
-  missed:    "#EF4B4B",
+  completed: "#9DB06A",
+  partial:   "#7E9CA8",
+  missed:    "#D9705A",
   planned:   "",
 };
 const STATUS_LABEL = {
@@ -136,7 +136,7 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
 
   return (
     <div style={{
-      borderRadius: 12, border: "1px solid " + (status === "missed" ? C.r + "40" : status === "completed" ? C.g + "40" : status === "partial" ? "#3B8DF040" : C.brdL),
+      borderRadius: 12, border: "1px solid " + (status === "missed" ? C.r + "40" : status === "completed" ? C.g + "40" : status === "partial" ? "#7E9CA840" : C.brdL),
       background: C.s1, marginBottom: 10, overflow: "hidden",
     }}>
       {/* Header row */}
@@ -169,7 +169,7 @@ function EnergySessionCard({ a, athleteId, today, onRpeDone }: EnergySessionCard
               <span style={{ fontSize: 10, color: C.tx3 }}>{Math.round(es.total_duration_s / 60)} min</span>
             )}
             {a.rpe_score != null && (
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#A855F7" }}>RPE {a.rpe_score}/10</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#C9A14A" }}>RPE {a.rpe_score}/10</span>
             )}
           </div>
         </div>

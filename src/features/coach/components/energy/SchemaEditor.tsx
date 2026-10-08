@@ -31,7 +31,7 @@ const TOOLS: { value: ToolType; label: string }[] = [
 ];
 
 const S = {
-  bg: "#08090C", card: "#1D1C1E", card2: "#26252A",
+  bg: "#15120F", card: "#15120F", card2: "#26252A",
   border: "#2E2D33", txt: "#F2F1F5", muted: "#8B8A92", accent: "#F5A623",
 } as const;
 
@@ -532,7 +532,7 @@ export default function SchemaEditor({ open, onOpenChange, value, onSave }: Prop
               onClick={finishPoly}
               style={{
                 marginTop: 6, background: "none",
-                border: `1px solid #22C993`, color: "#22C993",
+                border: `1px solid #9DB06A`, color: "#9DB06A",
                 fontSize: 12, fontWeight: 600, padding: "8px 12px",
                 borderRadius: 9, cursor: "pointer", fontFamily: "inherit",
               }}

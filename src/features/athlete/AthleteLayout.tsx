@@ -93,7 +93,7 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
       <div style={{ position: "sticky", top: 0, zIndex: 20, background: C.bg, borderBottom: "1px solid " + C.brd }}>
         <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.3px" }}>MyPrepaPro</div>
+            <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.3px" }}>Agon</div>
             {saveStatus && (
               <div style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 6, background: saveStatus === "saved" ? C.gS : C.rS, color: saveStatus === "saved" ? C.g : C.r }}>
                 {saveStatus === "saved" ? "OK" : "Err"}
@@ -256,7 +256,7 @@ export default function AthleteLayout({ onSwitchMode, userName }: AthleteLayoutP
             style={{
               width: "100%", display: "flex", alignItems: "center", gap: 10,
               padding: "12px 16px", borderRadius: 14,
-              border: "none", background: "linear-gradient(135deg, #7B6FFF 0%, #5B4FDF 100%)",
+              border: "none", background: "linear-gradient(135deg, #C9A14A 0%, #5B4FDF 100%)",
               color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
               fontFamily: "inherit", boxShadow: "0 6px 24px rgba(123,111,255,0.4)",
             }}

@@ -23,7 +23,7 @@ import type { SessionBlock, ClassiqueBlock, ClassiqueItem, WodBlock } from "@/ty
 import { isWodBlock } from "@/types/specific";
 
 const ORANGE = "#F5A623";
-const GREEN  = "#22C993";
+const GREEN  = "#9DB06A";
 
 // ── Item row (sortable, bloc classique) ──────────────────────────────────────
 

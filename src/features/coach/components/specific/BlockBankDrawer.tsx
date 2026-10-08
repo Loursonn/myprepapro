@@ -15,7 +15,7 @@ import type { EnergyStep } from "@/types/energy";
 import type { SessionBlock, SpecificBlockRow } from "@/types/specific";
 
 const ORANGE = "#F5A623";
-const GREEN  = "#22C993";
+const GREEN  = "#9DB06A";
 
 /** Clone récursif d'EnergyStep[] avec nouveaux ids. */
 function cloneSteps(steps: EnergyStep[]): EnergyStep[] {
@@ -154,7 +154,7 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
             onChange={(id) => setQualityFilter(id ?? "all")}
             onCreate={async (n) => user?.id ? await createQuality.mutateAsync({ name: n, coachId: user.id }) : undefined}
             width={160}
-            accent="#7B6FFF"
+            accent="#C9A14A"
           />
           <input
             value={search}
@@ -268,7 +268,7 @@ export default function BlockBankDrawer({ onInsert, onClose }: Props) {
                         </span>
                       )}
                       {quality && (
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#7B6FFF20", color: "#7B6FFF" }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#C9A14A20", color: "#C9A14A" }}>
                           {quality.name}
                         </span>
                       )}

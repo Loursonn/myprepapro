@@ -108,12 +108,17 @@ export function useAthleteInsights(summary: TrendSummary, ready: boolean) {
     queryFn: async (): Promise<string[] | null> => {
       const cached = readCache(cacheKey);
       if (cached) return cached;
-      const { data, error } = await supabase.functions.invoke("athlete-insights", { body: toAiPayload(summary) });
-      const list = (data as { insights?: unknown })?.insights;
-      if (error || !Array.isArray(list) || !list.length) return null;
-      const clean = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 4);
-      if (clean.length) writeCache(cacheKey, clean);
-      return clean.length ? clean : null;
+      try {
+        const { data, error } = await supabase.functions.invoke("athlete-insights", { body: toAiPayload(summary) });
+        const list = (data as { insights?: unknown })?.insights;
+        if (error || !Array.isArray(list) || !list.length) return null;
+        const clean = list.filter((x): x is string => typeof x === "string" && x.trim().length > 0).slice(0, 4);
+        if (clean.length) writeCache(cacheKey, clean);
+        return clean.length ? clean : null;
+      } catch {
+        // Edge function pas déployée ou inaccessible → fallback silencieux sur les règles
+        return null;
+      }
     },
   });
 

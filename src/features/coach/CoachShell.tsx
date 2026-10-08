@@ -19,30 +19,45 @@ import { CommandPalette } from "./components/CommandPalette";
 import { useCommandPalette } from "./context/CommandPaletteContext";
 import { Search } from "lucide-react";
 
+// ── Agon brand icons (inline SVG, currentColor) ─────────────────────────────
+
+const iconProps = { xmlns: "http://www.w3.org/2000/svg", viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "square" as const, strokeLinejoin: "miter" as const };
+
+const AgonIcons = {
+  stats:       <svg {...iconProps}><path d="M3 20H21M6 20V13M12 20V5M18 20V9"/></svg>,
+  groupe:      <svg {...iconProps}><circle cx="9" cy="8" r="3"/><path d="M3 20V19A6 6 0 0 1 15 19V20"/><path d="M15 5.3A3 3 0 0 1 15 10.7M18 14A5 5 0 0 1 21 18.5V20"/></svg>,
+  barre:       <svg {...iconProps}><path d="M3 12H21M6 7V17M9 9V15M15 9V15M18 7V17"/></svg>,
+  test:        <svg {...iconProps}><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>,
+  coach:       <svg {...iconProps}><rect x="5" y="4" width="14" height="17"/><path d="M9 4V2.5H15V4M8.5 9H15.5M8.5 13H15.5M8.5 17H12"/></svg>,
+  progression: <svg {...iconProps}><path d="M3 20H8V15H13V10H18V5H21"/></svg>,
+  message:     <svg {...iconProps}><path d="M4 5H20V16H10L6 20V16H4Z"/></svg>,
+  reglages:    <svg {...iconProps}><circle cx="12" cy="12" r="3"/><path d="M12 2V5M12 19V22M2 12H5M19 12H22M4.93 4.93L7.05 7.05M16.95 16.95L19.07 19.07M19.07 4.93L16.95 7.05M7.05 16.95L4.93 19.07"/></svg>,
+};
+
 // ── Navigation items ──────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
-  { icon: "🏠", label: "Home",       path: "/coach",                 exact: true,  certified: false, roadmap: false },
-  { icon: "👥", label: "Athlètes",   path: "/coach/athletes",        exact: false, certified: false, roadmap: false },
-  { icon: "📚", label: "Banque",     path: "/coach/library",          exact: false, certified: false, roadmap: false },
-{ icon: "🧪", label: "Tests",      path: "/coach/tests",            exact: false, certified: false, roadmap: false },
-  { icon: "🎖️", label: "Coachs",    path: "/coach/coaches",          exact: false, certified: true,  roadmap: false },
-  { icon: "🗺️", label: "Roadmap",   path: "/coach/roadmap",          exact: false, certified: false, roadmap: true  },
-  { icon: "📣", label: "Avis athlètes", path: "/coach/avis",        exact: false, certified: false, roadmap: true  },
-  { icon: "⚙️", label: "Paramètres", path: "/coach/settings",        exact: false, certified: false, roadmap: false },
-] as const;
+  { icon: AgonIcons.stats,       label: "Home",          path: "/coach",            exact: true,  certified: false, roadmap: false },
+  { icon: AgonIcons.groupe,      label: "Athlètes",      path: "/coach/athletes",   exact: false, certified: false, roadmap: false },
+  { icon: AgonIcons.barre,       label: "Banque",         path: "/coach/library",    exact: false, certified: false, roadmap: false },
+  { icon: AgonIcons.test,        label: "Tests",          path: "/coach/tests",      exact: false, certified: false, roadmap: false },
+  { icon: AgonIcons.coach,       label: "Coachs",         path: "/coach/coaches",    exact: false, certified: true,  roadmap: false },
+  { icon: AgonIcons.progression, label: "Roadmap",        path: "/coach/roadmap",    exact: false, certified: false, roadmap: true  },
+  { icon: AgonIcons.message,     label: "Avis athlètes",  path: "/coach/avis",       exact: false, certified: false, roadmap: true  },
+  { icon: AgonIcons.reglages,   label: "Paramètres",     path: "/coach/settings",   exact: false, certified: false, roadmap: false },
+];
 
 // ── Sidebar styles (CSS vars overridden via inline style on provider) ─────────
 
 const SIDEBAR_STYLE: React.CSSProperties = {
   "--sidebar-width": "240px",
   "--sidebar-width-icon": "64px",
-  "--sidebar-background": "#1D1C1E",
-  "--sidebar-foreground": "#7C7480",
+  "--sidebar-background": "#15120F",
+  "--sidebar-foreground": "#7D7468",
   "--sidebar-border": "rgba(124,116,128,0.2)",
-  "--sidebar-accent": "rgba(168,85,247,0.1)",
-  "--sidebar-accent-foreground": "#A855F7",
-  "--sidebar-ring": "#A855F7",
+  "--sidebar-accent": "rgba(201,161,74,0.10)",
+  "--sidebar-accent-foreground": "#C9A14A",
+  "--sidebar-ring": "#C9A14A",
 } as React.CSSProperties;
 
 // ── CoachShell ────────────────────────────────────────────────────────────────
@@ -67,26 +82,21 @@ function CoachShellInner() {
       {/* ── Sidebar ── */}
       <Sidebar
         collapsible="icon"
-        style={{ background: "#1D1C1E", borderRight: "1px solid rgba(124,116,128,0.2)" }}
+        style={{ background: "#15120F", borderRight: "1px solid rgba(124,116,128,0.2)" }}
       >
         {/* Logo */}
         <SidebarHeader style={{ padding: "16px 14px 12px", borderBottom: "1px solid rgba(124,116,128,0.2)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: C.ac + "20", border: "1px solid " + C.ac + "40",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 14, fontWeight: 800, color: C.ac, flexShrink: 0,
-              }}
-            >
-              M
-            </div>
+            <img
+              src="/brand/agon-symbole-favicon-marbre.svg"
+              alt="Agon"
+              style={{ width: 32, height: 32, flexShrink: 0 }}
+            />
             <span
               className="group-data-[collapsible=icon]:hidden"
               style={{ fontSize: 13, fontWeight: 700, color: C.tx, letterSpacing: "-0.3px" }}
             >
-              MyPrepaPro
+              Agon
             </span>
           </div>
         </SidebarHeader>
@@ -137,7 +147,7 @@ function CoachShellInner() {
                       padding: "9px 14px",
                       borderRadius: 0,
                       borderLeft: "2px solid " + (active ? C.ac : "transparent"),
-                      background: active ? "rgba(168,85,247,0.1)" : "transparent",
+                      background: active ? "rgba(201,161,74,0.10)" : "transparent",
                       color: active ? C.ac : C.tx2,
                       fontSize: 13,
                       fontWeight: active ? 600 : 400,
@@ -153,7 +163,9 @@ function CoachShellInner() {
                       if (!active) (e.currentTarget as HTMLElement).style.color = C.tx2;
                     }}
                   >
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+                    <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+                      {item.icon}
+                    </span>
                     <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

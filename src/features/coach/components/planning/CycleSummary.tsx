@@ -20,14 +20,14 @@ export function CycleSummary({ cycle, athleteId }: Props) {
   return (
     <AccordionItem
       value={cycle.id}
-      className="rounded-xl border border-[#FB923C]/30 bg-[#FB923C]/10 overflow-hidden"
+      className="rounded-xl border border-[#D99A3E]/30 bg-[#D99A3E]/10 overflow-hidden"
     >
-      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-white/5 transition-colors [&>svg]:text-[#FB923C]/60">
+      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-white/5 transition-colors [&>svg]:text-[#D99A3E]/60">
         <div className="flex items-center gap-2 text-left">
-          <Calendar size={14} className="text-[#FB923C] shrink-0" />
+          <Calendar size={14} className="text-[#D99A3E] shrink-0" />
           <span className="text-sm font-bold text-white">{cycle.name}</span>
           <span className="text-xs text-white/40">{dateRange}</span>
-          <span className="ml-auto mr-2 text-[10px] px-2 py-0.5 rounded-full bg-[#FB923C]/20 text-[#FB923C] font-semibold">
+          <span className="ml-auto mr-2 text-[10px] px-2 py-0.5 rounded-full bg-[#D99A3E]/20 text-[#D99A3E] font-semibold">
             {cycle.microcycles.length} sem.
           </span>
         </div>

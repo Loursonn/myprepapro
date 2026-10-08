@@ -1,57 +1,57 @@
-/** Palette de couleurs globale de l'app (mode sombre fixe) — v2 MyPrepaPro */
+/** Palette de couleurs globale de l'app (mode sombre fixe) — Agon "futurisme antique" */
 export const C = {
   // ── Fond & surfaces ──────────────────────────────────────────────────────────
-  bg:  "#1D1C1E",
-  s1:  "#252327",   // surface élevée (cards, drawers)
-  s2:  "#2A282C",   // surface doublement élevée (inputs, skeletons)
+  bg:  "#15120F",    // obsidienne
+  s1:  "#1E1A16",    // basalte (cards, drawers)
+  s2:  "#27221D",    // basalte 2 (inputs, skeletons)
 
   // ── Bordures ─────────────────────────────────────────────────────────────────
-  brd:  "rgba(124,116,128,0.15)",
-  brdL: "rgba(124,116,128,0.25)",
+  brd:  "rgba(231,211,168,0.10)",
+  brdL: "rgba(231,211,168,0.18)",
 
   // ── Texte ────────────────────────────────────────────────────────────────────
-  tx:  "#FFFFFF",
-  tx2: "#B0A8B4",   // secondaire clair
-  tx3: "#7C7480",   // muted / placeholder
+  tx:  "#F4EFE3",    // marbre
+  tx2: "#B9AE9C",    // secondaire
+  tx3: "#7D7468",    // muted / placeholder
 
   // ── Accents principaux ───────────────────────────────────────────────────────
-  ac:   "#A855F7",              // PRIMARY — violet
-  acS:  "rgba(168,85,247,0.12)",
+  ac:   "#C9A14A",               // PRIMARY — or
+  acS:  "rgba(201,161,74,0.12)",
 
   // ── Sémantique ───────────────────────────────────────────────────────────────
-  g:  "#22C993",  gS: "rgba(34,201,147,0.1)",   // success / vert
-  o:  "#FB923C",  oS: "rgba(251,146,60,0.1)",    // tertiary / orange
-  y:  "#E8C93A",  yS: "rgba(232,201,58,0.1)",    // jaune
-  r:  "#EF4B4B",  rS: "rgba(239,75,75,0.1)",     // danger / rouge
-  b:  "#3B8DF0",  bS: "rgba(59,141,240,0.1)",    // info / bleu
+  g:  "#9DB06A",  gS: "rgba(157,176,106,0.1)",   // success / olivier
+  o:  "#D99A3E",  oS: "rgba(217,154,62,0.1)",     // alerte / ocre
+  y:  "#D99A3E",  yS: "rgba(217,154,62,0.1)",     // ocre (alias alerte)
+  r:  "#D9705A",  rS: "rgba(217,112,90,0.1)",     // danger / terracotta
+  b:  "#7E9CA8",  bS: "rgba(126,156,168,0.1)",    // info / ardoise
 
   // ── Coach / secondaire ───────────────────────────────────────────────────────
-  coach:  "#F472B6",             // SECONDARY — rose
-  coachS: "rgba(244,114,182,0.12)",
+  coach:  "#C9A14A",             // SECONDARY — or (coach = or)
+  coachS: "rgba(201,161,74,0.12)",
 } as const;
 
 // ── Raccourcis sémantiques (même valeur, alias lisibles) ──────────────────────
-export const PRIMARY   = C.ac;       // #A855F7 violet
-export const SECONDARY = C.coach;    // #F472B6 rose
-export const TERTIARY  = C.o;        // #FB923C orange
-export const NEUTRAL   = C.tx3;      // #7C7480 gris
-export const SUCCESS   = C.g;        // #22C993 vert
+export const PRIMARY   = C.ac;       // #C9A14A or
+export const SECONDARY = C.coach;    // #C9A14A or
+export const TERTIARY  = C.o;        // #D99A3E ocre
+export const NEUTRAL   = C.tx3;      // #7D7468 pierre
+export const SUCCESS   = C.g;        // #9DB06A olivier
 
 export const BT = {
-  PERF:   { c: "#EF4B4B", l: "Mvt principal" },
-  ESTH:   { c: "#A855F7", l: "Hypertrophie"  },   // mis à jour primary
-  BESOIN: { c: "#FB923C", l: "Besoin indiv."  },   // mis à jour tertiary
-  ASSOC:  { c: "#22C993", l: "Muscles assoc." },
-  CORE:   { c: "#7C7480", l: "Core"           },
+  PERF:   { c: "#D9705A", l: "Mvt principal" },   // terracotta
+  ESTH:   { c: "#C9A14A", l: "Hypertrophie"  },   // or
+  BESOIN: { c: "#7E9CA8", l: "Besoin indiv."  },   // ardoise
+  ASSOC:  { c: "#7FA88E", l: "Muscles assoc." },   // patine
+  CORE:   { c: "#8E8780", l: "Core"           },   // pierre
 } as const;
 
 export const BLOC_COLORS = [
-  "#EF4B4B","#A855F7","#FB923C","#22C993","#7C7480",
-  "#3B8DF0","#F472B6","#C060D0","#E06030","#22C9C9",
+  "#C9A14A","#D9705A","#9DB06A","#7E9CA8","#A67C52",
+  "#7FA88E","#B48EA0","#D99A3E","#E7D3A8","#8E8780",
 ];
 
 export const HABIT_COLORS = [
-  "#FB923C","#22C993","#A855F7","#3B8DF0","#EF4B4B","#E8C93A","#F472B6","#C060D0",
+  "#C9A14A","#D9705A","#9DB06A","#7E9CA8","#A67C52","#D99A3E","#7FA88E","#B48EA0",
 ];
 
 export const HABIT_EMOJIS = [

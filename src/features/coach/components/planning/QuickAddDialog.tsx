@@ -29,12 +29,12 @@ const KIND_LABEL: Record<string, string> = {
   footing: "Footing", fartlek: "Fartlek", autre: "Autre", custom: "Custom",
 };
 const KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
 
 const SIDEBAR_CATS = [
-  { key: "workout"  as Tab, label: "Muscu",      Icon: Dumbbell,     color: "#7B6FFF", disabled: false },
+  { key: "workout"  as Tab, label: "Muscu",      Icon: Dumbbell,     color: "#C9A14A", disabled: false },
   { key: "energy"   as Tab, label: "Énergie",    Icon: Zap,          color: "#F59E0B", disabled: false },
   { key: "test"     as Tab, label: "Test",        Icon: FlaskConical, color: "#C49A6C", disabled: false },
   { key: "specific" as Tab, label: "Spécifique",  Icon: Layers,       color: C.tx3,     disabled: true  },
@@ -288,7 +288,7 @@ export function QuickAddDialog({
                       <button
                         key={s.id}
                         onClick={() => setSelectedSession(active ? "" : s.id)}
-                        style={itemBtn(active, "#7B6FFF")}
+                        style={itemBtn(active, "#C9A14A")}
                       >
                         {active && "✓ "}{s.name}
                       </button>

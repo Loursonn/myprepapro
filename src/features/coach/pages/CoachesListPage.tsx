@@ -46,7 +46,7 @@ function CoachRow({
       {/* Avatar */}
       <div style={{
         width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-        background: isSelf ? 'rgba(168,85,247,0.15)' : 'rgba(124,116,128,0.15)',
+        background: isSelf ? 'rgba(201,161,74,0.15)' : 'rgba(124,116,128,0.15)',
         border: '1px solid ' + (isSelf ? C.ac + '40' : 'rgba(124,116,128,0.25)'),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 14, fontWeight: 700,
@@ -83,7 +83,7 @@ function CoachRow({
               padding: '6px 12px', borderRadius: 8,
               border: '1px solid rgba(239,75,75,0.3)',
               background: 'rgba(239,75,75,0.08)',
-              color: '#EF4B4B', fontSize: 11, fontWeight: 600,
+              color: '#D9705A', fontSize: 11, fontWeight: 600,
               cursor: toggling ? 'default' : 'pointer', fontFamily: 'inherit',
               transition: 'background 150ms ease-out',
               flexShrink: 0,

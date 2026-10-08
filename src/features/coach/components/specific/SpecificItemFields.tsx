@@ -9,7 +9,7 @@ import { C } from "@/lib/theme";
 import { ExerciceSearch } from "../programmation/ExerciceSearch";
 import type { ClassiqueItem } from "@/types/specific";
 
-const VIOLET = "#7B6FFF";
+const VIOLET = "#C9A14A";
 
 interface Props {
   item: ClassiqueItem;

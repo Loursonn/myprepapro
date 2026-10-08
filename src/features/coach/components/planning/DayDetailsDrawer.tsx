@@ -24,8 +24,8 @@ import type { ProgSession, Bloc, Exercice, ExerciceParams } from "@/features/coa
 function rpeColor(v: number) { return v <= 4 ? C.g : v <= 7 ? C.o : C.r; }
 function rpeBg(v: number)    { return v <= 4 ? C.gS : v <= 7 ? C.oS : C.rS; }
 
-const FREE_COLOR  = "#0D9488";
-const TEST_COLOR  = "#C49A6C";
+const FREE_COLOR  = "#7FA88E";   // patine (DA)
+const TEST_COLOR  = "#A67C52";   // bronze (DA)
 
 const ENERGY_KIND_LABEL: Record<string, string> = {
   vo2: "VO₂max", tempo: "Tempo", seuil: "Seuil",
@@ -33,11 +33,11 @@ const ENERGY_KIND_LABEL: Record<string, string> = {
 };
 
 const TYPE_COLOR: Record<CalEvent["type"], string> = {
-  workout:       C.ac,
-  test:          TEST_COLOR,
-  competition:   C.coach,
-  energy:        C.o,
-  free_activity: FREE_COLOR,
+  workout:       C.ac,       // or — muscu
+  test:          TEST_COLOR, // bronze — tests
+  competition:   C.r,        // terracotta — compétitions
+  energy:        C.b,        // ardoise — énergie
+  free_activity: FREE_COLOR, // patine — activités libres
 };
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -574,7 +574,7 @@ function EventCard({
   onSelect: (e: CalEvent) => void;
 }) {
   const isEnergy = event.type === "energy";
-  const color = event.partial && isEnergy ? "#3B8DF0" : TYPE_COLOR[event.type] ?? C.tx3;
+  const color = event.partial && isEnergy ? "#7E9CA8" : TYPE_COLOR[event.type] ?? C.tx3;
   const { mutate: del } = useDeleteCalendarEvent();
 
   const rawBlockLogs = isEnergy
@@ -585,7 +585,7 @@ function EventCard({
   const totalCount = blVals.length;
 
   const statusInfo = event.partial && isEnergy
-    ? { label: `Partielle ${doneCount}/${totalCount}`, color: "#3B8DF0" }
+    ? { label: `Partielle ${doneCount}/${totalCount}`, color: "#7E9CA8" }
     : event.status ? STATUS_LABEL[event.status] : null;
 
   const isClickable = event.type === "workout" || event.type === "energy" || event.type === "free_activity";
@@ -701,7 +701,7 @@ interface DayDetailsDrawerProps {
 
 function WellnessDayView({ wellness }: { wellness: WellnessData }) {
   const score = Math.round(((wellness.fatigue ?? 3) + (wellness.sommeil ?? 3) + (wellness.stress ?? 3) + (wellness.energie ?? 3) + (wellness.doms ?? 3)) / 25 * 100);
-  const color = score >= 80 ? "#22C993" : score >= 65 ? "#7BC67E" : score >= 50 ? C.o : score >= 35 ? "#F07030" : C.r;
+  const color = score >= 80 ? "#9DB06A" : score >= 65 ? "#7BC67E" : score >= 50 ? C.o : score >= 35 ? "#F07030" : C.r;
   const label = score >= 80 ? "Optimal" : score >= 65 ? "Bon" : score >= 50 ? "Modéré" : score >= 35 ? "Fatigué" : "Surmenage";
   const metrics = [
     { k: "Récup.", v: wellness.fatigue }, { k: "Sommeil", v: wellness.sommeil },
@@ -744,7 +744,7 @@ function NutritionDayView({ nutrition }: { nutrition: NutritionDailyLog }) {
       )}
       {hasMacros && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 12px" }}>
-          {proteines != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: C.tx3 }}>Prot.</span><span style={{ fontSize: 10, fontWeight: 700, color: "#3B8DF0" }}>{proteines}g</span></div>}
+          {proteines != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: C.tx3 }}>Prot.</span><span style={{ fontSize: 10, fontWeight: 700, color: "#7E9CA8" }}>{proteines}g</span></div>}
           {glucides != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: C.tx3 }}>Gluc.</span><span style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B" }}>{glucides}g</span></div>}
           {lipides != null && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 9, color: C.tx3 }}>Lip.</span><span style={{ fontSize: 10, fontWeight: 700, color: "#EF4444" }}>{lipides}g</span></div>}
         </div>
@@ -763,7 +763,7 @@ function EnergyDetailView({ event, onOpenPreview, athleteId }: { event: CalEvent
   const totalCount = blEntries.length;
 
   const statusInfo = event.partial
-    ? { label: `Partielle ${doneCount}/${totalCount}`, color: "#3B8DF0" }
+    ? { label: `Partielle ${doneCount}/${totalCount}`, color: "#7E9CA8" }
     : event.status ? STATUS_LABEL[event.status] : null;
 
   return (
@@ -1164,7 +1164,7 @@ export function DayDetailsDrawer({
 
               {wellnessDay && (
                 <section>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#22C993", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>❤️ Bien-être</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#9DB06A", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>❤️ Bien-être</div>
                   <WellnessDayView wellness={wellnessDay} />
                 </section>
               )}

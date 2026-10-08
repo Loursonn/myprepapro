@@ -174,7 +174,7 @@ export default function CoachPerfNotification({ coachId, C }: Props) {
                     <button
                       onClick={() => handleReject(notif)}
                       disabled={processing === notif.id}
-                      style={{ flex: 1, padding: "10px 0", borderRadius: 9, border: "1px solid rgba(239,75,75,0.3)", background: "rgba(239,75,75,0.08)", color: "#EF4B4B", fontSize: 12, fontWeight: 700, cursor: processing === notif.id ? "default" : "pointer", fontFamily: "inherit" }}
+                      style={{ flex: 1, padding: "10px 0", borderRadius: 9, border: "1px solid rgba(239,75,75,0.3)", background: "rgba(239,75,75,0.08)", color: "#D9705A", fontSize: 12, fontWeight: 700, cursor: processing === notif.id ? "default" : "pointer", fontFamily: "inherit" }}
                     >
                       {processing === notif.id ? "…" : "Rejeter"}
                     </button>
@@ -199,12 +199,12 @@ export default function CoachPerfNotification({ coachId, C }: Props) {
               </div>
               {resolved.slice(0, 5).map(notif => (
                 <div key={notif.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: "1px solid " + C.brdL, background: C.s1, marginBottom: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: notif.status === "approved" ? C.g : "#EF4B4B", flexShrink: 0 }} />
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: notif.status === "approved" ? C.g : "#D9705A", flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>{notif.athlete_name} — {notif.metric_name}</div>
                     <div style={{ fontSize: 10, color: C.tx3 }}>{notif.date} · {notif.value} {notif.unit}</div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, background: notif.status === "approved" ? C.g + "20" : "rgba(239,75,75,0.12)", color: notif.status === "approved" ? C.g : "#EF4B4B" }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 5, background: notif.status === "approved" ? C.g + "20" : "rgba(239,75,75,0.12)", color: notif.status === "approved" ? C.g : "#D9705A" }}>
                     {notif.status === "approved" ? "Validé" : "Rejeté"}
                   </span>
                 </div>
