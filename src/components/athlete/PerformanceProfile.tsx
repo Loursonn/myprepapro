@@ -35,9 +35,9 @@ const METRIC_TYPES = [
 ];
 
 const METRIC_COLORS: Record<string, string> = {
-  vma: "#EF4B4B", vitesse_critique: "#F5A623", one_rm: "#7B6FFF",
-  temps_distance: "#22C993", puissance: "#3B8DF0", fc_max: "#D4538E",
-  fc_repos: "#9194A0", custom: "#C060D0",
+  vma: "#D9705A", vitesse_critique: "#F5A623", one_rm: "#C9A14A",
+  temps_distance: "#9DB06A", puissance: "#7E9CA8", fc_max: "#C9A14A",
+  fc_repos: "#9194A0", custom: "#B48EA0",
 };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function MiniPerfChart({ data, color, activeRef }: { data: { date: string; value
           <XAxis dataKey="label" tick={{ fontSize: 9, fill: "#555866" }} axisLine={false} tickLine={false} />
           <YAxis domain={["auto", "auto"]} hide />
           <Tooltip
-            contentStyle={{ background: "#181B24", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+            contentStyle={{ background: "#27221D", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
             labelStyle={{ color: "#9194A0" }}
             formatter={(v: number) => [v, ""]}
           />
@@ -245,7 +245,7 @@ export default function PerformanceProfile({ athleteId, viewOnly, isCoach, C }: 
                       <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: C.g + "20", color: C.g }}>REF ACTIVE</span>
                     )}
                     {latest.coach_validated === false && (
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "#EF4B4B20", color: "#EF4B4B" }}>REJETÉ</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "#D9705A20", color: "#D9705A" }}>REJETÉ</span>
                     )}
                     {latest.coach_validated === null && !activeRef && (
                       <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: C.o + "20", color: C.o }}>EN ATTENTE</span>
@@ -291,7 +291,7 @@ export default function PerformanceProfile({ athleteId, viewOnly, isCoach, C }: 
                             </button>
                           )}
                           <button onClick={() => setConfirmDelete(entry.id)}
-                            style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "rgba(239,75,75,0.1)", color: "#EF4B4B", fontSize: 12, cursor: "pointer" }}>×</button>
+                            style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "rgba(239,75,75,0.1)", color: "#D9705A", fontSize: 12, cursor: "pointer" }}>×</button>
                         </div>
                       </div>
                     ))}
@@ -397,7 +397,7 @@ export default function PerformanceProfile({ athleteId, viewOnly, isCoach, C }: 
             <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 8 }}>Supprimer cette mesure ?</div>
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
               <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, padding: "11px 0", borderRadius: 9, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
-              <button onClick={() => handleDelete(confirmDelete!)} style={{ flex: 1, padding: "11px 0", borderRadius: 9, border: "none", background: "#EF4B4B", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Supprimer</button>
+              <button onClick={() => handleDelete(confirmDelete!)} style={{ flex: 1, padding: "11px 0", borderRadius: 9, border: "none", background: "#D9705A", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Supprimer</button>
             </div>
           </div>
         </div>

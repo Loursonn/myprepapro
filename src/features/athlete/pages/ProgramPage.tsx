@@ -25,7 +25,7 @@ const MONTHS_FR    = ["jan","fév","mar","avr","mai","jun","jul","aoû","sep","o
 const DOW_FULL_FR  = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
 
 const ENERGY_KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
 const ENERGY_KIND_LABEL: Record<string, string> = {
@@ -39,7 +39,7 @@ function haptic() { if (navigator.vibrate) navigator.vibrate(10); }
 
 function sessionColor(s: WeekSession): string {
   return s.kind === "energy"
-    ? (ENERGY_KIND_COLOR[s.sessionKind ?? ""] ?? "#A855F7")
+    ? (ENERGY_KIND_COLOR[s.sessionKind ?? ""] ?? "#C9A14A")
     : C.ac;
 }
 
@@ -925,7 +925,7 @@ function SessionChip({
 // ── Test chip ─────────────────────────────────────────────────────────────────
 
 const TEST_TYPE_COLOR: Record<string, string> = {
-  musculation: "#7B6FFF", endurance: "#3B8DF0", vitesse: "#EF4444",
+  musculation: "#C9A14A", endurance: "#7E9CA8", vitesse: "#EF4444",
   puissance: "#F59E0B", souplesse: "#10B981", autre: "#6B7280",
 };
 
@@ -1182,8 +1182,8 @@ export default function ProgramPage() {
       {/* Sticky header */}
       <div style={{
         position: "sticky", top: 45, zIndex: 5,
-        background: "linear-gradient(135deg, rgba(168,85,247,0.22) 0%, rgba(37,35,39,0.98) 70%)",
-        borderBottom: "1px solid rgba(168,85,247,0.25)",
+        background: "linear-gradient(135deg, rgba(201,161,74,0.22) 0%, rgba(37,35,39,0.98) 70%)",
+        borderBottom: "1px solid rgba(201,161,74,0.25)",
         padding: "14px 16px", textAlign: "center",
         backdropFilter: "blur(8px)",
       }}>

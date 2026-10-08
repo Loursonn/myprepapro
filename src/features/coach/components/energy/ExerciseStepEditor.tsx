@@ -15,7 +15,7 @@ import { genId } from "@/lib/energy/treeUtils";
 import { ExerciceSearch } from "@/features/coach/components/programmation/ExerciceSearch";
 import { supabase } from "@/integrations/supabase/client";
 
-const EXO_COLOR = "#7B6FFF";
+const EXO_COLOR = "#C9A14A";
 
 const ROLES: { value: IntervalRole; label: string }[] = [
   { value: "work",     label: "Effort" },

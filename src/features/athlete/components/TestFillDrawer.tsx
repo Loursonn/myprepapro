@@ -26,7 +26,7 @@ interface TestData {
 }
 
 const TYPE_COLOR: Record<string, string> = {
-  musculation: "#7B6FFF", endurance: "#3B8DF0", vitesse: "#EF4444",
+  musculation: "#C9A14A", endurance: "#7E9CA8", vitesse: "#EF4444",
   puissance: "#F59E0B", souplesse: "#10B981", autre: "#6B7280",
 };
 

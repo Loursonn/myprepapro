@@ -281,7 +281,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
               {eAssigned.map(s=>(
                 <button key={s.id||s.session_key} onClick={()=>setPreviewItem({type:'energy',data:s,planWeek:planWeek})} style={{padding:'5px 10px',borderRadius:9,background:C.coach+'15',border:'1px solid '+C.coach+'30',fontSize:11,fontWeight:600,color:C.coach,cursor:'pointer',fontFamily:'inherit'}}>⚡ {s.session_label||'Énergie'} ›</button>
               ))}
-              {tests.map(t=>{const tc=t.type==='musculation'?'#7B6FFF':t.type==='energetique'?'#EF4B4B':t.type==='specifique'?'#F5A623':'#22C993';return(
+              {tests.map(t=>{const tc=t.type==='musculation'?'#C9A14A':t.type==='energetique'?'#D9705A':t.type==='specifique'?'#F5A623':'#9DB06A';return(
                 <button key={t.id} onClick={()=>setPreviewItem({type:'test',data:t,planWeek:planWeek})} style={{padding:'5px 10px',borderRadius:9,background:tc+'15',border:'1px solid '+tc+'30',fontSize:11,fontWeight:600,color:tc,cursor:'pointer',fontFamily:'inherit'}}>📋 {t.title} ›</button>
               );})}
               {sessList.length===0&&eAssigned.length===0&&tests.length===0&&dayEvts.length===0&&planCompsDay.length===0&&<span style={{fontSize:11,color:C.tx3}}>Aucun contenu planifié — cliquer "+ Planifier"</span>}
@@ -462,7 +462,7 @@ function CoachFourWeekCalendar({sessions=[],completedSessions={},currentWeek=1,C
 
               {/* Prévisuel test */}
               {type==='test'&&(()=>{
-                const tc=data.type==='musculation'?'#7B6FFF':data.type==='energetique'?'#EF4B4B':data.type==='specifique'?'#F5A623':'#22C993';
+                const tc=data.type==='musculation'?'#C9A14A':data.type==='energetique'?'#D9705A':data.type==='specifique'?'#F5A623':'#9DB06A';
                 return(<div>
                   <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
                     <span style={{fontSize:11,padding:'3px 10px',borderRadius:7,background:tc+'20',color:tc,fontWeight:600}}>{data.type||'Test'}</span>

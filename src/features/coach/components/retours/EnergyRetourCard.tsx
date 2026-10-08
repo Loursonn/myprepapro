@@ -10,7 +10,7 @@ import type { EnergySessionDetail, EnergyStepLog } from "@/features/shared/types
 // ── Kind labels / colors ──────────────────────────────────────────────────────
 
 const KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
 const KIND_LABEL: Record<string, string> = {
@@ -28,10 +28,10 @@ const KIND_LABELS: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; bg: string; color: string }> = {
-    completed: { label: "Complétée",   bg: "rgba(34,201,147,0.15)", color: "#22C993" },
+    completed: { label: "Complétée",   bg: "rgba(34,201,147,0.15)", color: "#9DB06A" },
     missed:    { label: "Manquée",     bg: "rgba(239,68,68,0.15)",  color: "#EF4444" },
     skipped:   { label: "Passée",      bg: "rgba(107,114,128,0.2)", color: "#9CA3AF" },
-    planned:   { label: "Planifiée",   bg: "rgba(59,141,240,0.15)", color: "#3B8DF0" },
+    planned:   { label: "Planifiée",   bg: "rgba(59,141,240,0.15)", color: "#7E9CA8" },
     in_progress: { label: "En cours",  bg: "rgba(245,158,11,0.15)", color: "#F59E0B" },
   };
   const s = cfg[status] ?? cfg["planned"];
@@ -158,7 +158,7 @@ export function EnergyRetourCard({ session }: EnergyRetourCardProps) {
   const doneCount  = blVals.filter((b) => b.done).length;
   const totalCount = blVals.length;
 
-  const statusColor = session.partial ? "#3B8DF0" : session.completed ? "#22C993" : "#FB923C";
+  const statusColor = session.partial ? "#7E9CA8" : session.completed ? "#9DB06A" : "#D99A3E";
   const statusLabel = session.partial
     ? `✓ Partielle ${doneCount}/${totalCount}`
     : session.completed ? "✓ Complétée" : "Non faite";

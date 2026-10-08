@@ -1,7 +1,7 @@
 import { C } from "@/lib/theme"
 import type { ExerciceParams, ParamValue } from "./types"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 
 interface SyntheseBarProps {
   params: ExerciceParams

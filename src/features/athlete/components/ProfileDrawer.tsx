@@ -16,6 +16,7 @@ import { TrendCard } from "@/features/athlete/components/profile/TrendCard";
 import { AppFeedbackSection } from "@/features/athlete/components/profile/AppFeedbackSection";
 import type { TrendSummary } from "@/lib/athleteTrends";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import type { Profile } from "@/hooks/useAuth";
 
 interface Props {
@@ -86,7 +87,7 @@ export default function ProfileDrawer({ onClose }: Props) {
       </div>
       <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
         {/* ── En-tête : identité + KPIs ── */}
-        <div style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.18) 0%, " + C.s1 + " 75%)", borderRadius: 16, border: "1px solid " + C.ac + "30", padding: "14px 16px" }}>
+        <div style={{ background: "linear-gradient(135deg, " + C.acS + " 0%, " + C.s1 + " 75%)", borderRadius: 16, border: "1px solid " + C.ac + "30", padding: "14px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.acS, border: "2px solid " + C.ac + "40", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.ac }}>
               {name.split(" ").filter(Boolean).map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}
@@ -228,6 +229,9 @@ export default function ProfileDrawer({ onClose }: Props) {
           <span style={{ fontSize: 11, color: C.tx3 }}>→</span>
         </button>
 
+        {/* ── Mon coach ── */}
+        {!viewOnly && <CoachSection />}
+
         {/* ── Données sportives (tests VMA, FC…) ── */}
         <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden" }}>
           <button onClick={() => setDrawerSportOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
@@ -363,6 +367,163 @@ function GoalsZoomContent() {
           <div style={{ fontSize: 11, color: reached ? C.g : C.tx3, fontWeight: reached ? 600 : 400 }}>{reached ? "Objectif atteint !" : delta !== null ? (Math.abs(delta) + " kg restants") : "—"}</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Gestion du coach ─────────────────────────────────────────────────────────
+
+function CoachSection() {
+  const { user, profile, linkToCoach, unlinkFromCoach, becomeSelfCoach } = useAuth();
+  const [showJoin, setShowJoin] = useState(false);
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"quit" | null>(null);
+
+  if (!user || !profile) return null;
+
+  const isCoachAthlete = profile.role === "coach_athlete";
+  const isSelfCoached = profile.coach_id === user.id; // coach_id = self
+  const hasExternalCoach = !!profile.coach_id && profile.coach_id !== user.id;
+  const noCoach = !profile.coach_id; // coach_id = null
+
+  // Fetch coach name for display
+  const [coachName, setCoachName] = useState<string | null>(null);
+  if (hasExternalCoach && !coachName) {
+    supabase.from("profiles").select("full_name, first_name, last_name").eq("id", profile.coach_id!).maybeSingle()
+      .then(({ data }) => {
+        if (data) setCoachName([data.first_name, data.last_name].filter(Boolean).join(" ") || data.full_name || "Coach");
+      });
+  }
+
+  async function handleJoin() {
+    if (!code.trim() || loading) return;
+    setLoading(true);
+    setMsg(null);
+    try {
+      await linkToCoach(code.trim());
+      setMsg({ text: "Coach rejoint !", ok: true });
+      setCode("");
+      setTimeout(() => { setShowJoin(false); setMsg(null); }, 1500);
+    } catch (e: unknown) {
+      setMsg({ text: (e as Error).message || "Code invalide", ok: false });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleQuitExternalCoach() {
+    setLoading(true);
+    try {
+      await unlinkFromCoach();
+      setMsg({ text: isCoachAthlete ? "Tu es redevenu ton propre coach" : "Coach quitté", ok: true });
+      setConfirmAction(null);
+      setTimeout(() => setMsg(null), 2000);
+    } catch (e: unknown) {
+      setMsg({ text: (e as Error).message || "Erreur", ok: false });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBecomeSelfCoach() {
+    setLoading(true);
+    try {
+      await becomeSelfCoach();
+      setMsg({ text: "Tu es ton propre coach", ok: true });
+      setTimeout(() => setMsg(null), 2000);
+    } catch (e: unknown) {
+      setMsg({ text: (e as Error).message || "Erreur", ok: false });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const joinInput = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ fontSize: 11, color: C.tx3 }}>{hasExternalCoach ? "Code du nouveau coach" : "Entre le code de ton coach"}</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={code} onChange={e => setCode(e.target.value.toUpperCase())}
+          placeholder="Ex: R4BL7M" maxLength={6} autoFocus
+          style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none", letterSpacing: "0.1em" }}
+        />
+        <button onClick={handleJoin} disabled={loading || !code.trim()} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: code.trim() ? C.ac : C.s2, color: code.trim() ? "#fff" : C.tx3, fontSize: 12, fontWeight: 600, cursor: code.trim() ? "pointer" : "default", fontFamily: "inherit" }}>
+          {loading ? "…" : "OK"}
+        </button>
+      </div>
+      <button onClick={() => { setShowJoin(false); setCode(""); setMsg(null); }} style={{ padding: "6px", background: "transparent", border: "none", color: C.tx3, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+        Annuler
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 10 }}>Mon coach</div>
+
+        {/* ── État 1 : coach_athlete se coache lui-même (coach_id = self) ── */}
+        {isSelfCoached && isCoachAthlete && (
+          <div style={{ fontSize: 12, color: C.tx2 }}>Tu es ton propre coach.</div>
+        )}
+
+        {/* ── État 2 : pas de coach (coach_id = null) ── */}
+        {noCoach && (
+          <>
+            <div style={{ fontSize: 12, color: C.tx2, marginBottom: 10 }}>Aucun coach assigné.</div>
+            {!showJoin ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <button onClick={() => { setShowJoin(true); setMsg(null); }} style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "1px solid " + C.ac + "50", background: C.acS, color: C.ac, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  Rejoindre un coach
+                </button>
+                {isCoachAthlete && (
+                  <button onClick={handleBecomeSelfCoach} disabled={loading} style={{ width: "100%", padding: "10px 0", borderRadius: 10, border: "1px solid " + C.g + "50", background: C.g + "15", color: C.g, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {loading ? "…" : "Devenir mon propre coach"}
+                  </button>
+                )}
+              </div>
+            ) : joinInput}
+          </>
+        )}
+
+        {/* ── État 3 : coaché par un autre (coach_id = autre) ── */}
+        {hasExternalCoach && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.coach + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.coach, flexShrink: 0 }}>
+                {(coachName || "C").slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.tx }}>{coachName || "…"}</div>
+                <div style={{ fontSize: 10, color: C.tx3 }}>Mon coach actuel</div>
+              </div>
+            </div>
+            {confirmAction === "quit" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 11, color: C.r, fontWeight: 600 }}>
+                  {isCoachAthlete ? "Tu redeviendras ton propre coach. Continuer ?" : "Tu n'auras plus de coach. Continuer ?"}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={handleQuitExternalCoach} disabled={loading} style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "none", background: C.r, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {loading ? "…" : "Confirmer"}
+                  </button>
+                  <button onClick={() => setConfirmAction(null)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "1px solid " + C.brdL, background: "transparent", color: C.tx3, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmAction("quit")} style={{ width: "100%", padding: "9px 0", borderRadius: 10, border: "1px solid " + C.r + "30", background: C.rS, color: C.r, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                Quitter mon coach
+              </button>
+            )}
+          </>
+        )}
+
+        {msg && <div style={{ fontSize: 11, marginTop: 8, color: msg.ok ? C.g : C.r, fontWeight: 600 }}>{msg.text}</div>}
+      </div>
     </div>
   );
 }

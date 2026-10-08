@@ -15,15 +15,15 @@ import type { ExerciceParams, ClusterConfig } from "@/features/coach/components/
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const VIOLET = "#7B6FFF";
-const ROSE = "#D4538E";
-const GREEN = "#22C993";
+const VIOLET = "#C9A14A";
+const ROSE = "#C9A14A";
+const GREEN = "#9DB06A";
 const REST_DEFAULT = 90;
 const RING_R = 18;
 const RING_C = 2 * Math.PI * RING_R; // ≈ 113.097
 
 const BLOC_PALETTE = [
-  "#7B6FFF", "#F97316", "#22C55E", "#EF4444",
+  "#C9A14A", "#F97316", "#22C55E", "#EF4444",
   "#3B9EFF", "#FACC15", "#EC4899", "#14B8A6",
 ];
 
@@ -1481,7 +1481,7 @@ function getRirColor(val: string): string {
   if (n <= 2.5) return "#FACC15";
   if (n <= 3.5) return "#84CC16";
   if (n <= 4.5) return "#22C55E";
-  if (n <= 5)   return "#22C993";
+  if (n <= 5)   return "#9DB06A";
   return "#3B9EFF";
 }
 
@@ -1940,7 +1940,7 @@ function RpeSheetForLog({
     { v: 3,  label: "Facile",      color: "#84CC16" },
     { v: 4,  label: "Modéré",      color: "#FACC15" },
     { v: 5,  label: "Rythme",      color: "#F59E0B" },
-    { v: 6,  label: "Intense",     color: "#FB923C" },
+    { v: 6,  label: "Intense",     color: "#D99A3E" },
     { v: 7,  label: "Dur",         color: "#F97316" },
     { v: 8,  label: "Très dur",    color: "#EF4444" },
     { v: 9,  label: "Quasi max",   color: "#DC2626" },

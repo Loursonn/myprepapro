@@ -151,7 +151,7 @@ export default function ProfilPage() {
             style={{
               width: "100%", padding: "14px 16px", border: "none",
               background: "transparent", textAlign: "left",
-              color: "#EF4B4B", fontSize: 13, fontWeight: 600,
+              color: "#D9705A", fontSize: 13, fontWeight: 600,
               cursor: "pointer", fontFamily: "inherit",
               display: "flex", alignItems: "center", gap: 8, minHeight: 44,
             }}

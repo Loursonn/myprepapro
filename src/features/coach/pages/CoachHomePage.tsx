@@ -55,7 +55,7 @@ function initials(name: string) {
 
 function SectionTitle({ emoji, children }: { emoji?: string; children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-bold uppercase tracking-[0.6px] text-[#7C7480] mb-3 flex items-center gap-1.5">
+    <p className="text-[10px] font-bold uppercase tracking-[0.6px] text-[#7D7468] mb-3 flex items-center gap-1.5">
       {emoji && <span className="text-[11px]">{emoji}</span>}
       {children}
     </p>
@@ -64,7 +64,7 @@ function SectionTitle({ emoji, children }: { emoji?: string; children: React.Rea
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-[#252327] border border-[rgba(124,116,128,0.15)] rounded-2xl overflow-hidden ${className}`}>
+    <div className={`bg-[#1E1A16] border border-[rgba(124,116,128,0.15)] rounded-2xl overflow-hidden ${className}`}>
       {children}
     </div>
   );
@@ -74,7 +74,7 @@ function SkeletonRows({ n = 3 }: { n?: number }) {
   return (
     <div className="flex flex-col gap-2 p-4">
       {Array.from({ length: n }).map((_, i) => (
-        <Skeleton key={i} className="h-12 w-full rounded-xl bg-[#2A282C]" />
+        <Skeleton key={i} className="h-12 w-full rounded-xl bg-[#27221D]" />
       ))}
     </div>
   );
@@ -223,7 +223,7 @@ export default function CoachHomePage() {
                                 </span>
                                 <StatusPill status={s.status} />
                                 {s.rpeScore != null && (
-                                  <span className="text-[10px] font-bold px-1.5 py-px rounded bg-[rgba(59,141,240,0.12)] text-[#3B8DF0] border border-[rgba(59,141,240,0.2)]">
+                                  <span className="text-[10px] font-bold px-1.5 py-px rounded bg-[rgba(59,141,240,0.12)] text-[#7E9CA8] border border-[rgba(59,141,240,0.2)]">
                                     RPE {s.rpeScore}
                                   </span>
                                 )}
@@ -385,7 +385,7 @@ export default function CoachHomePage() {
               <SectionTitle emoji="🏋️">Mon programme</SectionTitle>
               <button
                 onClick={() => navigate(`/coach/athletes/${user.id}/planning`)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-colors hover:border-[rgba(168,85,247,0.5)]"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-colors hover:border-[rgba(201,161,74,0.5)]"
                 style={{ background: C.acS, border: `1px solid ${C.ac}40`, fontFamily: "inherit" }}
               >
                 <div
@@ -605,19 +605,19 @@ function ActionCounter({ emoji, label, count, loading, color, onClick }: ActionC
       onClick={onClick}
       className="flex flex-col items-center gap-1.5 py-4 px-2 rounded-2xl border transition-all cursor-pointer"
       style={{
-        background:  count > 0 ? color + "12" : "#252327",
+        background:  count > 0 ? color + "12" : "#1E1A16",
         borderColor: count > 0 ? color + "45" : "rgba(124,116,128,0.15)",
       }}
     >
       <span className="text-[20px] leading-none">{emoji}</span>
       {loading ? (
-        <Skeleton className="h-7 w-10 rounded bg-[#2A282C]" />
+        <Skeleton className="h-7 w-10 rounded bg-[#27221D]" />
       ) : (
-        <p className="text-[26px] font-extrabold leading-none" style={{ color: count > 0 ? color : "#7C7480" }}>
+        <p className="text-[26px] font-extrabold leading-none" style={{ color: count > 0 ? color : "#7D7468" }}>
           {count}
         </p>
       )}
-      <p className="text-[9px] font-bold uppercase tracking-wide text-center leading-tight" style={{ color: "#7C7480" }}>
+      <p className="text-[9px] font-bold uppercase tracking-wide text-center leading-tight" style={{ color: "#7D7468" }}>
         {label}
       </p>
     </div>

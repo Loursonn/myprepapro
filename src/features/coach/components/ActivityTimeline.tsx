@@ -5,9 +5,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ActivityItem } from "@/features/shared/hooks/useRecentActivity";
 
 const TYPE_META: Record<string, { icon: string; color: string }> = {
-  session:  { icon: "💪", color: "#A855F7" },   // primary violet
-  wellness: { icon: "❤️", color: "#22C993" },   // success vert
-  pr:       { icon: "🏆", color: "#FB923C" },   // tertiary orange
+  session:  { icon: "💪", color: "#C9A14A" },   // primary violet
+  wellness: { icon: "❤️", color: "#9DB06A" },   // success vert
+  pr:       { icon: "🏆", color: "#D99A3E" },   // tertiary orange
 };
 
 interface ActivityTimelineProps {

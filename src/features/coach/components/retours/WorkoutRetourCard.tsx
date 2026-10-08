@@ -21,7 +21,7 @@ const RED     = "#ef4444";
 const RED_S   = "rgba(239,68,68,0.10)";
 const AMBER   = "#f59e0b";
 const AMBER_S = "rgba(245,158,11,0.10)";
-const VIOLET  = "#7B6FFF";
+const VIOLET  = "#C9A14A";
 const VIOLET_S = "rgba(123,111,255,0.12)";
 
 interface WorkoutType {

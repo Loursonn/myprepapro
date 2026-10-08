@@ -82,7 +82,7 @@ export function MethodCard({
               {weekCount > 0 && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
-                  background: "rgba(123,111,255,0.15)", color: "#7B6FFF",
+                  background: "rgba(123,111,255,0.15)", color: "#C9A14A",
                 }}>
                   📅 {weekCount} sem.
                 </span>
@@ -120,7 +120,7 @@ export function MethodCard({
           <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
             {weeklyConfigs.map((wc) => (
               <div key={wc.week} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "#7B6FFF", flexShrink: 0, minWidth: 20 }}>S{wc.week}</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: "#C9A14A", flexShrink: 0, minWidth: 20 }}>S{wc.week}</span>
                 <span style={{ fontSize: 10, color: C.tx3, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {wc.config ? methodConfigToText(wc.config as MethodConfig) : "—"}
                 </span>

@@ -3,7 +3,7 @@ import { C } from "@/lib/theme"
 import { supabase } from "@/integrations/supabase/client"
 import { Copy } from "lucide-react"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 
 interface SemaineNavProps {

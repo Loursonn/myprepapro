@@ -21,11 +21,11 @@ import { localISO } from "@/lib/date";
 // ── Palette des blocs ─────────────────────────────────────────────────────────
 
 const COL = {
-  identity:  "#7B6FFF",
+  identity:  "#C9A14A",
   nutrition: "#F5A623",
-  sleep:     "#3B8DF0",
-  habits:    "#22C993",
-  perfs:     "#D4538E",
+  sleep:     "#7E9CA8",
+  habits:    "#9DB06A",
+  perfs:     "#C9A14A",
 };
 
 // ── Section shell ─────────────────────────────────────────────────────────────

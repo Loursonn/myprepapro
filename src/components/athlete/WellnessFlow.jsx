@@ -37,7 +37,7 @@ function BodyMap({selected,onToggle,color}){
 }
 
 // ── Free-point DOMS BodyMap ─────────────────────────────────────────────────
-const DOMS_COLORS = ["#F5A623", "#F07030", "#EF4B4B"];
+const DOMS_COLORS = ["#F5A623", "#F07030", "#D9705A"];
 function domsColor(intensity) {
   if (!intensity || intensity <= 3) return DOMS_COLORS[0];
   if (intensity <= 6) return DOMS_COLORS[1];
@@ -313,7 +313,7 @@ function WellnessFlow({existing,onSave,sleepTarget,onAddInjury,weightLog}){
         setStep(nv.doms<=3?S_DOMS_ZONES:S_INJURY); // doms<=3 = douleurs significatives → zones
       } else {setStep(step+1);}
     };
-    const BTN_COLORS=["#EF4B4B","#F07030","#F5A623","#7BC67E",C.g];
+    const BTN_COLORS=["#D9705A","#F07030","#F5A623","#7BC67E",C.g];
     return(<div style={{padding:"20px 20px 40px"}}>{progBar}
       <div style={{fontSize:13,fontWeight:600,color:C.tx2,textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:8}}>Question {step+1}/5</div>
       <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.5px",marginBottom:6}}>{it.q}</div>

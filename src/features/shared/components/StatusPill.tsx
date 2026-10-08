@@ -9,32 +9,32 @@ const CONFIG: Record<
   planned: {
     label: "Planifiée",
     bg:    "rgba(124,116,128,0.18)",
-    color: "#7C7480",
-    dot:   "#7C7480",
+    color: "#7D7468",
+    dot:   "#7D7468",
   },
   "in-progress": {
     label: "En cours",
-    bg:    "rgba(168,85,247,0.18)",
-    color: "#A855F7",
-    dot:   "#A855F7",
+    bg:    "rgba(201,161,74,0.18)",
+    color: "#C9A14A",
+    dot:   "#C9A14A",
   },
   completed: {
     label: "Terminée",
     bg:    "rgba(34,201,147,0.15)",
-    color: "#22C993",
-    dot:   "#22C993",
+    color: "#9DB06A",
+    dot:   "#9DB06A",
   },
   missed: {
     label: "Manquée",
     bg:    "rgba(251,146,60,0.15)",
-    color: "#FB923C",
-    dot:   "#FB923C",
+    color: "#D99A3E",
+    dot:   "#D99A3E",
   },
   skipped: {
     label: "Ignorée",
     bg:    "rgba(244,114,182,0.15)",
-    color: "#F472B6",
-    dot:   "#F472B6",
+    color: "#C9A14A",
+    dot:   "#C9A14A",
   },
 };
 

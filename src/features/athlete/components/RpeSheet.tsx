@@ -131,7 +131,7 @@ export function RpeSheet({ sessionId, scheduledDate, onClose }: RpeSheetProps) {
             cursor: selected != null ? "pointer" : "default",
             fontFamily: "inherit", minHeight: 44,
             transition: "background 150ms",
-            boxShadow: selected != null ? "0 4px 20px rgba(168,85,247,0.3)" : "none",
+            boxShadow: selected != null ? "0 4px 20px rgba(201,161,74,0.3)" : "none",
           }}
         >
           {isPending ? "Enregistrement…" : "Enregistrer"}

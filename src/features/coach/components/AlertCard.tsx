@@ -4,10 +4,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 export type AlertVariant = "danger" | "warning" | "success" | "coach";
 
 const VARIANT_COLORS: Record<AlertVariant, string> = {
-  danger:  "#EF4B4B",   // surcharge / séance manquée
-  warning: "#FB923C",   // attention — orange tertiary
-  success: "#22C993",   // positif — vert
-  coach:   "#F472B6",   // compétition priorité A — rose secondary
+  danger:  "#D9705A",   // surcharge / séance manquée
+  warning: "#D99A3E",   // attention — orange tertiary
+  success: "#9DB06A",   // positif — vert
+  coach:   "#C9A14A",   // compétition priorité A — rose secondary
 };
 
 interface AlertRow {

@@ -120,11 +120,11 @@ function iconBtn(color: string): React.CSSProperties {
 // ── Couleur /5 (nuance rouge → vert) ──────────────────────────────────────────
 function scoreColor(n: number | null): string {
   if (n == null) return C.tx3;
-  if (n <= 1) return '#EF4B4B';
-  if (n <= 2) return '#FB923C';
-  if (n <= 3) return '#E8C93A';
+  if (n <= 1) return '#D9705A';
+  if (n <= 2) return '#D99A3E';
+  if (n <= 3) return '#D99A3E';
   if (n <= 4) return '#84CC16';
-  return '#22C993';
+  return '#9DB06A';
 }
 
 // ── Vue Bilan articulaire (dérivée des tests, groupée par articulation) ────────

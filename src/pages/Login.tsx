@@ -100,12 +100,12 @@ export default function Login() {
   }
 
   const S = {
-    bg: "#08090C", s1: "#111318", s2: "#181B24",
-    brd: "rgba(255,255,255,0.06)", brdL: "rgba(255,255,255,0.1)",
-    tx: "#F2F2F4", tx2: "#9194A0", tx3: "#555866",
-    ac: "#7B6FFF", acS: "rgba(123,111,255,0.12)",
-    coach: "#D4538E", coachS: "rgba(212,83,142,0.12)",
-    g: "#22C993", r: "#EF4B4B",
+    bg: "#15120F", s1: "#1E1A16", s2: "#27221D",
+    brd: "rgba(231,211,168,0.10)", brdL: "rgba(231,211,168,0.18)",
+    tx: "#F4EFE3", tx2: "#B9AE9C", tx3: "#7D7468",
+    ac: "#C9A14A", acS: "rgba(201,161,74,0.12)",
+    coach: "#C9A14A", coachS: "rgba(201,161,74,0.12)",
+    g: "#9DB06A", r: "#D9705A",
   };
 
   const inputStyle: React.CSSProperties = {
@@ -144,7 +144,7 @@ export default function Login() {
 
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 32, fontWeight: 900, color: S.tx, letterSpacing: "-1px" }}>MyPrepaPro</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: S.tx, letterSpacing: "-1px" }}>Agon</div>
           <div style={{ fontSize: 13, color: S.tx3, marginTop: 4 }}>Suivi de préparation physique</div>
         </div>
 

@@ -232,7 +232,7 @@ function WorkoutCard({ w }: { w: WorkoutDetail }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, color: C.tx2 }}>{name}</span>
                   {planned?.method && (
-                    <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 3, background: "rgba(123,111,255,0.12)", color: "#7B6FFF", fontWeight: 600 }}>
+                    <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 3, background: "rgba(123,111,255,0.12)", color: "#C9A14A", fontWeight: 600 }}>
                       {planned.method}
                     </span>
                   )}
@@ -349,7 +349,7 @@ function EnergyCard({ e }: { e: EnergySessionDetail }) {
   const dist     = e.distance_m != null
     ? e.distance_m >= 1000 ? `${(e.distance_m / 1000).toFixed(1)}km` : `${e.distance_m}m`
     : null;
-  const col      = e.partial ? "#3B8DF0" : e.completed ? C.g : C.o;
+  const col      = e.partial ? "#7E9CA8" : e.completed ? C.g : C.o;
   const blEntries  = e.block_logs ? Object.entries(e.block_logs) : [];
   const doneCount  = blEntries.filter(([, b]) => b.done).length;
   const totalCount = blEntries.length;

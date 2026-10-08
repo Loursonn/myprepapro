@@ -13,7 +13,7 @@ type DayEnergy  = WeeklyRetourData["energy_sessions"][number];
 type DayTest    = WeeklyRetourData["test_sessions"][number];
 
 const TEST_TYPE_COLOR: Record<string, string> = {
-  musculation: "#7B6FFF", endurance: "#3B8DF0", vitesse: "#EF4444",
+  musculation: "#C9A14A", endurance: "#7E9CA8", vitesse: "#EF4444",
   puissance: "#F59E0B", souplesse: "#10B981", autre: "#6B7280",
 };
 
@@ -237,7 +237,7 @@ function EnergyRow({ session, isRescheduled }: { session: DayEnergy; isReschedul
   const hasDetail = done || session.note || session.duration_min != null;
 
   const kindColors: Record<string, string> = {
-    vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+    vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
     footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623",
   };
   const kindColor = kindColors[session.session_kind ?? ""] ?? "#6B7280";
@@ -504,7 +504,7 @@ function WorkoutDetailModal({ workout, prevWorkout, onClose }: { workout: DayWor
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{name}</span>
                   {planned?.method && (
-                    <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "rgba(123,111,255,0.12)", color: "#7B6FFF", fontWeight: 600 }}>
+                    <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "rgba(123,111,255,0.12)", color: "#C9A14A", fontWeight: 600 }}>
                       {planned.method}
                     </span>
                   )}
@@ -518,7 +518,7 @@ function WorkoutDetailModal({ workout, prevWorkout, onClose }: { workout: DayWor
                 {/* Planned — chip style */}
                 {planned && planned.sets > 0 && (
                   <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 9, fontWeight: 800, color: "#7B6FFF", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>Prévu</div>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: "#C9A14A", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 }}>Prévu</div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {[
                         { l: "Séries", v: String(planned.sets) },
@@ -577,7 +577,7 @@ function WorkoutDetailModal({ workout, prevWorkout, onClose }: { workout: DayWor
                           {s.kg != null && <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>{s.kg} kg</span>}
                           {s.reps != null && <span style={{ fontSize: 12, color: C.tx }}>× {s.reps}</span>}
                           {s.rir != null && <span style={{ fontSize: 11, color: C.tx3 }}>RIR {s.rir}</span>}
-                          {s.method && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(123,111,255,0.12)", color: "#7B6FFF", fontWeight: 600 }}>{s.method}</span>}
+                          {s.method && <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 3, background: "rgba(123,111,255,0.12)", color: "#C9A14A", fontWeight: 600 }}>{s.method}</span>}
                           <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: sc }}>{ok ? "✓" : "~"}</span>
                         </div>
                       );

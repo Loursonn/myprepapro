@@ -5,12 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import AthleteProfileForm from "@/components/coach/AthleteProfileForm";
 
 const C = {
-  bg: "#08090C", s1: "#111318", s2: "#181B24",
+  bg: "#15120F", s1: "#1E1A16", s2: "#27221D",
   brd: "rgba(255,255,255,0.06)", brdL: "rgba(255,255,255,0.1)",
   tx: "#F2F2F4", tx2: "#9194A0", tx3: "#555866",
-  ac: "#7B6FFF", acS: "rgba(123,111,255,0.12)",
-  coach: "#D4538E", coachS: "rgba(212,83,142,0.12)",
-  g: "#22C993", r: "#EF4B4B",
+  ac: "#C9A14A", acS: "rgba(123,111,255,0.12)",
+  coach: "#C9A14A", coachS: "rgba(212,83,142,0.12)",
+  g: "#9DB06A", r: "#D9705A",
 };
 
 export default function CoachDashboard() {
@@ -116,7 +116,7 @@ export default function CoachDashboard() {
 
             {/* Déconnexion */}
             <button onClick={() => setShowLogoutConfirm(true)}
-              style={{ width: "100%", marginTop: 8, padding: "12px", borderRadius: 12, border: "1px solid rgba(239,75,75,0.3)", background: "rgba(239,75,75,0.1)", color: "#EF4B4B", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              style={{ width: "100%", marginTop: 8, padding: "12px", borderRadius: 12, border: "1px solid rgba(239,75,75,0.3)", background: "rgba(239,75,75,0.1)", color: "#D9705A", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               <span>⏻</span><span>Déconnexion</span>
             </button>
           </div>

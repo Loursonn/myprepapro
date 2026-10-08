@@ -40,13 +40,13 @@ const dayCollisionDetection: CollisionDetection = (args) => {
 };
 
 const KIND_COLORS: Record<string, string> = {
-  vo2:        "#A855F7",
-  tempo:      "#3B8DF0",
-  seuil:      "#FB923C",
-  footing:    "#22C993",
-  fartlek:    "#E8C93A",
-  autre:      "#7C7480",
-  custom:     "#F472B6",
+  vo2:        "#C9A14A",
+  tempo:      "#7E9CA8",
+  seuil:      "#D99A3E",
+  footing:    "#9DB06A",
+  fartlek:    "#D99A3E",
+  autre:      "#7D7468",
+  custom:     "#C9A14A",
   specifique: "#F5A623",
 };
 
@@ -232,7 +232,7 @@ function DraggableBankSession({ session }: { session: EnergySessionRow }) {
     id: `bank_${session.id}`,
     data: { bankSession: session },
   });
-  const kc = KIND_COLORS[session.session_kind] ?? "#A855F7";
+  const kc = KIND_COLORS[session.session_kind] ?? "#C9A14A";
   return (
     <div
       ref={setNodeRef}

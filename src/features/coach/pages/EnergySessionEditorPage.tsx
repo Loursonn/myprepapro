@@ -110,7 +110,7 @@ function AssignModal({
 // ── Import session modal ─────────────────────────────────────────────────────
 
 const KIND_COLOR: Record<string, string> = {
-  vo2: "#A855F7", tempo: "#3B8DF0", seuil: "#F59E0B",
+  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
   footing: "#22C55E", fartlek: "#EC4899", autre: "#6B7280", custom: "#14B8A6",
 };
 
@@ -496,7 +496,7 @@ export default function EnergySessionEditorPage() {
                 onChange={setQualityId}
                 onCreate={async (n) => user?.id ? await createQuality.mutateAsync({ name: n, coachId: user.id }) : undefined}
                 width={150}
-                accent="#7B6FFF"
+                accent="#C9A14A"
               />
               {/* Legacy WOD pleine page : proposer la conversion en blocs */}
               {format === "wod" && (

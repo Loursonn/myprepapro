@@ -164,7 +164,7 @@ function ResultCard({
                 return (
                   <div key={v.id} style={{
                     padding: '4px 10px', borderRadius: 7,
-                    background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)',
+                    background: 'rgba(201,161,74,0.08)', border: '1px solid rgba(201,161,74,0.15)',
                   }}>
                     <span style={{ fontSize: 11, color: C.tx3 }}>
                       {varDef?.label ?? '—'}{' '}
@@ -203,7 +203,7 @@ function ResultCard({
                 disabled={deleting}
                 style={{
                   padding: '5px 10px', borderRadius: 6, border: 'none', fontFamily: 'inherit',
-                  background: 'rgba(239,75,75,0.15)', color: '#EF4B4B',
+                  background: 'rgba(239,75,75,0.15)', color: '#D9705A',
                   fontSize: 11, fontWeight: 700, cursor: 'pointer',
                 }}
               >
@@ -221,7 +221,7 @@ function ResultCard({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'color 150ms ease-out',
             }}
-            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#EF4B4B')}
+            onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = '#D9705A')}
             onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = C.tx3)}
             >
               <Trash2 size={13} />
@@ -601,12 +601,12 @@ const inputStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   display: 'block', fontSize: 10, fontWeight: 600,
-  color: '#7C7480', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6,
+  color: '#7D7468', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6,
 };
 
 const cancelBtnStyle: React.CSSProperties = {
   padding: '9px 18px', borderRadius: 9,
   border: '1px solid rgba(255,255,255,0.08)',
-  background: 'transparent', color: '#7C7480',
+  background: 'transparent', color: '#7D7468',
   fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
 };

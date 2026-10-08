@@ -52,10 +52,10 @@ const PREDEFINED_KEYS = new Set(METRICS.map((m) => m.key));
 
 const CATEGORY_COLOR: Record<Category, string> = {
   cardio:    "#EF4444",
-  vitesse:   "#3B8DF0",
+  vitesse:   "#7E9CA8",
   puissance: "#F59E0B",
   corpo:     "#10B981",
-  custom:    "#A855F7",
+  custom:    "#C9A14A",
 };
 
 // ── Zone FC computations ──────────────────────────────────────────────────────

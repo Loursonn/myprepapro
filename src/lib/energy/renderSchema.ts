@@ -31,7 +31,7 @@ export const FIELD_BACKGROUNDS: Record<FieldType, string> = {
     ${[0, 1, 2, 3].map(i => `<rect x="${40 + i * 14}" y="${40 + i * 14}" width="${420 - i * 28}" height="${240 - i * 28}" rx="${110 - i * 14}" fill="none" stroke="#ffffffaa" stroke-width="1.5"/>`).join("")}
     <line x1="250" y1="280" x2="250" y2="320" stroke="#ffffffaa" stroke-width="2"/>`,
 
-  vide: `<rect width="500" height="320" fill="#111318"/>
+  vide: `<rect width="500" height="320" fill="#1E1A16"/>
     ${Array.from({ length: 9 }, (_, i) => `<line x1="${(i + 1) * 50}" y1="0" x2="${(i + 1) * 50}" y2="320" stroke="#ffffff11"/>`).join("")}
     ${Array.from({ length: 5 }, (_, i) => `<line x1="0" y1="${(i + 1) * 53}" x2="500" y2="${(i + 1) * 53}" stroke="#ffffff11"/>`).join("")}`,
 };
@@ -146,7 +146,7 @@ export const SCHEMA_COLORS = [
   { color: "#E5484D", label: "Sprint" },
   { color: "#F5A623", label: "Tempo" },
   { color: "#4FA3FF", label: "Footing" },
-  { color: "#22C993", label: "Récup" },
+  { color: "#9DB06A", label: "Récup" },
 ] as const;
 
 // ── Arrowhead computation ───────────────────────────────────────────────────

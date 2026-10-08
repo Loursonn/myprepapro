@@ -33,6 +33,9 @@ interface AuthContextType {
   registerAthlete: (email: string, password: string, fullName: string, token: string) => Promise<void>;
   registerAthleteWithCode: (email: string, password: string, fullName: string, coachCode: string) => Promise<void>;
   linkToCoach: (coachCode: string) => Promise<void>;
+  unlinkFromCoach: () => Promise<void>;
+  removeSelfAsAthlete: () => Promise<void>;
+  becomeSelfCoach: () => Promise<void>;
   logout: () => Promise<void>;
   createInviteLink: () => Promise<string>;
   updateAthleteProfile: (athleteId: string, fields: {
@@ -190,8 +193,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq("coach_code", coachCode.toUpperCase().trim())
       .maybeSingle();
     if (!coach) throw new Error("Code coach invalide");
+    if (coach.id === user.id) throw new Error("Tu ne peux pas entrer ton propre code coach");
     const { error } = await supabase.from("profiles").update({ coach_id: coach.id }).eq("id", user.id);
     if (error) throw new Error("Erreur lors de l'assignation");
+    await fetchProfile(user.id);
+  }
+
+  async function unlinkFromCoach() {
+    if (!user) throw new Error("Non connecté");
+    // Quitter un coach externe → coach_athlete redevient son propre coach, athlete pur → null
+    const newCoachId = profile?.role === "coach_athlete" ? user.id : null;
+    const { error } = await supabase.from("profiles").update({ coach_id: newCoachId }).eq("id", user.id);
+    if (error) throw new Error("Erreur lors de la déconnexion du coach");
+    await fetchProfile(user.id);
+  }
+
+  async function removeSelfAsAthlete() {
+    if (!user) throw new Error("Non connecté");
+    // coach_athlete se retire de ses propres athlètes (coach_id = null)
+    const { error } = await supabase.from("profiles").update({ coach_id: null }).eq("id", user.id);
+    if (error) throw new Error("Erreur");
+    await fetchProfile(user.id);
+  }
+
+  async function becomeSelfCoach() {
+    if (!user) throw new Error("Non connecté");
+    // coach_athlete redevient son propre athlète (coach_id = self)
+    const { error } = await supabase.from("profiles").update({ coach_id: user.id }).eq("id", user.id);
+    if (error) throw new Error("Erreur");
     await fetchProfile(user.id);
   }
 
@@ -242,7 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user, profile, loading,
       athletes, activeAthleteId, setActiveAthleteId,
       login, registerCoach, registerAthlete, registerAthleteWithCode,
-      linkToCoach, logout, createInviteLink, updateAthleteProfile,
+      linkToCoach, unlinkFromCoach, removeSelfAsAthlete, becomeSelfCoach, logout, createInviteLink, updateAthleteProfile,
     }}>
       {children}
     </AuthContext.Provider>

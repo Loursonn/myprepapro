@@ -164,7 +164,7 @@ export default function SessionPreview({ intervals, athleteId, compact = false }
           const w      = Math.max(1, x2 - x);
           const isExo  = fi.interval.type === "exercise";
           const barH   = isExo ? Math.max(2, 0.55 * BAR_AREA) : Math.max(2, (displayPct / 100) * BAR_AREA);
-          const fill   = isExo ? "#7B6FFF" : intensityToColor(displayPct);
+          const fill   = isExo ? "#C9A14A" : intensityToColor(displayPct);
           const opacity = isExo ? 0.8 : isFallback ? 0.55 : 0.85;
           const barY   = BAR_AREA - barH;
 

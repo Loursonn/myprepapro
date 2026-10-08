@@ -17,7 +17,7 @@ import { BlocForm } from "./BlocForm"
 import { SemaineNav } from "./SemaineNav"
 import { useBlocBank } from "./hooks/useBlocBank"
 
-const VIOLET = "#7B6FFF"
+const VIOLET = "#C9A14A"
 
 interface SessionBlocEditorProps {
   session: ProgSession

@@ -1,52 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,200..700&family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Agon — direction artistique "futurisme antique" */
 
 @layer base {
-  /* App dark-only — palette v2 MyPrepaPro */
   :root {
-    --background: 300 3% 11%;         /* #1D1C1E */
-    --foreground: 0 0% 100%;          /* #FFFFFF */
+    --background: 24 18% 7%;             /* #15120F obsidienne */
+    --foreground: 38 43% 92%;            /* #F4EFE3 marbre */
 
-    --card: 300 4% 14%;               /* #252327 */
-    --card-foreground: 0 0% 100%;
+    --card: 24 14% 10%;                  /* #1E1A16 basalte */
+    --card-foreground: 38 43% 92%;
 
-    --popover: 300 4% 16%;            /* #2A282C */
-    --popover-foreground: 0 0% 100%;
+    --popover: 24 12% 13%;               /* #27221D basalte 2 */
+    --popover-foreground: 38 43% 92%;
 
-    --primary: 271 91% 65%;           /* #A855F7 violet */
-    --primary-foreground: 0 0% 100%;
+    --primary: 40 52% 54%;               /* #C9A14A or */
+    --primary-foreground: 24 18% 7%;     /* obsidienne */
 
-    --secondary: 330 86% 70%;         /* #F472B6 rose */
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 33 48% 49%;             /* #A67C52 bronze */
+    --secondary-foreground: 38 43% 92%;
 
-    --muted: 300 4% 16%;
-    --muted-foreground: 291 4% 48%;   /* #7C7480 */
+    --muted: 24 12% 13%;
+    --muted-foreground: 27 8% 45%;       /* #7D7468 pierre */
 
-    --accent: 271 91% 65%;            /* #A855F7 */
-    --accent-foreground: 0 0% 100%;
+    --accent: 40 52% 54%;               /* #C9A14A or */
+    --accent-foreground: 24 18% 7%;
 
-    --destructive: 0 80% 61%;         /* #EF4B4B */
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 12 62% 60%;           /* #D9705A terracotta */
+    --destructive-foreground: 38 43% 92%;
 
-    --border: 291 5% 47% / 0.2;       /* rgba(124,116,128,0.2) */
-    --input: 300 4% 16%;
-    --ring: 271 91% 65%;
+    --border: 38 43% 78% / 0.10;         /* sable 10% */
+    --input: 24 12% 13%;
+    --ring: 40 52% 54%;
 
-    --radius: 0.75rem;
+    --radius: 0.625rem;                  /* 10px — agon-radius */
 
-    --sidebar-background: 300 3% 11%; /* #1D1C1E */
-    --sidebar-foreground: 291 4% 48%;
-    --sidebar-primary: 271 91% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 271 91% 65% / 0.1;
-    --sidebar-accent-foreground: 271 91% 65%;
-    --sidebar-border: 291 5% 47% / 0.2;
-    --sidebar-ring: 271 91% 65%;
+    --sidebar-background: 24 18% 7%;
+    --sidebar-foreground: 27 8% 45%;
+    --sidebar-primary: 40 52% 54%;
+    --sidebar-primary-foreground: 24 18% 7%;
+    --sidebar-accent: 40 52% 54% / 0.1;
+    --sidebar-accent-foreground: 40 52% 54%;
+    --sidebar-border: 38 43% 78% / 0.10;
+    --sidebar-ring: 40 52% 54%;
   }
 }
 
@@ -56,8 +55,9 @@ All colors MUST be HSL.
   }
 
   html, body, #root {
-    background-color: #1D1C1E;
-    color: #FFFFFF;
+    background-color: #15120F;
+    color: #F4EFE3;
+    font-family: "Geist", system-ui, sans-serif;
     @apply bg-background text-foreground;
   }
 }

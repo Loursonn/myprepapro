@@ -12,9 +12,9 @@ const EQUIPMENT_LABEL: Record<string, string> = {
 };
 
 const COLORS = {
-  warmup: "#22C993", work: "#E5484D", recovery: "#4FA3FF",
-  rest: "#8B8A92", cooldown: "#22C993", open: "#8B8A92",
-  exercise: "#7B6FFF", repeat: "#F5A623",
+  warmup: "#9DB06A", work: "#E5484D", recovery: "#4FA3FF",
+  rest: "#8B8A92", cooldown: "#9DB06A", open: "#8B8A92",
+  exercise: "#C9A14A", repeat: "#F5A623",
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -53,7 +53,7 @@ function StepCard({ step, color, children }: {
   return (
     <div style={{
       display: "flex", gap: 12,
-      background: "var(--card, #1D1C1E)", border: "1px solid var(--border, #2E2D33)",
+      background: "var(--card, #15120F)", border: "1px solid var(--border, #2E2D33)",
       borderLeft: `4px solid ${color}`,
       borderRadius: 12, padding: "12px 14px", marginBottom: 8,
     }}>

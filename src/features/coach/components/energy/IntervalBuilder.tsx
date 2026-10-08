@@ -25,7 +25,7 @@ import IntervalEditor from "./IntervalEditor";
 import ExerciseStepEditor from "./ExerciseStepEditor";
 import { C } from "@/lib/theme";
 
-const EXO_COLOR = "#7B6FFF";
+const EXO_COLOR = "#C9A14A";
 
 // ── Role colors ───────────────────────────────────────────────────────────────
 
