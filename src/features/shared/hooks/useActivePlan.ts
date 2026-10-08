@@ -9,7 +9,7 @@
  *   + energy_session_assignments (current week, all statuses)
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { QK } from "@/lib/queryKeys";
 import { localISO } from "@/lib/date";
@@ -102,10 +102,10 @@ export function localToday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Returns Mon–Sun ISO range for the week containing today. */
-export function currentWeekRange(): { mondayISO: string; sundayISO: string } {
+/** Returns Mon–Sun ISO range for the week containing today, shifted by `weekOffset` weeks. */
+export function currentWeekRange(weekOffset = 0): { mondayISO: string; sundayISO: string } {
   const d = new Date();
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + weekOffset * 7);
   d.setHours(0, 0, 0, 0);
   const sun = new Date(d);
   sun.setDate(d.getDate() + 6);
@@ -137,14 +137,15 @@ export function timeProgressPct(startDate: string, endDate: string): number {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useActivePlan(athleteId: string) {
+export function useActivePlan(athleteId: string, weekOffset = 0) {
   return useQuery({
-    queryKey: QK.activePlan(athleteId),
+    queryKey: [...QK.activePlan(athleteId), weekOffset],
     enabled: !!athleteId,
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
     queryFn: async (): Promise<ActivePlanResult> => {
       const today = localToday();
-      const { mondayISO, sundayISO } = currentWeekRange();
+      const { mondayISO, sundayISO } = currentWeekRange(weekOffset);
 
       // ── 1. Active macrocycle ───────────────────────────────────────────────
       const { data: macros } = await supabase

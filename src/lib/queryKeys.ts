@@ -61,4 +61,8 @@ export const QK = {
   roadmapPhases: ['roadmap-phases'] as const,
   roadmapItems:  (phaseId?: string) => phaseId ? ['roadmap-items', phaseId] : ['roadmap-items'] as const,
   roadmapVotes:  (userId: string)   => ['roadmap-votes', userId]             as const,
+  // ── Avis athlètes (retours sur l'app) ─────────────────────────────────────────
+  appFeedbackList: ['app-feedback'] as const,
+  // ── Tendances athlète (Mon profil) ────────────────────────────────────────────
+  athleteInsights: (aid: string, day: string) => ['athlete-insights', aid, day] as const,
 } as const;

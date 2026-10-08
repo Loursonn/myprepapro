@@ -28,6 +28,7 @@ const NAV_ITEMS = [
 { icon: "🧪", label: "Tests",      path: "/coach/tests",            exact: false, certified: false, roadmap: false },
   { icon: "🎖️", label: "Coachs",    path: "/coach/coaches",          exact: false, certified: true,  roadmap: false },
   { icon: "🗺️", label: "Roadmap",   path: "/coach/roadmap",          exact: false, certified: false, roadmap: true  },
+  { icon: "📣", label: "Avis athlètes", path: "/coach/avis",        exact: false, certified: false, roadmap: true  },
   { icon: "⚙️", label: "Paramètres", path: "/coach/settings",        exact: false, certified: false, roadmap: false },
 ] as const;
 

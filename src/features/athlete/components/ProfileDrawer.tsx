@@ -1,16 +1,20 @@
 import { useState } from "react";
+import type React from "react";
 import { C } from "@/lib/theme";
 import { useAthleteContext } from "@/features/shared/context/AthleteContext";
 import { useNavigate } from "react-router-dom";
 import PerformanceProfile from "@/components/athlete/PerformanceProfile";
-import { WeightChart, SleepTunnel, MiniChart } from "@/components/athlete/StatsCharts";
+import { WeightChart, SleepTunnel } from "@/components/athlete/StatsCharts";
 import { getWellnessChartData } from "@/lib/calculations";
 import { getReco } from "@/lib/wellness";
 import { ALL_BZ } from "@/lib/muscles";
 import { stC } from "@/lib/muscles";
-import { e1rm } from "@/lib/exercises";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { todayKey } from "@/lib/date";
+import { useAthleteTrends, useAthleteInsights } from "@/features/shared/hooks/useAthleteTrends";
+import { TrendCard } from "@/features/athlete/components/profile/TrendCard";
+import { AppFeedbackSection } from "@/features/athlete/components/profile/AppFeedbackSection";
+import type { TrendSummary } from "@/lib/athleteTrends";
 import { supabase } from "@/integrations/supabase/client";
 import type { Profile } from "@/hooks/useAuth";
 
@@ -18,155 +22,95 @@ interface Props {
   onClose: () => void;
 }
 
+const PERIODS = [{ d: 7, l: "7 j" }, { d: 30, l: "30 j" }, { d: 90, l: "3 mois" }] as const;
+
+const fmt = (v: number | null, digits = 0) => v === null ? "—" : v.toFixed(digits).replace(".", ",");
+const fmtDay = (iso: string) => new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+const sectionTitle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px" };
+
 export default function ProfileDrawer({ onClose }: Props) {
-  const { athleteId, athleteProfile, viewOnly, activeInjuries, injuries, wellness, wScore, wReco, weightLog, weightMilestones, bodyWeight, wellnessHistory, nutritionStrategy, sets, exos, tw, coachFeedbacks } = useAthleteContext();
+  const { athleteId, athleteProfile, viewOnly, activeInjuries, wellness, wScore, wReco, weightLog, weightMilestones, bodyWeight, wellnessHistory, nutritionStrategy, coachFeedbacks, goals, streak } = useAthleteContext();
   const navigate = useNavigate();
   const [drawerSportOpen, setDrawerSportOpen] = useState(false);
-  const [drawerPrOpen, setDrawerPrOpen] = useState(false);
-  const [drawerInjOpen, setDrawerInjOpen] = useState(false);
+  const [drawerInjOpen, setDrawerInjOpen] = useState(true);
   const [drawerZoom, setDrawerZoom] = useState<string | null>(null);
   const [wellnessPeriod, setWellnessPeriod] = useState("month");
-  const [prSearch, setPrSearch] = useState("");
-  const [prExName, setPrExName] = useState<string | null>(null);
-  const [prTab, setPrTab] = useState("est");
+  const [days, setDays] = useState<number>(30);
+
+  const { summary: t, ready } = useAthleteTrends(days);
+  const { insights, source, loading: insightsLoading } = useAthleteInsights(t, ready);
 
   const ap = athleteProfile as Profile | null;
+  const name = ap ? ([ap.first_name, ap.last_name].filter(Boolean).join(" ") || ap.full_name || "Athlète") : "Athlète";
 
-  const weeks = Object.keys(coachFeedbacks).map(Number).filter(Boolean).sort((a, b) => b - a);
-  const latestWeek = weeks[0];
-  const latestFb = latestWeek ? coachFeedbacks[latestWeek] : null;
+  // Retour coach : uniquement s'il date des 14 derniers jours
+  const recentFb = Object.entries(coachFeedbacks)
+    .map(([w, fb]) => ({ week: Number(w), ...fb }))
+    .filter(fb => fb.note && fb.date && Date.now() - new Date(fb.date).getTime() <= 14 * 86_400_000)
+    .sort((a, b) => (a.date! < b.date! ? 1 : -1))[0];
+
+  const weightToTarget = t.weight.value !== null && t.weightTarget ? Math.round((t.weightTarget - t.weight.value) * 10) / 10 : null;
+  const weightGoodWhenUp = t.weightTarget && t.weight.prev !== null ? t.weightTarget > t.weight.prev : null;
 
   // Zoom overlay
   if (drawerZoom) return (
     <div style={{ position: "fixed", inset: 0, zIndex: 103, background: C.bg, overflowY: "auto", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid " + C.brd, position: "sticky", top: 0, background: C.bg, zIndex: 2 }}>
         <button onClick={() => setDrawerZoom(null)} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 18, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>←</button>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>{drawerZoom === "weight" ? "Poids de corps" : drawerZoom === "wellness" ? "Forme du jour" : drawerZoom === "goals" ? "Objectifs" : "Score de santé"}</div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{drawerZoom === "weight" ? "Poids de corps" : drawerZoom === "wellness" ? "Forme & santé" : drawerZoom === "sleep" ? "Sommeil" : "Objectifs"}</div>
       </div>
       <div style={{ padding: "16px" }}>
         {drawerZoom === "weight" && (
           <div style={{ background: C.s1, borderRadius: 14, padding: "16px", border: "1px solid " + C.brd }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>Évolution du poids</div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.ac }}>{bodyWeight.current || "—"}<span style={{ fontSize: 10, fontWeight: 400, color: C.tx3 }}> / {bodyWeight.target || "—"} kg</span></div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.ac }}>{t.weight.value ?? bodyWeight.current ?? "—"}<span style={{ fontSize: 10, fontWeight: 400, color: C.tx3 }}> / {t.weightTarget || "—"} kg</span></div>
             </div>
             {Object.keys(weightLog).length > 0 ? <WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy} /> : <div style={{ textAlign: "center", color: C.tx3, fontSize: 11, padding: "24px 0" }}>Aucune mesure enregistrée</div>}
           </div>
         )}
-        {drawerZoom === "wellness" && wellness && (
+        {drawerZoom === "wellness" && (
           <WellnessZoomContent wellness={wellness} wScore={wScore} wReco={wReco} wellnessHistory={wellnessHistory} wellnessPeriod={wellnessPeriod} setWellnessPeriod={setWellnessPeriod} />
         )}
+        {drawerZoom === "sleep" && <SleepZoomContent summary={t} goals={goals} wellnessHistory={wellnessHistory} />}
         {drawerZoom === "goals" && <GoalsZoomContent />}
-        {drawerZoom === "health" && (
-          <div style={{ background: C.s1, borderRadius: 14, padding: "16px", border: "1px solid " + C.brd }}>
-            <WellnessChart wellnessHistory={wellnessHistory} period={wellnessPeriod} setPeriod={setWellnessPeriod} height={200} />
-          </div>
-        )}
       </div>
     </div>
   );
 
   return (
-    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(360px,92vw)", zIndex: 102, background: C.bg, overflowY: "auto", display: "flex", flexDirection: "column", boxShadow: "-4px 0 32px rgba(0,0,0,0.6)", borderLeft: "1px solid " + C.brd }}>
+    <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(400px,94vw)", zIndex: 102, background: C.bg, overflowY: "auto", display: "flex", flexDirection: "column", boxShadow: "-4px 0 32px rgba(0,0,0,0.6)", borderLeft: "1px solid " + C.brd }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid " + C.brd, position: "sticky", top: 0, background: C.bg, zIndex: 2 }}>
         <div style={{ fontSize: 15, fontWeight: 700 }}>Mon profil</div>
         <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 18, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
       </div>
-      <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Profile card */}
-        <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden" }}>
-          <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ padding: "16px", flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* ── En-tête : identité + KPIs ── */}
+        <div style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.18) 0%, " + C.s1 + " 75%)", borderRadius: 16, border: "1px solid " + C.ac + "30", padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.acS, border: "2px solid " + C.ac + "40", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.ac }}>
-              {ap ? ([ap.first_name, ap.last_name].filter(Boolean).join(" ") || ap.full_name || "?").split(" ").filter((n: string) => n).map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) : "?"}
+              {name.split(" ").filter(Boolean).map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>{ap ? ([ap.first_name, ap.last_name].filter(Boolean).join(" ") || ap.full_name || "Athlète") : "Athlète"}</div>
-              {ap?.gender && <div style={{ fontSize: 11, color: C.tx3 }}>{ap.gender === "male" ? "Homme" : ap.gender === "female" ? "Femme" : ""}</div>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.tx }}>{name}</div>
+              {wellness && <div style={{ fontSize: 11, color: wReco.c, fontWeight: 600 }}>Forme du jour : {wReco.label} · {wScore}</div>}
             </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 14 }}>
+            {[
+              { v: String(t.attendance.done), l: "séances" },
+              { v: t.attendance.pct === null ? "—" : t.attendance.pct + "%", l: "assiduité" },
+              { v: String(streak ?? 0), l: "série" },
+            ].map(k => (
+              <div key={k.l} style={{ background: "rgba(0,0,0,0.18)", borderRadius: 10, padding: "8px 0", textAlign: "center" }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.tx }}>{k.v}</div>
+                <div style={{ fontSize: 10, color: C.tx3 }}>{k.l}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Données sportives */}
-        <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden" }}>
-          <button onClick={() => setDrawerSportOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Données sportives</div>
-            <span style={{ fontSize: 12, color: C.tx3, display: "inline-block", transition: "transform 0.2s", transform: drawerSportOpen ? "rotate(180deg)" : "none" }}>∨</span>
-          </button>
-          {drawerSportOpen && <div style={{ borderTop: "1px solid " + C.brd, padding: "0 0 8px" }}><PerformanceProfile athleteId={athleteId} viewOnly={viewOnly} C={C} /></div>}
-        </div>
-
-        {/* Poids */}
-        <button onClick={() => setDrawerZoom("weight")} style={{ width: "100%", background: C.s1, borderRadius: 14, padding: "14px 16px", border: "1px solid " + C.brd, textAlign: "left" as const, cursor: "pointer", fontFamily: "inherit" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Poids de corps</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: C.ac }}>{(() => { const e = Object.entries(weightLog).sort((a, b) => b[0] > a[0] ? 1 : -1)[0]; return weightLog[todayKey()] || e?.[1] || bodyWeight.current || "—"; })()}<span style={{ fontSize: 10, fontWeight: 400, color: C.tx3 }}> kg</span></span>
-              <span style={{ fontSize: 11, color: C.tx3 }}>→</span>
-            </div>
-          </div>
-          {Object.keys(weightLog).length > 0 ? <WeightChart log={weightLog} milestones={weightMilestones} target={bodyWeight.target} nutritionStrategy={nutritionStrategy} /> : <div style={{ fontSize: 11, color: C.tx3, textAlign: "center" as const, padding: "8px 0" }}>Aucune mesure</div>}
-        </button>
-
-        {/* Forme du jour */}
-        <button onClick={() => setDrawerZoom("wellness")} style={{ width: "100%", background: C.s1, borderRadius: 14, padding: "14px 16px", border: "1px solid " + (wellness ? wReco.c + "30" : C.brd), textAlign: "left" as const, cursor: "pointer", fontFamily: "inherit" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: wellness ? 10 : 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Forme du jour</div>
-            {wellness && <div style={{ display: "flex", alignItems: "center", gap: 6 }}><div style={{ fontSize: 10, fontWeight: 800, color: wReco.c }}>{wScore}</div><span style={{ fontSize: 11, color: C.tx3 }}>→</span></div>}
-          </div>
-          {wellness ? <div style={{ fontSize: 12, fontWeight: 600, color: wReco.c }}>{wReco.label}</div> : <div style={{ fontSize: 11, color: C.tx3 }}>Aucun bilan aujourd'hui</div>}
-        </button>
-
-        {/* Score santé */}
-        <button onClick={() => setDrawerZoom("health")} style={{ width: "100%", background: C.s1, borderRadius: 14, padding: "14px 16px", border: "1px solid " + C.brd, textAlign: "left" as const, cursor: "pointer", fontFamily: "inherit" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Score de santé</div>
-            <span style={{ fontSize: 11, color: C.tx3 }}>→</span>
-          </div>
-          <WellnessChart wellnessHistory={wellnessHistory} period={wellnessPeriod} setPeriod={setWellnessPeriod} height={72} minimal />
-        </button>
-
-        {/* 1RM Record */}
-        <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden" }}>
-          <button onClick={() => setDrawerPrOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>1RM Record</div>
-            <span style={{ fontSize: 12, color: C.tx3, display: "inline-block", transition: "transform 0.2s", transform: drawerPrOpen ? "rotate(180deg)" : "none" }}>∨</span>
-          </button>
-          {drawerPrOpen && (
-            <div style={{ borderTop: "1px solid " + C.brd, padding: "12px 16px" }}>
-              {(() => {
-                const seen = new Set<string>();
-                const progExNames = Object.values(exos || {}).flat().map(ex => ex.name || "").filter(n => { if (!n || seen.has(n.toLowerCase())) return false; seen.add(n.toLowerCase()); return true; }).sort();
-                const filtered = prSearch ? progExNames.filter(n => n.toLowerCase().includes(prSearch.toLowerCase())) : progExNames;
-                const getActual1rm = (exName: string, w: number) => {
-                  const exIds = Object.values(exos || {}).flat().filter(ex => (ex.name || "").toLowerCase() === exName.toLowerCase()).map(ex => ex.id);
-                  let best: number | null = null;
-                  exIds.forEach(id => { (sets[id + "_" + w] || []).filter(r => r.done && (r.kg || 0) > 0).forEach(r => { const est = e1rm(r.kg!, r.reps || 1); if (!best || est > best) best = est; }); });
-                  return best;
-                };
-                const actual1rmByWeek = prExName ? Array.from({ length: tw }, (_, i) => ({ w: i + 1, week: "S" + (i + 1), val: getActual1rm(prExName, i + 1) })) : [];
-                const bestActual = actual1rmByWeek.reduce((mx, d) => d.val && d.val > (mx.val || 0) ? d : mx, { val: 0, w: null as number | null });
-                const showDropdown = prSearch && filtered.length > 0 && !progExNames.find(n => n.toLowerCase() === prSearch.toLowerCase());
-                return (<>
-                  <div style={{ position: "relative", marginBottom: 10 }}>
-                    <input value={prSearch} onChange={e => { setPrSearch(e.target.value); setPrExName(null); }} placeholder={progExNames.length ? "Rechercher un exercice..." : "Aucun exercice"} style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
-                    {showDropdown && (<div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: C.s1, border: "1px solid " + C.brdL, borderRadius: 8, zIndex: 50, maxHeight: 140, overflowY: "auto", marginTop: 4, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
-                      {filtered.slice(0, 6).map(n => (<div key={n} onClick={() => { setPrExName(n); setPrSearch(n); }} style={{ padding: "8px 12px", fontSize: 12, cursor: "pointer", color: C.tx, borderBottom: "1px solid " + C.brd }}>{n}</div>))}
-                    </div>)}
-                  </div>
-                  {prExName ? (<>
-                    <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
-                      {[{ k: "est", l: "1RM Estimé" }, { k: "evo", l: "Évolution" }].map(t => (<button key={t.k} onClick={() => setPrTab(t.k)} style={{ padding: "4px 12px", borderRadius: 7, border: "none", background: prTab === t.k ? C.acS : C.s2, color: prTab === t.k ? C.ac : C.tx3, fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{t.l}</button>))}
-                    </div>
-                    {prTab === "est" && <div style={{ textAlign: "center" as const }}><div style={{ fontSize: 44, fontWeight: 900, color: C.ac, letterSpacing: "-2px", lineHeight: 1 }}>{bestActual.val || "--"}</div><div style={{ fontSize: 10, color: C.tx3, marginTop: 3 }}>kg estimé 1RM</div>{bestActual.w && <div style={{ marginTop: 6, fontSize: 10, color: C.tx3, padding: "2px 8px", borderRadius: 5, background: C.s2, display: "inline-block" }}>Meilleure perf. S{bestActual.w}</div>}</div>}
-                    {prTab === "evo" && (actual1rmByWeek.some(d => d.val) ? <MiniChart data={actual1rmByWeek} color={C.ac} h={70} /> : <div style={{ textAlign: "center" as const, color: C.tx3, fontSize: 11, padding: "16px 0" }}>Aucune série effectuée</div>)}
-                  </>) : (<div style={{ fontSize: 11, color: C.tx3, textAlign: "center" as const, padding: "10px 0" }}>{progExNames.length ? "Recherche et sélectionne un exercice" : "Aucun exercice dans la programmation"}</div>)}
-                </>);
-              })()}
-            </div>
-          )}
-        </div>
-
-        {/* Blessures */}
+        {/* ── Blessures actives ── */}
         {activeInjuries.length > 0 && (
           <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.r + "30", overflow: "hidden" }}>
             <button onClick={() => setDrawerInjOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
@@ -179,24 +123,122 @@ export default function ProfileDrawer({ onClose }: Props) {
           </div>
         )}
 
-        {/* Retour coach */}
-        {latestFb?.note && (
+        {/* ── Mes tendances ── */}
+        <section>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={sectionTitle}>Mes tendances</div>
+            <div style={{ display: "flex", gap: 3, background: C.s1, borderRadius: 8, padding: 2, border: "1px solid " + C.brd }}>
+              {PERIODS.map(p => (
+                <button key={p.d} onClick={() => setDays(p.d)} style={{ padding: "4px 9px", borderRadius: 6, border: "none", background: days === p.d ? C.acS : "transparent", color: days === p.d ? C.ac : C.tx3, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{p.l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <TrendCard
+              label="Score de santé" value={fmt(t.health.value)} unit="/100" delta={t.health.delta} color={C.g}
+              series={t.health.series} sub="moyenne wellness" onClick={() => setDrawerZoom("wellness")}
+            />
+            <TrendCard
+              label="Sommeil" value={t.sleep ? String(t.sleep.score) : "—"} unit="/100"
+              delta={t.sleep && t.prevSleep ? t.sleep.score - t.prevSleep.score : null} color={C.b}
+              sub={t.sleep ? `${fmt(t.sleep.avgHours, 1)} h / ${t.sleep.targetHours} h · coucher ±${t.sleep.bedtimeDeviationMin} min` : "aucune donnée"}
+              progress={t.sleep?.score ?? null} onClick={() => setDrawerZoom("sleep")}
+            />
+            <TrendCard
+              label="Poids" value={fmt(t.weight.value, 1)} unit="kg" delta={t.weight.delta} deltaUnit=" kg" goodWhenUp={weightGoodWhenUp}
+              color={C.ac} series={t.weight.series}
+              sub={weightToTarget === null ? "pas d'objectif" : Math.abs(weightToTarget) < 0.3 ? "objectif atteint" : `${weightToTarget > 0 ? "+" : ""}${fmt(weightToTarget, 1)} kg vs objectif`}
+              onClick={() => setDrawerZoom("weight")}
+            />
+            <TrendCard
+              label="Assiduité" value={t.attendance.pct === null ? "—" : String(t.attendance.pct)} unit="%"
+              delta={t.attendance.pct !== null && t.prevAttendance.pct !== null ? t.attendance.pct - t.prevAttendance.pct : null} deltaUnit=" pts"
+              color={C.o} progress={t.attendance.pct} sub={`${t.attendance.done}/${t.attendance.planned} séances`}
+            />
+            <TrendCard
+              label="Fatigue" value={fmt(t.fatigue.value, 1)} unit="/5" delta={t.fatigue.delta} color={C.y}
+              series={t.fatigue.series} sub="5 = très en forme" onClick={() => setDrawerZoom("wellness")}
+            />
+            <TrendCard
+              label="Stress" value={fmt(t.stress.value, 1)} unit="/5" delta={t.stress.delta} color={C.coach}
+              series={t.stress.series} sub="5 = très détendu" onClick={() => setDrawerZoom("wellness")}
+            />
+          </div>
+        </section>
+
+        {/* ── Ce qu'on retient ── */}
+        {insights.length > 0 && (
+          <section style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.ac + "30", padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ ...sectionTitle, color: C.ac }}>✨ Ce qu'on retient</div>
+              {insightsLoading ? <span style={{ fontSize: 10, color: C.tx3 }}>analyse…</span> : source === "ai" && <span style={{ fontSize: 9, color: C.tx3, padding: "2px 6px", borderRadius: 4, background: C.s2 }}>IA</span>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {insights.map((txt, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: C.tx2, lineHeight: 1.5 }}>
+                  <span style={{ color: C.ac, flexShrink: 0 }}>•</span><span>{txt}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Mes derniers progrès ── */}
+        <section>
+          <div style={{ ...sectionTitle, marginBottom: 10 }}>Mes derniers progrès</div>
+          {t.progress.length ? (
+            <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden" }}>
+              {t.progress.slice(0, 5).map((p, i) => (
+                <div key={p.exercise} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i ? "1px solid " + C.brd : "none" }}>
+                  <div style={{ fontSize: 16 }}>🏆</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.tx, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.exercise}</div>
+                    <div style={{ fontSize: 10, color: C.tx3 }}>{fmtDay(p.date)}{p.prevKg !== null ? ` · avant ${p.prevKg} kg` : " · premier record"}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.ac }}>{p.kg} kg</div>
+                    {p.gain !== null && <div style={{ fontSize: 10, fontWeight: 700, color: C.g }}>+{p.gain} kg</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, padding: "16px", textAlign: "center", fontSize: 11, color: C.tx3 }}>
+              Aucun nouveau record sur la période
+            </div>
+          )}
+        </section>
+
+        {/* ── Retour coach (14 derniers jours uniquement) ── */}
+        {recentFb && (
           <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.coach + "40", overflow: "hidden" }}>
             <button onClick={() => { navigate("coach-feedback"); onClose(); }} style={{ width: "100%", padding: "12px 14px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" as const }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 13 }}>💬</span><span style={{ fontSize: 11, fontWeight: 700, color: C.coach }}>Retour du coach</span></div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 9, color: C.tx3 }}>S{latestWeek}</span><span style={{ fontSize: 11, color: C.coach }}>›</span></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontSize: 9, color: C.tx3 }}>{fmtDay(recentFb.date!.slice(0, 10))}</span><span style={{ fontSize: 11, color: C.coach }}>›</span></div>
               </div>
-              <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.55, fontStyle: "italic", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>"{latestFb.note}"</div>
+              <div style={{ fontSize: 11, color: C.tx2, lineHeight: 1.55, fontStyle: "italic", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>"{recentFb.note}"</div>
             </button>
           </div>
         )}
 
-        {/* Objectifs */}
+        {/* ── Objectifs ── */}
         <button onClick={() => setDrawerZoom("goals")} style={{ width: "100%", background: C.s1, borderRadius: 14, padding: "14px 16px", border: "1px solid " + C.brd, textAlign: "left" as const, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Objectifs</div>
           <span style={{ fontSize: 11, color: C.tx3 }}>→</span>
         </button>
+
+        {/* ── Données sportives (tests VMA, FC…) ── */}
+        <div style={{ background: C.s1, borderRadius: 14, border: "1px solid " + C.brd, overflow: "hidden" }}>
+          <button onClick={() => setDrawerSportOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px" }}>Données sportives</div>
+            <span style={{ fontSize: 12, color: C.tx3, display: "inline-block", transition: "transform 0.2s", transform: drawerSportOpen ? "rotate(180deg)" : "none" }}>∨</span>
+          </button>
+          {drawerSportOpen && <div style={{ borderTop: "1px solid " + C.brd, padding: "0 0 8px" }}><PerformanceProfile athleteId={athleteId} viewOnly={viewOnly} C={C} /></div>}
+        </div>
+
+        {/* ── Retour sur l'app ── */}
+        {!viewOnly && <AppFeedbackSection />}
 
         {/* Déconnexion */}
         <div style={{ marginTop: "auto", paddingTop: 8 }}>
@@ -204,6 +246,35 @@ export default function ProfileDrawer({ onClose }: Props) {
             <span>⏻</span><span>Déconnexion</span>
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SleepZoomContent({ summary, goals, wellnessHistory }: { summary: TrendSummary; goals: { sleepTarget?: number; sleepBedtime?: { h: number; m: number } }; wellnessHistory: Record<string, unknown> }) {
+  const s = summary.sleep;
+  const hm = (t?: { h: number; m: number }) => t ? `${String(t.h).padStart(2, "0")}:${String(t.m).padStart(2, "0")}` : "non défini";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: C.s1, borderRadius: 14, padding: "16px", border: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, marginBottom: 12 }}>Score de sommeil · {summary.days} j</div>
+        {s ? (<>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 14 }}><span style={{ fontSize: 40, fontWeight: 900, color: C.b, letterSpacing: "-1px" }}>{s.score}</span><span style={{ fontSize: 14, color: C.tx3 }}>/ 100</span></div>
+          {[
+            { l: "Régularité du coucher", v: s.regularity, d: `écart moyen ±${s.bedtimeDeviationMin} min · cible ${hm(goals.sleepBedtime)}` },
+            { l: "Quantité", v: s.quantity, d: `${s.avgHours} h en moyenne · objectif ${s.targetHours} h` },
+          ].map(r => (
+            <div key={r.l} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}><span>{r.l}</span><span style={{ fontWeight: 700 }}>{r.v}/50</span></div>
+              <div style={{ height: 6, background: C.s2, borderRadius: 3, overflow: "hidden" }}><div style={{ height: "100%", width: (r.v / 50) * 100 + "%", background: C.b, borderRadius: 3 }} /></div>
+              <div style={{ fontSize: 10, color: C.tx3, marginTop: 4 }}>{r.d}</div>
+            </div>
+          ))}
+        </>) : <div style={{ textAlign: "center" as const, color: C.tx3, fontSize: 12, padding: "20px 0" }}>Renseigne tes heures de coucher et de réveil dans ton bilan du jour.</div>}
+      </div>
+      <div style={{ background: C.s1, borderRadius: 14, padding: "16px", border: "1px solid " + C.brd }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: C.tx3, textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 12 }}>Tunnel de sommeil</div>
+        <SleepTunnel wellnessHistory={wellnessHistory} C={C} />
       </div>
     </div>
   );
