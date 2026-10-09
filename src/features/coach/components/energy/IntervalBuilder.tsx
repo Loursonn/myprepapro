@@ -25,7 +25,7 @@ import IntervalEditor from "./IntervalEditor";
 import ExerciseStepEditor from "./ExerciseStepEditor";
 import { C } from "@/lib/theme";
 
-const EXO_COLOR = "#C9A14A";
+const EXO_COLOR = "#FFC933";
 
 // ── Role colors ───────────────────────────────────────────────────────────────
 
@@ -144,7 +144,7 @@ function IntervalRow({
 
       {/* Actions */}
       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-        <ActionBtn onClick={onEdit} title="Éditer">✏️</ActionBtn>
+        <ActionBtn onClick={onEdit} title="Éditer"></ActionBtn>
         <ActionBtn onClick={onDuplicate} title="Dupliquer">⧉</ActionBtn>
         <ActionBtn onClick={onDelete} title="Supprimer" danger>✕</ActionBtn>
       </div>
@@ -202,7 +202,7 @@ function ExerciseRow({
       </div>
 
       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-        <ActionBtn onClick={onEdit} title="Éditer">✏️</ActionBtn>
+        <ActionBtn onClick={onEdit} title="Éditer"></ActionBtn>
         <ActionBtn onClick={onDuplicate} title="Dupliquer">⧉</ActionBtn>
         <ActionBtn onClick={onDelete} title="Supprimer" danger>✕</ActionBtn>
       </div>
@@ -281,7 +281,7 @@ function GroupRowHeader({
       ) : (
         <button
           onClick={() => { setRepeatVal(group.repeat); setEditingRepeat(true); }}
-          style={{ background: color + "20", border: `1px solid ${color}40`, borderRadius: 12, color, fontSize: 11, fontWeight: 700, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
+          style={{ background: color + "20", border: `1px solid ${color}40`, borderRadius: 6, color, fontSize: 11, fontWeight: 700, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
         >
           × {group.repeat}
         </button>
@@ -307,16 +307,16 @@ function GroupRowHeader({
           ) : (
             <button
               onClick={() => { setDepartureVal(toMMSS(group.departure_every_s!)); setEditingDeparture(true); }}
-              style={{ background: "#F5A623" + "20", border: `1px solid #F5A62340`, borderRadius: 12, color: "#F5A623", fontSize: 10, fontWeight: 600, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
+              style={{ background: "#F5A623" + "20", border: `1px solid #F5A62340`, borderRadius: 6, color: "#F5A623", fontSize: 10, fontWeight: 600, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
               title="Départ fixe — cliquer pour modifier, Échap pour supprimer"
             >
-              ⏱ /{toMMSS(group.departure_every_s)}
+              /{toMMSS(group.departure_every_s)}
             </button>
           )
         ) : (
           <button
             onClick={() => { setDepartureVal("1:00"); onEditDeparture(60); setEditingDeparture(true); }}
-            style={{ background: "transparent", border: `1px dashed ${C.brd}`, borderRadius: 12, color: C.tx3, fontSize: 10, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
+            style={{ background: "transparent", border: `1px dashed ${C.brd}`, borderRadius: 6, color: C.tx3, fontSize: 10, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}
             title="Ajouter départ fixe (toutes les X min)"
           >
             + Départ fixe
@@ -505,7 +505,7 @@ export default function IntervalBuilder({ root, onChange, athleteId, sessionKind
         <div style={{
           textAlign: "center", padding: "32px 16px",
           color: C.tx3, fontSize: 13,
-          border: `1px dashed ${C.brd}`, borderRadius: 8,
+          border: `1px dashed ${C.brd}`, borderRadius: 4,
         }}>
           Aucun intervalle.{" "}
           <button
@@ -532,7 +532,7 @@ export default function IntervalBuilder({ root, onChange, athleteId, sessionKind
         <button
           onClick={() => onChange(addStepToGroup(root, root.id, makeInterval()))}
           style={{
-            padding: "7px 14px", borderRadius: 8,
+            padding: "7px 14px", borderRadius: 4,
             border: `1px solid ${C.ac}50`, background: C.ac + "12",
             color: C.ac, fontSize: 12, fontWeight: 600,
             cursor: "pointer", fontFamily: "inherit",
@@ -544,7 +544,7 @@ export default function IntervalBuilder({ root, onChange, athleteId, sessionKind
           <button
             onClick={handleAddExercise}
             style={{
-              padding: "7px 14px", borderRadius: 8,
+              padding: "7px 14px", borderRadius: 4,
               border: `1px solid ${EXO_COLOR}50`, background: EXO_COLOR + "12",
               color: EXO_COLOR, fontSize: 12, fontWeight: 600,
               cursor: "pointer", fontFamily: "inherit",
@@ -556,7 +556,7 @@ export default function IntervalBuilder({ root, onChange, athleteId, sessionKind
         <button
           onClick={() => onChange(addStepToGroup(root, root.id, makeGroup()))}
           style={{
-            padding: "7px 14px", borderRadius: 8,
+            padding: "7px 14px", borderRadius: 4,
             border: `1px solid ${C.brd}`, background: "transparent",
             color: C.tx2, fontSize: 12,
             cursor: "pointer", fontFamily: "inherit",

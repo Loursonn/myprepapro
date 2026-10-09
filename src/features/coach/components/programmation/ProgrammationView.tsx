@@ -21,7 +21,7 @@ import { SessionBlocEditor } from "./SessionBlocEditor"
 import { CardSkeleton } from "@/features/shared/components/skeletons"
 import { ProgSessionWeekDrawer } from "./ProgSessionWeekDrawer"
 
-const VIOLET = "#C9A14A"
+const VIOLET = "#FFC933"
 const VIOLET_S = "rgba(123,111,255,0.12)"
 
 const DOW = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
@@ -65,7 +65,7 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
 
   return (
     <div style={{
-      background: C.s1, borderRadius: 12, border: "1px solid " + (isOpen ? VIOLET + "60" : C.brdL),
+      background: C.s1, borderRadius: 6, border: "1px solid " + (isOpen ? VIOLET + "60" : C.brdL),
       overflow: "hidden", marginBottom: 8,
       transition: "border-color 150ms",
     }}>
@@ -149,7 +149,7 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
             onClick={() => { setShowPlace(p => !p); setShowDuplicate(false) }}
             title="Placer dans le planning"
             style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid " + C.brdL, background: showPlace ? VIOLET_S : "transparent", color: showPlace ? VIOLET : C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}
-          >📅</button>
+          ></button>
 
           <button
             onClick={() => { setShowDuplicate(p => !p); setShowPlace(false) }}
@@ -161,7 +161,7 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
             <>
               <button
                 onClick={onDelete}
-                style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: C.r, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit", flexShrink: 0 }}
+                style={{ padding: "4px 10px", borderRadius: 7, border: "none", background: C.rV, color: "#0E0C0A", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit", flexShrink: 0 }}
               >Supprimer</button>
               <button
                 onClick={() => setConfirmDelete(false)}
@@ -206,7 +206,7 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
                   setShowPlace(false)
                 }}
                 disabled={placeSession.isPending}
-                style={{ padding: "10px 0", borderRadius: 9, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                style={{ padding: "10px 0", borderRadius: 4, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               >
                 {placeSession.isPending ? "En cours…" : "Générer tout le cycle ▶"}
               </button>
@@ -217,7 +217,7 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
                 type="date"
                 value={placeDate}
                 onChange={e => setPlaceDate(e.target.value)}
-                style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none" }}
+                style={{ flex: 1, padding: "8px 10px", borderRadius: 4, border: "1px solid " + C.brdL, background: C.s1, color: C.tx, fontSize: 13, fontFamily: "inherit", outline: "none" }}
               />
               <button
                 onClick={async () => {
@@ -232,7 +232,7 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
                   setShowPlace(false)
                 }}
                 disabled={placeSession.isPending}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                style={{ padding: "8px 16px", borderRadius: 4, border: "none", background: VIOLET, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
               >
                 {placeSession.isPending ? "…" : "Placer"}
               </button>
@@ -268,7 +268,7 @@ function SessionCard({ session, isOpen, cycleId, athleteId, onToggle, onEdit, on
                   }}
                   style={{
                     display: "flex", alignItems: "center", gap: 8, textAlign: "left",
-                    padding: "8px 10px", borderRadius: 8,
+                    padding: "8px 10px", borderRadius: 4,
                     border: "1px solid " + C.brdL, background: C.s1, color: C.tx,
                     fontSize: 12, fontWeight: 600, cursor: duplicateSession.isPending ? "not-allowed" : "pointer",
                     fontFamily: "inherit", opacity: duplicateSession.isPending ? 0.6 : 1,
@@ -422,7 +422,7 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
           onClick={() => { setIsAddingSession(true); setEditingSessionId(null) }}
           style={{
             display: "flex", alignItems: "center", gap: 5,
-            padding: "8px 16px", borderRadius: 9,
+            padding: "8px 16px", borderRadius: 4,
             border: "none", background: VIOLET, color: "#fff",
             fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
           }}
@@ -443,7 +443,7 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
       {/* Empty state */}
       {!isAddingSession && sessions.length === 0 && (
         <div style={{ textAlign: "center", padding: "50px 20px" }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🏋️</div>
+          <div style={{ fontSize: 36, marginBottom: 12 }}></div>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 4 }}>Aucune séance</div>
           <div style={{ fontSize: 12, color: C.tx3, marginBottom: 20 }}>
             Crée ta première séance pour commencer à programmer.
@@ -451,7 +451,7 @@ export function ProgrammationView({ athleteId, cycleId }: ProgrammationViewProps
           <button
             onClick={() => setIsAddingSession(true)}
             style={{
-              padding: "10px 22px", borderRadius: 10,
+              padding: "10px 22px", borderRadius: 4,
               border: "none", background: VIOLET, color: "#fff",
               fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: 6,

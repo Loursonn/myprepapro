@@ -29,14 +29,14 @@ import { formatSLong } from "@/lib/energy/formatTarget";
 
 // ── Colors ──────────────────────────────────────────────────────────────────
 const C = {
-  bg: "var(--bg, #15120F)",
-  card: "var(--card, #15120F)",
+  bg: "var(--bg, #0E0C0A)",
+  card: "var(--card, #0E0C0A)",
   border: "var(--border, #2E2D33)",
   tx: "#F2F1F5",
   tx2: "#8B8A92",
   orange: "#F5A623",
-  green: "#9DB06A",
-  purple: "#C9A14A",
+  green: "#66F03C",
+  purple: "#FFC933",
 };
 
 // ── Classique block preview ─────────────────────────────────────────────────
@@ -45,7 +45,7 @@ function ClassiqueBlockPreview({ block }: { block: ClassiqueBlock }) {
     <div style={{
       background: C.card, border: `1px solid ${C.border}`,
       borderLeft: `4px solid ${C.green}`,
-      borderRadius: 12, padding: "12px 14px", marginBottom: 10,
+      borderRadius: 6, padding: "12px 14px", marginBottom: 10,
     }}>
       <div style={{
         fontSize: 11, fontWeight: 700, color: C.green,
@@ -81,7 +81,7 @@ function WodBlockPreview({ block }: { block: WodBlock }) {
   return (
     <div style={{
       border: `1px dashed ${C.orange}`,
-      borderRadius: 14, padding: 10, marginBottom: 10,
+      borderRadius: 6, padding: 10, marginBottom: 10,
       background: "rgba(245,166,35,0.03)",
     }}>
       <div style={{
@@ -116,7 +116,7 @@ function ClassiqueBlockExecution({
     <div style={{
       background: C.card, border: `1px solid ${C.border}`,
       borderLeft: `4px solid ${allDone ? C.green : C.tx2}`,
-      borderRadius: 12, padding: "12px 14px", marginBottom: 10,
+      borderRadius: 6, padding: "12px 14px", marginBottom: 10,
       opacity: allDone ? 0.7 : 1, transition: "opacity 200ms",
     }}>
       <div style={{
@@ -167,7 +167,7 @@ function ClassiqueBlockExecution({
         <div style={{ marginTop: 6 }}>
           {block.items.filter((it) => it.notes).map((it) => (
             <div key={it.id} style={{ fontSize: 11, color: C.tx2, padding: "2px 0" }}>
-              💡 {it.name} : {it.notes}
+              Note — {it.name} : {it.notes}
             </div>
           ))}
         </div>
@@ -364,7 +364,7 @@ export default function SpecificExecutionPage() {
           <div style={{
             background: C.card, border: `1px solid ${C.border}`,
             borderLeft: `3px solid ${C.orange}`,
-            borderRadius: 12, padding: "12px 14px", fontSize: 13,
+            borderRadius: 6, padding: "12px 14px", fontSize: 13,
             marginBottom: 16,
           }}>
             <strong style={{ display: "block", fontSize: 11, color: C.orange, textTransform: "uppercase" as const, letterSpacing: "0.05em", marginBottom: 4 }}>
@@ -376,7 +376,7 @@ export default function SpecificExecutionPage() {
 
         {/* Schema */}
         {session.schema && (
-          <div style={{ marginBottom: 16, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
+          <div style={{ marginBottom: 16, borderRadius: 6, overflow: "hidden", border: `1px solid ${C.border}` }}>
             <SchemaViewerWithZoom schema={session.schema} />
           </div>
         )}
@@ -406,7 +406,7 @@ export default function SpecificExecutionPage() {
                   onClick={effectiveStart}
                   style={{
                     width: "100%", background: C.orange, color: "#1a1204",
-                    border: "none", borderRadius: 12, padding: 15,
+                    border: "none", borderRadius: 6, padding: 15,
                     fontSize: 16, fontWeight: 700, cursor: "pointer",
                     fontFamily: "inherit",
                   }}
@@ -448,7 +448,7 @@ export default function SpecificExecutionPage() {
                     onClick={exec.start}
                     style={{
                       width: "100%", background: C.orange, color: "#1a1204",
-                      border: "none", borderRadius: 12, padding: 12,
+                      border: "none", borderRadius: 6, padding: 12,
                       fontSize: 14, fontWeight: 700, cursor: "pointer",
                       fontFamily: "inherit", marginTop: 12,
                     }}
@@ -483,7 +483,7 @@ export default function SpecificExecutionPage() {
                     width: "100%", marginTop: 16,
                     background: (hasWodSteps && exec.phase === "executing") ? C.tx2 + "30" : C.green,
                     color: (hasWodSteps && exec.phase === "executing") ? C.tx2 : "#0a2618",
-                    border: "none", borderRadius: 12, padding: 14,
+                    border: "none", borderRadius: 6, padding: 14,
                     fontSize: 15, fontWeight: 700, cursor: "pointer",
                     fontFamily: "inherit",
                   }}

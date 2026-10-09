@@ -15,17 +15,17 @@ export const KIND_LABEL: Record<string, string> = {
   footing: "Footing", fartlek: "Fartlek", specifique: "Spécifique", autre: "Autre", custom: "Custom",
 };
 export const KIND_COLOR: Record<string, string> = {
-  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
+  vo2: "#FFC933", tempo: "#33B5FF", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", specifique: "#F5A623", autre: "#6B7280", custom: "#6B7280",
 };
 
 export const ROLE_COLOR: Record<string, string> = {
   warmup:   "#F59E0B",
   work:     "#EF4444",
-  recovery: "#7E9CA8",
+  recovery: "#33B5FF",
   rest:     "#6B7280",
   cooldown: "#10B981",
-  open:     "#C9A14A",
+  open:     "#FFC933",
 };
 export const ROLE_LABEL_FR: Record<string, string> = {
   warmup:   "Écho",
@@ -99,7 +99,7 @@ export function StepTree({ steps, depth = 0 }: { steps: EnergyStep[]; depth?: nu
         }
         // Exercise
         if (step.type === "exercise") {
-          const exoColor = "#C9A14A";
+          const exoColor = "#FFC933";
           const detail = [
             step.reps_min ? (step.reps_max && step.reps_max !== step.reps_min ? `${step.reps_min}-${step.reps_max} reps` : `${step.reps_min} reps`) : null,
             step.weight_kg ? `${step.weight_kg} ${step.weight_unit === "bw" ? "BW" : step.weight_unit === "pct_rm" ? "%RM" : "kg"}` : null,
@@ -163,10 +163,10 @@ function ClassiqueBlockView({ block }: { block: ClassiqueBlock }) {
   return (
     <div style={{
       background: C.s2, border: "1px solid " + C.brd,
-      borderLeft: "3px solid #9DB06A",
-      borderRadius: 9, padding: "10px 12px", marginBottom: 8,
+      borderLeft: "3px solid #66F03C",
+      borderRadius: 4, padding: "10px 12px", marginBottom: 8,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: "#9DB06A", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#66F03C", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
         {block.title || "Bloc classique"}
       </div>
       {block.items.map((item) => (
@@ -186,7 +186,7 @@ function ClassiqueBlockView({ block }: { block: ClassiqueBlock }) {
         <div style={{ marginTop: 4 }}>
           {block.items.filter((it) => it.notes).map((it) => (
             <div key={it.id} style={{ fontSize: 9, color: C.tx3, padding: "1px 0" }}>
-              💡 {it.name} : {it.notes}
+              {it.name} : {it.notes}
             </div>
           ))}
         </div>
@@ -199,7 +199,7 @@ function WodBlockView({ block }: { block: WodBlock }) {
   return (
     <div style={{
       border: "1px dashed #F5A623",
-      borderRadius: 10, padding: 8, marginBottom: 8,
+      borderRadius: 4, padding: 8, marginBottom: 8,
       background: "rgba(245,166,35,0.03)",
     }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: "#F5A623", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, padding: "0 4px" }}>
@@ -261,7 +261,7 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
         style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 61,
           maxHeight: "92vh",
-          background: C.s1, borderRadius: "18px 18px 0 0", border: "1px solid " + C.brd,
+          background: C.s1, borderRadius: "6px 6px 0 0", border: "1px solid " + C.brd,
           borderBottom: "none",
           display: "flex", flexDirection: "column",
           animation: "slideUp 200ms ease-out",
@@ -276,7 +276,7 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
 
         {/* Header */}
         <div style={{ padding: "10px 18px 12px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: kc + "25", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 4, background: kc + "25", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Zap size={16} color={kc} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -309,7 +309,7 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
 
           {/* Notes */}
           {session.notes && (
-            <div style={{ margin: "0 18px 12px", padding: "9px 12px", borderRadius: 9, background: C.s2, border: "1px solid " + C.brd, fontSize: 11, color: C.tx2, lineHeight: 1.6 }}>
+            <div style={{ margin: "0 18px 12px", padding: "9px 12px", borderRadius: 4, background: C.s2, border: "1px solid " + C.brd, fontSize: 11, color: C.tx2, lineHeight: 1.6 }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.04em", display: "block", marginBottom: 3 }}>Notes</span>
               {session.notes}
             </div>
@@ -317,7 +317,7 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
 
           {/* Schema */}
           {session.schema && (
-            <div style={{ margin: "0 18px 12px", borderRadius: 9, overflow: "hidden", border: "1px solid " + C.brd }}>
+            <div style={{ margin: "0 18px 12px", borderRadius: 4, overflow: "hidden", border: "1px solid " + C.brd }}>
               <SchemaViewerWithZoom schema={session.schema} />
             </div>
           )}
@@ -332,7 +332,7 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
                 {((session as any).images as SessionImage[]).map((img: SessionImage, i: number) => (
                   <div key={i}
                     onClick={() => setLightboxUrl(img.url)}
-                    style={{ width: 100, height: 100, borderRadius: 8, overflow: "hidden", border: "1px solid " + C.brd, cursor: "pointer" }}>
+                    style={{ width: 100, height: 100, borderRadius: 4, overflow: "hidden", border: "1px solid " + C.brd, cursor: "pointer" }}>
                     <img src={img.url} alt={img.caption || ""} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   </div>
                 ))}
@@ -356,32 +356,32 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
         {/* Footer actions */}
         <div style={{ padding: "10px 18px", paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))", borderTop: "1px solid " + C.brd, display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {onUnvalidate && (
-            <button onClick={onUnvalidate} style={{ padding: "9px 16px", borderRadius: 10, border: "1px solid " + C.r + "50", background: "transparent", color: C.r, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onUnvalidate} style={{ padding: "9px 16px", borderRadius: 4, border: "1px solid " + C.r + "50", background: "transparent", color: C.r, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
               Dévalider
             </button>
           )}
           {onCancel && (
-            <button onClick={onCancel} style={{ padding: "9px 16px", borderRadius: 10, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onCancel} style={{ padding: "9px 16px", borderRadius: 4, border: "1px solid rgba(239,68,68,0.4)", background: "rgba(239,68,68,0.1)", color: "#EF4444", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Annuler la séance
             </button>
           )}
           {onEdit && (
-            <button onClick={onEdit} style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: C.coach, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onEdit} style={{ padding: "9px 16px", borderRadius: 4, border: "none", background: C.acV, color: "#0E0C0A", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
               Modifier
             </button>
           )}
           {onStart && (
-            <button onClick={onStart} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", background: C.ac, color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onStart} style={{ flex: 1, padding: "12px 0", borderRadius: 6, border: "none", background: C.acV, color: "#0E0C0A", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
               {startLabel ?? "Faire la séance ▶"}
             </button>
           )}
           {onValidate && (
-            <button onClick={onValidate} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: "none", background: "#9DB06A", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onValidate} style={{ flex: 1, padding: "12px 0", borderRadius: 6, border: "none", background: "#66F03C", color: "#0E0C0A", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
               Valider la séance ✓
             </button>
           )}
           {!onStart && !onValidate && !onEdit && !onCancel && !onUnvalidate && (
-            <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 4, border: "1px solid " + C.brdL, background: "transparent", color: C.tx2, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
               Fermer
             </button>
           )}
@@ -397,7 +397,7 @@ export function SessionPreviewModal({ session, athleteId, onEdit, onStart, start
             cursor: "zoom-out",
           }}
         >
-          <img src={lightboxUrl} alt="" style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8 }} />
+          <img src={lightboxUrl} alt="" style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 4 }} />
         </div>
       )}
     </>
