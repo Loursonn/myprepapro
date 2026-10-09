@@ -59,9 +59,9 @@ function findCurrentCycleId(cycles: Array<{ id: string; start_date: string; end_
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-const FREE_COLOR    = "#7FA88E";   // patine (DA)
+const FREE_COLOR    = "#1FF0B0";   // patine (DA)
 const TEST_COLOR    = "#A67C52";   // bronze (DA)
-const BIO_COLOR     = "#9DB06A";   // olivier (DA)
+const BIO_COLOR     = "#66F03C";   // olivier (DA)
 const BIO_BANK_ID   = "bio-mensurations";
 const BIO_TITLE     = "Mensurations / Photos";
 
@@ -125,11 +125,11 @@ function EventChip({
 
   // Status overrides base type color — partial takes priority over completed
   const isPartialEnergy = event.type === "energy" && event.partial;
-  const color = isPartialEnergy     ? "#7E9CA8"
+  const color = isPartialEnergy     ? "#33B5FF"
               : st === "completed"  ? C.g
               : st === "missed"     ? C.r
               : baseColor;
-  const bg    = isPartialEnergy     ? "#7E9CA820"
+  const bg    = isPartialEnergy     ? "#33B5FF20"
               : st === "completed"  ? C.gS
               : st === "missed"     ? C.rS
               : baseBg;
@@ -161,7 +161,7 @@ function EventChip({
       }}
     >
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-        {event.type === "workout" ? "🏋️ " : event.type === "competition" ? "🏆 " : event.type === "test" ? (bio ? "📏 " : "🧪 ") : event.type === "energy" ? "⚡ " : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "🏃 ") : ""}
+        {event.type === "workout" ? "" : event.type === "competition" ? "" : event.type === "test" ? (bio ? "" : "") : event.type === "energy" ? "" : event.type === "free_activity" ? (event.sportEmoji ? event.sportEmoji + " " : "") : ""}
         {event.title}
         {isPartialEnergy && totalCount > 0 && (
           <span style={{ opacity: 0.45, fontWeight: 500, marginLeft: 3 }}>{doneCount}/{totalCount}</span>
@@ -171,7 +171,7 @@ function EventChip({
         )}
       </span>
       {event.type === "workout" && !!(event.raw?.athlete_modifications as { coachOverride?: unknown } | null)?.coachOverride && (
-        <span title="Séance adaptée pour ce jour" style={{ flexShrink: 0, marginLeft: 2, color: "#F59E0B" }}>✎</span>
+        <span title="Séance adaptée pour ce jour" style={{ flexShrink: 0, marginLeft: 2, color: "#F59E0B" }}></span>
       )}
       {event.rpe != null && (
         <span style={{ flexShrink: 0, opacity: 0.85, fontWeight: 700, marginLeft: 2 }}>RPE {event.rpe}</span>
@@ -285,7 +285,7 @@ function DraggableSession({
       {...listeners}
       style={{
         padding: "7px 10px",
-        borderRadius: 8,
+        borderRadius: 4,
         border: "1px solid " + color + "40",
         background: isDragging ? color : colorS,
         color: isDragging ? "#fff" : color,
@@ -350,7 +350,7 @@ function DroppableDay({
           ? C.s2 + "80"
           : "transparent",
         border: "1px solid " + (today ? C.ac + "40" : isOver ? C.ac + "60" : C.brd),
-        borderRadius: 10,
+        borderRadius: 4,
         padding: "6px 7px",
         cursor: "pointer",
         transition: "background 120ms, border-color 120ms",
@@ -422,8 +422,8 @@ function DroppableDay({
 
       {(wellnessLogged || nutritionLogged) && (
         <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 2 }}>
-          {wellnessLogged && <span style={{ fontSize: 10, lineHeight: 1 }}>❤️</span>}
-          {nutritionLogged && <span style={{ fontSize: 10, lineHeight: 1 }}>🍽️</span>}
+          {wellnessLogged && <span style={{ fontSize: 10, lineHeight: 1 }}></span>}
+          {nutritionLogged && <span style={{ fontSize: 10, lineHeight: 1 }}></span>}
         </div>
       )}
 
@@ -431,7 +431,7 @@ function DroppableDay({
       {isOver && (
         <div
           style={{
-            position: "absolute", inset: 0, borderRadius: 10,
+            position: "absolute", inset: 0, borderRadius: 4,
             border: "2px dashed " + C.ac,
             pointerEvents: "none",
           }}
@@ -444,7 +444,7 @@ function DroppableDay({
 // ── Session bank sidebar ──────────────────────────────────────────────────────
 
 const ENERGY_KIND_COLOR: Record<string, string> = {
-  vo2: "#C9A14A", tempo: "#7E9CA8", seuil: "#F59E0B",
+  vo2: "#FFC933", tempo: "#33B5FF", seuil: "#F59E0B",
   footing: "#10B981", fartlek: "#EF4444", autre: "#6B7280", custom: "#6B7280",
 };
 const ENERGY_KIND_LABEL: Record<string, string> = {
@@ -455,8 +455,8 @@ const ENERGY_KIND_LABEL: Record<string, string> = {
 type BankTab = "workout" | "energy" | "specifique" | "tests";
 
 const BANK_TABS: { key: BankTab; label: string; Icon: typeof Dumbbell; color: string }[] = [
-  { key: "workout",    label: "Muscu",      Icon: Dumbbell,     color: "#C9A14A" },
-  { key: "energy",     label: "Énergie",    Icon: Zap,          color: "#C9A14A" },
+  { key: "workout",    label: "Muscu",      Icon: Dumbbell,     color: "#FFC933" },
+  { key: "energy",     label: "Énergie",    Icon: Zap,          color: "#FFC933" },
   { key: "specifique", label: "Spécifique", Icon: Target,       color: "#F5A623" },
   { key: "tests",      label: "Tests",      Icon: FlaskConical, color: TEST_COLOR },
 ];
@@ -523,7 +523,7 @@ function PlanningBank({
       style={{
         width: 252, flexShrink: 0,
         background: C.s1,
-        borderRadius: 14,
+        borderRadius: 6,
         border: "1px solid " + C.brd,
         display: "flex", flexDirection: "column",
         overflow: "hidden",
@@ -545,7 +545,7 @@ function PlanningBank({
                 onClick={() => setTab(key)}
                 style={{
                   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-                  padding: "10px 0", borderRadius: 10,
+                  padding: "10px 0", borderRadius: 4,
                   border: "1px solid " + (active ? color + "70" : C.brd),
                   background: active ? color + "1A" : C.s2,
                   color: active ? color : C.tx3,
@@ -564,7 +564,7 @@ function PlanningBank({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher…"
           style={{
-            width: "100%", padding: "6px 9px", borderRadius: 8,
+            width: "100%", padding: "6px 9px", borderRadius: 4,
             border: "1px solid " + C.brdL, background: C.s2,
             color: C.tx, fontSize: 12, fontFamily: "inherit", outline: "none",
             boxSizing: "border-box",
@@ -590,7 +590,7 @@ function PlanningBank({
         {tab === "energy" && (
           filteredEnergy.length === 0 ? empty("Aucune séance énergétique") :
           filteredEnergy.map((s) => {
-            const kc = ENERGY_KIND_COLOR[s.session_kind] ?? "#C9A14A";
+            const kc = ENERGY_KIND_COLOR[s.session_kind] ?? "#FFC933";
             return (
               <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <DraggableSession session={{ id: s.id, name: s.name }} sessionType="energy" isDragging={activeDragId === s.id} />
@@ -645,7 +645,7 @@ function PlanningBank({
                         onClick={() => toggleCat(cat)}
                         style={{
                           display: "flex", alignItems: "center", gap: 6,
-                          padding: "7px 9px", borderRadius: 8,
+                          padding: "7px 9px", borderRadius: 4,
                           border: "1px solid " + (isOpen ? color + "50" : C.brd),
                           background: isOpen ? color + "10" : C.s2,
                           color, fontSize: 11, fontWeight: 700,
@@ -992,7 +992,7 @@ export function CalendarMonthView({
             <button
               onClick={() => setMonth((m) => subMonths(m, 1))}
               style={{
-                width: 36, height: 36, borderRadius: 10,
+                width: 36, height: 36, borderRadius: 4,
                 border: "1px solid " + C.brdL, background: "transparent",
                 color: C.tx3, cursor: "pointer", fontFamily: "inherit",
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -1008,9 +1008,9 @@ export function CalendarMonthView({
               <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 4, flexWrap: "wrap" }}>
                 {[
                   { label: "Séance",  color: C.ac      },
-                  { label: "Énergie", color: "#C9A14A"  },
-                  { label: "Test",    color: C.o        },
-                  { label: "Compét",  color: C.coach    },
+                  { label: "Énergie", color: C.b        },
+                  { label: "Test",    color: TEST_COLOR  },
+                  { label: "Compét",  color: C.r         },
                 ].map(({ label, color }) => (
                   <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
@@ -1023,7 +1023,7 @@ export function CalendarMonthView({
             <button
               onClick={() => setMonth((m) => addMonths(m, 1))}
               style={{
-                width: 36, height: 36, borderRadius: 10,
+                width: 36, height: 36, borderRadius: 4,
                 border: "1px solid " + C.brdL, background: "transparent",
                 color: C.tx3, cursor: "pointer", fontFamily: "inherit",
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -1038,12 +1038,12 @@ export function CalendarMonthView({
             <div
               style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 14px", borderRadius: 10,
+                padding: "8px 14px", borderRadius: 4,
                 background: C.s1, border: "1px solid " + C.brd,
                 fontSize: 11, flexWrap: "wrap",
               }}
             >
-              <span style={{ color: C.tx3, fontWeight: 600 }}>📋 Cycle :</span>
+              <span style={{ color: C.tx3, fontWeight: 600 }}>Cycle :</span>
               {/* Cycle selector — links month view to a Frise cycle so resize auto-syncs dates */}
               <select
                 value={blockConfig.cycleId ?? ""}
@@ -1081,7 +1081,7 @@ export function CalendarMonthView({
                 ))}
               </select>
               {blockConfig.cycleId && (
-                <span style={{ color: C.ac, fontSize: 10, fontWeight: 600 }}>🔗 lié</span>
+                <span style={{ color: C.ac, fontSize: 10, fontWeight: 600 }}>lié</span>
               )}
               <span style={{ color: C.tx3 }}>·</span>
               <label style={{ display: "flex", alignItems: "center", gap: 6, color: C.tx3 }}>
@@ -1121,7 +1121,7 @@ export function CalendarMonthView({
           {/* Grid */}
           <div
             style={{
-              background: C.s1, borderRadius: 16,
+              background: C.s1, borderRadius: 6,
               border: "1px solid " + C.brd, overflow: "hidden",
             }}
           >
@@ -1187,17 +1187,17 @@ export function CalendarMonthView({
             <div
               style={{
                 display: "flex", gap: 16,
-                background: C.s1, borderRadius: 12, padding: "10px 16px",
+                background: C.s1, borderRadius: 6, padding: "10px 16px",
                 border: "1px solid " + C.brd, flexWrap: "wrap",
               }}
             >
               {[
-                { label: "Séances",      count: events.filter((e) => e.type === "workout").length,     color: C.ac       },
-                { label: "Énergie",      count: events.filter((e) => e.type === "energy").length,      color: "#C9A14A"  },
-                { label: "Complétées",   count: events.filter((e) => e.status === "completed").length, color: C.g        },
-                { label: "Manquées",     count: events.filter((e) => e.status === "missed").length,    color: C.r        },
-                { label: "Tests",        count: events.filter((e) => e.type === "test").length,        color: C.o        },
-                { label: "Compétitions", count: events.filter((e) => e.type === "competition").length, color: C.coach    },
+                { label: "Séances",      count: events.filter((e) => e.type === "workout").length,     color: C.ac        },
+                { label: "Énergie",      count: events.filter((e) => e.type === "energy").length,      color: C.b         },
+                { label: "Complétées",   count: events.filter((e) => e.status === "completed").length, color: C.g         },
+                { label: "Manquées",     count: events.filter((e) => e.status === "missed").length,    color: C.r         },
+                { label: "Tests",        count: events.filter((e) => e.type === "test").length,        color: TEST_COLOR  },
+                { label: "Compétitions", count: events.filter((e) => e.type === "competition").length, color: C.r         },
               ].map(({ label, count, color }) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 15, fontWeight: 800, color }}>{count}</span>
@@ -1227,7 +1227,6 @@ export function CalendarMonthView({
               border: "1px solid " + TYPE_COLOR[activeDragEvent.type] + "60",
               background: TYPE_COLOR[activeDragEvent.type], color: "#fff",
               fontSize: 11, fontWeight: 600,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
               pointerEvents: "none",
             }}
           >
@@ -1236,12 +1235,11 @@ export function CalendarMonthView({
         ) : activeDragSession ? (
           <div
             style={{
-              padding: "7px 10px", borderRadius: 8,
+              padding: "7px 10px", borderRadius: 4,
               border: "1px solid " + (activeDragIsEnergy ? C.b : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac) + "60",
               background: activeDragIsEnergy ? C.b : activeDragIsTest ? TEST_COLOR : activeDragIsBio ? BIO_COLOR : C.ac,
               color: "#fff",
               fontSize: 11, fontWeight: 600,
-              boxShadow: `0 8px 24px ${activeDragIsEnergy ? "rgba(126,156,168,0.4)" : activeDragIsTest ? "rgba(166,124,82,0.4)" : activeDragIsBio ? "rgba(157,176,106,0.4)" : "rgba(201,161,74,0.4)"}`,
               pointerEvents: "none",
               display: "flex", alignItems: "center", gap: 6,
             }}

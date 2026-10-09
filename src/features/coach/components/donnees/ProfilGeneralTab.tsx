@@ -21,40 +21,44 @@ import { localISO } from "@/lib/date";
 // ── Palette des blocs ─────────────────────────────────────────────────────────
 
 const COL = {
-  identity:  "#C9A14A",
+  identity:  "#FFC933",
   nutrition: "#F5A623",
-  sleep:     "#7E9CA8",
-  habits:    "#9DB06A",
-  perfs:     "#C9A14A",
+  sleep:     "#33B5FF",
+  habits:    "#66F03C",
+  perfs:     "#FFC933",
 };
 
 // ── Section shell ─────────────────────────────────────────────────────────────
 
-function Section({ icon: Icon, title, subtitle, color, children }: {
+function Section({ icon: Icon, title, subtitle, color, children, motif }: {
   icon: typeof User;
   title: string;
   subtitle?: string;
   color: string;
   children: React.ReactNode;
+  motif?: boolean;
 }) {
   return (
     <section style={{
-      background: C.s1, border: `1px solid ${C.brd}`, borderRadius: 16,
+      background: C.s1, border: `1px solid ${C.brd}`, borderRadius: 6,
       overflow: "hidden",
     }}>
       <div style={{
+        position: "relative",
         display: "flex", alignItems: "center", gap: 10,
         padding: "12px 16px", borderBottom: `1px solid ${C.brd}`,
         background: color + "0A",
       }}>
+        {motif && <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 20, backgroundImage: "url(/brand/agon-pattern-frise-meandre-sombre.svg)", backgroundSize: "600px", backgroundRepeat: "repeat-x", opacity: 0.18, pointerEvents: "none", zIndex: 0, maskImage: "linear-gradient(180deg, #000 0%, transparent 100%)", WebkitMaskImage: "linear-gradient(180deg, #000 0%, transparent 100%)" }} />}
         <span style={{
-          width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+          position: "relative", zIndex: 1,
+          width: 26, height: 26, borderRadius: 4, flexShrink: 0,
           background: color + "1A", color,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           <Icon size={14} />
         </span>
-        <div>
+        <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 12, fontWeight: 800, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {title}
           </div>
@@ -68,7 +72,7 @@ function Section({ icon: Icon, title, subtitle, color, children }: {
 
 function Tile({ label, value, color }: { label: string; value: string | null; color?: string }) {
   return (
-    <div style={{ background: C.s2, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+    <div style={{ background: C.s2, borderRadius: 4, padding: "10px 8px", textAlign: "center" }}>
       <div style={{ fontSize: 9, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 14, fontWeight: 800, color: value ? (color ?? C.tx) : C.tx3 }}>{value || "—"}</div>
     </div>
@@ -95,7 +99,7 @@ function HabitRow({ habit, dates }: { habit: Habit; dates: string[] }) {
   });
 
   return (
-    <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", gap: 12 }}>
+    <div style={{ background: C.s2, borderRadius: 4, padding: "10px 12px", display: "flex", alignItems: "center", gap: 12 }}>
       <div style={{ fontSize: 18, flexShrink: 0 }}>{habit.icon || "✅"}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{habit.name}</div>
@@ -133,7 +137,7 @@ function HMPicker({ label, value, onChange }: {
         <select
           value={h}
           onChange={(e) => onChange({ h: Number(e.target.value), m })}
-          style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", outline: "none" }}
+          style={{ padding: "6px 8px", borderRadius: 4, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", outline: "none" }}
         >
           {Array.from({ length: 24 }, (_, i) => (
             <option key={i} value={i}>{String(i).padStart(2, "0")}h</option>
@@ -142,7 +146,7 @@ function HMPicker({ label, value, onChange }: {
         <select
           value={m}
           onChange={(e) => onChange({ h, m: Number(e.target.value) })}
-          style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", outline: "none" }}
+          style={{ padding: "6px 8px", borderRadius: 4, border: "1px solid " + C.brdL, background: C.s2, color: C.tx, fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", outline: "none" }}
         >
           {[0, 15, 30, 45].map((min) => (
             <option key={min} value={min}>{String(min).padStart(2, "0")}min</option>
@@ -179,11 +183,11 @@ function SleepGoalsBody({ goals, setGoals }: { goals: Goals; setGoals: (v: Goals
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, alignItems: "end" }}>
-        <HMPicker label="🌙 Coucher" value={goals.sleepBedtime} onChange={(v) => handleChange({ sleepBedtime: v })} />
-        <HMPicker label="☀️ Lever" value={goals.sleepWakeup} onChange={(v) => handleChange({ sleepWakeup: v })} />
+        <HMPicker label="Coucher" value={goals.sleepBedtime} onChange={(v) => handleChange({ sleepBedtime: v })} />
+        <HMPicker label="Lever" value={goals.sleepWakeup} onChange={(v) => handleChange({ sleepWakeup: v })} />
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>⏱ Durée</div>
-          <div style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid " + C.brdL, background: C.s2, fontSize: 15, fontWeight: 800, color: durTarget != null ? COL.sleep : C.tx3 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.tx3, textTransform: "uppercase", letterSpacing: "0.4px" }}>Durée</div>
+          <div style={{ padding: "6px 12px", borderRadius: 4, border: "1px solid " + C.brdL, background: C.s2, fontSize: 15, fontWeight: 800, color: durTarget != null ? COL.sleep : C.tx3 }}>
             {durTarget != null
               ? `${Math.floor(durTarget)}h${Math.round((durTarget % 1) * 60) > 0 ? String(Math.round((durTarget % 1) * 60)).padStart(2, "0") : ""}`
               : "—"}
@@ -219,7 +223,7 @@ export function ProfilGeneralTab() {
   const SL: Record<string, string> = { maintenance: "Maintenance", seche: "Sèche", prise_de_masse: "Prise de masse" };
 
   const editBtn = (label: string, tab: "profil" | "nutrition") => onEditProfile && (
-    <button onClick={() => onEditProfile(tab)} style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid " + C.coach + "50", background: C.coachS, color: C.coach, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+    <button onClick={() => onEditProfile(tab)} style={{ padding: "5px 12px", borderRadius: 4, border: "1px solid " + C.coach + "50", background: C.coachS, color: C.coach, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
       {label}
     </button>
   );
@@ -228,7 +232,7 @@ export function ProfilGeneralTab() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── 1. Identité ── */}
-      <Section icon={User} title="Identité" subtitle="Informations personnelles et antécédents" color={COL.identity}>
+      <Section icon={User} title="Identité" subtitle="Informations personnelles et antécédents" color={COL.identity} motif>
         {ap ? (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -237,7 +241,7 @@ export function ProfilGeneralTab() {
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>{[ap.first_name, ap.last_name].filter(Boolean).join(" ") || ap.full_name}</div>
                 <div style={{ fontSize: 11, color: C.tx3 }}>{ap.gender === "male" ? "Homme" : ap.gender === "female" ? "Femme" : "Genre non renseigné"}</div>
               </div>
-              {editBtn("✎ Modifier l'identité", "profil")}
+              {editBtn("Modifier l'identité", "profil")}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Tile label="Âge" value={ap.age ? ap.age + " ans" : null} color={COL.identity} />
@@ -247,7 +251,7 @@ export function ProfilGeneralTab() {
         ) : (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ fontSize: 13, color: C.tx3 }}>Profil non renseigné</div>
-            {editBtn("✎ Créer le profil", "profil")}
+            {editBtn("Créer le profil", "profil")}
           </div>
         )}
 
@@ -286,12 +290,12 @@ export function ProfilGeneralTab() {
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ background: C.s2, borderRadius: 4, padding: "10px 12px" }}>
                   <div style={{ fontSize: 9, color: C.tx3, textTransform: "uppercase", marginBottom: 3 }}>Calories cibles</div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: COL.nutrition }}>{ns.total_calories_coach ? ns.total_calories_coach.toLocaleString("fr-FR") + " kcal" : "—"}</div>
                   {ns.nap && <div style={{ fontSize: 10, color: C.tx3, marginTop: 2 }}>NAP {NAP_L[ns.nap] || ns.nap} (×{ns.nap})</div>}
                 </div>
-                <div style={{ background: C.s2, borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ background: C.s2, borderRadius: 4, padding: "10px 12px" }}>
                   <div style={{ fontSize: 9, color: C.tx3, textTransform: "uppercase", marginBottom: 3 }}>{ns.strategy === "seche" ? "Déficit cible" : ns.strategy === "prise_de_masse" ? "Surplus cible" : "Tolérance"}</div>
                   {ns.surplus_deficit_min != null && ns.surplus_deficit_max != null
                     ? <div style={{ fontSize: 16, fontWeight: 800, color: sc }}>{ns.strategy === "seche" ? Math.abs(ns.surplus_deficit_min) + "%" : ns.strategy === "prise_de_masse" ? "+" + ns.surplus_deficit_max + "%" : "±" + ns.surplus_deficit_max + "%"}</div>
@@ -302,7 +306,7 @@ export function ProfilGeneralTab() {
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[{ label: "Glucides", pct: ns.macros_glucides_pct, g: ns.macros_glucides, color: C.b }, { label: "Lipides", pct: ns.macros_lipides_pct, g: ns.macros_lipides, color: C.o }, { label: "Protéines", pct: ns.macros_proteines_pct, g: ns.macros_proteines, color: C.g }].map(m => (
-                      <div key={m.label} style={{ background: C.s2, borderRadius: 10, padding: "8px", textAlign: "center", border: "1px solid " + m.color + "20" }}>
+                      <div key={m.label} style={{ background: C.s2, borderRadius: 4, padding: "8px", textAlign: "center", border: "1px solid " + m.color + "20" }}>
                         <div style={{ fontSize: 9, color: m.color, fontWeight: 700, marginBottom: 3 }}>{m.label}</div>
                         {m.pct != null && <div style={{ fontSize: 18, fontWeight: 900, color: m.color, lineHeight: 1 }}>{m.pct}<span style={{ fontSize: 10 }}>%</span></div>}
                         {m.g != null && <div style={{ fontSize: 12, fontWeight: 600, color: C.tx2, marginTop: 1 }}>{m.g} g</div>}
@@ -338,7 +342,7 @@ export function ProfilGeneralTab() {
             <div style={{ fontSize: 11, color: habitToggleErr ? C.r : C.tx3, marginTop: 2 }}>{habitToggleErr || "Activer le suivi d'habitudes pour cet athlète"}</div>
           </div>
           <button disabled={habitToggling} onClick={toggleHabitEnabled} style={{ width: 46, height: 26, borderRadius: 13, background: habitEnabled ? COL.habits : C.s2, border: `2px solid ${habitEnabled ? COL.habits : C.brdL}`, cursor: habitToggling ? "default" : "pointer", position: "relative", transition: "all 0.2s", flexShrink: 0, outline: "none", opacity: habitToggling ? 0.6 : 1 }}>
-          <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: habitEnabled ? 24 : 2, transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.3)" }} />
+          <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: habitEnabled ? 24 : 2, transition: "left 0.2s" }} />
           </button>
         </div>
         {habitEnabled && (

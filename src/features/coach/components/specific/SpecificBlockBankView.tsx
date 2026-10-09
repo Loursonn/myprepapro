@@ -21,7 +21,7 @@ import type { EnergyGroup, EnergyStep } from "@/types/energy";
 import type { ClassiqueItem, SpecificBlockRow, BlockKind } from "@/types/specific";
 
 const ORANGE = "#F5A623";
-const GREEN  = "#9DB06A";
+const GREEN  = "#66F03C";
 
 // ── Editor modal ─────────────────────────────────────────────────────────────
 
@@ -84,10 +84,9 @@ function BlockEditorModal({ initial, onClose }: {
       <div style={{
         position: "fixed", top: "50%", left: "50%", zIndex: 91,
         transform: "translate(-50%, -50%)",
-        background: C.bg, borderRadius: 16,
+        background: C.bg, borderRadius: 6,
         width: "min(96vw, 760px)", maxHeight: "90vh",
         display: "flex", flexDirection: "column",
-        boxShadow: "0 12px 48px rgba(0,0,0,0.6)",
         border: `1px solid ${C.brdL}`,
       }}>
         {/* Header */}
@@ -97,7 +96,7 @@ function BlockEditorModal({ initial, onClose }: {
           </div>
           <button
             onClick={onClose}
-            style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${C.brdL}`, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            style={{ width: 30, height: 30, borderRadius: 4, border: `1px solid ${C.brdL}`, background: "transparent", color: C.tx3, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
             <X size={14} />
           </button>
@@ -129,10 +128,10 @@ function BlockEditorModal({ initial, onClose }: {
               onChange={setQualityId}
               onCreate={async (n) => user?.id ? await createQuality.mutateAsync({ name: n, coachId: user.id }) : undefined}
               width={150}
-              accent="#C9A14A"
+              accent="#FFC933"
             />
             {/* Kind toggle */}
-            <div style={{ display: "flex", gap: 2, background: C.s2, borderRadius: 8, padding: 2 }}>
+            <div style={{ display: "flex", gap: 2, background: C.s2, borderRadius: 4, padding: 2 }}>
               {(["classique", "wod"] as const).map((k) => (
                 <button
                   key={k}
@@ -195,7 +194,7 @@ function BlockEditorModal({ initial, onClose }: {
         <div style={{ padding: "12px 20px", borderTop: `1px solid ${C.brd}`, display: "flex", gap: 8, justifyContent: "flex-end", flexShrink: 0 }}>
           <button
             onClick={onClose}
-            style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${C.brdL}`, background: "transparent", color: C.tx2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
+            style={{ padding: "8px 14px", borderRadius: 4, border: `1px solid ${C.brdL}`, background: "transparent", color: C.tx2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}
           >
             Annuler
           </button>
@@ -203,7 +202,7 @@ function BlockEditorModal({ initial, onClose }: {
             onClick={handleSave}
             disabled={isSaving}
             style={{
-              padding: "8px 16px", borderRadius: 8, border: "none",
+              padding: "8px 16px", borderRadius: 4, border: "none",
               background: ORANGE, color: "#1a1204", fontSize: 12, fontWeight: 700,
               cursor: "pointer", fontFamily: "inherit", opacity: isSaving ? 0.7 : 1,
             }}
@@ -274,7 +273,7 @@ export default function SpecificBlockBankView() {
           onChange={(id) => setQualityFilter(id ?? "all")}
           onCreate={async (n) => user?.id ? await createQuality.mutateAsync({ name: n, coachId: user.id }) : undefined}
           width={170}
-          accent="#C9A14A"
+          accent="#FFC933"
         />
 
         <input
@@ -298,7 +297,7 @@ export default function SpecificBlockBankView() {
         <button
           onClick={openCreate}
           style={{
-            marginLeft: "auto", padding: "7px 14px", borderRadius: 8, border: "none",
+            marginLeft: "auto", padding: "7px 14px", borderRadius: 4, border: "none",
             background: ORANGE, color: "#1a1204", fontSize: 12,
             fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
           }}
@@ -312,7 +311,7 @@ export default function SpecificBlockBankView() {
         <div style={{ textAlign: "center", padding: "40px 0", color: C.tx3, fontSize: 12 }}>Chargement…</div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px", color: C.tx3 }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🧱</div>
+          <div style={{ fontSize: 36, marginBottom: 12 }}></div>
           <div style={{ fontSize: 15, fontWeight: 600, color: C.tx2, marginBottom: 6 }}>
             {blocks.length === 0 ? "Aucun bloc dans la banque" : "Aucun bloc pour ces filtres"}
           </div>
@@ -324,7 +323,7 @@ export default function SpecificBlockBankView() {
           <button
             onClick={openCreate}
             style={{
-              padding: "9px 20px", borderRadius: 8, border: "none",
+              padding: "9px 20px", borderRadius: 4, border: "none",
               background: ORANGE, color: "#1a1204", fontSize: 13,
               fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
             }}
@@ -346,7 +345,7 @@ export default function SpecificBlockBankView() {
                 key={b.id}
                 onClick={() => openEdit(b)}
                 style={{
-                  background: C.s1, border: `1px solid ${C.brd}`, borderRadius: 12,
+                  background: C.s1, border: `1px solid ${C.brd}`, borderRadius: 6,
                   overflow: "hidden", cursor: "pointer",
                   transition: "border-color 150ms",
                 }}
@@ -375,7 +374,7 @@ export default function SpecificBlockBankView() {
                           </span>
                         )}
                         {quality && (
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#C9A14A20", color: "#C9A14A" }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "#FFC93320", color: "#FFC933" }}>
                             {quality.name}
                           </span>
                         )}
@@ -419,7 +418,7 @@ export default function SpecificBlockBankView() {
           onClick={() => setConfirmDelete(null)}
           style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
-          <div onClick={(e) => e.stopPropagation()} style={{ background: C.s1, borderRadius: 12, padding: 24, width: 340, border: `1px solid ${C.brd}` }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.s1, borderRadius: 6, padding: 24, width: 340, border: `1px solid ${C.brd}` }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.tx, marginBottom: 8 }}>Supprimer le bloc ?</div>
             <div style={{ fontSize: 12, color: C.tx3, marginBottom: 18 }}>
               « {confirmDelete.name} » sera retiré de la banque. Les séances qui l'ont déjà importé ne sont pas affectées.
@@ -427,13 +426,13 @@ export default function SpecificBlockBankView() {
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button
                 onClick={() => setConfirmDelete(null)}
-                style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.brd}`, background: "transparent", color: C.tx2, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}
+                style={{ padding: "7px 14px", borderRadius: 4, border: `1px solid ${C.brd}`, background: "transparent", color: C.tx2, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}
               >
                 Annuler
               </button>
               <button
                 onClick={() => { deleteBlock.mutate(confirmDelete.id); setConfirmDelete(null); }}
-                style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: C.r, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                style={{ padding: "7px 14px", borderRadius: 4, border: "none", background: C.rV, color: "#0E0C0A", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
               >
                 Supprimer
               </button>

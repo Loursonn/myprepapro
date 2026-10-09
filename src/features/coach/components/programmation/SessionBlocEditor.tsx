@@ -17,7 +17,7 @@ import { BlocForm } from "./BlocForm"
 import { SemaineNav } from "./SemaineNav"
 import { useBlocBank } from "./hooks/useBlocBank"
 
-const VIOLET = "#C9A14A"
+const VIOLET = "#FFC933"
 
 interface SessionBlocEditorProps {
   session: ProgSession
@@ -203,7 +203,7 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange, initi
       {/* Bank picker */}
       {showBankPicker && (
         <div style={{
-          marginTop: 8, padding: 10, borderRadius: 10,
+          marginTop: 8, padding: 10, borderRadius: 4,
           border: "1px solid " + VIOLET + "40", background: VIOLET + "08",
         }}>
           <div style={{ fontSize: 10, color: C.tx3, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
@@ -230,7 +230,7 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange, initi
                           onClick={() => addBlocFromBank(b)}
                           style={{
                             display: "flex", alignItems: "center", gap: 8, textAlign: "left",
-                            padding: "9px 10px", borderRadius: 8,
+                            padding: "9px 10px", borderRadius: 4,
                             border: "1px solid " + C.brdL, background: C.s1, color: C.tx,
                             fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                           }}
@@ -265,7 +265,7 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange, initi
           onClick={() => { setIsAddingBloc(true); setShowBankPicker(false) }}
           style={{
             flex: 1,
-            padding: "10px 0", borderRadius: 9,
+            padding: "10px 0", borderRadius: 4,
             border: "1px dashed " + C.brdL, background: "transparent",
             color: C.tx3, fontSize: 12, fontWeight: 600,
             cursor: "pointer", fontFamily: "inherit",
@@ -282,7 +282,7 @@ export function SessionBlocEditor({ session, cycleId, athleteId, onChange, initi
           onClick={() => { setShowBankPicker(p => !p); setIsAddingBloc(false) }}
           style={{
             flex: 1,
-            padding: "10px 0", borderRadius: 9,
+            padding: "10px 0", borderRadius: 4,
             border: "1px dashed " + (showBankPicker ? VIOLET : C.brdL),
             background: showBankPicker ? VIOLET + "0F" : "transparent",
             color: showBankPicker ? VIOLET : C.tx3, fontSize: 12, fontWeight: 600,
